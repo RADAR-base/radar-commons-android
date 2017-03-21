@@ -15,5 +15,7 @@ android:
     - tools
     - build-tools-22.0.1
     - android-22
+    - extra-android-m2repository
+    - extra-google-android-support
 
 script: TERM=dumb ./gradlew assembleDebug
