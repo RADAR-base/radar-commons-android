@@ -218,7 +218,7 @@ public abstract class MainActivity extends AppCompatActivity {
 
     private void configureRunAtBoot() {
         ComponentName receiver = new ComponentName(
-                getApplicationContext(), MainActivityStarter.class);
+                getApplicationContext(), MainActivityBootStarter.class);
         PackageManager pm = getApplicationContext().getPackageManager();
 
         boolean startAtBoot = radarConfiguration.getBoolean(RadarConfiguration.START_AT_BOOT, false);

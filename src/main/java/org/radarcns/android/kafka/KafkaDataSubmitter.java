@@ -218,7 +218,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     /**
      * Wait for the executor to finish.
      * @param millis milliseconds to wait.
-     * @throws InterruptedException
+     * @throws InterruptedException if the join is interrupted
      */
     public void join(long millis) throws InterruptedException {
         executor.awaitTermination(millis, TimeUnit.MILLISECONDS);

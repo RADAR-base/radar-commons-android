@@ -16,6 +16,7 @@
 
 package org.radarcns.android.util;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
 import android.widget.Toast;
@@ -27,6 +28,7 @@ import android.widget.Toast;
  * By default, a current {@link Boast} notification will be cancelled by a subsequent notification.
  * This default behaviour can be changed by calling certain methods like {@link #show(boolean)}.
  */
+@SuppressLint("ShowToast")
 public class Boast {
     /**
      * Keeps track of certain Boast notifications that may need to be cancelled. This functionality

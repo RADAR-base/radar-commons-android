@@ -23,7 +23,7 @@ import android.content.Intent;
 /**
  * Starts MainActivity on boot if configured to do so
  */
-public class MainActivityStarter extends BroadcastReceiver {
+public class MainActivityBootStarter extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)) {
