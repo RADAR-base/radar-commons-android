@@ -11,7 +11,9 @@ cache:
 android:
   components:
     - tools
+    - platform-tools
+    - tools
     - build-tools-22.0.1
-    - platform-tools-22
+    - android-22
 
 script: TERM=dumb ./gradlew assembleDebug
