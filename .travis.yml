@@ -12,5 +12,6 @@ android:
   components:
     - tools
     - build-tools-22.0.1
+    - platform-tools
 
 script: TERM=dumb ./gradlew assembleDebug
