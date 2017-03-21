@@ -20,4 +20,4 @@ android:
     - extra-google-google_play_services
     - extra-google-m2repository
 
-script: TERM=dumb ./gradlew assembleDebug
+script: TERM=dumb ./gradlew check assembleDebug
