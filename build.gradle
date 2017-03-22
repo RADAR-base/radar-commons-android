@@ -27,7 +27,6 @@ android {
         targetSdkVersion 22
         versionCode 1
         versionName '0.1-alpha.1'
-
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     lintOptions {
@@ -37,6 +36,15 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+
+            libraryVariants.all { variant ->
+                variant.outputs.each { output ->
+                    if (output.outputFile != null && output.outputFile.name.endsWith('.aar')) {
+                        output.outputFile = new File(output.outputFile.parent,
+                                "${archivesBaseName}-${android.defaultConfig.versionName}.aar")
+                    }
+                }
+            }
         }
     }
 }

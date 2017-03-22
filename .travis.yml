@@ -21,3 +21,16 @@ android:
     - extra-google-m2repository
 
 script: TERM=dumb ./gradlew check assembleDebug
+
+deploy:
+  provider: releases
+  api_key:
+    secure: ${GH_TOKEN}
+  file_glob: true
+  file: build/outputs/*.aar
+  skip_cleanup: true
+  on:
+    tags: true
+
+after_deploy:
+  - ./gradlew bintrayUpload
