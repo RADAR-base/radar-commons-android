@@ -55,7 +55,7 @@ android {
 
 group = 'org.radarcns'
 ext.moduleName = 'radar-commons-android'
-version = android.defaultConfig.versionCode
+version = android.defaultConfig.versionName
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
