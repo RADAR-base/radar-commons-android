@@ -8,10 +8,15 @@ buildscript {
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
         classpath 'com.google.gms:google-services:3.0.0'
+
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
+        classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
     }
 }
 
 apply plugin: 'com.android.library'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'com.github.dcendents.android-maven'
 
 android {
     compileSdkVersion 22
@@ -21,7 +26,7 @@ android {
         minSdkVersion 19
         targetSdkVersion 22
         versionCode 1
-        versionName "1.0"
+        versionName '0.1-alpha.1'
 
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
@@ -36,6 +41,18 @@ android {
     }
 }
 
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+group = 'org.radarcns'
+ext.moduleName = 'radar-commons-android'
+version = android.defaultConfig.versionCode
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
 repositories {
     maven { url "${rootProject.projectDir}/libs" }
     jcenter()
@@ -48,8 +65,8 @@ dependencies {
     compile 'org.apache.avro:avro:1.8.1'
     compile 'org.xerial.snappy:snappy-java:1.1.2.6'
     compile 'com.google.firebase:firebase-config:10.0.1'
-    compile ('org.radarcns:radar-commons:0.1-alpha.5-SNAPSHOT') {
-        exclude group: 'org.apache.kafka'
+    compile ('org.radarcns:radar-commons:0.1') {
+        exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
     }
 
@@ -57,6 +74,58 @@ dependencies {
     testCompile 'org.slf4j:slf4j-simple:1.7.21'
 }
 
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "RADAR Commons Android"
+        }
+    }
+    developers {
+        developer {
+            id "radar-cns"
+            name "Joris Borgdorff"
+            email "joris@thehyve.nl"
+        }
+    }
+}
+
+install {
+    repositories.mavenInstaller {
+        pom.project {
+            group project.group
+            artifactId moduleName
+            version project.version
+        }
+        pom.withXml {
+            def root = asNode()
+            root.appendNode('description', 'Kafka backend for processing device data.')
+            root.appendNode('name', moduleName)
+            root.appendNode('url', 'https://github.com/RADAR-CNS/RADAR-Commons-Android.git')
+            root.children().last() + pomConfig
+        }
+    }
+}
+
+bintray {
+    user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
+    key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+    configurations = ['archives']
+    pkg {
+        repo = project.group
+        name = moduleName
+        userOrg = 'radar-cns'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'https://github.com/RADAR_CNS/RADAR-Commons-Android.git'
+        version {
+            name = project.version
+            desc = 'Common Android library for the RADAR passive app'
+            vcsTag = System.getenv('TRAVIS_TAG')
+            released = new Date()
+        }
+    }
+}
 
 task wrapper(type: Wrapper) {
     gradleVersion = '3.4.1'

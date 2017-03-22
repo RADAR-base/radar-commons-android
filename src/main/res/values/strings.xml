@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">RADAR common infrastructure</string>
+    <string name="app_name">RADAR common android app</string>
     <string name="accel">Accelerometers</string>
     <string name="accel_x">x:</string>
     <string name="accel_y">y:</string>
