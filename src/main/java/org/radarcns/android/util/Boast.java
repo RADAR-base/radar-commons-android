@@ -23,8 +23,8 @@ import android.widget.Toast;
 
 /**
  * {@link Toast} decorator allowing for easy cancellation of notifications. Use this class if you
- * want subsequent Toast notifications to overwrite current ones. </p>
- * <p/>
+ * want subsequent Toast notifications to overwrite current ones.
+ * <p>
  * By default, a current {@link Boast} notification will be cancelled by a subsequent notification.
  * This default behaviour can be changed by calling certain methods like {@link #show(boolean)}.
  */

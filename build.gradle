@@ -74,12 +74,32 @@ dependencies {
     compile 'org.xerial.snappy:snappy-java:1.1.2.6'
     compile 'com.google.firebase:firebase-config:10.0.1'
     compile ('org.radarcns:radar-commons:0.1') {
+        exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
     }
 
     testCompile 'junit:junit:4.12'
     testCompile 'org.slf4j:slf4j-simple:1.7.21'
+}
+
+task sourcesJar(type: Jar) {
+    from android.sourceSets.main.java.srcDirs
+    classifier = 'sources'
+}
+
+task javadoc(type: Javadoc) {
+    source = android.sourceSets.main.java.srcDirs
+    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+artifacts {
+    archives javadocJar
+    archives sourcesJar
 }
 
 def pomConfig = {
@@ -131,6 +151,9 @@ bintray {
             desc = 'Common Android library for the RADAR passive app'
             vcsTag = System.getenv('TRAVIS_TAG')
             released = new Date()
+            gpg {
+                sign = true //Determines whether to GPG sign the files. The default is false
+            }
         }
     }
 }
