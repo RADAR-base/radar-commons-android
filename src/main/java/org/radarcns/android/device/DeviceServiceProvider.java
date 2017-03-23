@@ -185,9 +185,20 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      */
     public static List<DeviceServiceProvider> loadProviders(@NonNull MainActivity activity,
                                                             @NonNull RadarConfiguration config) {
+        List<DeviceServiceProvider> factories = loadProviders(config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT));
+        for (DeviceServiceProvider factory : factories) {
+            factory.setActivity(activity);
+            factory.setConfig(config);
+        }
+        return factories;
+    }
+
+    /**
+     * Loads the service providers specified in given whitespace-delimited String.
+     */
+    public static List<DeviceServiceProvider> loadProviders(@NonNull String deviceServicesToConnect) {
         List<DeviceServiceProvider> factories = new ArrayList<>();
-        String value = config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT);
-        Scanner scanner = new Scanner(value);
+        Scanner scanner = new Scanner(deviceServicesToConnect);
         while (scanner.hasNext()) {
             String className = scanner.next();
             if (className.charAt(0) == '.') {
@@ -201,8 +212,6 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
             }
             try {
                 DeviceServiceProvider serviceProvider = (DeviceServiceProvider)factoryClass.newInstance();
-                serviceProvider.setActivity(activity);
-                serviceProvider.setConfig(config);
                 factories.add(serviceProvider);
             } catch (InstantiationException | IllegalAccessException ex) {
                 throw new IllegalArgumentException("Class " + className + " cannot be instantiated", ex);
