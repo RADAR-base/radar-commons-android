@@ -39,105 +39,173 @@ import java.util.UUID;
 public class PersistentStorage {
     private static Logger logger = LoggerFactory.getLogger(PersistentStorage.class);
 
+    private final File classFile;
+    private Properties loadedProps;
+
+    public PersistentStorage(Class<?> forClass) {
+        File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
+
+        if (!path.exists() && !path.mkdirs()) {
+            logger.error("'{}' could not be created", path.getAbsolutePath());
+        }
+
+        classFile = new File(path, forClass.getName() + ".properties");
+        loadedProps = null;
+    }
+
     /**
      * Use a class-bounded file-based storage to load or store properties.
      *
      * If a class-bound properties file exists, the default properties are updated with the contents
      * of that file. If any defaults were not stored yet, the combined loaded properties and default
      * properties are stored again. If no values were stored, the given defaults are stored
-     * and returned in a copy.
-     * @param clazz class to store properties for.
+     * and returned.
      * @param defaults default properties, null if no defaults are known
      * @throws IOException if the properties cannot be retrieved or stored.
-     * @return a new Properties object that combines defaults with any loaded properties.
+     * @return modified defaults, overwritten any loaded properties. If defaults was none, a new
+     *         Properties object is returned.
      */
-    public static Properties loadOrStore(Class<?> clazz, Properties defaults)
+    public Properties loadOrStore(Properties defaults)
             throws IOException {
-        File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
-        File file = new File(path, clazz.getName() + ".properties");
+        Properties loadedProps = load();
 
-        if (!path.exists() && !path.mkdirs()) {
-            logger.error("'{}' could not be created or already exists.", path.getAbsolutePath());
+        // Nothing needs to be stored
+        if (defaults == null) {
+            Properties ret = new Properties();
+            ret.putAll(loadedProps);
+            return ret;
         }
 
-        Properties loadedProps = new Properties();
-
-        if (file.exists()) {
-            // Read source id
-            try (FileInputStream fin = new FileInputStream(file);
-                 Reader fr = new InputStreamReader(fin, "UTF-8");
-                 Reader in = new BufferedReader(fr)) {
-                loadedProps.load(in);
-                logger.debug("Loaded persistent properties from {}", file);
-            }
-            if (defaults == null || defaults.isEmpty()) {
-                return loadedProps;
-            }
+        if (!defaults.isEmpty()) {
             // Find out if the defaults had more values than the properties file. If not, do not
             // store the values again.
             Set<Object> originalKeySet = new HashSet<>(defaults.keySet());
             originalKeySet.removeAll(loadedProps.keySet());
-            if (originalKeySet.isEmpty()) {
-                return loadedProps;
+            if (!originalKeySet.isEmpty()) {
+                for (Object key : originalKeySet) {
+                    loadedProps.put(key, defaults.get(key));
+                }
+                store(loadedProps);
             }
-        } else if (defaults == null || defaults.isEmpty()) {
+        }
+
+        defaults.putAll(loadedProps);
+        return defaults;
+    }
+
+    /**
+     * Load properties from class file, if it exists.
+     * @throws IOException if the file is not a valid properties file
+     * @return loaded properties or an empty Properties object.
+     */
+    private synchronized Properties load() throws IOException {
+        if (loadedProps != null) {
             return loadedProps;
         }
 
-        Properties combinedProperties = new Properties();
-        combinedProperties.putAll(defaults);
-        combinedProperties.putAll(loadedProps);
+        loadedProps = new Properties();
 
-        try (FileOutputStream fout = new FileOutputStream(file);
+        if (classFile.exists()) {
+            // Read source id
+            try (FileInputStream fin = new FileInputStream(classFile);
+                 Reader fr = new InputStreamReader(fin, "UTF-8");
+                 Reader in = new BufferedReader(fr)) {
+                loadedProps.load(in);
+                logger.debug("Loaded persistent properties from {}", classFile);
+            }
+        }
+
+        return loadedProps;
+    }
+
+    /** Store properties to given file. */
+    public synchronized void store(Properties props) throws IOException {
+        try (FileOutputStream fout = new FileOutputStream(classFile);
              OutputStreamWriter fwr = new OutputStreamWriter(fout, "UTF-8");
              Writer out = new BufferedWriter(fwr)) {
-            combinedProperties.store(out, null);
-            logger.debug("Stored persistent properties to {}", file);
+            props.store(out, null);
+            logger.debug("Stored persistent properties to {}", classFile);
+            if (loadedProps != props) {
+                loadedProps = new Properties();
+                loadedProps.putAll(props);
+            }
         }
-        return combinedProperties;
     }
 
     /**
      * Load or store a single persistent UUID value.
-     * @param clazz class name
      * @param key key to store the UUID with.
      * @return The generated UUID value
      */
-    public static String loadOrStoreUUID(Class<?> clazz, String key) {
-        Properties defaults = new Properties();
-        defaults.setProperty(key, UUID.randomUUID().toString());
+    public String loadOrStoreUUID(String key) {
         try {
-            Properties props = PersistentStorage.loadOrStore(clazz, defaults);
-            return props.getProperty(key);
+            Properties props = load();
+            String uuid = props.getProperty(key);
+            if (uuid != null) {
+                return uuid;
+            }
+            uuid = UUID.randomUUID().toString();
+            props.setProperty(key, uuid);
+            store(props);
+            return uuid;
         } catch (IOException ex) {
+            logger.error("Failed to load or store UUID, generating new unpersisted one", ex);
             // Use newly generated UUID
-            return defaults.getProperty(key);
+            return UUID.randomUUID().toString();
         }
     }
 
     /**
-     * Get a String value from persistent storage
-     * @param clazz class to store the value for
+     * Get a String value from persistent storage.
      * @param key key of the value
      * @return value or null if not present
      */
-    public static String get(Class<?> clazz, String key) throws IOException {
-        Properties ret = loadOrStore(clazz, null);
-        return ret.getProperty(key);
+    public String get(String key) throws IOException {
+        return load().getProperty(key);
     }
 
     /**
-     * Get a String value from persistent storage
-     * @param clazz class to store the value for
+     * Get a String value from persistent storage and store a default value otherwise.
+     * @param key key of the value
+     * @return value or null if not present
+     */
+    public String getOrSet(String key, String defaultValue) throws IOException {
+        Properties props = load();
+        String ret = props.getProperty(key);
+        if (ret == null && defaultValue != null) {
+            props.setProperty(key, defaultValue);
+            store(props);
+            return defaultValue;
+        } else {
+            return ret;
+        }
+    }
+
+    /**
+     * Put a String in storage replacing a previous value, if any.
      * @param key key of the value
      * @param value value to store
-     * @return true if the value was absent or equals the given value, false if a different value is
-     *         already stored
      */
-    public static boolean putIfAbsent(Class<?> clazz, String key, String value) throws IOException {
-        Properties defaults = new Properties();
-        defaults.setProperty(key, value);
-        Properties ret = loadOrStore(clazz, defaults);
-        return ret.getProperty(key).equals(value);
+    public void put(String key, String value) throws IOException {
+        Properties props = load();
+        props.setProperty(key, value);
+        store(props);
+    }
+
+    /** Clear the storage. */
+    public void clear() throws IOException {
+        store(new Properties());
+    }
+
+    /** Number of properties stored. */
+    public int size() throws IOException {
+        return load().size();
+    }
+
+    /** Remove element with given key. */
+    public void remove(String key) throws IOException {
+        Properties props = load();
+        props.remove(key);
+        store(props);
     }
 }

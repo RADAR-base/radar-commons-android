@@ -73,6 +73,7 @@ dependencies {
 
     testCompile 'junit:junit:4.12'
     testCompile 'org.slf4j:slf4j-simple:1.7.21'
+    testCompile 'org.robolectric:robolectric:3.3.2'
 }
 
 task sourcesJar(type: Jar) {
