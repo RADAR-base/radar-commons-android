@@ -330,6 +330,34 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
     }
 
+    public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
+        DeviceManager localManager = getDeviceManager();
+        if (getUserId() == null) {
+            throw new IllegalStateException("Cannot start recording: user ID is not set.");
+        }
+        if (localManager == null) {
+            logger.info("Starting recording");
+            localManager = createDeviceManager();
+            boolean didSet;
+            synchronized (this) {
+                if (deviceScanner == null) {
+                    deviceScanner = localManager;
+                    didSet = true;
+                } else {
+                    didSet = false;
+                }
+            }
+            if (didSet) {
+                localManager.start(acceptableIds);
+            }
+        }
+        return getDeviceManager().getState();
+    }
+
+    public void stopRecording() {
+        stopDeviceManager(unsetDeviceManager());
+    }
+
     private class LocalBinder extends Binder implements DeviceServiceBinder {
         @Override
         public <V extends SpecificRecord> List<Record<MeasurementKey, V>> getRecords(
@@ -359,32 +387,12 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         @Override
         public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
-            DeviceManager localManager = getDeviceManager();
-            if (getUserId() == null) {
-                throw new IllegalStateException("Cannot start recording: user ID is not set.");
-            }
-            if (localManager == null) {
-                logger.info("Starting recording");
-                localManager = createDeviceManager();
-                boolean didSet;
-                synchronized (this) {
-                    if (deviceScanner == null) {
-                        deviceScanner = localManager;
-                        didSet = true;
-                    } else {
-                        didSet = false;
-                    }
-                }
-                if (didSet) {
-                    localManager.start(acceptableIds);
-                }
-            }
-            return getDeviceManager().getState();
+            return DeviceService.this.startRecording(acceptableIds);
         }
 
         @Override
         public void stopRecording() {
-            stopDeviceManager(unsetDeviceManager());
+            DeviceService.this.stopRecording();
         }
 
         @Override
@@ -586,7 +594,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return deviceScanner;
     }
 
-    public Binder getBinder() {
+    /** Get the service local binder. */
+    public LocalBinder getBinder() {
         return mBinder;
     }
 
