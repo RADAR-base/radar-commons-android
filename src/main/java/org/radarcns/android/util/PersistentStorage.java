@@ -47,7 +47,7 @@ public class PersistentStorage {
      * properties are stored again. If no values were stored, the given defaults are stored
      * and returned in a copy.
      * @param clazz class to store properties for.
-     * @param defaults default properties
+     * @param defaults default properties, null if no defaults are known
      * @throws IOException if the properties cannot be retrieved or stored.
      * @return a new Properties object that combines defaults with any loaded properties.
      */
@@ -70,6 +70,9 @@ public class PersistentStorage {
                 loadedProps.load(in);
                 logger.debug("Loaded persistent properties from {}", file);
             }
+            if (defaults == null || defaults.isEmpty()) {
+                return loadedProps;
+            }
             // Find out if the defaults had more values than the properties file. If not, do not
             // store the values again.
             Set<Object> originalKeySet = new HashSet<>(defaults.keySet());
@@ -77,6 +80,8 @@ public class PersistentStorage {
             if (originalKeySet.isEmpty()) {
                 return loadedProps;
             }
+        } else if (defaults == null || defaults.isEmpty()) {
+            return loadedProps;
         }
 
         Properties combinedProperties = new Properties();
@@ -108,5 +113,31 @@ public class PersistentStorage {
             // Use newly generated UUID
             return defaults.getProperty(key);
         }
+    }
+
+    /**
+     * Get a String value from persistent storage
+     * @param clazz class to store the value for
+     * @param key key of the value
+     * @return value or null if not present
+     */
+    public static String get(Class<?> clazz, String key) throws IOException {
+        Properties ret = loadOrStore(clazz, null);
+        return ret.getProperty(key);
+    }
+
+    /**
+     * Get a String value from persistent storage
+     * @param clazz class to store the value for
+     * @param key key of the value
+     * @param value value to store
+     * @return true if the value was absent or equals the given value, false if a different value is
+     *         already stored
+     */
+    public static boolean putIfAbsent(Class<?> clazz, String key, String value) throws IOException {
+        Properties defaults = new Properties();
+        defaults.setProperty(key, value);
+        Properties ret = loadOrStore(clazz, defaults);
+        return ret.getProperty(key).equals(value);
     }
 }
