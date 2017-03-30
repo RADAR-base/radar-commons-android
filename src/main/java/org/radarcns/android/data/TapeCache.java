@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Kings College London and The Hyve
+ * Copyright 2017 The Hyve
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     public TapeCache(Context context, AvroTopic<K, V> topic, long timeWindowMillis) throws IOException {
         this.topic = topic;
         this.timeWindowMillis = timeWindowMillis;
-        outputFile = new File(context.getFilesDir(), topic.getName() + ".tape");
+        outputFile = new File(context.getCacheDir(), topic.getName() + ".tape");
         QueueFile queueFile;
         try {
             queueFile = QueueFile.newMapped(outputFile, Integer.MAX_VALUE);
