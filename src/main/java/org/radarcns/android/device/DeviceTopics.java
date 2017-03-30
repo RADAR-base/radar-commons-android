@@ -21,7 +21,9 @@ import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.key.MeasurementKey;
 import org.radarcns.topic.AvroTopic;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -43,5 +45,9 @@ public abstract class DeviceTopics {
 
     public AvroTopic<MeasurementKey, ? extends SpecificRecord> getTopic(String name) {
         return Objects.requireNonNull(topicMap.get(name), "Topic " + name + " unknown");
+    }
+
+    public List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> getTopics() {
+        return new ArrayList<>(topicMap.values());
     }
 }

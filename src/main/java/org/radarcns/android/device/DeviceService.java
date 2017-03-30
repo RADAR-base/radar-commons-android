@@ -320,7 +320,13 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     protected abstract DeviceTopics getTopics();
 
-    protected abstract List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> getCachedTopics();
+    /**
+     * Topics that should cache information. This implementation returns all topics in
+     * getTopics().getTopics().
+     */
+    protected List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> getCachedTopics() {
+        return getTopics().getTopics();
+    }
 
     public synchronized void setUserId(@NonNull String userId) {
         Objects.requireNonNull(userId);
