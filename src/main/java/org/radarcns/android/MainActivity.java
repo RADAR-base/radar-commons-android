@@ -64,7 +64,7 @@ public abstract class MainActivity extends AppCompatActivity {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
-    private final Map<DeviceServiceConnection, Set<String>> mInputDeviceKeys;
+    private final Map<DeviceServiceConnection, Set<String>> deviceFilters;
 
     private long uiRefreshRate;
 
@@ -97,7 +97,7 @@ public abstract class MainActivity extends AppCompatActivity {
         serverStatus = null;
 
         mTotalRecordsSent = new HashMap<>();
-        mInputDeviceKeys = new HashMap<>();
+        deviceFilters = new HashMap<>();
 
         bindServicesRunner = new Runnable() {
             @Override
@@ -168,7 +168,7 @@ public abstract class MainActivity extends AppCompatActivity {
         for (DeviceServiceProvider provider : mConnections) {
             DeviceServiceConnection connection = provider.getConnection();
             mTotalRecordsSent.put(connection, new TimedInt());
-            mInputDeviceKeys.put(connection, Collections.<String>emptySet());
+            deviceFilters.put(connection, Collections.<String>emptySet());
         }
 
         radarConfiguration.onFetchComplete(this, new OnCompleteListener<Void>() {
@@ -204,7 +204,10 @@ public abstract class MainActivity extends AppCompatActivity {
                 } catch (RemoteException e) {
                     logger.warn("Failed to update device data", e);
                 } finally {
-                    getHandler().postDelayed(mUIScheduler, uiRefreshRate);
+                    Handler handler = getHandler();
+                    if (handler != null) {
+                        handler.postDelayed(mUIScheduler, uiRefreshRate);
+                    }
                 }
             }
         };
@@ -250,8 +253,8 @@ public abstract class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         logger.info("mainActivity onPause");
-        super.onPause();
         getHandler().removeCallbacks(mUIScheduler);
+        super.onPause();
     }
 
     @Override
@@ -328,7 +331,7 @@ public abstract class MainActivity extends AppCompatActivity {
             }
             try {
                 logger.info("Starting recording on connection {}", connection);
-                connection.startRecording(mInputDeviceKeys.get(connection));
+                connection.startRecording(deviceFilters.get(connection));
             } catch (RemoteException ex) {
                 logger.error("Failed to start recording for device {}", connection, ex);
             }
@@ -373,8 +376,8 @@ public abstract class MainActivity extends AppCompatActivity {
                     case CONNECTING:
                         logger.info( "Device name is {} while connecting.", connection.getDeviceName() );
                         // Reject if device name inputted does not equal device nameA
-                        if (!connection.isAllowedDevice(mInputDeviceKeys.get(connection))) {
-                            logger.info("Device name '{}' is not in the list of keys '{}'", connection.getDeviceName(), mInputDeviceKeys.get(connection));
+                        if (!connection.isAllowedDevice(deviceFilters.get(connection))) {
+                            logger.info("Device name '{}' is not in the list of keys '{}'", connection.getDeviceName(), deviceFilters.get(connection));
                             Boast.makeText(MainActivity.this, String.format("Device '%s' rejected", connection.getDeviceName()), Toast.LENGTH_LONG).show();
                             disconnect();
                         }
@@ -450,8 +453,10 @@ public abstract class MainActivity extends AppCompatActivity {
     }
 
     public void setAllowedDeviceIds(final DeviceServiceConnection connection, Set<String> allowedIds) {
+        deviceFilters.put(connection, allowedIds);
+
         // Do NOT disconnect if input has not changed, is empty or equals the connected device.
-        if (!connection.isAllowedDevice(allowedIds)) {
+        if (connection.hasService() && !connection.isAllowedDevice(allowedIds)) {
             getHandler().post(new Runnable() {
                 @Override
                 public void run() {

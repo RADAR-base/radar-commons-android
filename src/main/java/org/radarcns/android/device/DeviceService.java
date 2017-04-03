@@ -469,8 +469,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                             for (int i = 0; i < setSize; i++) {
                                 acceptableIds.add(data.readString());
                             }
-                            startRecording(acceptableIds).writeToParcel(reply, 0);
+                            BaseDeviceState deviceState = startRecording(acceptableIds);
                             reply.writeByte((byte)1);
+                            deviceState.writeToParcel(reply, 0);
                         }
                         break;
                     }
