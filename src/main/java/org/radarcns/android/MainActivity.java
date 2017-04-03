@@ -162,7 +162,7 @@ public abstract class MainActivity extends AppCompatActivity {
 
         // TODO: disable developer mode in production
         radarConfiguration = createConfiguration();
-        configureRunAtBoot();
+        onConfigChanged();
 
         mConnections = DeviceServiceProvider.loadProviders(this, radarConfiguration);
         for (DeviceServiceProvider provider : mConnections) {
@@ -183,7 +183,7 @@ public abstract class MainActivity extends AppCompatActivity {
                     }
                     logger.info("Remote Config: Activate success.");
                     // Set global properties.
-                    configureRunAtBoot();
+                    onConfigChanged();
                 } else {
                     Boast.makeText(MainActivity.this, "Remote Config: Fetch Failed",
                             Toast.LENGTH_SHORT).show();
@@ -214,11 +214,13 @@ public abstract class MainActivity extends AppCompatActivity {
         }
     }
 
+    protected abstract void onConfigChanged();
+
     protected abstract MainActivityView createView();
 
-    private void configureRunAtBoot() {
+    protected void configureRunAtBoot(@NonNull Class<?> bootReceiver) {
         ComponentName receiver = new ComponentName(
-                getApplicationContext(), MainActivityBootStarter.class);
+                getApplicationContext(), bootReceiver);
         PackageManager pm = getApplicationContext().getPackageManager();
 
         boolean startAtBoot = radarConfiguration.getBoolean(RadarConfiguration.START_AT_BOOT, false);
