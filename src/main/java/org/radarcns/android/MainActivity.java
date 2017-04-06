@@ -56,6 +56,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static android.Manifest.permission.ACCESS_NETWORK_STATE;
+import static android.Manifest.permission.BLUETOOTH;
 import static android.Manifest.permission.INTERNET;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
@@ -320,14 +321,20 @@ public abstract class MainActivity extends AppCompatActivity {
     private void startScanning() {
         if (isForcedDisconnected) {
             return;
-        } else if (!BluetoothAdapter.getDefaultAdapter().isEnabled()) {
-            enableBt();
-            return;
         }
+        boolean requestedBt = false;
         for (DeviceServiceProvider provider : mConnections) {
             DeviceServiceConnection connection = provider.getConnection();
             if (!connection.hasService() || connection.isRecording()) {
                 continue;
+            }
+            if (provider.needsPermissions().contains(BLUETOOTH)) {
+                if (requestedBt || requestEnableBt()) {
+                    logger.info("Cannot start scanning on service {} until bluetooth is turned on.",
+                            connection);
+                    requestedBt = true;
+                    continue;
+                }
             }
             try {
                 logger.info("Starting recording on connection {}", connection);
@@ -392,12 +399,19 @@ public abstract class MainActivity extends AppCompatActivity {
         });
     }
 
-    void enableBt() {
+    /**
+     * Sends an intent to request bluetooth to be turned on.
+     * @return whether a request was sent
+     */
+    boolean requestEnableBt() {
         BluetoothAdapter btAdaptor = BluetoothAdapter.getDefaultAdapter();
-        if (!btAdaptor.isEnabled() && btAdaptor.getState() != BluetoothAdapter.STATE_TURNING_ON) {
+        if (!btAdaptor.isEnabled()) {
             Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             btIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getApplicationContext().startActivity(btIntent);
+            return true;
+        } else {
+            return false;
         }
     }
 
