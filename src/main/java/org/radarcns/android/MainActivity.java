@@ -299,7 +299,7 @@ public abstract class MainActivity extends AppCompatActivity {
         return mHandler;
     }
 
-    private void disconnect() {
+    protected void disconnect() {
         for (DeviceServiceProvider provider : mConnections) {
             disconnect(provider.getConnection());
         }
@@ -318,7 +318,7 @@ public abstract class MainActivity extends AppCompatActivity {
     /**
      * If no E4Service is scanning, and ask one to start scanning.
      */
-    private void startScanning() {
+    protected void startScanning() {
         if (isForcedDisconnected) {
             return;
         }
@@ -403,7 +403,7 @@ public abstract class MainActivity extends AppCompatActivity {
      * Sends an intent to request bluetooth to be turned on.
      * @return whether a request was sent
      */
-    boolean requestEnableBt() {
+    protected boolean requestEnableBt() {
         BluetoothAdapter btAdaptor = BluetoothAdapter.getDefaultAdapter();
         if (!btAdaptor.isEnabled()) {
             Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
@@ -419,7 +419,7 @@ public abstract class MainActivity extends AppCompatActivity {
         return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET);
     }
 
-    private void checkPermissions() {
+    protected void checkPermissions() {
         List<String> permissions = new ArrayList<>();
         permissions.addAll(getActivityPermissions());
         for (DeviceServiceProvider<?> provider : mConnections) {
@@ -487,7 +487,7 @@ public abstract class MainActivity extends AppCompatActivity {
         }
     }
 
-    private DeviceServiceProvider getConnectionProvider(DeviceServiceConnection<?> connection) {
+    protected DeviceServiceProvider getConnectionProvider(DeviceServiceConnection<?> connection) {
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.getConnection().equals(connection)) {
                 return provider;
