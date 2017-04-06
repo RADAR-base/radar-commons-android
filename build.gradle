@@ -65,11 +65,12 @@ dependencies {
     compile 'org.apache.avro:avro:1.8.1'
     compile 'org.xerial.snappy:snappy-java:1.1.2.6'
     compile 'com.google.firebase:firebase-config:10.0.1'
-    compile ('org.radarcns:radar-commons:0.1') {
+    compile ('org.radarcns:radar-commons:0.2') {
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
     }
+    compile 'org.radarcns:radar-schemas-commons:0.1'
 
     testCompile 'junit:junit:4.12'
     testCompile 'org.slf4j:slf4j-simple:1.7.21'
