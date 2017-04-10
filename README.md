@@ -1,5 +1,7 @@
 # RADAR-Commons-Android
 
+[![Build Status](https://travis-ci.org/RADAR-CNS/RADAR-Commons-Android.svg?branch=master)](https://travis-ci.org/RADAR-CNS/RADAR-Commons-Android)
+
 Base module for the RADAR passive remote monitoring app. Modules for that app should implement the API from this base library. Also user interfaces should use this as a base.
 
 ## Contributing
