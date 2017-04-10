@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Kings College London and The Hyve
+ * Copyright 2017 The Hyve
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static android.Manifest.permission.ACCESS_NETWORK_STATE;
+import static android.Manifest.permission.BLUETOOTH;
 import static android.Manifest.permission.INTERNET;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
@@ -64,7 +65,7 @@ public abstract class MainActivity extends AppCompatActivity {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
-    private final Map<DeviceServiceConnection, Set<String>> mInputDeviceKeys;
+    private final Map<DeviceServiceConnection, Set<String>> deviceFilters;
 
     private long uiRefreshRate;
 
@@ -97,7 +98,7 @@ public abstract class MainActivity extends AppCompatActivity {
         serverStatus = null;
 
         mTotalRecordsSent = new HashMap<>();
-        mInputDeviceKeys = new HashMap<>();
+        deviceFilters = new HashMap<>();
 
         bindServicesRunner = new Runnable() {
             @Override
@@ -162,13 +163,13 @@ public abstract class MainActivity extends AppCompatActivity {
 
         // TODO: disable developer mode in production
         radarConfiguration = createConfiguration();
-        configureRunAtBoot();
+        onConfigChanged();
 
         mConnections = DeviceServiceProvider.loadProviders(this, radarConfiguration);
         for (DeviceServiceProvider provider : mConnections) {
             DeviceServiceConnection connection = provider.getConnection();
             mTotalRecordsSent.put(connection, new TimedInt());
-            mInputDeviceKeys.put(connection, Collections.<String>emptySet());
+            deviceFilters.put(connection, Collections.<String>emptySet());
         }
 
         radarConfiguration.onFetchComplete(this, new OnCompleteListener<Void>() {
@@ -183,7 +184,7 @@ public abstract class MainActivity extends AppCompatActivity {
                     }
                     logger.info("Remote Config: Activate success.");
                     // Set global properties.
-                    configureRunAtBoot();
+                    onConfigChanged();
                 } else {
                     Boast.makeText(MainActivity.this, "Remote Config: Fetch Failed",
                             Toast.LENGTH_SHORT).show();
@@ -204,7 +205,10 @@ public abstract class MainActivity extends AppCompatActivity {
                 } catch (RemoteException e) {
                     logger.warn("Failed to update device data", e);
                 } finally {
-                    getHandler().postDelayed(mUIScheduler, uiRefreshRate);
+                    Handler handler = getHandler();
+                    if (handler != null) {
+                        handler.postDelayed(mUIScheduler, uiRefreshRate);
+                    }
                 }
             }
         };
@@ -214,11 +218,13 @@ public abstract class MainActivity extends AppCompatActivity {
         }
     }
 
+    protected abstract void onConfigChanged();
+
     protected abstract MainActivityView createView();
 
-    private void configureRunAtBoot() {
+    protected void configureRunAtBoot(@NonNull Class<?> bootReceiver) {
         ComponentName receiver = new ComponentName(
-                getApplicationContext(), MainActivityBootStarter.class);
+                getApplicationContext(), bootReceiver);
         PackageManager pm = getApplicationContext().getPackageManager();
 
         boolean startAtBoot = radarConfiguration.getBoolean(RadarConfiguration.START_AT_BOOT, false);
@@ -248,8 +254,8 @@ public abstract class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         logger.info("mainActivity onPause");
-        super.onPause();
         getHandler().removeCallbacks(mUIScheduler);
+        super.onPause();
     }
 
     @Override
@@ -293,7 +299,7 @@ public abstract class MainActivity extends AppCompatActivity {
         return mHandler;
     }
 
-    private void disconnect() {
+    protected void disconnect() {
         for (DeviceServiceProvider provider : mConnections) {
             disconnect(provider.getConnection());
         }
@@ -312,21 +318,27 @@ public abstract class MainActivity extends AppCompatActivity {
     /**
      * If no E4Service is scanning, and ask one to start scanning.
      */
-    private void startScanning() {
+    protected void startScanning() {
         if (isForcedDisconnected) {
             return;
-        } else if (!BluetoothAdapter.getDefaultAdapter().isEnabled()) {
-            enableBt();
-            return;
         }
+        boolean requestedBt = false;
         for (DeviceServiceProvider provider : mConnections) {
             DeviceServiceConnection connection = provider.getConnection();
             if (!connection.hasService() || connection.isRecording()) {
                 continue;
             }
+            if (provider.needsPermissions().contains(BLUETOOTH)) {
+                if (requestedBt || requestEnableBt()) {
+                    logger.info("Cannot start scanning on service {} until bluetooth is turned on.",
+                            connection);
+                    requestedBt = true;
+                    continue;
+                }
+            }
             try {
                 logger.info("Starting recording on connection {}", connection);
-                connection.startRecording(mInputDeviceKeys.get(connection));
+                connection.startRecording(deviceFilters.get(connection));
             } catch (RemoteException ex) {
                 logger.error("Failed to start recording for device {}", connection, ex);
             }
@@ -371,8 +383,8 @@ public abstract class MainActivity extends AppCompatActivity {
                     case CONNECTING:
                         logger.info( "Device name is {} while connecting.", connection.getDeviceName() );
                         // Reject if device name inputted does not equal device nameA
-                        if (!connection.isAllowedDevice(mInputDeviceKeys.get(connection))) {
-                            logger.info("Device name '{}' is not in the list of keys '{}'", connection.getDeviceName(), mInputDeviceKeys.get(connection));
+                        if (!connection.isAllowedDevice(deviceFilters.get(connection))) {
+                            logger.info("Device name '{}' is not in the list of keys '{}'", connection.getDeviceName(), deviceFilters.get(connection));
                             Boast.makeText(MainActivity.this, String.format("Device '%s' rejected", connection.getDeviceName()), Toast.LENGTH_LONG).show();
                             disconnect();
                         }
@@ -387,12 +399,19 @@ public abstract class MainActivity extends AppCompatActivity {
         });
     }
 
-    void enableBt() {
+    /**
+     * Sends an intent to request bluetooth to be turned on.
+     * @return whether a request was sent
+     */
+    protected boolean requestEnableBt() {
         BluetoothAdapter btAdaptor = BluetoothAdapter.getDefaultAdapter();
-        if (!btAdaptor.isEnabled() && btAdaptor.getState() != BluetoothAdapter.STATE_TURNING_ON) {
+        if (!btAdaptor.isEnabled()) {
             Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             btIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getApplicationContext().startActivity(btIntent);
+            return true;
+        } else {
+            return false;
         }
     }
 
@@ -400,7 +419,7 @@ public abstract class MainActivity extends AppCompatActivity {
         return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET);
     }
 
-    private void checkPermissions() {
+    protected void checkPermissions() {
         List<String> permissions = new ArrayList<>();
         permissions.addAll(getActivityPermissions());
         for (DeviceServiceProvider<?> provider : mConnections) {
@@ -448,8 +467,10 @@ public abstract class MainActivity extends AppCompatActivity {
     }
 
     public void setAllowedDeviceIds(final DeviceServiceConnection connection, Set<String> allowedIds) {
+        deviceFilters.put(connection, allowedIds);
+
         // Do NOT disconnect if input has not changed, is empty or equals the connected device.
-        if (!connection.isAllowedDevice(allowedIds)) {
+        if (connection.hasService() && !connection.isAllowedDevice(allowedIds)) {
             getHandler().post(new Runnable() {
                 @Override
                 public void run() {
@@ -466,7 +487,7 @@ public abstract class MainActivity extends AppCompatActivity {
         }
     }
 
-    private DeviceServiceProvider getConnectionProvider(DeviceServiceConnection<?> connection) {
+    protected DeviceServiceProvider getConnectionProvider(DeviceServiceConnection<?> connection) {
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.getConnection().equals(connection)) {
                 return provider;

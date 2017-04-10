@@ -4,11 +4,6 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:2.2.3'
-
-        // NOTE: Do not place your application dependencies here; they belong
-        // in the individual module build.gradle files
-        classpath 'com.google.gms:google-services:3.0.0'
-
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
     }
@@ -25,9 +20,8 @@ android {
     defaultConfig {
         minSdkVersion 19
         targetSdkVersion 22
-        versionCode 1
-        versionName '0.1-alpha.1'
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        versionCode 2
+        versionName '0.1-alpha.2-SNAPSHOT'
     }
     lintOptions {
         abortOnError false
@@ -62,9 +56,7 @@ version = android.defaultConfig.versionName
 //---------------------------------------------------------------------------//
 
 repositories {
-    maven { url "${rootProject.projectDir}/libs" }
     jcenter()
-    maven { url 'http://packages.confluent.io/maven/' }
 }
 
 dependencies {
@@ -73,14 +65,16 @@ dependencies {
     compile 'org.apache.avro:avro:1.8.1'
     compile 'org.xerial.snappy:snappy-java:1.1.2.6'
     compile 'com.google.firebase:firebase-config:10.0.1'
-    compile ('org.radarcns:radar-commons:0.1') {
+    compile ('org.radarcns:radar-commons:0.2') {
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
     }
+    compile 'org.radarcns:radar-schemas-commons:0.1'
 
     testCompile 'junit:junit:4.12'
     testCompile 'org.slf4j:slf4j-simple:1.7.21'
+    testCompile 'org.robolectric:robolectric:3.3.2'
 }
 
 task sourcesJar(type: Jar) {

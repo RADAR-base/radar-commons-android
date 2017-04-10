@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Kings College London and The Hyve
+ * Copyright 2017 The Hyve
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -259,7 +259,7 @@ public class QueueFileTest {
         assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH * 2, queue.fileSize());
     }
 
-    @Test(timeout = 2000L)
+    @Test(timeout = 10000L)
     public void enduranceTest() throws Throwable {
         int numberOfOperations = 1000;
         int size = MappedQueueFileStorage.MINIMUM_LENGTH *2;

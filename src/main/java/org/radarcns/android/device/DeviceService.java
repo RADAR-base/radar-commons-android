@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Kings College London and The Hyve
+ * Copyright 2017 The Hyve
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -320,7 +320,13 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     protected abstract DeviceTopics getTopics();
 
-    protected abstract List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> getCachedTopics();
+    /**
+     * Topics that should cache information. This implementation returns all topics in
+     * getTopics().getTopics().
+     */
+    protected List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> getCachedTopics() {
+        return getTopics().getTopics();
+    }
 
     public synchronized void setUserId(@NonNull String userId) {
         Objects.requireNonNull(userId);
@@ -328,6 +334,34 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         if (deviceScanner != null) {
             deviceScanner.getState().getId().setUserId(userId);
         }
+    }
+
+    public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
+        DeviceManager localManager = getDeviceManager();
+        if (getUserId() == null) {
+            throw new IllegalStateException("Cannot start recording: user ID is not set.");
+        }
+        if (localManager == null) {
+            logger.info("Starting recording");
+            localManager = createDeviceManager();
+            boolean didSet;
+            synchronized (this) {
+                if (deviceScanner == null) {
+                    deviceScanner = localManager;
+                    didSet = true;
+                } else {
+                    didSet = false;
+                }
+            }
+            if (didSet) {
+                localManager.start(acceptableIds);
+            }
+        }
+        return getDeviceManager().getState();
+    }
+
+    public void stopRecording() {
+        stopDeviceManager(unsetDeviceManager());
     }
 
     private class LocalBinder extends Binder implements DeviceServiceBinder {
@@ -359,32 +393,12 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         @Override
         public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
-            DeviceManager localManager = getDeviceManager();
-            if (getUserId() == null) {
-                throw new IllegalStateException("Cannot start recording: user ID is not set.");
-            }
-            if (localManager == null) {
-                logger.info("Starting recording");
-                localManager = createDeviceManager();
-                boolean didSet;
-                synchronized (this) {
-                    if (deviceScanner == null) {
-                        deviceScanner = localManager;
-                        didSet = true;
-                    } else {
-                        didSet = false;
-                    }
-                }
-                if (didSet) {
-                    localManager.start(acceptableIds);
-                }
-            }
-            return getDeviceManager().getState();
+            return DeviceService.this.startRecording(acceptableIds);
         }
 
         @Override
         public void stopRecording() {
-            stopDeviceManager(unsetDeviceManager());
+            DeviceService.this.stopRecording();
         }
 
         @Override
@@ -455,8 +469,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                             for (int i = 0; i < setSize; i++) {
                                 acceptableIds.add(data.readString());
                             }
-                            startRecording(acceptableIds).writeToParcel(reply, 0);
+                            BaseDeviceState deviceState = startRecording(acceptableIds);
                             reply.writeByte((byte)1);
+                            deviceState.writeToParcel(reply, 0);
                         }
                         break;
                     }
@@ -586,7 +601,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return deviceScanner;
     }
 
-    public Binder getBinder() {
+    /** Get the service local binder. */
+    public LocalBinder getBinder() {
         return mBinder;
     }
 
