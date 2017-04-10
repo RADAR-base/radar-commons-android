@@ -259,7 +259,7 @@ public class QueueFileTest {
         assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH * 2, queue.fileSize());
     }
 
-    @Test(timeout = 2000L)
+    @Test(timeout = 10000L)
     public void enduranceTest() throws Throwable {
         int numberOfOperations = 1000;
         int size = MappedQueueFileStorage.MINIMUM_LENGTH *2;
