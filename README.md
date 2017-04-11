@@ -39,6 +39,6 @@ To create an Android App, follow the following steps:
 
 ## Contributing
 
-For latest code use `dev` branch.
-Code should be formatted using the [Google Java Code Style Guide](https://google.github.io/styleguide/javaguide.html).
+For latest code use `dev` branch. Code should be formatted using the [Google Java Code Style Guide](https://google.github.io/styleguide/javaguide.html), except using 4 spaces as indentation.
+
 If you want to contribute a feature or fix browse our [issues](https://github.com/RADAR-CNS/RADAR-Commons-Android/issues), and please make a pull request.
