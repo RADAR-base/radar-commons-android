@@ -21,7 +21,7 @@ android {
         minSdkVersion 19
         targetSdkVersion 22
         versionCode 2
-        versionName '0.1-alpha.2-SNAPSHOT'
+        versionName '0.1'
     }
     lintOptions {
         abortOnError false
@@ -49,7 +49,13 @@ android {
 
 group = 'org.radarcns'
 ext.moduleName = 'radar-commons-android'
+ext.description = 'Kafka backend for processing device data.'
+ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
 version = android.defaultConfig.versionName
+
+ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
+ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
+ext.website = 'http://radar-cns.org'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
@@ -77,20 +83,34 @@ dependencies {
     testCompile 'org.robolectric:robolectric:3.3.2'
 }
 
+//---------------------------------------------------------------------------//
+// Build system metadata                                                     //
+//---------------------------------------------------------------------------//
+
+ext.sharedManifest = manifest {
+    attributes("Implementation-Title": moduleName,
+            "Implementation-Version": version)
+}
+
 task sourcesJar(type: Jar) {
-    from android.sourceSets.main.java.srcDirs
     classifier = 'sources'
+    from android.sourceSets.main.java.srcDirs
+    manifest.from sharedManifest
 }
 
 task javadoc(type: Javadoc) {
     source = android.sourceSets.main.java.srcDirs
     classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+    classpath += configurations.compile
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier = 'javadoc'
     from javadoc.destinationDir
+    manifest.from sharedManifest
 }
+
+// add javadoc/source jar tasks as artifacts
 artifacts {
     archives javadocJar
     archives sourcesJar
@@ -101,15 +121,34 @@ def pomConfig = {
         license {
             name "The Apache Software License, Version 2.0"
             url "http://www.apache.org/licenses/LICENSE-2.0.txt"
-            distribution "RADAR Commons Android"
+            distribution 'repo'
         }
     }
     developers {
         developer {
-            id "radar-cns"
-            name "Joris Borgdorff"
-            email "joris@thehyve.nl"
+            id 'blootsvoets'
+            name 'Joris Borgdorff'
+            email 'joris@thehyve.nl'
+            organization 'The Hyve'
         }
+        developer {
+            id 'MaximMoinat'
+            name 'Maxim Moinat'
+            email 'maxim@thehyve.nl'
+            organization 'The Hyve'
+        }
+    }
+    issueManagement {
+        system 'GitHub'
+        url githubUrl + '/issues'
+    }
+    organization {
+        name 'RADAR-CNS'
+        url website
+    }
+    scm {
+        connection 'scm:git:' + githubUrl
+        url githubUrl
     }
 }
 
@@ -122,9 +161,9 @@ install {
         }
         pom.withXml {
             def root = asNode()
-            root.appendNode('description', 'Kafka backend for processing device data.')
+            root.appendNode('description', description)
             root.appendNode('name', moduleName)
-            root.appendNode('url', 'https://github.com/RADAR-CNS/RADAR-Commons-Android.git')
+            root.appendNode('url', githubUrl)
             root.children().last() + pomConfig
         }
     }
@@ -133,16 +172,22 @@ install {
 bintray {
     user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
     key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+    override = false
     configurations = ['archives']
     pkg {
         repo = project.group
         name = moduleName
         userOrg = 'radar-cns'
+        desc = description
         licenses = ['Apache-2.0']
-        vcsUrl = 'https://github.com/RADAR_CNS/RADAR-Commons-Android.git'
+        websiteUrl = website
+        issueTrackerUrl = issueUrl
+        vcsUrl = githubUrl
+        githubRepo = githubRepoName
+        githubReleaseNotesFile = 'README.md'
         version {
             name = project.version
-            desc = 'Common Android library for the RADAR passive app'
+            desc = description
             vcsTag = System.getenv('TRAVIS_TAG')
             released = new Date()
             gpg {

@@ -24,8 +24,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -37,6 +35,7 @@ import android.util.Pair;
 
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.R;
+import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
@@ -250,19 +249,32 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         Intent notificationIntent = new Intent(context, DeviceService.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, notificationIntent, 0);
 
+        startForeground(ONGOING_NOTIFICATION_ID, createBackgroundNotification(pendingIntent));
+    }
+
+    protected Notification createBackgroundNotification(PendingIntent intent) {
         Notification.Builder notificationBuilder = new Notification.Builder(
                 getApplicationContext());
-        Bitmap largeIcon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
-        notificationBuilder.setSmallIcon(R.drawable.ic_bt_connected);
-        notificationBuilder.setLargeIcon(largeIcon);
-        notificationBuilder.setTicker(getText(R.string.service_notification_ticker));
-        notificationBuilder.setWhen(System.currentTimeMillis());
-        notificationBuilder.setContentIntent(pendingIntent);
-        notificationBuilder.setContentText(getText(R.string.service_notification_text));
-        notificationBuilder.setContentTitle(getText(R.string.service_notification_title));
-        Notification notification = notificationBuilder.build();
+        notificationBuilder
+                .setWhen(System.currentTimeMillis())
+                .setContentIntent(intent)
+                .setTicker(getText(R.string.service_notification_ticker))
+                .setContentText(getText(R.string.service_notification_text))
+                .setContentTitle(getText(R.string.service_notification_title));
 
-        startForeground(ONGOING_NOTIFICATION_ID, notification);
+        if (getApplication() instanceof RadarApplication) {
+            ((RadarApplication)getApplication()).updateNotificationAppSettings(notificationBuilder);
+        } else {
+            notificationBuilder.setSmallIcon(R.drawable.ic_bt_connected);
+        }
+        updateBackgroundNotificationText(notificationBuilder);
+
+        return notificationBuilder.build();
+    }
+
+    protected Notification.Builder updateBackgroundNotificationText(Notification.Builder builder) {
+        // Do not update anything
+        return builder;
     }
 
     public void stopBackgroundListener() {
