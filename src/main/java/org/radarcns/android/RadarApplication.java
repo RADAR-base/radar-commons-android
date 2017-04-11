@@ -32,7 +32,4 @@ public abstract class RadarApplication extends Application {
     public abstract Bitmap getLargeIcon();
     /** Small icon drawable resource ID. */
     public abstract int getSmallIcon();
-
-    /** Implementation of the main activity class. */
-    public abstract Class<?> getMainActivityClass();
 }
