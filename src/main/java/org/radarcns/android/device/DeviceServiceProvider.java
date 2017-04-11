@@ -136,12 +136,13 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * called.
      */
     public void unbind() {
+        if (activity == null) {
+            throw new IllegalStateException("#setActivity(MainActivity) needs to be set before #unbind() is called.");
+        }
         if (!bound) {
             throw new IllegalStateException("Service is not bound");
         }
-        if (activity == null) {
-            throw new IllegalStateException("#setActivity(MainActivity) needs to be set before #bind() is called.");
-        }
+        bound = false;
         activity.unbindService(connection);
         connection.onServiceDisconnected(null);
     }
