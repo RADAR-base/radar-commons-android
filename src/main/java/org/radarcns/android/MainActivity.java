@@ -222,6 +222,7 @@ public abstract class MainActivity extends AppCompatActivity {
 
     protected abstract MainActivityView createView();
 
+    /** Configure whether a boot listener should start this application at boot. */
     protected void configureRunAtBoot(@NonNull Class<?> bootReceiver) {
         ComponentName receiver = new ComponentName(
                 getApplicationContext(), bootReceiver);
