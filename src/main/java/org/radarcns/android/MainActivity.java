@@ -61,17 +61,29 @@ import static android.Manifest.permission.INTERNET;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
+/** Base MainActivity class. It manages the services to collect the data and starts up a view. To
+ * create an application, extend this class and override the abstract methods. */
 public abstract class MainActivity extends AppCompatActivity {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
+
+    /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters;
 
+    /** Time between refreshes. */
     private long uiRefreshRate;
 
+    /**
+     * Background handler thread, to do the service orchestration. Having this in the background
+     * is important to avoid any lags in the UI. It is shutdown whenever the activity is not
+     * running.
+     */
     private HandlerThread mHandlerThread;
+    /** Hander in the background. It is set to null whenever the activity is not running. */
     private Handler mHandler;
 
+    /** The UI to show the service data. */
     private Runnable mUIScheduler;
     private MainActivityView mUIUpdater;
     private boolean isForcedDisconnected;
@@ -83,13 +95,17 @@ public abstract class MainActivity extends AppCompatActivity {
     /** Connections. **/
     private List<DeviceServiceProvider> mConnections;
 
+    /** An overview of how many records have been sent throughout the application. */
     private final Map<DeviceServiceConnection, TimedInt> mTotalRecordsSent;
     private String latestTopicSent;
     private final TimedInt latestNumberOfRecordsSent;
 
     private RadarConfiguration radarConfiguration;
 
+    /** Runner to bind all needed services to this activity. */
     private final Runnable bindServicesRunner;
+
+    /** Current server status. */
     private ServerStatusListener.Status serverStatus;
 
     public MainActivity() {
@@ -155,13 +171,18 @@ public abstract class MainActivity extends AppCompatActivity {
         return super.supportRequestWindowFeature(featureId);
     }
 
+    /**
+     * Create a RadarConfiguration object. At implementation, the Firebase version needs to be set
+     * for this.
+     *
+     * @return configured RadarConfiguration
+     */
     protected abstract RadarConfiguration createConfiguration();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // TODO: disable developer mode in production
         radarConfiguration = createConfiguration();
         onConfigChanged();
 
@@ -218,8 +239,13 @@ public abstract class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Called whenever the RadarConfiguration is changed. This can be at activity start or
+     * when the configuration is updated from Firebase.
+     */
     protected abstract void onConfigChanged();
 
+    /** Create a view to show the data of this activity. */
     protected abstract MainActivityView createView();
 
     /** Configure whether a boot listener should start this application at boot. */
@@ -296,16 +322,19 @@ public abstract class MainActivity extends AppCompatActivity {
         mHandlerThread.quitSafely();
     }
 
+    /** Get background handler. */
     private synchronized Handler getHandler() {
         return mHandler;
     }
 
+    /** Disconnect from all services. */
     protected void disconnect() {
         for (DeviceServiceProvider provider : mConnections) {
             disconnect(provider.getConnection());
         }
     }
 
+    /** Disconnect from given service. */
     public void disconnect(DeviceServiceConnection connection) {
         if (connection.isRecording()) {
             try {
@@ -317,7 +346,7 @@ public abstract class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * If no E4Service is scanning, and ask one to start scanning.
+     * If no Service is scanning, and ask one to start scanning.
      */
     protected void startScanning() {
         if (isForcedDisconnected) {
