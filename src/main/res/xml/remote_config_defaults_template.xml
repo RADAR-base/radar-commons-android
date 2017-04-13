@@ -40,7 +40,7 @@
     </entry>
     <entry>
         <key>kafka_upload_rate</key>
-        <value>10</value>
+        <value>50</value>
     </entry>
     <entry>
         <key>kafka_clean_rate</key>
@@ -48,7 +48,7 @@
     </entry>
     <entry>
         <key>sender_connection_timeout</key>
-        <value>20</value>
+        <value>120</value>
     </entry>
 </defaultsMap>
 <!-- END xml_defaults -->

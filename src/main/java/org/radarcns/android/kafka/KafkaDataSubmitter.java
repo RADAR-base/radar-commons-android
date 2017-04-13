@@ -110,6 +110,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                 uploadRate, cleanRate);
     }
 
+    /** Set upload rate in seconds. */
     public final synchronized void setUploadRate(long period) {
         if (uploadFuture != null) {
             uploadFuture.cancel(false);
@@ -147,9 +148,9 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
         }, uploadRate / 5, uploadRate / 5, TimeUnit.MILLISECONDS);
     }
 
-    /** Upload rate in milliseconds. */
+    /** Upload rate in seconds. */
     private synchronized long getUploadRate() {
-        return this.uploadRate;
+        return this.uploadRate / 1000L;
     }
 
     public final synchronized void setCleanRate(long period) {
@@ -403,7 +404,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                             connection.didDisconnect(e);
                         }
                     }
-                }, period, TimeUnit.MILLISECONDS));
+                }, period, TimeUnit.SECONDS));
             }
         }
         return true;
