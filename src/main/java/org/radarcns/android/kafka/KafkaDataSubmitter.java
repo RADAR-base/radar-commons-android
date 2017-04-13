@@ -69,6 +69,9 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     private boolean lastUploadFailed = false;
     private ScheduledFuture<?> cleanFuture;
     private ScheduledFuture<?> uploadFuture;
+    private ScheduledFuture<?> uploadIfNeededFuture;
+    /** Upload rate in milliseconds. */
+    private long uploadRate;
 
     public KafkaDataSubmitter(@NonNull DataHandler<K, V> dataHandler, @NonNull KafkaSender<K, V> sender, ThreadFactory threadFactory, int sendLimit, long uploadRate, long cleanRate) {
         this.dataHandler = dataHandler;
@@ -98,6 +101,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
 
         synchronized (this) {
             uploadFuture = null;
+            uploadIfNeededFuture = null;
             setUploadRate(uploadRate);
             cleanFuture = null;
             setCleanRate(cleanRate);
@@ -109,7 +113,9 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     public final synchronized void setUploadRate(long period) {
         if (uploadFuture != null) {
             uploadFuture.cancel(false);
+            uploadIfNeededFuture.cancel(false);
         }
+        this.uploadRate = period * 1000L;
         // Get upload frequency from system property
         uploadFuture = executor.scheduleAtFixedRate(new Runnable() {
             Set<AvroTopic<K, ? extends V>> topicsToSend = Collections.emptySet();
@@ -129,7 +135,21 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                     topicsToSend.clear();
                 }
             }
-        }, period, period, TimeUnit.SECONDS);
+        }, uploadRate, uploadRate, TimeUnit.MILLISECONDS);
+
+        uploadIfNeededFuture = executor.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                if (connection.isConnected()) {
+                    uploadCachesIfNeeded();
+                }
+            }
+        }, uploadRate / 5, uploadRate / 5, TimeUnit.MILLISECONDS);
+    }
+
+    /** Upload rate in milliseconds. */
+    private synchronized long getUploadRate() {
+        return this.uploadRate;
     }
 
     public final synchronized void setCleanRate(long period) {
@@ -232,6 +252,34 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     }
 
     /**
+     * Upload the caches if they would cause the buffer to overflow
+     */
+    private void uploadCachesIfNeeded() {
+        boolean uploadingNotified = false;
+        int currentSendLimit = sendLimit.get();
+
+        try {
+            for (Map.Entry<AvroTopic<K, ? extends V>, ? extends DataCache<K, ? extends V>> entry : dataHandler.getCaches().entrySet()) {
+                if (entry.getValue().numberOfRecords().first > currentSendLimit) {
+                    //noinspection unchecked
+                    uploadCache((AvroTopic<K, V>) entry.getKey(), (DataCache<K, V>) entry.getValue(), currentSendLimit, uploadingNotified);
+                    if (!uploadingNotified) {
+                        uploadingNotified = true;
+                    }
+                }
+            }
+            if (uploadingNotified) {
+                dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED);
+                connection.didConnect();
+            }
+        } catch (IOException ex) {
+            if (!lastUploadFailed) {
+                connection.didDisconnect(ex);
+            }
+        }
+    }
+
+    /**
      * Upload a limited amount of data stored in the database which is not yet sent.
      */
     private void uploadCaches(Set<AvroTopic<K, ? extends V>> toSend) {
@@ -328,6 +376,8 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
         }
         records.add(new Record<>(offset, deviceId, (V)record));
 
+        long period = getUploadRate();
+
         synchronized (trySendFuture) {
             if (!trySendFuture.containsKey(topic)) {
                 trySendFuture.put(castTopic, executor.schedule(new Runnable() {
@@ -353,7 +403,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                             connection.didDisconnect(e);
                         }
                     }
-                }, 5L, TimeUnit.SECONDS));
+                }, period, TimeUnit.MILLISECONDS));
             }
         }
         return true;
