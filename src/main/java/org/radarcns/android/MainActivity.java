@@ -274,7 +274,6 @@ public abstract class MainActivity extends AppCompatActivity {
         logger.info("mainActivity onResume");
         super.onResume();
         getHandler().post(bindServicesRunner);
-        radarConfiguration.fetch();
         getHandler().post(mUIScheduler);
     }
 
@@ -298,6 +297,8 @@ public abstract class MainActivity extends AppCompatActivity {
         synchronized (this) {
             mHandler = localHandler;
         }
+
+        radarConfiguration.fetch();
     }
 
     @Override
