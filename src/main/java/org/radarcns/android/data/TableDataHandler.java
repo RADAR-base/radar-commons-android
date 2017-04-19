@@ -21,13 +21,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.os.BatteryManager;
 import android.support.annotation.NonNull;
 
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.AndroidThreadFactory;
+import org.radarcns.android.util.AtomicFloat;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.SpecificRecordEncoder;
 import org.radarcns.key.MeasurementKey;
@@ -48,6 +49,8 @@ import java.util.TreeMap;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static android.content.Intent.ACTION_BATTERY_CHANGED;
+
 /**
  * Stores data in databases and sends it to the server.
  */
@@ -60,6 +63,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public static final long CLEAN_RATE_DEFAULT = 3600L;
     public static final long UPLOAD_RATE_DEFAULT = 10L;
     public static final long SENDER_CONNECTION_TIMEOUT_DEFAULT = 10L;
+    public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
 
     private final Context context;
     private final ThreadFactory threadFactory;
@@ -73,11 +77,15 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private long kafkaUploadRate;
     private long kafkaCleanRate;
     private long senderConnectionTimeout;
+    private boolean dataIsConnected;
+    private boolean batteryIsPlugged;
+    private float batteryFactor;
 
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
     private KafkaDataSubmitter<MeasurementKey, SpecificRecord> submitter;
     private RestSender<MeasurementKey, SpecificRecord> sender;
+    private final AtomicFloat minimumBatteryLevel;
 
     /**
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
@@ -92,6 +100,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.kafkaCleanRate = CLEAN_RATE_DEFAULT;
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
+        this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
@@ -109,47 +118,82 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         connectivityReceiver = new BroadcastReceiver() {
             public void onReceive(Context context, Intent intent) {
                 if (intent.getAction().equals(ConnectivityManager.CONNECTIVITY_ACTION)) {
-                    if (intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false)) {
-                        logger.info("Network disconnected, stopping data sender.");
+                    updateNetworkStatus(intent);
+
+                    if (isStarted() && !dataIsConnected) {
+                        logger.info("Network was disconnected, stopping data sending");
                         stop();
-                    } else if (!isStarted()) {
-                        logger.info("Network connected, starting data sender.");
-                        start();
+                        return;
                     }
+                } else if (intent.getAction().equals(ACTION_BATTERY_CHANGED)) {
+                    updateBatteryStatus(intent);
+
+                    if (isStarted() && batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged) {
+                        logger.info("Battery level getting low, stopping data sending");
+                        stop();
+                        return;
+                    }
+                }
+
+                // Just try to start: the start method will not do anything if the parameters
+                // are not right.
+                if (!isStarted()) {
+                    start();
                 }
             }
         };
 
+        dataIsConnected = false;
+        batteryFactor = 1.0f;
+        batteryIsPlugged = true;
+
         if (kafkaUrl != null) {
-            updateServerStatus(Status.READY);
-            context.registerReceiver(connectivityReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
+            doEnableSubmitter();
         } else {
             updateServerStatus(Status.DISABLED);
         }
     }
 
-    private boolean isDataConnected() {
-        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = cm.getActiveNetworkInfo();
-        return networkInfo != null && networkInfo.isConnectedOrConnecting();
+    private void updateBatteryStatus(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+
+        batteryFactor = level / (float)scale;
+        batteryIsPlugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) > 0;
+    }
+
+    private void updateNetworkStatus(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        dataIsConnected = intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
     }
 
     /**
      * Start submitting data to the server.
      *
-     * This can only be called if there is not already a submitter running.
+     * This can only be called if there is not already a submitter running. It will return without
+     * any action if the network is not connected or if the battery is running too low.
      */
     public synchronized void start() {
         if (isStarted()) {
             throw new IllegalStateException("Cannot start submitter, it is already started");
         }
-        if (status == Status.DISABLED || !isDataConnected()) {
+        if (status == Status.DISABLED
+                || !dataIsConnected
+                || (batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged)) {
             return;
         }
 
         updateServerStatus(Status.CONNECTING);
-        this.sender = new RestSender<>(kafkaConfig, schemaRetriever, new SpecificRecordEncoder(false), new SpecificRecordEncoder(false), senderConnectionTimeout);
-        this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory, kafkaRecordsSendLimit, kafkaUploadRate, kafkaCleanRate);
+        this.sender = new RestSender<>(kafkaConfig, schemaRetriever,
+                new SpecificRecordEncoder(false), new SpecificRecordEncoder(false),
+                senderConnectionTimeout);
+        this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
+                kafkaRecordsSendLimit, kafkaUploadRate, kafkaCleanRate);
     }
 
     public synchronized boolean isStarted() {
@@ -183,8 +227,20 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
     public synchronized void enableSubmitter() {
         if (status == Status.DISABLED) {
-            updateServerStatus(Status.READY);
+            doEnableSubmitter();
         }
+    }
+
+    private void doEnableSubmitter() {
+        IntentFilter networkFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        updateNetworkStatus(context.registerReceiver(connectivityReceiver, networkFilter));
+
+        IntentFilter batteryFilter = new IntentFilter(ACTION_BATTERY_CHANGED);
+        updateBatteryStatus(context.registerReceiver(connectivityReceiver, batteryFilter));
+
+        updateServerStatus(Status.READY);
+
+        start();
     }
 
     /**
@@ -327,6 +383,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     }
 
     public synchronized void setKafkaUploadRate(long kafkaUploadRate) {
+        if (this.kafkaUploadRate == kafkaUploadRate) {
+            return;
+        }
         if (submitter != null) {
             submitter.setUploadRate(kafkaUploadRate);
         }
@@ -363,5 +422,12 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
     public void setDataRetention(long dataRetention) {
         this.dataRetention.set(dataRetention);
+    }
+
+    public void setMinimumBatteryLevel(float minimumBatteryLevel) {
+        this.minimumBatteryLevel.set(minimumBatteryLevel);
+        if (!isStarted()) {
+            start();
+        }
     }
 }

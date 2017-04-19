@@ -596,6 +596,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.DEFAULT_GROUP_ID_KEY)) {
             setUserId(RadarConfiguration.getStringExtra(bundle, RadarConfiguration.DEFAULT_GROUP_ID_KEY));
         }
+        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
+            localDataHandler.setMinimumBatteryLevel(RadarConfiguration.getFloatExtra(bundle, RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL));
+        }
 
         if (newlyCreated) {
             localDataHandler.addStatusListener(this);
