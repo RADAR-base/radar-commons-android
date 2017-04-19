@@ -50,5 +50,9 @@
         <key>sender_connection_timeout</key>
         <value>120</value>
     </entry>
+    <entry>
+        <key>kafka_upload_minimum_battery_level</key>
+        <value>0.1</value>
+    </entry>
 </defaultsMap>
 <!-- END xml_defaults -->
