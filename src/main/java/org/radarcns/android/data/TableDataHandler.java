@@ -222,6 +222,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             if (isStarted()) {
                 stop();
             }
+            context.unregisterReceiver(connectivityReceiver);
         }
     }
 
