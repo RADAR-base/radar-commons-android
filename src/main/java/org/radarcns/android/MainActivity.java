@@ -274,7 +274,6 @@ public abstract class MainActivity extends AppCompatActivity {
         logger.info("mainActivity onResume");
         super.onResume();
         getHandler().post(bindServicesRunner);
-        radarConfiguration.fetch();
         getHandler().post(mUIScheduler);
     }
 
@@ -292,12 +291,14 @@ public abstract class MainActivity extends AppCompatActivity {
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
 
-        mHandlerThread = new HandlerThread("E4Service connection", Process.THREAD_PRIORITY_BACKGROUND);
+        mHandlerThread = new HandlerThread("Service connection", Process.THREAD_PRIORITY_BACKGROUND);
         mHandlerThread.start();
         Handler localHandler = new Handler(mHandlerThread.getLooper());
         synchronized (this) {
             mHandler = localHandler;
         }
+
+        radarConfiguration.fetch();
     }
 
     @Override
@@ -478,7 +479,7 @@ public abstract class MainActivity extends AppCompatActivity {
                 startScanning();
             } else {
                 // User refused to grant permission.
-                Boast.makeText(this, "Cannot connect to Empatica E4DeviceManager without location permissions", Toast.LENGTH_LONG).show();
+                Boast.makeText(this, "Cannot connect to device plugin without proper permissions", Toast.LENGTH_LONG).show();
             }
         }
     }

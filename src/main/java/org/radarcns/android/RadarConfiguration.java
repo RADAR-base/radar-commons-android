@@ -59,6 +59,7 @@ public class RadarConfiguration {
     public static final String CONDENSED_DISPLAY_KEY = "is_condensed_n_records_display";
     public static final String START_AT_BOOT = "start_at_boot";
     public static final String DEVICE_SERVICES_TO_CONNECT = "device_services_to_connect";
+    public static final String KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
@@ -83,6 +84,9 @@ public class RadarConfiguration {
 
     public static final Set<String> BOOLEAN_VALUES = Collections.singleton(
             CONDENSED_DISPLAY_KEY);
+
+    public static final Set<String> FLOAT_VALUES = Collections.singleton(
+            KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL);
 
     private static final Object syncObject = new Object();
     private static RadarConfiguration instance = null;
@@ -265,6 +269,24 @@ public class RadarConfiguration {
         }
     }
 
+
+    private Float getRawFloat(String key) {
+        if (localConfiguration.containsKey(key)) {
+            Object value = localConfiguration.get(key);
+            if (value == null) {
+                return null;
+            } else if (value instanceof Number) {
+                return ((Number)value).floatValue();
+            } else if (value instanceof String) {
+                return Float.valueOf((String)value);
+            } else {
+                return null;
+            }
+        } else {
+            return Float.valueOf(getString(key));
+        }
+    }
+
     public String getString(@NonNull String key) {
         String result = getRawString(key);
 
@@ -300,6 +322,21 @@ public class RadarConfiguration {
      */
     public int getInt(@NonNull String key) {
         Integer ret = getRawInteger(key);
+        if (ret == null) {
+            throw new IllegalArgumentException("Key does not have a value");
+        }
+        return ret;
+    }
+
+    /**
+     * Get a configured float value.
+     * @param key key of the value
+     * @return float value
+     * @throws NumberFormatException if the configured value is not an Float
+     * @throws IllegalArgumentException if the key does not have an associated value
+     */
+    public float getFloat(@NonNull String key) {
+        Float ret = getRawFloat(key);
         if (ret == null) {
             throw new IllegalArgumentException("Key does not have a value");
         }
@@ -420,6 +457,8 @@ public class RadarConfiguration {
                     bundle.putLong(key, (Long) value);
                 } else if (value instanceof Integer) {
                     bundle.putInt(key, (Integer) value);
+                } else if (value instanceof Float) {
+                    bundle.putFloat(key, (Float) value);
                 }
             }
             else {
@@ -430,6 +469,8 @@ public class RadarConfiguration {
                         bundle.putInt(key, getInt(extra));
                     } else if (BOOLEAN_VALUES.contains(extra)) {
                         bundle.putBoolean(key, getString(extra).equals("true"));
+                    } else if (FLOAT_VALUES.contains(extra)) {
+                        bundle.putFloat(key, getFloat(extra));
                     } else {
                         bundle.putString(key, getString(extra));
                     }
@@ -466,5 +507,9 @@ public class RadarConfiguration {
 
     public static String getStringExtra(Bundle bundle, String key) {
         return bundle.getString(RADAR_PREFIX + key);
+    }
+
+    public static float getFloatExtra(Bundle bundle, String key) {
+        return bundle.getFloat(RADAR_PREFIX + key);
     }
 }
