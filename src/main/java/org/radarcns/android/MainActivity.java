@@ -309,9 +309,9 @@ public abstract class MainActivity extends AppCompatActivity {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                for (DeviceServiceProvider connection : mConnections) {
-                    if (connection.isBound()) {
-                        connection.unbind();
+                for (DeviceServiceProvider provider : mConnections) {
+                    if (provider.isBound()) {
+                        provider.unbind();
                     }
                 }
             }

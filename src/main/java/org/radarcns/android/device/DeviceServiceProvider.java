@@ -24,6 +24,8 @@ import android.support.annotation.NonNull;
 
 import org.radarcns.android.MainActivity;
 import org.radarcns.android.RadarConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +37,8 @@ import java.util.Scanner;
  * @param <T> state that the Service will provide.
  */
 public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
+    private static final Logger logger = LoggerFactory.getLogger(DeviceServiceProvider.class);
+
     private MainActivity activity;
     private RadarConfiguration config;
     private DeviceServiceConnection<T> connection;
@@ -120,6 +124,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (bound) {
             throw new IllegalStateException("Service is already bound");
         }
+        logger.info("Binding {}", this);
         Intent intent = new Intent(activity, getServiceClass());
         Bundle extras = new Bundle();
         configure(extras);
@@ -142,6 +147,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (!bound) {
             throw new IllegalStateException("Service is not bound");
         }
+        logger.info("Unbinding {}", this);
         bound = false;
         activity.unbindService(connection);
         connection.onServiceDisconnected(null);
