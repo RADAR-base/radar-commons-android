@@ -20,7 +20,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.net.ConnectivityManager;
 import android.support.annotation.NonNull;
 
 import org.apache.avro.specific.SpecificRecord;
@@ -50,6 +49,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static android.content.Intent.ACTION_BATTERY_CHANGED;
 import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
+import static android.net.ConnectivityManager.EXTRA_NO_CONNECTIVITY;
 import static android.os.BatteryManager.EXTRA_LEVEL;
 import static android.os.BatteryManager.EXTRA_PLUGGED;
 import static android.os.BatteryManager.EXTRA_SCALE;
@@ -172,7 +172,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         if (intent == null) {
             return;
         }
-        dataIsConnected = intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
+        dataIsConnected = intent.getBooleanExtra(EXTRA_NO_CONNECTIVITY, false);
     }
 
     /**
