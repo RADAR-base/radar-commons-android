@@ -21,7 +21,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
-import android.os.BatteryManager;
 import android.support.annotation.NonNull;
 
 import org.apache.avro.specific.SpecificRecord;
@@ -50,6 +49,10 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static android.content.Intent.ACTION_BATTERY_CHANGED;
+import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
+import static android.os.BatteryManager.EXTRA_LEVEL;
+import static android.os.BatteryManager.EXTRA_PLUGGED;
+import static android.os.BatteryManager.EXTRA_SCALE;
 
 /**
  * Stores data in databases and sends it to the server.
@@ -117,7 +120,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
         connectivityReceiver = new BroadcastReceiver() {
             public void onReceive(Context context, Intent intent) {
-                if (intent.getAction().equals(ConnectivityManager.CONNECTIVITY_ACTION)) {
+                if (intent.getAction().equals(CONNECTIVITY_ACTION)) {
                     updateNetworkStatus(intent);
 
                     if (isStarted() && !dataIsConnected) {
@@ -158,11 +161,11 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         if (intent == null) {
             return;
         }
-        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        int level = intent.getIntExtra(EXTRA_LEVEL, -1);
+        int scale = intent.getIntExtra(EXTRA_SCALE, -1);
 
         batteryFactor = level / (float)scale;
-        batteryIsPlugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) > 0;
+        batteryIsPlugged = intent.getIntExtra(EXTRA_PLUGGED, 0) > 0;
     }
 
     private void updateNetworkStatus(Intent intent) {
@@ -233,7 +236,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     }
 
     private void doEnableSubmitter() {
-        IntentFilter networkFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        IntentFilter networkFilter = new IntentFilter(CONNECTIVITY_ACTION);
         updateNetworkStatus(context.registerReceiver(connectivityReceiver, networkFilter));
 
         IntentFilter batteryFilter = new IntentFilter(ACTION_BATTERY_CHANGED);
