@@ -122,33 +122,27 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             public void onReceive(Context context, Intent intent) {
                 if (intent.getAction().equals(CONNECTIVITY_ACTION)) {
                     updateNetworkStatus(intent);
-
-                    if (isStarted() && !dataIsConnected) {
-                        logger.info("Network was disconnected, stopping data sending");
-                        stop();
-                        return;
-                    }
                 } else if (intent.getAction().equals(ACTION_BATTERY_CHANGED)) {
                     updateBatteryStatus(intent);
-
-                    if (isStarted() && batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged) {
-                        logger.info("Battery level getting low, stopping data sending");
-                        stop();
-                        return;
-                    }
+                } else {
+                    return;
                 }
 
-                // Just try to start: the start method will not do anything if the parameters
-                // are not right.
-                if (!isStarted()) {
+                if (isStarted()) {
+                    if (!dataIsConnected) {
+                        logger.info("Network was disconnected, stopping data sending");
+                        stop();
+                    } else if (batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged) {
+                        logger.info("Battery level getting low, stopping data sending");
+                        stop();
+                    }
+                } else {
+                    // Just try to start: the start method will not do anything if the parameters
+                    // are not right.
                     start();
                 }
             }
         };
-
-        dataIsConnected = false;
-        batteryFactor = 1.0f;
-        batteryIsPlugged = true;
 
         if (kafkaUrl != null) {
             doEnableSubmitter();
@@ -172,20 +166,18 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         if (intent == null) {
             return;
         }
-        dataIsConnected = intent.getBooleanExtra(EXTRA_NO_CONNECTIVITY, false);
+        dataIsConnected = !intent.getBooleanExtra(EXTRA_NO_CONNECTIVITY, false);
     }
 
     /**
      * Start submitting data to the server.
      *
-     * This can only be called if there is not already a submitter running. It will return without
-     * any action if the network is not connected or if the battery is running too low.
+     * This will not do anything if there is not already a submitter running, if it is disabled,
+     * if the network is not connected or if the battery is running too low.
      */
     public synchronized void start() {
-        if (isStarted()) {
-            throw new IllegalStateException("Cannot start submitter, it is already started");
-        }
-        if (status == Status.DISABLED
+        if (isStarted()
+                || status == Status.DISABLED
                 || !dataIsConnected
                 || (batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged)) {
             return;
@@ -232,10 +224,15 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public synchronized void enableSubmitter() {
         if (status == Status.DISABLED) {
             doEnableSubmitter();
+            start();
         }
     }
 
     private void doEnableSubmitter() {
+        dataIsConnected = false;
+        batteryFactor = 1.0f;
+        batteryIsPlugged = true;
+
         IntentFilter networkFilter = new IntentFilter(CONNECTIVITY_ACTION);
         updateNetworkStatus(context.registerReceiver(connectivityReceiver, networkFilter));
 
@@ -243,8 +240,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         updateBatteryStatus(context.registerReceiver(connectivityReceiver, batteryFilter));
 
         updateServerStatus(Status.READY);
-
-        start();
     }
 
     /**
@@ -430,8 +425,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
     public void setMinimumBatteryLevel(float minimumBatteryLevel) {
         this.minimumBatteryLevel.set(minimumBatteryLevel);
-        if (!isStarted()) {
-            start();
-        }
+        start();
     }
 }
