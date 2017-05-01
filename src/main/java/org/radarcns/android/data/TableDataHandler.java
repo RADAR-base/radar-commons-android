@@ -16,10 +16,7 @@
 
 package org.radarcns.android.data;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Process;
 import android.support.annotation.NonNull;
 
@@ -28,6 +25,8 @@ import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.AtomicFloat;
+import org.radarcns.android.util.BatteryLevelReceiver;
+import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.config.ServerConfig;
@@ -50,17 +49,10 @@ import java.util.TreeMap;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static android.content.Intent.ACTION_BATTERY_CHANGED;
-import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
-import static android.net.ConnectivityManager.EXTRA_NO_CONNECTIVITY;
-import static android.os.BatteryManager.EXTRA_LEVEL;
-import static android.os.BatteryManager.EXTRA_PLUGGED;
-import static android.os.BatteryManager.EXTRA_SCALE;
-
 /**
  * Stores data in databases and sends it to the server.
  */
-public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRecord> {
+public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRecord>, BatteryLevelReceiver.BatteryLevelListener, NetworkConnectedReceiver.NetworkConnectedListener {
     private static final Logger logger = LoggerFactory.getLogger(TableDataHandler.class);
 
     public static final long DATA_RETENTION_DEFAULT = 86400000L;
@@ -72,12 +64,12 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
     public static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
-    private final Context context;
     private final ThreadFactory threadFactory;
     private final Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> tables;
     private final Set<ServerStatusListener> statusListeners;
-    private final BroadcastReceiver connectivityReceiver;
     private final SingleThreadExecutorFactory executorFactory;
+    private final BatteryLevelReceiver batteryLevelReceiver;
+    private final NetworkConnectedReceiver networkConnectedReceiver;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
     private int kafkaRecordsSendLimit;
@@ -85,9 +77,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private long kafkaUploadRate;
     private long kafkaCleanRate;
     private long senderConnectionTimeout;
-    private boolean dataIsConnected;
-    private boolean batteryIsPlugged;
-    private float batteryFactor;
 
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
@@ -101,7 +90,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
                             List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> topics,
                             int maxBytes) throws IOException {
-        this.context = context;
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
@@ -111,6 +99,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
         this.executorFactory = new SharedSingleThreadExecutorFactory(
                 new AndroidThreadFactory("TableDataHandler", Process.THREAD_PRIORITY_BACKGROUND));
+
+        this.batteryLevelReceiver = new BatteryLevelReceiver(context, this);
+        this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
@@ -126,34 +117,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         statusListeners = new HashSet<>();
         this.threadFactory = new AndroidThreadFactory("DataHandler", android.os.Process.THREAD_PRIORITY_BACKGROUND);
 
-        connectivityReceiver = new BroadcastReceiver() {
-            public void onReceive(Context context, Intent intent) {
-                if (intent.getAction().equals(CONNECTIVITY_ACTION)) {
-                    updateNetworkStatus(intent);
-                } else if (intent.getAction().equals(ACTION_BATTERY_CHANGED)) {
-                    updateBatteryStatus(intent);
-                } else {
-                    return;
-                }
-
-                if (isStarted()) {
-                    if (!dataIsConnected) {
-                        logger.info("Network was disconnected, stopping data sending");
-                        stop();
-                    } else if (batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged) {
-                        logger.info("Battery level getting low, stopping data sending");
-                        stop();
-                    } else {
-                        updateUploadRate();
-                    }
-                } else {
-                    // Just try to start: the start method will not do anything if the parameters
-                    // are not right.
-                    start();
-                }
-            }
-        };
-
         if (kafkaUrl != null) {
             doEnableSubmitter();
         } else {
@@ -168,29 +131,11 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     }
 
     private long getPreferredUploadRate() {
-        if (batteryFactor > REDUCED_BATTERY_LEVEL || batteryIsPlugged) {
+        if (batteryLevelReceiver.hasMinimumLevel(REDUCED_BATTERY_LEVEL)) {
             return kafkaUploadRate;
         } else {
             return kafkaUploadRate * 5;
         }
-    }
-
-    private void updateBatteryStatus(Intent intent) {
-        if (intent == null) {
-            return;
-        }
-        int level = intent.getIntExtra(EXTRA_LEVEL, -1);
-        int scale = intent.getIntExtra(EXTRA_SCALE, -1);
-
-        batteryFactor = level / (float)scale;
-        batteryIsPlugged = intent.getIntExtra(EXTRA_PLUGGED, 0) > 0;
-    }
-
-    private void updateNetworkStatus(Intent intent) {
-        if (intent == null) {
-            return;
-        }
-        dataIsConnected = !intent.getBooleanExtra(EXTRA_NO_CONNECTIVITY, false);
     }
 
     /**
@@ -202,8 +147,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public synchronized void start() {
         if (isStarted()
                 || status == Status.DISABLED
-                || !dataIsConnected
-                || (batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged)) {
+                || !networkConnectedReceiver.isConnected()
+                || !batteryLevelReceiver.hasMinimumLevel(minimumBatteryLevel.get())) {
             return;
         }
 
@@ -240,7 +185,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             if (isStarted()) {
                 stop();
             }
-            context.unregisterReceiver(connectivityReceiver);
+            networkConnectedReceiver.unregister();
+            batteryLevelReceiver.unregister();
         }
     }
 
@@ -252,16 +198,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     }
 
     private void doEnableSubmitter() {
-        dataIsConnected = false;
-        batteryFactor = 1.0f;
-        batteryIsPlugged = true;
-
-        IntentFilter networkFilter = new IntentFilter(CONNECTIVITY_ACTION);
-        updateNetworkStatus(context.registerReceiver(connectivityReceiver, networkFilter));
-
-        IntentFilter batteryFilter = new IntentFilter(ACTION_BATTERY_CHANGED);
-        updateBatteryStatus(context.registerReceiver(connectivityReceiver, batteryFilter));
-
+        networkConnectedReceiver.register();
+        batteryLevelReceiver.register();
         updateServerStatus(Status.READY);
     }
 
@@ -271,7 +209,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      */
     public synchronized void close() throws IOException {
         if (status != Status.DISABLED) {
-            context.unregisterReceiver(connectivityReceiver);
+            networkConnectedReceiver.unregister();
+            batteryLevelReceiver.unregister();
         }
         if (this.submitter != null) {
             try {
@@ -313,10 +252,10 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         if (status == Status.DISABLED) {
             return;
         }
-        if (submitter == null) {
+        if (!isStarted()) {
             start();
         }
-        if (submitter != null) {
+        if (isStarted()) {
             submitter.checkConnection();
         }
     }
@@ -445,5 +384,35 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public void setMinimumBatteryLevel(float minimumBatteryLevel) {
         this.minimumBatteryLevel.set(minimumBatteryLevel);
         start();
+    }
+
+    @Override
+    public void onNetworkConnectionChanged(boolean isConnected) {
+        if (isStarted()) {
+            if (!isConnected) {
+                logger.info("Network was disconnected, stopping data sending");
+                stop();
+            }
+        } else if (isConnected) {
+            // Just try to start: the start method will not do anything if the parameters
+            // are not right.
+            start();
+        }
+    }
+
+    @Override
+    public void onBatteryLevelChanged(float level, boolean isPlugged) {
+        if (isStarted()) {
+            if (level < minimumBatteryLevel.get() && !isPlugged) {
+                logger.info("Battery level getting low, stopping data sending");
+                stop();
+            } else {
+                updateUploadRate();
+            }
+        } else {
+            // Just try to start: the start method will not do anything if the parameters
+            // are not right.
+            start();
+        }
     }
 }
