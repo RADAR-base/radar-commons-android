@@ -60,6 +60,7 @@ public class RadarConfiguration {
     public static final String START_AT_BOOT = "start_at_boot";
     public static final String DEVICE_SERVICES_TO_CONNECT = "device_services_to_connect";
     public static final String KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level";
+    public static final String MAX_CACHE_SIZE = "cache_max_size_bytes";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);

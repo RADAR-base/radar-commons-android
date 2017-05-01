@@ -20,6 +20,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Process;
 import android.support.annotation.NonNull;
 
 import org.apache.avro.specific.SpecificRecord;
@@ -27,6 +28,8 @@ import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.AtomicFloat;
+import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
+import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.SpecificRecordEncoder;
 import org.radarcns.key.MeasurementKey;
@@ -73,6 +76,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private final Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> tables;
     private final Set<ServerStatusListener> statusListeners;
     private final BroadcastReceiver connectivityReceiver;
+    private final SingleThreadExecutorFactory executorFactory;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
     private int kafkaRecordsSendLimit;
@@ -94,8 +98,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> topics)
-            throws IOException {
+                            List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> topics,
+                            int maxBytes) throws IOException {
         this.context = context;
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
@@ -104,11 +108,14 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
         this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
+        this.executorFactory = new SharedSingleThreadExecutorFactory(
+                new AndroidThreadFactory("TableDataHandler", Process.THREAD_PRIORITY_BACKGROUND));
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
 //            tables.put(topic, new MeasurementTable<>(context, topic, DATABASE_COMMIT_RATE_DEFAULT));
-            tables.put(topic, new TapeCache<>(context, topic, DATABASE_COMMIT_RATE_DEFAULT));
+            tables.put(topic, new TapeCache<>(
+                    context, topic, DATABASE_COMMIT_RATE_DEFAULT, executorFactory, maxBytes));
         }
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
@@ -205,10 +212,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             this.submitter = null;
             this.sender = null;
         }
-        if (status == Status.DISABLED) {
-            return;
+        if (status != Status.DISABLED) {
+            updateServerStatus(Status.READY);
         }
-        updateServerStatus(Status.READY);
     }
 
     public synchronized void disableSubmitter() {
@@ -265,6 +271,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
         }
+        executorFactory.close();
     }
 
     @Override

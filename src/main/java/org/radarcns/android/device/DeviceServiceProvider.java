@@ -32,6 +32,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 
+import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
+import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
+
 /**
  * RADAR service provider, to bind and configure to a service. It is not thread-safe.
  * @param <T> state that the Service will provide.
@@ -179,9 +188,9 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     protected void configure(Bundle bundle) {
         // Add the default configuration parameters given to the service intents
         config.putExtras(bundle,
-                RadarConfiguration.KAFKA_REST_PROXY_URL_KEY, RadarConfiguration.SCHEMA_REGISTRY_URL_KEY, RadarConfiguration.DEFAULT_GROUP_ID_KEY,
-                RadarConfiguration.KAFKA_UPLOAD_RATE_KEY, RadarConfiguration.KAFKA_CLEAN_RATE_KEY, RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY,
-                RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY);
+                KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, DEFAULT_GROUP_ID_KEY,
+                KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
+                SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE);
     }
 
     /**
