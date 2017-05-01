@@ -142,7 +142,10 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
             @Override
             public void run() {
                 if (connection.isConnected()) {
-                    uploadCachesIfNeeded();
+                    boolean sendAgain = uploadCachesIfNeeded();
+                    if (sendAgain) {
+                        executor.execute(this);
+                    }
                 }
             }
         }, uploadRate / 5, uploadRate / 5, TimeUnit.MILLISECONDS);
@@ -172,39 +175,21 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     }
 
     /**
-     * Close the submitter eventually.
+     * Close the submitter eventually. This does not flush any caches.
      *
      * Call {@link #join(long)} to wait for this to finish.
      */
-    public void close() {
+    @Override
+    public synchronized void close() {
         executor.execute(new Runnable() {
             @Override
             public void run() {
-                Map<AvroTopic<K, ? extends V>, ? extends DataCache<K, ? extends V>> caches = dataHandler.getCaches();
-                for (DataCache<K, ? extends V> cache : caches.values()) {
-                    try {
-                        cache.flush();
-                    } catch (IOException ex) {
-                        logger.error("Cannot flush cache", ex);
+                synchronized (trySendFuture) {
+                    for (ScheduledFuture<?> future : trySendFuture.values()) {
+                        future.cancel(true);
                     }
-                }
-                if (connection.isConnected()) {
-                    uploadCaches(new HashSet<>(caches.keySet()));
-                    try {
-                        synchronized (trySendFuture) {
-                            for (ScheduledFuture<?> future : trySendFuture.values()) {
-                                future.cancel(true);
-                            }
-                            trySendFuture.clear();
-
-                            for (Map.Entry<AvroTopic<K, V>, Queue<Record<K, V>>> records : trySendCache.entrySet()) {
-                                doImmediateSend(records.getKey(), listPool.get(records.getValue()));
-                            }
-                            trySendCache.clear();
-                        }
-                    } catch (IOException e) {
-                        logger.warn("Failed to addMeasurement latest measurements", e);
-                    }
+                    trySendFuture.clear();
+                    trySendCache.clear();
                 }
 
                 for (Map.Entry<AvroTopic<K, V>, KafkaTopicSender<K, V>> topicSender : topicSenders.entrySet()) {
@@ -255,9 +240,10 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     /**
      * Upload the caches if they would cause the buffer to overflow
      */
-    private void uploadCachesIfNeeded() {
+    private boolean uploadCachesIfNeeded() {
         boolean uploadingNotified = false;
         int currentSendLimit = sendLimit.get();
+        boolean sendAgain = false;
 
         try {
             for (Map.Entry<AvroTopic<K, ? extends V>, ? extends DataCache<K, ? extends V>> entry : dataHandler.getCaches().entrySet()) {
@@ -267,6 +253,9 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                     if (!uploadingNotified) {
                         uploadingNotified = true;
                     }
+                }
+                if (entry.getValue().numberOfRecords().first > currentSendLimit) {
+                    sendAgain = true;
                 }
             }
             if (uploadingNotified) {
@@ -278,6 +267,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                 connection.didDisconnect(ex);
             }
         }
+        return sendAgain;
     }
 
     /**
