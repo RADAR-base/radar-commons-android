@@ -24,6 +24,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -101,9 +102,6 @@ public abstract class MainActivity extends Activity {
 
     private RadarConfiguration radarConfiguration;
 
-    /** Runner to bind all needed services to this activity. */
-    private final Runnable bindServicesRunner;
-
     /** Current server status. */
     private ServerStatusListener.Status serverStatus;
 
@@ -114,18 +112,6 @@ public abstract class MainActivity extends Activity {
 
         mTotalRecordsSent = new HashMap<>();
         deviceFilters = new HashMap<>();
-
-        bindServicesRunner = new Runnable() {
-            @Override
-            public void run() {
-                for (DeviceServiceProvider provider : mConnections) {
-                    if (!provider.isBound()) {
-                        provider.bind();
-                    }
-                }
-            }
-
-        };
 
         bluetoothReceiver = new BroadcastReceiver() {
             @Override
@@ -265,7 +251,6 @@ public abstract class MainActivity extends Activity {
     protected void onResume() {
         logger.info("mainActivity onResume");
         super.onResume();
-        getHandler().post(bindServicesRunner);
         getHandler().post(mUIScheduler);
     }
 
@@ -290,6 +275,21 @@ public abstract class MainActivity extends Activity {
             mHandler = localHandler;
         }
 
+        new AsyncTask<DeviceServiceProvider, Void, Void>() {
+            @Override
+            protected Void doInBackground(DeviceServiceProvider... params) {
+                for (DeviceServiceProvider provider : params) {
+                    if (!provider.isBound()) {
+                        logger.info("Binding to service: {}", provider);
+                        provider.bind();
+                    } else {
+                        logger.info("Already bound: {}", provider);
+                    }
+                }
+                return null;
+            }
+        }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
+
         radarConfiguration.fetch();
     }
 
@@ -299,20 +299,19 @@ public abstract class MainActivity extends Activity {
         super.onStop();
         unregisterReceiver(deviceFailedReceiver);
         unregisterReceiver(bluetoothReceiver);
-        getHandler().post(new Runnable() {
-            @Override
-            public void run() {
-                for (DeviceServiceProvider provider : mConnections) {
-                    if (provider.isBound()) {
-                        provider.unbind();
-                    }
-                }
-            }
-        });
         synchronized (this) {
             mHandler = null;
         }
         mHandlerThread.quitSafely();
+
+        for (DeviceServiceProvider provider : mConnections) {
+            if (provider.isBound()) {
+                logger.info("Unbinding service: {}", provider);
+                provider.unbind();
+            } else {
+                logger.info("Already unbound: {}", provider);
+            }
+        }
     }
 
     /** Get background handler. */
@@ -379,19 +378,21 @@ public abstract class MainActivity extends Activity {
         startScanning();
     }
 
-    public synchronized void serviceDisconnected(final DeviceServiceConnection<?> connection) {
-        if (mHandler != null) {
-            mHandler.post(new Runnable() {
+    public synchronized void serviceDisconnected(DeviceServiceConnection<?> connection) {
+        if (getHandler() != null) {
+            new AsyncTask<DeviceServiceConnection, Void, Void>() {
                 @Override
-                public void run() {
-                    DeviceServiceProvider provider = getConnectionProvider(connection);
+                protected Void doInBackground(DeviceServiceConnection... params) {
+                    DeviceServiceProvider provider = getConnectionProvider(params[0]);
                     logger.info("Rebinding {} after disconnect", provider);
                     if (provider.isBound()) {
                         provider.unbind();
                     }
                     provider.bind();
+
+                    return null;
                 }
-            });
+            }.execute(connection);
         }
     }
 
