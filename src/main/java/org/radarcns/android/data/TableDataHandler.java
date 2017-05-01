@@ -70,6 +70,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public static final long UPLOAD_RATE_DEFAULT = 10L;
     public static final long SENDER_CONNECTION_TIMEOUT_DEFAULT = 10L;
     public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
+    public static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
     private final Context context;
     private final ThreadFactory threadFactory;
@@ -142,6 +143,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
                     } else if (batteryFactor < minimumBatteryLevel.get() && !batteryIsPlugged) {
                         logger.info("Battery level getting low, stopping data sending");
                         stop();
+                    } else {
+                        updateUploadRate();
                     }
                 } else {
                     // Just try to start: the start method will not do anything if the parameters
@@ -155,6 +158,20 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             doEnableSubmitter();
         } else {
             updateServerStatus(Status.DISABLED);
+        }
+    }
+
+    private synchronized void updateUploadRate() {
+        if (submitter != null) {
+            submitter.setUploadRate(getPreferredUploadRate());
+        }
+    }
+
+    private long getPreferredUploadRate() {
+        if (batteryFactor > REDUCED_BATTERY_LEVEL || batteryIsPlugged) {
+            return kafkaUploadRate;
+        } else {
+            return kafkaUploadRate * 5;
         }
     }
 
@@ -195,7 +212,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
                 new SpecificRecordEncoder(false), new SpecificRecordEncoder(false),
                 senderConnectionTimeout);
         this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
-                kafkaRecordsSendLimit, kafkaUploadRate, kafkaCleanRate);
+                kafkaRecordsSendLimit, getPreferredUploadRate(), kafkaCleanRate);
     }
 
     public synchronized boolean isStarted() {
@@ -389,13 +406,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     }
 
     public synchronized void setKafkaUploadRate(long kafkaUploadRate) {
-        if (this.kafkaUploadRate == kafkaUploadRate) {
-            return;
-        }
-        if (submitter != null) {
-            submitter.setUploadRate(kafkaUploadRate);
-        }
         this.kafkaUploadRate = kafkaUploadRate;
+        updateUploadRate();
     }
 
     public synchronized void setKafkaCleanRate(long kafkaCleanRate) {

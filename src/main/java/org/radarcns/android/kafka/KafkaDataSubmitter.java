@@ -112,11 +112,15 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
 
     /** Set upload rate in seconds. */
     public final synchronized void setUploadRate(long period) {
+        long newUploadRate = period * 1000L;
+        if (this.uploadRate == newUploadRate) {
+            return;
+        }
+        this.uploadRate = newUploadRate;
         if (uploadFuture != null) {
             uploadFuture.cancel(false);
             uploadIfNeededFuture.cancel(false);
         }
-        this.uploadRate = period * 1000L;
         // Get upload frequency from system property
         uploadFuture = executor.scheduleAtFixedRate(new Runnable() {
             Set<AvroTopic<K, ? extends V>> topicsToSend = Collections.emptySet();
