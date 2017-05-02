@@ -280,17 +280,21 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     }
 
     @Override
-    public synchronized void flush() {
-        if (addMeasurementFuture != null) {
-            addMeasurementFuture.cancel(false);
-            addMeasurementFuture = null;
-        }
-        // no measurements in cache
-        if (measurementsToAdd.isEmpty()) {
-            return;
+    public void flush() {
+        Future<?> flushFuture;
+        synchronized (this) {
+            if (addMeasurementFuture != null) {
+                addMeasurementFuture.cancel(false);
+                addMeasurementFuture = null;
+            }
+            // no measurements in cache
+            if (measurementsToAdd.isEmpty()) {
+                return;
+            }
+            flushFuture = executor.submit(this.flusher);
         }
         try {
-            executor.submit(this.flusher).get();
+            flushFuture.get();
         } catch (InterruptedException e) {
             logger.warn("Did not wait for adding measurements to complete.");
         } catch (ExecutionException ex) {
