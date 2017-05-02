@@ -30,6 +30,7 @@ import org.radarcns.key.MeasurementKey;
 import org.radarcns.topic.AvroTopic;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.Config;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -39,6 +40,7 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE)
 public class TapeCacheTest {
     private SharedSingleThreadExecutorFactory executorFactory;
     private TapeCache<MeasurementKey, ApplicationUptime> tapeCache;
@@ -92,6 +94,15 @@ public class TapeCacheTest {
         tapeCache.markSent(record.offset);
         assertEquals(Collections.emptyList(), tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
+
+        tapeCache.addMeasurement(key, value);
+        tapeCache.addMeasurement(key, value);
+
+        Thread.sleep(100);
+
+        unsent = tapeCache.unsentRecords(100);
+        assertEquals(2, unsent.size());
+        assertEquals(new Pair<>(2L, 0L), tapeCache.numberOfRecords());
     }
 
 

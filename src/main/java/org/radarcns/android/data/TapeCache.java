@@ -67,6 +67,8 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     private long lastOffsetSent;
     private long timeWindowMillis;
 
+    private final AtomicLong queueSize;
+
     public TapeCache(final Context context, AvroTopic<K, V> topic, long timeWindowMillis,
                      SingleThreadExecutorFactory executorFactory, int maxBytes) throws IOException {
         this.topic = topic;
@@ -84,6 +86,8 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                 throw ex;
             }
         }
+        this.queueSize = new AtomicLong(queueFile.size());
+
         this.executor = executorFactory.getScheduledExecutorService();
 
         this.executor.scheduleAtFixedRate(new Runnable() {
@@ -92,10 +96,11 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                 Intent numberCached = new Intent(CACHE_TOPIC);
                 numberCached.putExtra(CACHE_TOPIC, getTopic().getName());
                 numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, 0L);
-                numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, (long) queueSize());
+                numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, queueSize.get());
                 context.sendBroadcast(numberCached);
             }
         }, 10L, 10L, TimeUnit.SECONDS);
+
         this.measurementsToAdd = new ArrayList<>();
 
         this.converter = new TapeAvroConverter<>(topic);
@@ -135,6 +140,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                         }
                         if (outputFile.delete()) {
                             QueueFile queueFile = QueueFile.newMapped(outputFile, maxBytes);
+                            queueSize.set(queueFile.size());
                             queue = new BackedObjectQueue<>(queueFile, converter);
                             return Collections.emptyList();
                         } else {
@@ -167,20 +173,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     @Override
     public Pair<Long, Long> numberOfRecords() {
-        return new Pair<>((long) queueSize(), 0L);
-    }
-
-    private int queueSize() {
-        try {
-            return executor.submit(new Callable<Integer>() {
-                @Override
-                public Integer call() throws Exception {
-                    return queue.size();
-                }
-            }).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return -1;
-        }
+        return new Pair<>(queueSize.get(), 0L);
     }
 
     @Override
@@ -208,6 +201,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                         logger.info("Removing data from topic {} at offset {} onwards ({} records)",
                                 topic, offset, toRemove);
                         queue.remove(toRemove);
+                        queueSize.addAndGet(-toRemove);
                         logger.info("Removed data from topic {} at offset {} onwards ({} records)",
                                 topic, offset, toRemove);
                         return toRemove;
@@ -314,8 +308,10 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         try {
             logger.info("Writing {} records to file in topic {}", localList.size(), topic);
             queue.addAll(localList);
+            queueSize.addAndGet(localList.size());
         } catch (IOException ex) {
             logger.error("Failed to add record", ex);
+            queueSize.set(queue.size());
             throw new RuntimeException(ex);
         }
 
