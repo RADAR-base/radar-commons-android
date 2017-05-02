@@ -49,6 +49,15 @@ import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_SENT_NUMBE
 import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_UNSENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
 
+/**
+ * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
+ * before being written in batches to the BackedObjectQueue, using a single-threaded
+ * ExecutorService. Data is retrieved and removed from the queue in a blocking way using that same
+ * ExecutorService. Sent messages are not kept, they are immediately removed.
+ *
+ * @param <K> measurement key type
+ * @param <V> measurement value type
+ */
 public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> implements DataCache<K, V> {
     private static final Logger logger = LoggerFactory.getLogger(TapeCache.class);
     private static final ListPool listPool = new ListPool(10);
@@ -69,6 +78,17 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     private final AtomicLong queueSize;
 
+    /**
+     * TapeCache to cache measurements with
+     * @param context Android context to get the cache directory and broadcast the cache size.
+     * @param topic Kafka Avro topic to write data for.
+     * @param timeWindowMillis time that data may be cached before writing
+     * @param executorFactory factory to get a single-threaded {@link ScheduledExecutorService}
+     *                        from.
+     * @param maxBytes number of bytes the backing cache file may have, with minimum value
+     *                 {@link org.radarcns.util.MappedQueueFileStorage#MINIMUM_LENGTH}.
+     * @throws IOException if a BackedObjectQueue cannot be created.
+     */
     public TapeCache(final Context context, AvroTopic<K, V> topic, long timeWindowMillis,
                      SingleThreadExecutorFactory executorFactory, int maxBytes) throws IOException {
         this.topic = topic;
