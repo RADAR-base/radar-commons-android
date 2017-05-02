@@ -43,7 +43,8 @@ public abstract class SpecificReceiver extends BroadcastReceiver {
     }
 
     public void register() {
-        context.registerReceiver(this, new IntentFilter(getAction()));
+        Intent init = context.registerReceiver(this, new IntentFilter(getAction()));
+        onReceive(context, init);
     }
 
     public void unregister() {
