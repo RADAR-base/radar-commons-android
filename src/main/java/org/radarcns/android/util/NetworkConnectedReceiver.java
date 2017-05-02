@@ -30,7 +30,7 @@ public class NetworkConnectedReceiver extends SpecificReceiver {
     public NetworkConnectedReceiver(@NonNull Context context, NetworkConnectedListener listener) {
         super(context);
         this.listener = listener;
-        this.isConnected = false;
+        this.isConnected = true;
     }
 
     @Override
