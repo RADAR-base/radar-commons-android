@@ -18,6 +18,7 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.NonNull;
@@ -35,12 +36,15 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import static java.util.regex.Pattern.CASE_INSENSITIVE;
 
 public class RadarConfiguration {
+    private static final Object SYNC_PREFS_OBJECT = new Object();
+
     public static final String RADAR_PREFIX = "org.radarcns.android.";
 
     public static final String KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url";
@@ -512,5 +516,18 @@ public class RadarConfiguration {
 
     public static float getFloatExtra(Bundle bundle, String key) {
         return bundle.getFloat(RADAR_PREFIX + key);
+    }
+
+    public static String getOrSetUUID(@NonNull Context context, String key) {
+        SharedPreferences prefs = context.getSharedPreferences("global", Context.MODE_PRIVATE);
+        String uuid;
+        synchronized (SYNC_PREFS_OBJECT) {
+            uuid = prefs.getString(key, null);
+            if (uuid == null) {
+                uuid = UUID.randomUUID().toString();
+                prefs.edit().putString(key, uuid).apply();
+            }
+        }
+        return uuid;
     }
 }
