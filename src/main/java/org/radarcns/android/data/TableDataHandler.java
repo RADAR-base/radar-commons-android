@@ -213,15 +213,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             batteryLevelReceiver.unregister();
         }
         if (this.submitter != null) {
-            try {
-                this.submitter.close();
-                this.submitter.join(5_000L);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            } finally {
-                this.submitter = null;
-                this.sender = null;
-            }
+            this.submitter.close();  // will also close sender
+            this.submitter = null;
+            this.sender = null;
         }
         clean();
         for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {

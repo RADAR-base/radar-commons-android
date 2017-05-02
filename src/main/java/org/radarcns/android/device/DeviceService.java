@@ -183,6 +183,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     @Override
     public void onRebind(Intent intent) {
+        logger.info("Received (re)bind in {}", this);
         numberOfActivitiesBound.incrementAndGet();
         if (intent != null) {
             onInvocation(intent.getExtras());
@@ -191,6 +192,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     @Override
     public boolean onUnbind(Intent intent) {
+        logger.info("Received unbind in {}", this);
         int startId = -1;
         synchronized (this) {
             if (numberOfActivitiesBound.decrementAndGet() == 0 && !isConnected) {
@@ -198,6 +200,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             }
         }
         if (startId != -1) {
+            logger.info("Stopping self if latest start ID was {}", latestStartId);
             stopSelf(latestStartId);
         }
         return true;
