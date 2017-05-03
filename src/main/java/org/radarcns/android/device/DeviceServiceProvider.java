@@ -24,17 +24,31 @@ import android.support.annotation.NonNull;
 
 import org.radarcns.android.MainActivity;
 import org.radarcns.android.RadarConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 
+import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
+import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
+import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
+
 /**
  * RADAR service provider, to bind and configure to a service. It is not thread-safe.
  * @param <T> state that the Service will provide.
  */
 public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
+    private static final Logger logger = LoggerFactory.getLogger(DeviceServiceProvider.class);
+
     private MainActivity activity;
     private RadarConfiguration config;
     private DeviceServiceConnection<T> connection;
@@ -120,6 +134,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (bound) {
             throw new IllegalStateException("Service is already bound");
         }
+        logger.info("Binding {}", this);
         Intent intent = new Intent(activity, getServiceClass());
         Bundle extras = new Bundle();
         configure(extras);
@@ -142,6 +157,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (!bound) {
             throw new IllegalStateException("Service is not bound");
         }
+        logger.info("Unbinding {}", this);
         bound = false;
         activity.unbindService(connection);
         connection.onServiceDisconnected(null);
@@ -173,9 +189,9 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     protected void configure(Bundle bundle) {
         // Add the default configuration parameters given to the service intents
         config.putExtras(bundle,
-                RadarConfiguration.KAFKA_REST_PROXY_URL_KEY, RadarConfiguration.SCHEMA_REGISTRY_URL_KEY, RadarConfiguration.DEFAULT_GROUP_ID_KEY,
-                RadarConfiguration.KAFKA_UPLOAD_RATE_KEY, RadarConfiguration.KAFKA_CLEAN_RATE_KEY, RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY,
-                RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY);
+                KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, DEFAULT_GROUP_ID_KEY,
+                KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
+                SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI);
     }
 
     /**

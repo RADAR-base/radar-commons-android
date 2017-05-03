@@ -189,12 +189,10 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
 
     @Override
     public void onServiceDisconnected(ComponentName className) {
-        // Do NOT set deviceName to null. This causes loss of the name if application loses
-        // focus [MM 2016-11-16]
-
         // only do these steps once
-        if (getServiceBinder() != null) {
+        if (hasService()) {
             synchronized (this) {
+                deviceName = null;
                 serviceBinder = null;
                 deviceStatus = DeviceStatusListener.Status.DISCONNECTED;
             }

@@ -16,6 +16,7 @@
 
 package org.radarcns.android;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -23,7 +24,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.os.Build;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -32,7 +33,6 @@ import android.os.RemoteException;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
 import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnCompleteListener;
@@ -63,7 +63,7 @@ import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
-public abstract class MainActivity extends AppCompatActivity {
+public abstract class MainActivity extends Activity {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
@@ -102,9 +102,6 @@ public abstract class MainActivity extends AppCompatActivity {
 
     private RadarConfiguration radarConfiguration;
 
-    /** Runner to bind all needed services to this activity. */
-    private final Runnable bindServicesRunner;
-
     /** Current server status. */
     private ServerStatusListener.Status serverStatus;
 
@@ -115,18 +112,6 @@ public abstract class MainActivity extends AppCompatActivity {
 
         mTotalRecordsSent = new HashMap<>();
         deviceFilters = new HashMap<>();
-
-        bindServicesRunner = new Runnable() {
-            @Override
-            public void run() {
-                for (DeviceServiceProvider provider : mConnections) {
-                    if (!provider.isBound()) {
-                        provider.bind();
-                    }
-                }
-            }
-
-        };
 
         bluetoothReceiver = new BroadcastReceiver() {
             @Override
@@ -164,11 +149,6 @@ public abstract class MainActivity extends AppCompatActivity {
             }
         };
         latestNumberOfRecordsSent = new TimedInt();
-    }
-
-    @Override
-    public boolean supportRequestWindowFeature(int featureId) {
-        return super.supportRequestWindowFeature(featureId);
     }
 
     /**
@@ -234,9 +214,7 @@ public abstract class MainActivity extends AppCompatActivity {
             }
         };
 
-        if (getApplicationInfo().targetSdkVersion > Build.VERSION_CODES.LOLLIPOP_MR1) {
-            checkPermissions();
-        }
+        checkPermissions();
     }
 
     /**
@@ -273,7 +251,6 @@ public abstract class MainActivity extends AppCompatActivity {
     protected void onResume() {
         logger.info("mainActivity onResume");
         super.onResume();
-        getHandler().post(bindServicesRunner);
         getHandler().post(mUIScheduler);
     }
 
@@ -298,6 +275,21 @@ public abstract class MainActivity extends AppCompatActivity {
             mHandler = localHandler;
         }
 
+        new AsyncTask<DeviceServiceProvider, Void, Void>() {
+            @Override
+            protected Void doInBackground(DeviceServiceProvider... params) {
+                for (DeviceServiceProvider provider : params) {
+                    if (!provider.isBound()) {
+                        logger.info("Binding to service: {}", provider);
+                        provider.bind();
+                    } else {
+                        logger.info("Already bound: {}", provider);
+                    }
+                }
+                return null;
+            }
+        }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
+
         radarConfiguration.fetch();
     }
 
@@ -307,20 +299,19 @@ public abstract class MainActivity extends AppCompatActivity {
         super.onStop();
         unregisterReceiver(deviceFailedReceiver);
         unregisterReceiver(bluetoothReceiver);
-        getHandler().post(new Runnable() {
-            @Override
-            public void run() {
-                for (DeviceServiceProvider connection : mConnections) {
-                    if (connection.isBound()) {
-                        connection.unbind();
-                    }
-                }
-            }
-        });
         synchronized (this) {
             mHandler = null;
         }
         mHandlerThread.quitSafely();
+
+        for (DeviceServiceProvider provider : mConnections) {
+            if (provider.isBound()) {
+                logger.info("Unbinding service: {}", provider);
+                provider.unbind();
+            } else {
+                logger.info("Already unbound: {}", provider);
+            }
+        }
     }
 
     /** Get background handler. */
@@ -387,19 +378,21 @@ public abstract class MainActivity extends AppCompatActivity {
         startScanning();
     }
 
-    public synchronized void serviceDisconnected(final DeviceServiceConnection<?> connection) {
-        if (mHandler != null) {
-            mHandler.post(new Runnable() {
+    public synchronized void serviceDisconnected(DeviceServiceConnection<?> connection) {
+        if (getHandler() != null) {
+            new AsyncTask<DeviceServiceConnection, Void, Void>() {
                 @Override
-                public void run() {
-                    DeviceServiceProvider provider = getConnectionProvider(connection);
+                protected Void doInBackground(DeviceServiceConnection... params) {
+                    DeviceServiceProvider provider = getConnectionProvider(params[0]);
                     logger.info("Rebinding {} after disconnect", provider);
                     if (provider.isBound()) {
                         provider.unbind();
                     }
                     provider.bind();
+
+                    return null;
                 }
-            });
+            }.execute(connection);
         }
     }
 
@@ -460,6 +453,7 @@ public abstract class MainActivity extends AppCompatActivity {
         List<String> permissionsToRequest = new ArrayList<>();
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                logger.info("Need to request permission for {}", permission);
                 permissionsToRequest.add(permission);
             }
         }
@@ -474,13 +468,15 @@ public abstract class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(final int requestCode, @NonNull final String[] permissions, @NonNull final int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_ENABLE_PERMISSIONS) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permission granted.
-                startScanning();
-            } else {
-                // User refused to grant permission.
-                Boast.makeText(this, "Cannot connect to device plugin without proper permissions", Toast.LENGTH_LONG).show();
+            for (int i = 0; i < permissions.length; i++) {
+                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    logger.info("Granted permission {}", permissions[i]);
+                } else {
+                    logger.info("Denied permission {}", permissions[i]);
+                }
             }
+            // Permission granted.
+            startScanning();
         }
     }
 
