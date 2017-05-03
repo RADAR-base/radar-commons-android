@@ -43,9 +43,14 @@ public class NetworkConnectedReceiver extends SpecificReceiver {
     protected void onSpecificReceive(Intent intent) {
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-        isConnected = activeNetwork.isConnected();
-        hasWifiOrEthernet = activeNetwork.getType() == TYPE_WIFI
-                || activeNetwork.getType() == TYPE_ETHERNET;
+        if (activeNetwork == null) {
+            isConnected = false;
+            hasWifiOrEthernet = false;
+        } else {
+            isConnected = activeNetwork.isConnected();
+            int networkType = activeNetwork.getType();
+            hasWifiOrEthernet = networkType == TYPE_WIFI || networkType == TYPE_ETHERNET;
+        }
         if (listener != null) {
             listener.onNetworkConnectionChanged(isConnected, hasWifiOrEthernet);
         }
