@@ -65,6 +65,7 @@ public class RadarConfiguration {
     public static final String DEVICE_SERVICES_TO_CONNECT = "device_services_to_connect";
     public static final String KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level";
     public static final String MAX_CACHE_SIZE = "cache_max_size_bytes";
+    public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
@@ -84,11 +85,11 @@ public class RadarConfiguration {
             KAFKA_CLEAN_RATE_KEY, SENDER_CONNECTION_TIMEOUT_KEY, DATA_RETENTION_KEY,
             FIREBASE_FETCH_TIMEOUT_MS_KEY));
 
-    public static final Set<String> INT_VALUES = Collections.singleton(
-            KAFKA_RECORDS_SEND_LIMIT_KEY);
+    public static final Set<String> INT_VALUES = new HashSet<>(Arrays.asList(
+            KAFKA_RECORDS_SEND_LIMIT_KEY, MAX_CACHE_SIZE));
 
-    public static final Set<String> BOOLEAN_VALUES = Collections.singleton(
-            CONDENSED_DISPLAY_KEY);
+    public static final Set<String> BOOLEAN_VALUES = new HashSet<>(Arrays.asList(
+            CONDENSED_DISPLAY_KEY, SEND_ONLY_WITH_WIFI));
 
     public static final Set<String> FLOAT_VALUES = Collections.singleton(
             KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL);
@@ -492,6 +493,10 @@ public class RadarConfiguration {
 
     public static int getIntExtra(Bundle bundle, String key, int defaultValue) {
         return bundle.getInt(RADAR_PREFIX + key, defaultValue);
+    }
+
+    public static boolean getBooleanExtra(Bundle bundle, String key, boolean defaultValue) {
+        return bundle.getBoolean(RADAR_PREFIX + key, defaultValue);
     }
 
     public static int getIntExtra(Bundle bundle, String key) {

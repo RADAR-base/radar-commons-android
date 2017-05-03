@@ -18,26 +18,36 @@ package org.radarcns.android.util;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.support.annotation.NonNull;
 
 import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
-import static android.net.ConnectivityManager.EXTRA_NO_CONNECTIVITY;
+import static android.net.ConnectivityManager.TYPE_ETHERNET;
+import static android.net.ConnectivityManager.TYPE_WIFI;
 
+/** Keeps track of whether there is a network connection (e.g., WiFi or Ethernet). */
 public class NetworkConnectedReceiver extends SpecificReceiver {
     private final NetworkConnectedListener listener;
+    private boolean hasWifiOrEthernet;
     private boolean isConnected;
 
     public NetworkConnectedReceiver(@NonNull Context context, NetworkConnectedListener listener) {
         super(context);
         this.listener = listener;
         this.isConnected = true;
+        this.hasWifiOrEthernet = true;
     }
 
     @Override
     protected void onSpecificReceive(Intent intent) {
-        this.isConnected = !intent.getBooleanExtra(EXTRA_NO_CONNECTIVITY, false);
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        isConnected = activeNetwork.isConnected();
+        hasWifiOrEthernet = activeNetwork.getType() == TYPE_WIFI
+                || activeNetwork.getType() == TYPE_ETHERNET;
         if (listener != null) {
-            listener.onNetworkConnectionChanged(this.isConnected);
+            listener.onNetworkConnectionChanged(isConnected, hasWifiOrEthernet);
         }
     }
 
@@ -46,11 +56,19 @@ public class NetworkConnectedReceiver extends SpecificReceiver {
         return CONNECTIVITY_ACTION;
     }
 
+    public boolean hasConnection(boolean wifiOrEthernetOnly) {
+        return isConnected && (hasWifiOrEthernet || !wifiOrEthernetOnly);
+    }
+
     public boolean isConnected() {
         return isConnected;
     }
 
+    public boolean hasWifiOrEthernet() {
+        return hasWifiOrEthernet;
+    }
+
     public interface NetworkConnectedListener {
-        void onNetworkConnectionChanged(boolean isConnected);
+        void onNetworkConnectionChanged(boolean isConnected, boolean hasWifiOrEthernet);
     }
 }

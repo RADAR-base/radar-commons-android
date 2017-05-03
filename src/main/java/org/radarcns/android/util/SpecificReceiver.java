@@ -25,7 +25,7 @@ import android.support.annotation.NonNull;
 import java.util.Objects;
 
 public abstract class SpecificReceiver extends BroadcastReceiver {
-    private final Context context;
+    protected final Context context;
 
     public SpecificReceiver(@NonNull Context context) {
         Objects.requireNonNull(context);

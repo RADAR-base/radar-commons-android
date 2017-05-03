@@ -68,6 +68,7 @@ import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
+import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send store the data of a
@@ -560,6 +561,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             }
         }
 
+        boolean sendOnlyWithWifi = RadarConfiguration.getBooleanExtra(
+                bundle, SEND_ONLY_WITH_WIFI, true);
+
         boolean newlyCreated;
         synchronized (this) {
             if (dataHandler == null) {
@@ -567,7 +571,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                         bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
                 try {
                     dataHandler = new TableDataHandler(
-                            this, kafkaConfig, remoteSchemaRetriever, getCachedTopics(), maxBytes);
+                            this, kafkaConfig, remoteSchemaRetriever, getCachedTopics(), maxBytes,
+                            sendOnlyWithWifi);
                     newlyCreated = true;
                 } catch (IOException ex) {
                     logger.error("Failed to instantiate Data Handler", ex);
@@ -587,6 +592,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 localDataHandler.setSchemaRetriever(remoteSchemaRetriever);
             }
         }
+
+        localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
 
         if (RadarConfiguration.hasExtra(bundle, DATA_RETENTION_KEY)) {
             localDataHandler.setDataRetention(

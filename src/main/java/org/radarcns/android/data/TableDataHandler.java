@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -70,6 +71,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private final SingleThreadExecutorFactory executorFactory;
     private final BatteryLevelReceiver batteryLevelReceiver;
     private final NetworkConnectedReceiver networkConnectedReceiver;
+    private final AtomicBoolean sendOnlyWithWifi;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
     private int kafkaRecordsSendLimit;
@@ -89,7 +91,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
                             List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> topics,
-                            int maxBytes) throws IOException {
+                            int maxBytes, boolean sendOnlyWithWifi) throws IOException {
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
@@ -102,6 +104,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
         this.batteryLevelReceiver = new BatteryLevelReceiver(context, this);
         this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
+        this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
@@ -147,7 +150,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public synchronized void start() {
         if (isStarted()
                 || status == Status.DISABLED
-                || !networkConnectedReceiver.isConnected()
+                || !networkConnectedReceiver.hasConnection(sendOnlyWithWifi.get())
                 || !batteryLevelReceiver.hasMinimumLevel(minimumBatteryLevel.get())) {
             return;
         }
@@ -179,6 +182,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
     }
 
+    /** Do not submit any data, only cache it. If it is already disabled, this does nothing. */
     public synchronized void disableSubmitter() {
         if (status != Status.DISABLED) {
             updateServerStatus(Status.DISABLED);
@@ -190,6 +194,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
     }
 
+    /** Start submitting data. If it is already submitting data, this does nothing. */
     public synchronized void enableSubmitter() {
         if (status == Status.DISABLED) {
             doEnableSubmitter();
@@ -232,7 +237,12 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
     }
 
-    public synchronized boolean trySend(AvroTopic topic, long offset, MeasurementKey deviceId, SpecificRecord record) {
+    /**
+     * Try to submit given data. This will only send data if the submitter is active and there is
+     * a connection with the server. Otherwise, the data is discarded.
+     */
+    public synchronized boolean trySend(AvroTopic topic, long offset, MeasurementKey deviceId,
+                                        SpecificRecord record) {
         return submitter != null && submitter.trySend(topic, offset, deviceId, record);
     }
 
@@ -272,11 +282,13 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         return tables;
     }
 
+    /** Add a listener for ServerStatus updates. */
     public void addStatusListener(ServerStatusListener listener) {
         synchronized (statusListeners) {
             statusListeners.add(listener);
         }
     }
+    /** Remove a listener for ServerStatus updates. */
     public void removeStatusListener(ServerStatusListener listener) {
         synchronized (statusListeners) {
             statusListeners.remove(listener);
@@ -293,6 +305,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
     }
 
+    /** Get the latest server status. */
     public ServerStatusListener.Status getStatus() {
         synchronized (statusListeners) {
             return this.status;
@@ -380,14 +393,22 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         start();
     }
 
+    public void setSendOnlyWithWifi(boolean sendOnlyWithWifi) {
+        this.sendOnlyWithWifi.set(sendOnlyWithWifi);
+        // trigger network connection setting update
+        this.onNetworkConnectionChanged(
+                networkConnectedReceiver.isConnected(),
+                networkConnectedReceiver.hasWifiOrEthernet());
+    }
+
     @Override
-    public void onNetworkConnectionChanged(boolean isConnected) {
+    public void onNetworkConnectionChanged(boolean isConnected, boolean hasWifiOrEthernet) {
         if (isStarted()) {
-            if (!isConnected) {
+            if (!isConnected || (!hasWifiOrEthernet && sendOnlyWithWifi.get())) {
                 logger.info("Network was disconnected, stopping data sending");
                 stop();
             }
-        } else if (isConnected) {
+        } else {
             // Just try to start: the start method will not do anything if the parameters
             // are not right.
             start();

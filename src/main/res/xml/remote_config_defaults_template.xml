@@ -60,5 +60,9 @@
         <!-- 450 MB ~ 5.5 million records. With a 64 Hz stream, that fills up after 24 hours. -->
         <value>450000000</value>
     </entry>
+    <entry>
+        <key>send_only_with_wifi</key>
+        <value>true</value>
+    </entry>
 </defaultsMap>
 <!-- END xml_defaults -->

@@ -25,7 +25,7 @@ import static android.os.BatteryManager.EXTRA_LEVEL;
 import static android.os.BatteryManager.EXTRA_PLUGGED;
 import static android.os.BatteryManager.EXTRA_SCALE;
 
-/** Keep track of battery level events */
+/** Keep track of battery level events. */
 public class BatteryLevelReceiver extends SpecificReceiver {
     private final BatteryLevelListener listener;
     private float level;
@@ -56,19 +56,28 @@ public class BatteryLevelReceiver extends SpecificReceiver {
         }
     }
 
+    /** Latest battery level in range [0, 1]. */
     public float getLevel() {
         return level;
     }
 
+    /** Latest value whether the device is plugged into a charger. */
     public boolean isPlugged() {
         return isPlugged;
     }
 
+    /** Returns true if the current battery level is at least the given level, or that the device is
+     * currently plugged in. Returns false otherwise. */
     public boolean hasMinimumLevel(float minLevel) {
         return level >= minLevel || isPlugged;
     }
 
     public interface BatteryLevelListener {
+        /**
+         * Latest battery level reported by the system.
+         * @param level battery level in range [0, 1]
+         * @param isPlugged whether the device is plugged into a charger
+         */
         void onBatteryLevelChanged(float level, boolean isPlugged);
     }
 }
