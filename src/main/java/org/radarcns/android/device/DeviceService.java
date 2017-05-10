@@ -69,6 +69,7 @@ import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
+import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send store the data of a
@@ -594,6 +595,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
 
         localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
+        localDataHandler.setCompression(RadarConfiguration.getBooleanExtra(
+                bundle, SEND_WITH_COMPRESSION, false));
 
         if (RadarConfiguration.hasExtra(bundle, DATA_RETENTION_KEY)) {
             localDataHandler.setDataRetention(

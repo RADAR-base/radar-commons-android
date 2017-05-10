@@ -41,6 +41,7 @@ import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
+import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
 
 /**
  * RADAR service provider, to bind and configure to a service. It is not thread-safe.
@@ -191,7 +192,8 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         config.putExtras(bundle,
                 KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, DEFAULT_GROUP_ID_KEY,
                 KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
-                SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI);
+                SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
+                SEND_WITH_COMPRESSION);
     }
 
     /**

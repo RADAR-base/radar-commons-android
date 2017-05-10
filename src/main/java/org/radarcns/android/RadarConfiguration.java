@@ -66,6 +66,7 @@ public class RadarConfiguration {
     public static final String KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level";
     public static final String MAX_CACHE_SIZE = "cache_max_size_bytes";
     public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
+    public static final String SEND_WITH_COMPRESSION = "send_with_compression";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
@@ -89,7 +90,7 @@ public class RadarConfiguration {
             KAFKA_RECORDS_SEND_LIMIT_KEY, MAX_CACHE_SIZE));
 
     public static final Set<String> BOOLEAN_VALUES = new HashSet<>(Arrays.asList(
-            CONDENSED_DISPLAY_KEY, SEND_ONLY_WITH_WIFI));
+            CONDENSED_DISPLAY_KEY, SEND_ONLY_WITH_WIFI, SEND_WITH_COMPRESSION));
 
     public static final Set<String> FLOAT_VALUES = Collections.singleton(
             KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL);

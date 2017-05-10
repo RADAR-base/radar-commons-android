@@ -85,6 +85,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private KafkaDataSubmitter<MeasurementKey, SpecificRecord> submitter;
     private RestSender<MeasurementKey, SpecificRecord> sender;
     private final AtomicFloat minimumBatteryLevel;
+    private boolean useCompression;
 
     /**
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
@@ -105,6 +106,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.batteryLevelReceiver = new BatteryLevelReceiver(context, this);
         this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
         this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
+        this.useCompression = false;
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
@@ -158,7 +160,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         updateServerStatus(Status.CONNECTING);
         this.sender = new RestSender<>(kafkaConfig, schemaRetriever,
                 new SpecificRecordEncoder(false), new SpecificRecordEncoder(false),
-                senderConnectionTimeout);
+                senderConnectionTimeout, useCompression);
         this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
                 kafkaRecordsSendLimit, getPreferredUploadRate(), kafkaCleanRate);
     }
@@ -382,6 +384,13 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             sender.setSchemaRetriever(schemaRetriever);
         }
         this.schemaRetriever = schemaRetriever;
+    }
+
+    public synchronized void setCompression(boolean useCompression) {
+        if (sender != null) {
+            sender.setCompression(useCompression);
+        }
+        this.useCompression = useCompression;
     }
 
     public void setDataRetention(long dataRetention) {
