@@ -165,12 +165,18 @@ public abstract class MainActivity extends Activity {
 
         radarConfiguration = createConfiguration();
         onConfigChanged();
+        logger.info("RADAR configuration at create: {}", radarConfiguration);
 
-        mConnections = DeviceServiceProvider.loadProviders(this, radarConfiguration);
-        for (DeviceServiceProvider provider : mConnections) {
-            DeviceServiceConnection connection = provider.getConnection();
-            mTotalRecordsSent.put(connection, new TimedInt());
-            deviceFilters.put(connection, Collections.<String>emptySet());
+        try {
+            mConnections = DeviceServiceProvider.loadProviders(this, radarConfiguration);
+            for (DeviceServiceProvider provider : mConnections) {
+                DeviceServiceConnection connection = provider.getConnection();
+                mTotalRecordsSent.put(connection, new TimedInt());
+                deviceFilters.put(connection, Collections.<String>emptySet());
+            }
+        } catch (IllegalArgumentException ex) {
+            logger.error("Cannot instantiate device provider, waiting to fetch to complete", ex);
+            mConnections = Collections.emptyList();
         }
 
         radarConfiguration.onFetchComplete(this, new OnCompleteListener<Void>() {
@@ -185,6 +191,7 @@ public abstract class MainActivity extends Activity {
                     }
                     logger.info("Remote Config: Activate success.");
                     // Set global properties.
+                    logger.info("RADAR configuration at create: {}", radarConfiguration);
                     onConfigChanged();
                 } else {
                     Boast.makeText(MainActivity.this, "Remote Config: Fetch Failed",

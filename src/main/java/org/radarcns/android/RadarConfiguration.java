@@ -536,4 +536,14 @@ public class RadarConfiguration {
         }
         return uuid;
     }
+
+    public String toString() {
+        Set<String> keys = config.getKeysByPrefix(null);
+        StringBuilder builder = new StringBuilder(keys.size() * 40 + 20);
+        builder.append("RadarConfiguration:\n");
+        for (String key : keys) {
+            builder.append("  ").append(key).append(": ").append(config.getValue(key)).append('\n');
+        }
+        return builder.toString();
+    }
 }
