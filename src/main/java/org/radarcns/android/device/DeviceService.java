@@ -345,10 +345,17 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         sendBroadcast(recordsIntent);
     }
 
+    /**
+     * New device manager for the current device.
+     */
     protected abstract DeviceManager createDeviceManager();
 
+    /**
+     * Default state when no device manager is active.
+     */
     protected abstract BaseDeviceState getDefaultState();
 
+    /** Kafka topics that this service will send data to. */
     protected abstract DeviceTopics getTopics();
 
     /**
@@ -651,6 +658,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return mBinder;
     }
 
+    /** User ID to send data for. */
     public String getUserId() {
         return userId;
     }
