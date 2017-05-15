@@ -26,7 +26,7 @@ public class BaseDeviceState implements Parcelable {
     public static final Parcelable.Creator<BaseDeviceState> CREATOR = new DeviceStateCreator<>(BaseDeviceState.class);
 
     private final MeasurementKey id = new MeasurementKey(null, null);
-    private DeviceStatusListener.Status status = DeviceStatusListener.Status.READY;
+    private DeviceStatusListener.Status status = DeviceStatusListener.Status.DISCONNECTED;
 
     public DeviceStatusListener.Status getStatus() {
         return status;
