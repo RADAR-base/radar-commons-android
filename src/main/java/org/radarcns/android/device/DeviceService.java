@@ -70,6 +70,7 @@ import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
 import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send store the data of a
@@ -555,13 +556,16 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         ServerConfig kafkaConfig = null;
         SchemaRetriever remoteSchemaRetriever = null;
+        boolean unsafeConnection = RadarConfiguration.getBooleanExtra(bundle, UNSAFE_KAFKA_CONNECTION, false);
         if (RadarConfiguration.hasExtra(bundle, KAFKA_REST_PROXY_URL_KEY)) {
             String urlString = RadarConfiguration.getStringExtra(bundle, KAFKA_REST_PROXY_URL_KEY);
             if (!urlString.isEmpty()) {
                 try {
                     ServerConfig schemaRegistry = new ServerConfig(RadarConfiguration.getStringExtra(bundle, SCHEMA_REGISTRY_URL_KEY));
+                    schemaRegistry.setUnsafe(unsafeConnection);
                     remoteSchemaRetriever = new SchemaRetriever(schemaRegistry, 30);
                     kafkaConfig = new ServerConfig(urlString);
+                    kafkaConfig.setUnsafe(unsafeConnection);
                 } catch (MalformedURLException ex) {
                     logger.error("Malformed Kafka server URL {}", urlString);
                     throw new IllegalArgumentException(ex);
