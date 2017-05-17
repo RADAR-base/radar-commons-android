@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -158,9 +159,13 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
 
         updateServerStatus(Status.CONNECTING);
-        this.sender = new RestSender<>(kafkaConfig, schemaRetriever,
-                new SpecificRecordEncoder(false), new SpecificRecordEncoder(false),
-                senderConnectionTimeout, useCompression);
+        this.sender = new RestSender.Builder<MeasurementKey, SpecificRecord>()
+                .server(kafkaConfig)
+                .schemaRetriever(schemaRetriever)
+                .encoders(new SpecificRecordEncoder(false), new SpecificRecordEncoder(false))
+                .connectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS)
+                .useCompression(useCompression)
+                .build();
         this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
                 kafkaRecordsSendLimit, getPreferredUploadRate(), kafkaCleanRate);
     }
