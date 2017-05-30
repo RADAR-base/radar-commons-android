@@ -21,7 +21,7 @@ android {
         minSdkVersion 21
         targetSdkVersion 25
         versionCode 3
-        versionName '0.1.1-SNAPSHOT'
+        versionName '0.2'
     }
     lintOptions {
         abortOnError false
