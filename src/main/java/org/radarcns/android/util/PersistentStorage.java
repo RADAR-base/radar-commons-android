@@ -36,6 +36,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * A class-bounded file-based storage to load or store properties.
+ * @deprecated Use SharedPreferences instead to avoid needing external files permissions.
+ */
+@Deprecated
 public class PersistentStorage {
     private static Logger logger = LoggerFactory.getLogger(PersistentStorage.class);
 

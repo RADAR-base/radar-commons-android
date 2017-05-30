@@ -57,7 +57,20 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
+import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
+import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
+import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
+import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send store the data of a
@@ -80,6 +93,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     public static final String SERVER_STATUS_CHANGED = PREFIX + "ServerStatusListener.Status";
     public static final String SERVER_RECORDS_SENT_TOPIC = PREFIX + "ServerStatusListener.topic";
     public static final String SERVER_RECORDS_SENT_NUMBER = PREFIX + "ServerStatusListener.lastNumberOfRecordsSent";
+    public static final String CACHE_TOPIC = PREFIX + "DataCache.topic";
+    public static final String CACHE_RECORDS_UNSENT_NUMBER = PREFIX + "DataCache.numberOfRecords.first";
+    public static final String CACHE_RECORDS_SENT_NUMBER = PREFIX + "DataCache.numberOfRecords.second";
     public static final String DEVICE_SERVICE_CLASS = PREFIX + "DeviceService.getClass";
     public static final String DEVICE_STATUS_CHANGED = PREFIX + "DeviceStatusListener.Status";
     public static final String DEVICE_STATUS_NAME = PREFIX + "Devicemanager.getName";
@@ -135,6 +151,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     @Override
     public void onDestroy() {
+        logger.info("Destroying DeviceService {}", this);
         super.onDestroy();
         // Unregister broadcast listeners
         unregisterReceiver(mBluetoothReceiver);
@@ -169,6 +186,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     @Override
     public void onRebind(Intent intent) {
+        logger.info("Received (re)bind in {}", this);
         numberOfActivitiesBound.incrementAndGet();
         if (intent != null) {
             onInvocation(intent.getExtras());
@@ -177,6 +195,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     @Override
     public boolean onUnbind(Intent intent) {
+        logger.info("Received unbind in {}", this);
         int startId = -1;
         synchronized (this) {
             if (numberOfActivitiesBound.decrementAndGet() == 0 && !isConnected) {
@@ -184,6 +203,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             }
         }
         if (startId != -1) {
+            logger.info("Stopping self if latest start ID was {}", latestStartId);
             stopSelf(latestStartId);
         }
         return true;
@@ -229,7 +249,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                     }
                 }
                 if (startId != -1) {
-                    stopSelf(latestStartId);
+                    stopSelf(startId);
                 }
                 break;
             default:
@@ -326,10 +346,17 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         sendBroadcast(recordsIntent);
     }
 
+    /**
+     * New device manager for the current device.
+     */
     protected abstract DeviceManager createDeviceManager();
 
+    /**
+     * Default state when no device manager is active.
+     */
     protected abstract BaseDeviceState getDefaultState();
 
+    /** Kafka topics that this service will send data to. */
     protected abstract DeviceTopics getTopics();
 
     /**
@@ -529,13 +556,16 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         ServerConfig kafkaConfig = null;
         SchemaRetriever remoteSchemaRetriever = null;
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.KAFKA_REST_PROXY_URL_KEY)) {
-            String urlString = RadarConfiguration.getStringExtra(bundle, RadarConfiguration.KAFKA_REST_PROXY_URL_KEY);
+        boolean unsafeConnection = RadarConfiguration.getBooleanExtra(bundle, UNSAFE_KAFKA_CONNECTION, false);
+        if (RadarConfiguration.hasExtra(bundle, KAFKA_REST_PROXY_URL_KEY)) {
+            String urlString = RadarConfiguration.getStringExtra(bundle, KAFKA_REST_PROXY_URL_KEY);
             if (!urlString.isEmpty()) {
                 try {
                     ServerConfig schemaRegistry = new ServerConfig(RadarConfiguration.getStringExtra(bundle, SCHEMA_REGISTRY_URL_KEY));
+                    schemaRegistry.setUnsafe(unsafeConnection);
                     remoteSchemaRetriever = new SchemaRetriever(schemaRegistry, 30);
                     kafkaConfig = new ServerConfig(urlString);
+                    kafkaConfig.setUnsafe(unsafeConnection);
                 } catch (MalformedURLException ex) {
                     logger.error("Malformed Kafka server URL {}", urlString);
                     throw new IllegalArgumentException(ex);
@@ -543,12 +573,18 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             }
         }
 
+        boolean sendOnlyWithWifi = RadarConfiguration.getBooleanExtra(
+                bundle, SEND_ONLY_WITH_WIFI, true);
+
         boolean newlyCreated;
         synchronized (this) {
             if (dataHandler == null) {
+                int maxBytes = RadarConfiguration.getIntExtra(
+                        bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
                 try {
                     dataHandler = new TableDataHandler(
-                            this, kafkaConfig, remoteSchemaRetriever, getCachedTopics());
+                            this, kafkaConfig, remoteSchemaRetriever, getCachedTopics(), maxBytes,
+                            sendOnlyWithWifi);
                     newlyCreated = true;
                 } catch (IOException ex) {
                     logger.error("Failed to instantiate Data Handler", ex);
@@ -569,32 +605,40 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             }
         }
 
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.DATA_RETENTION_KEY)) {
+        localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
+        localDataHandler.setCompression(RadarConfiguration.getBooleanExtra(
+                bundle, SEND_WITH_COMPRESSION, false));
+
+        if (RadarConfiguration.hasExtra(bundle, DATA_RETENTION_KEY)) {
             localDataHandler.setDataRetention(
-                    RadarConfiguration.getLongExtra(bundle, RadarConfiguration.DATA_RETENTION_KEY));
+                    RadarConfiguration.getLongExtra(bundle, DATA_RETENTION_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.KAFKA_UPLOAD_RATE_KEY)) {
+        if (RadarConfiguration.hasExtra(bundle, KAFKA_UPLOAD_RATE_KEY)) {
             localDataHandler.setKafkaUploadRate(
-                    RadarConfiguration.getLongExtra(bundle, RadarConfiguration.KAFKA_UPLOAD_RATE_KEY));
+                    RadarConfiguration.getLongExtra(bundle, KAFKA_UPLOAD_RATE_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.KAFKA_CLEAN_RATE_KEY)) {
+        if (RadarConfiguration.hasExtra(bundle, KAFKA_CLEAN_RATE_KEY)) {
             localDataHandler.setKafkaCleanRate(
-                    RadarConfiguration.getLongExtra(bundle, RadarConfiguration.KAFKA_CLEAN_RATE_KEY));
+                    RadarConfiguration.getLongExtra(bundle, KAFKA_CLEAN_RATE_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY)) {
+        if (RadarConfiguration.hasExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY)) {
             localDataHandler.setKafkaRecordsSendLimit(
-                    RadarConfiguration.getIntExtra(bundle, RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY));
+                    RadarConfiguration.getIntExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY)) {
+        if (RadarConfiguration.hasExtra(bundle, SENDER_CONNECTION_TIMEOUT_KEY)) {
             localDataHandler.setSenderConnectionTimeout(
-                    RadarConfiguration.getLongExtra(bundle, RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY));
+                    RadarConfiguration.getLongExtra(bundle, SENDER_CONNECTION_TIMEOUT_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.DATABASE_COMMIT_RATE_KEY)) {
+        if (RadarConfiguration.hasExtra(bundle, DATABASE_COMMIT_RATE_KEY)) {
             localDataHandler.setDatabaseCommitRate(
-                    RadarConfiguration.getLongExtra(bundle, RadarConfiguration.DATABASE_COMMIT_RATE_KEY));
+                    RadarConfiguration.getLongExtra(bundle, DATABASE_COMMIT_RATE_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, RadarConfiguration.DEFAULT_GROUP_ID_KEY)) {
-            setUserId(RadarConfiguration.getStringExtra(bundle, RadarConfiguration.DEFAULT_GROUP_ID_KEY));
+        if (RadarConfiguration.hasExtra(bundle, DEFAULT_GROUP_ID_KEY)) {
+            setUserId(RadarConfiguration.getStringExtra(bundle, DEFAULT_GROUP_ID_KEY));
+        }
+        if (RadarConfiguration.hasExtra(bundle, KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
+            localDataHandler.setMinimumBatteryLevel(RadarConfiguration.getFloatExtra(bundle,
+                    KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL));
         }
 
         if (newlyCreated) {
@@ -618,6 +662,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return mBinder;
     }
 
+    /** User ID to send data for. */
     public String getUserId() {
         return userId;
     }

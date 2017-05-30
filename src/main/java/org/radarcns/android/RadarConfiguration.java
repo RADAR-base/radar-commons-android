@@ -18,6 +18,7 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.NonNull;
@@ -35,12 +36,15 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import static java.util.regex.Pattern.CASE_INSENSITIVE;
 
 public class RadarConfiguration {
+    private static final Object SYNC_PREFS_OBJECT = new Object();
+
     public static final String RADAR_PREFIX = "org.radarcns.android.";
 
     public static final String KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url";
@@ -59,6 +63,11 @@ public class RadarConfiguration {
     public static final String CONDENSED_DISPLAY_KEY = "is_condensed_n_records_display";
     public static final String START_AT_BOOT = "start_at_boot";
     public static final String DEVICE_SERVICES_TO_CONNECT = "device_services_to_connect";
+    public static final String KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level";
+    public static final String MAX_CACHE_SIZE = "cache_max_size_bytes";
+    public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
+    public static final String SEND_WITH_COMPRESSION = "send_with_compression";
+    public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
@@ -78,11 +87,15 @@ public class RadarConfiguration {
             KAFKA_CLEAN_RATE_KEY, SENDER_CONNECTION_TIMEOUT_KEY, DATA_RETENTION_KEY,
             FIREBASE_FETCH_TIMEOUT_MS_KEY));
 
-    public static final Set<String> INT_VALUES = Collections.singleton(
-            KAFKA_RECORDS_SEND_LIMIT_KEY);
+    public static final Set<String> INT_VALUES = new HashSet<>(Arrays.asList(
+            KAFKA_RECORDS_SEND_LIMIT_KEY, MAX_CACHE_SIZE));
 
-    public static final Set<String> BOOLEAN_VALUES = Collections.singleton(
-            CONDENSED_DISPLAY_KEY);
+    public static final Set<String> BOOLEAN_VALUES = new HashSet<>(Arrays.asList(
+            CONDENSED_DISPLAY_KEY, SEND_ONLY_WITH_WIFI, SEND_WITH_COMPRESSION,
+            UNSAFE_KAFKA_CONNECTION));
+
+    public static final Set<String> FLOAT_VALUES = Collections.singleton(
+            KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL);
 
     private static final Object syncObject = new Object();
     private static RadarConfiguration instance = null;
@@ -265,6 +278,24 @@ public class RadarConfiguration {
         }
     }
 
+
+    private Float getRawFloat(String key) {
+        if (localConfiguration.containsKey(key)) {
+            Object value = localConfiguration.get(key);
+            if (value == null) {
+                return null;
+            } else if (value instanceof Number) {
+                return ((Number)value).floatValue();
+            } else if (value instanceof String) {
+                return Float.valueOf((String)value);
+            } else {
+                return null;
+            }
+        } else {
+            return Float.valueOf(getString(key));
+        }
+    }
+
     public String getString(@NonNull String key) {
         String result = getRawString(key);
 
@@ -300,6 +331,21 @@ public class RadarConfiguration {
      */
     public int getInt(@NonNull String key) {
         Integer ret = getRawInteger(key);
+        if (ret == null) {
+            throw new IllegalArgumentException("Key does not have a value");
+        }
+        return ret;
+    }
+
+    /**
+     * Get a configured float value.
+     * @param key key of the value
+     * @return float value
+     * @throws NumberFormatException if the configured value is not an Float
+     * @throws IllegalArgumentException if the key does not have an associated value
+     */
+    public float getFloat(@NonNull String key) {
+        Float ret = getRawFloat(key);
         if (ret == null) {
             throw new IllegalArgumentException("Key does not have a value");
         }
@@ -420,6 +466,8 @@ public class RadarConfiguration {
                     bundle.putLong(key, (Long) value);
                 } else if (value instanceof Integer) {
                     bundle.putInt(key, (Integer) value);
+                } else if (value instanceof Float) {
+                    bundle.putFloat(key, (Float) value);
                 }
             }
             else {
@@ -430,6 +478,8 @@ public class RadarConfiguration {
                         bundle.putInt(key, getInt(extra));
                     } else if (BOOLEAN_VALUES.contains(extra)) {
                         bundle.putBoolean(key, getString(extra).equals("true"));
+                    } else if (FLOAT_VALUES.contains(extra)) {
+                        bundle.putFloat(key, getFloat(extra));
                     } else {
                         bundle.putString(key, getString(extra));
                     }
@@ -446,6 +496,10 @@ public class RadarConfiguration {
 
     public static int getIntExtra(Bundle bundle, String key, int defaultValue) {
         return bundle.getInt(RADAR_PREFIX + key, defaultValue);
+    }
+
+    public static boolean getBooleanExtra(Bundle bundle, String key, boolean defaultValue) {
+        return bundle.getBoolean(RADAR_PREFIX + key, defaultValue);
     }
 
     public static int getIntExtra(Bundle bundle, String key) {
@@ -466,5 +520,32 @@ public class RadarConfiguration {
 
     public static String getStringExtra(Bundle bundle, String key) {
         return bundle.getString(RADAR_PREFIX + key);
+    }
+
+    public static float getFloatExtra(Bundle bundle, String key) {
+        return bundle.getFloat(RADAR_PREFIX + key);
+    }
+
+    public static String getOrSetUUID(@NonNull Context context, String key) {
+        SharedPreferences prefs = context.getSharedPreferences("global", Context.MODE_PRIVATE);
+        String uuid;
+        synchronized (SYNC_PREFS_OBJECT) {
+            uuid = prefs.getString(key, null);
+            if (uuid == null) {
+                uuid = UUID.randomUUID().toString();
+                prefs.edit().putString(key, uuid).apply();
+            }
+        }
+        return uuid;
+    }
+
+    public String toString() {
+        Set<String> keys = config.getKeysByPrefix(null);
+        StringBuilder builder = new StringBuilder(keys.size() * 40 + 20);
+        builder.append("RadarConfiguration:\n");
+        for (String key : keys) {
+            builder.append("  ").append(key).append(": ").append(config.getValue(key)).append('\n');
+        }
+        return builder.toString();
     }
 }

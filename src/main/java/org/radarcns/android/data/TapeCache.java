@@ -17,12 +17,12 @@
 package org.radarcns.android.data;
 
 import android.content.Context;
+import android.content.Intent;
 import android.os.Parcel;
-import android.os.Process;
 import android.util.Pair;
 
 import org.apache.avro.specific.SpecificRecord;
-import org.radarcns.android.util.AndroidThreadFactory;
+import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.data.AvroEncoder;
 import org.radarcns.data.Record;
 import org.radarcns.data.SpecificRecordEncoder;
@@ -40,12 +40,24 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_SENT_NUMBER;
+import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_UNSENT_NUMBER;
+import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
+
+/**
+ * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
+ * before being written in batches to the BackedObjectQueue, using a single-threaded
+ * ExecutorService. Data is retrieved and removed from the queue in a blocking way using that same
+ * ExecutorService. Sent messages are not kept, they are immediately removed.
+ *
+ * @param <K> measurement key type
+ * @param <V> measurement value type
+ */
 public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> implements DataCache<K, V> {
     private static final Logger logger = LoggerFactory.getLogger(TapeCache.class);
     private static final ListPool listPool = new ListPool(10);
@@ -56,35 +68,69 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     private final List<Record<K, V>> measurementsToAdd;
     private final File outputFile;
     private final BackedObjectQueue.Converter<Record<K, V>> converter;
+    private final Runnable flusher;
+    private final int maxBytes;
 
     private BackedObjectQueue<Record<K, V>> queue;
     private Future<?> addMeasurementFuture;
-    private boolean measurementsAreFlushed;
     private long lastOffsetSent;
     private long timeWindowMillis;
 
-    public TapeCache(Context context, AvroTopic<K, V> topic, long timeWindowMillis) throws IOException {
+    private final AtomicLong queueSize;
+
+    /**
+     * TapeCache to cache measurements with
+     * @param context Android context to get the cache directory and broadcast the cache size.
+     * @param topic Kafka Avro topic to write data for.
+     * @param timeWindowMillis time that data may be cached before writing
+     * @param executorFactory factory to get a single-threaded {@link ScheduledExecutorService}
+     *                        from.
+     * @param maxBytes number of bytes the backing cache file may have, with minimum value
+     *                 {@link org.radarcns.util.MappedQueueFileStorage#MINIMUM_LENGTH}.
+     * @throws IOException if a BackedObjectQueue cannot be created.
+     */
+    public TapeCache(final Context context, AvroTopic<K, V> topic, long timeWindowMillis,
+                     SingleThreadExecutorFactory executorFactory, int maxBytes) throws IOException {
         this.topic = topic;
         this.timeWindowMillis = timeWindowMillis;
+        this.maxBytes = maxBytes;
         outputFile = new File(context.getCacheDir(), topic.getName() + ".tape");
         QueueFile queueFile;
         try {
-            queueFile = QueueFile.newMapped(outputFile, Integer.MAX_VALUE);
+            queueFile = QueueFile.newMapped(outputFile, maxBytes);
         } catch (IOException ex) {
             logger.error("TapeCache " + outputFile + " was corrupted. Removing old cache.");
             if (outputFile.delete()) {
-                queueFile = QueueFile.newMapped(outputFile, Integer.MAX_VALUE);
+                queueFile = QueueFile.newMapped(outputFile, maxBytes);
             } else {
                 throw ex;
             }
         }
-        this.executor = Executors.newSingleThreadScheduledExecutor(new AndroidThreadFactory(
-                "TapeCache-" + TapeCache.this.topic.getName(),
-                Process.THREAD_PRIORITY_BACKGROUND));
+        this.queueSize = new AtomicLong(queueFile.size());
+
+        this.executor = executorFactory.getScheduledExecutorService();
+
+        this.executor.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                Intent numberCached = new Intent(CACHE_TOPIC);
+                numberCached.putExtra(CACHE_TOPIC, getTopic().getName());
+                numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, 0L);
+                numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, queueSize.get());
+                context.sendBroadcast(numberCached);
+            }
+        }, 10L, 10L, TimeUnit.SECONDS);
+
         this.measurementsToAdd = new ArrayList<>();
 
         this.converter = new TapeAvroConverter<>(topic);
         this.queue = new BackedObjectQueue<>(queueFile, converter);
+        this.flusher = new Runnable() {
+            @Override
+            public void run() {
+                doFlush();
+            }
+        };
 
         long firstInQueue;
         if (queue.isEmpty()) {
@@ -94,7 +140,6 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         }
         lastOffsetSent = firstInQueue - 1L;
         nextOffset = new AtomicLong(firstInQueue + queue.size());
-        measurementsAreFlushed = false;
     }
 
     @Override
@@ -108,8 +153,14 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                         return queue.peek(limit);
                     } catch (IllegalStateException ex) {
                         logger.error("Queue was corrupted. Removing cache.");
+                        try {
+                            queue.close();
+                        } catch (IOException ioex) {
+                            logger.warn("Failed to close corrupt queue", ioex);
+                        }
                         if (outputFile.delete()) {
-                            QueueFile queueFile = QueueFile.newMapped(outputFile, Integer.MAX_VALUE);
+                            QueueFile queueFile = QueueFile.newMapped(outputFile, maxBytes);
+                            queueSize.set(queueFile.size());
                             queue = new BackedObjectQueue<>(queueFile, converter);
                             return Collections.emptyList();
                         } else {
@@ -121,7 +172,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         } catch (InterruptedException ex) {
             logger.warn("unsentRecords was interrupted, returning an empty list", ex);
             Thread.currentThread().interrupt();
-            return listPool.get(Collections.<Record<K,V>>emptyList());
+            return listPool.get(Collections.<Record<K, V>>emptyList());
         } catch (ExecutionException ex) {
             logger.warn("Failed to retrieve records for topic {}", topic, ex);
             Throwable cause = ex.getCause();
@@ -142,20 +193,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     @Override
     public Pair<Long, Long> numberOfRecords() {
-        return new Pair<>((long)queueSize(), 0L);
-    }
-
-    private int queueSize() {
-        try {
-            return executor.submit(new Callable<Integer>() {
-                @Override
-                public Integer call() throws Exception {
-                    return queue.size();
-                }
-            }).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return -1;
-        }
+        return new Pair<>(queueSize.get(), 0L);
     }
 
     @Override
@@ -183,6 +221,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                         logger.info("Removing data from topic {} at offset {} onwards ({} records)",
                                 topic, offset, toRemove);
                         queue.remove(toRemove);
+                        queueSize.addAndGet(-toRemove);
                         logger.info("Removed data from topic {} at offset {} onwards ({} records)",
                                 topic, offset, toRemove);
                         return toRemove;
@@ -208,38 +247,11 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     @Override
     public synchronized void addMeasurement(final K key, final V value) {
-        measurementsAreFlushed = false;
         measurementsToAdd.add(new Record<>(nextOffset.getAndIncrement(), key, value));
 
         if (addMeasurementFuture == null) {
-            addMeasurementFuture = executor.schedule(new Runnable() {
-                @Override
-                public void run() {
-                    List<Record<K, V>> localList;
-
-                    synchronized (TapeCache.this) {
-                        addMeasurementFuture = null;
-                        localList = listPool.get(measurementsToAdd);
-                        measurementsToAdd.clear();
-                    }
-
-                    try {
-                        logger.info("Writing {} records to file in topic {}", localList.size(), topic);
-                        queue.addAll(localList);
-                    } catch (IOException ex) {
-                        logger.error("Failed to add record", ex);
-                        throw new RuntimeException(ex);
-                    }
-
-                    listPool.add(localList);
-                    synchronized (TapeCache.this) {
-                        if (measurementsToAdd.isEmpty()) {
-                            measurementsAreFlushed = true;
-                            notifyAll();
-                        }
-                    }
-                }
-            }, timeWindowMillis, TimeUnit.MILLISECONDS);
+            addMeasurementFuture = executor.schedule(flusher,
+                    timeWindowMillis, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -275,20 +287,54 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
         flush();
+        queue.close();
         listPool.clear();
-        executor.shutdown();
     }
 
     @Override
-    public synchronized void flush() {
-        try {
-            while (!measurementsAreFlushed) {
-                wait();
+    public void flush() {
+        Future<?> flushFuture;
+        synchronized (this) {
+            if (addMeasurementFuture != null) {
+                addMeasurementFuture.cancel(false);
+                addMeasurementFuture = null;
             }
+            // no measurements in cache
+            if (measurementsToAdd.isEmpty()) {
+                return;
+            }
+            flushFuture = executor.submit(this.flusher);
+        }
+        try {
+            flushFuture.get();
         } catch (InterruptedException e) {
             logger.warn("Did not wait for adding measurements to complete.");
+        } catch (ExecutionException ex) {
+            logger.warn("Failed to execute flush task", ex);
         }
+    }
+
+    private void doFlush() {
+        List<Record<K, V>> localList;
+
+        synchronized (this) {
+            addMeasurementFuture = null;
+            localList = listPool.get(measurementsToAdd);
+            measurementsToAdd.clear();
+        }
+
+        try {
+            logger.info("Writing {} records to file in topic {}", localList.size(), topic);
+            queue.addAll(localList);
+            queueSize.addAndGet(localList.size());
+        } catch (IOException ex) {
+            logger.error("Failed to add record", ex);
+            queueSize.set(queue.size());
+            throw new RuntimeException(ex);
+        }
+
+        listPool.add(localList);
     }
 }

@@ -69,6 +69,9 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     private boolean lastUploadFailed = false;
     private ScheduledFuture<?> cleanFuture;
     private ScheduledFuture<?> uploadFuture;
+    private ScheduledFuture<?> uploadIfNeededFuture;
+    /** Upload rate in milliseconds. */
+    private long uploadRate;
 
     public KafkaDataSubmitter(@NonNull DataHandler<K, V> dataHandler, @NonNull KafkaSender<K, V> sender, ThreadFactory threadFactory, int sendLimit, long uploadRate, long cleanRate) {
         this.dataHandler = dataHandler;
@@ -98,6 +101,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
 
         synchronized (this) {
             uploadFuture = null;
+            uploadIfNeededFuture = null;
             setUploadRate(uploadRate);
             cleanFuture = null;
             setCleanRate(cleanRate);
@@ -106,9 +110,16 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                 uploadRate, cleanRate);
     }
 
+    /** Set upload rate in seconds. */
     public final synchronized void setUploadRate(long period) {
+        long newUploadRate = period * 1000L;
+        if (this.uploadRate == newUploadRate) {
+            return;
+        }
+        this.uploadRate = newUploadRate;
         if (uploadFuture != null) {
             uploadFuture.cancel(false);
+            uploadIfNeededFuture.cancel(false);
         }
         // Get upload frequency from system property
         uploadFuture = executor.scheduleAtFixedRate(new Runnable() {
@@ -129,7 +140,24 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                     topicsToSend.clear();
                 }
             }
-        }, period, period, TimeUnit.SECONDS);
+        }, uploadRate, uploadRate, TimeUnit.MILLISECONDS);
+
+        uploadIfNeededFuture = executor.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                if (connection.isConnected()) {
+                    boolean sendAgain = uploadCachesIfNeeded();
+                    if (sendAgain) {
+                        executor.execute(this);
+                    }
+                }
+            }
+        }, uploadRate / 5, uploadRate / 5, TimeUnit.MILLISECONDS);
+    }
+
+    /** Upload rate in seconds. */
+    private synchronized long getUploadRate() {
+        return this.uploadRate / 1000L;
     }
 
     public final synchronized void setCleanRate(long period) {
@@ -151,39 +179,21 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
     }
 
     /**
-     * Close the submitter eventually.
+     * Close the submitter eventually. This does not flush any caches.
      *
      * Call {@link #join(long)} to wait for this to finish.
      */
-    public void close() {
+    @Override
+    public synchronized void close() {
         executor.execute(new Runnable() {
             @Override
             public void run() {
-                Map<AvroTopic<K, ? extends V>, ? extends DataCache<K, ? extends V>> caches = dataHandler.getCaches();
-                for (DataCache<K, ? extends V> cache : caches.values()) {
-                    try {
-                        cache.flush();
-                    } catch (IOException ex) {
-                        logger.error("Cannot flush cache", ex);
+                synchronized (trySendFuture) {
+                    for (ScheduledFuture<?> future : trySendFuture.values()) {
+                        future.cancel(true);
                     }
-                }
-                if (connection.isConnected()) {
-                    uploadCaches(new HashSet<>(caches.keySet()));
-                    try {
-                        synchronized (trySendFuture) {
-                            for (ScheduledFuture<?> future : trySendFuture.values()) {
-                                future.cancel(true);
-                            }
-                            trySendFuture.clear();
-
-                            for (Map.Entry<AvroTopic<K, V>, Queue<Record<K, V>>> records : trySendCache.entrySet()) {
-                                doImmediateSend(records.getKey(), listPool.get(records.getValue()));
-                            }
-                            trySendCache.clear();
-                        }
-                    } catch (IOException e) {
-                        logger.warn("Failed to addMeasurement latest measurements", e);
-                    }
+                    trySendFuture.clear();
+                    trySendCache.clear();
                 }
 
                 for (Map.Entry<AvroTopic<K, V>, KafkaTopicSender<K, V>> topicSender : topicSenders.entrySet()) {
@@ -229,6 +239,39 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
      */
     public void checkConnection() {
         connection.check();
+    }
+
+    /**
+     * Upload the caches if they would cause the buffer to overflow
+     */
+    private boolean uploadCachesIfNeeded() {
+        boolean uploadingNotified = false;
+        int currentSendLimit = sendLimit.get();
+        boolean sendAgain = false;
+
+        try {
+            for (Map.Entry<AvroTopic<K, ? extends V>, ? extends DataCache<K, ? extends V>> entry : dataHandler.getCaches().entrySet()) {
+                if (entry.getValue().numberOfRecords().first > currentSendLimit) {
+                    //noinspection unchecked
+                    uploadCache((AvroTopic<K, V>) entry.getKey(), (DataCache<K, V>) entry.getValue(), currentSendLimit, uploadingNotified);
+                    if (!uploadingNotified) {
+                        uploadingNotified = true;
+                    }
+                }
+                if (entry.getValue().numberOfRecords().first > currentSendLimit) {
+                    sendAgain = true;
+                }
+            }
+            if (uploadingNotified) {
+                dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED);
+                connection.didConnect();
+            }
+        } catch (IOException ex) {
+            if (!lastUploadFailed) {
+                connection.didDisconnect(ex);
+            }
+        }
+        return sendAgain;
     }
 
     /**
@@ -328,6 +371,8 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
         }
         records.add(new Record<>(offset, deviceId, (V)record));
 
+        long period = getUploadRate();
+
         synchronized (trySendFuture) {
             if (!trySendFuture.containsKey(topic)) {
                 trySendFuture.put(castTopic, executor.schedule(new Runnable() {
@@ -353,7 +398,7 @@ public class KafkaDataSubmitter<K, V> implements Closeable {
                             connection.didDisconnect(e);
                         }
                     }
-                }, 5L, TimeUnit.SECONDS));
+                }, period, TimeUnit.SECONDS));
             }
         }
         return true;
