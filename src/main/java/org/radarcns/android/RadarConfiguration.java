@@ -166,6 +166,15 @@ public class RadarConfiguration {
     }
 
     public Object put(String key, Object value) {
+        if (!(value == null
+                || value instanceof String
+                || value instanceof Long
+                || value instanceof Integer
+                || value instanceof Float
+                || value instanceof Boolean)) {
+            throw new IllegalArgumentException("Cannot put value of type " + value.getClass()
+                    + " into RadarConfiguration");
+        }
         return localConfiguration.put(key, value);
     }
 
@@ -460,6 +469,8 @@ public class RadarConfiguration {
                 Object value = localConfiguration.get(extra);
                 if (value == null) {
                     bundle.putString(key, null);
+                } else if (value instanceof String){
+                    bundle.putString(key, (String) value);
                 } else if (value instanceof Boolean) {
                     bundle.putBoolean(key, (Boolean) value);
                 } else if (value instanceof Long) {
@@ -468,6 +479,8 @@ public class RadarConfiguration {
                     bundle.putInt(key, (Integer) value);
                 } else if (value instanceof Float) {
                     bundle.putFloat(key, (Float) value);
+                } else {
+                    throw new IllegalStateException("Configuration contains unknown type");
                 }
             }
             else {
@@ -544,7 +557,7 @@ public class RadarConfiguration {
         StringBuilder builder = new StringBuilder(keys.size() * 40 + 20);
         builder.append("RadarConfiguration:\n");
         for (String key : keys) {
-            builder.append("  ").append(key).append(": ").append(config.getValue(key)).append('\n');
+            builder.append("  ").append(key).append(": ").append(config.getValue(key).asString()).append('\n');
         }
         return builder.toString();
     }
