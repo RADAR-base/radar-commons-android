@@ -57,6 +57,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.radarcns.android.RadarConfiguration.ACCESS_TOKEN;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
 import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
@@ -575,6 +576,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         boolean sendOnlyWithWifi = RadarConfiguration.getBooleanExtra(
                 bundle, SEND_ONLY_WITH_WIFI, true);
+        String accessToken = RadarConfiguration.getStringExtra(bundle, ACCESS_TOKEN, null);
 
         boolean newlyCreated;
         synchronized (this) {
@@ -584,7 +586,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 try {
                     dataHandler = new TableDataHandler(
                             this, kafkaConfig, remoteSchemaRetriever, getCachedTopics(), maxBytes,
-                            sendOnlyWithWifi);
+                            sendOnlyWithWifi, accessToken);
                     newlyCreated = true;
                 } catch (IOException ex) {
                     logger.error("Failed to instantiate Data Handler", ex);
@@ -655,11 +657,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     public synchronized DeviceManager getDeviceManager() {
         return deviceScanner;
-    }
-
-    /** Get the service local binder. */
-    public LocalBinder getBinder() {
-        return mBinder;
     }
 
     /** User ID to send data for. */

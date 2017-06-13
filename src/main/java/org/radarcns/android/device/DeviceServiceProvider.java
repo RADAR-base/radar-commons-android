@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 
+import static org.radarcns.android.RadarConfiguration.ACCESS_TOKEN;
 import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
@@ -194,7 +195,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, DEFAULT_GROUP_ID_KEY,
                 KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
-                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
+                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION, ACCESS_TOKEN);
     }
 
     /**
