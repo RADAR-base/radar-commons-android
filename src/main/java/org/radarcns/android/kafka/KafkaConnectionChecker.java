@@ -16,6 +16,7 @@
 
 package org.radarcns.android.kafka;
 
+import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.KafkaSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,9 +112,14 @@ class KafkaConnectionChecker implements Runnable {
         logger.warn("Sender is disconnected", ex);
 
         if (isConnected.compareAndSet(true, false)) {
-            listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED);
-            // try to reconnect immediately
-            executor.execute(this);
+            if (ex instanceof AuthenticationException) {
+                logger.warn("Failed to authenticate to server: {}", ex.getMessage());
+                listener.updateServerStatus(ServerStatusListener.Status.UNAUTHORIZED);
+            } else {
+                listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED);
+                // try to reconnect immediately
+                executor.execute(this);
+            }
         }
     }
 

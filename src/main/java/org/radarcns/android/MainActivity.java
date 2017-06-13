@@ -489,6 +489,10 @@ public abstract class MainActivity extends Activity {
 
     public void updateServerStatus(final ServerStatusListener.Status status) {
         this.serverStatus = status;
+
+        if (status == ServerStatusListener.Status.UNAUTHORIZED) {
+            // TODO: redirect to login activity or dialog
+        }
     }
 
     public void updateServerRecordsSent(DeviceServiceConnection<?> connection, String topic,

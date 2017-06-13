@@ -68,6 +68,7 @@ public class RadarConfiguration {
     public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
     public static final String SEND_WITH_COMPRESSION = "send_with_compression";
     public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
+    public static final String ACCESS_TOKEN = "access_token";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);

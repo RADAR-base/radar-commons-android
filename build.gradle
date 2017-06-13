@@ -61,8 +61,13 @@ ext.website = 'http://radar-cns.org'
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
+configurations.compile {
+    resolutionStrategy.cacheChangingModulesFor 0, 'MILLISECONDS'
+}
+
 repositories {
     jcenter()
+    maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
 }
 
 dependencies {
@@ -70,7 +75,8 @@ dependencies {
     compile 'org.apache.avro:avro:1.8.1'
     compile 'org.xerial.snappy:snappy-java:1.1.2.6'
     compile 'com.google.firebase:firebase-config:10.2.6'
-    compile ('org.radarcns:radar-commons:0.4') {
+    compile ('org.radarcns:radar-commons:0.4.1-SNAPSHOT') {
+        changing = true
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'

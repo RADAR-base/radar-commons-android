@@ -73,6 +73,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private final BatteryLevelReceiver batteryLevelReceiver;
     private final NetworkConnectedReceiver networkConnectedReceiver;
     private final AtomicBoolean sendOnlyWithWifi;
+    private String accessToken;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
     private int kafkaRecordsSendLimit;
@@ -93,7 +94,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
                             List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> topics,
-                            int maxBytes, boolean sendOnlyWithWifi) throws IOException {
+                            int maxBytes, boolean sendOnlyWithWifi, String accessToken)
+            throws IOException {
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
@@ -108,6 +110,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
         this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
         this.useCompression = false;
+        this.accessToken = accessToken;
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
@@ -165,6 +168,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
                 .encoders(new SpecificRecordEncoder(false), new SpecificRecordEncoder(false))
                 .connectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS)
                 .useCompression(useCompression)
+                .accessToken(accessToken)
                 .build();
         this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
                 kafkaRecordsSendLimit, getPreferredUploadRate(), kafkaCleanRate);
@@ -368,6 +372,13 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             submitter.setCleanRate(kafkaCleanRate);
         }
         this.kafkaCleanRate = kafkaCleanRate;
+    }
+
+    public synchronized void setAccessToken(String accessToken) {
+        if (sender != null) {
+            sender.setAccessToken(accessToken);
+        }
+        this.accessToken = accessToken;
     }
 
     public synchronized void setSenderConnectionTimeout(long senderConnectionTimeout) {
