@@ -22,6 +22,7 @@ import android.graphics.Bitmap;
 
 /** Provides the name and some metadata of the main activity */
 public abstract class RadarApplication extends Application {
+
     public Notification.Builder updateNotificationAppSettings(Notification.Builder builder) {
         return builder
             .setLargeIcon(getLargeIcon())

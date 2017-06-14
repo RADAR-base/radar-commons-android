@@ -65,8 +65,10 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     /**
      * Creator for a device state.
      * @return non-null state creator.
+     * @deprecated state creators are no longer used
      */
-    public abstract Parcelable.Creator<T> getStateCreator();
+    @Deprecated
+    public Parcelable.Creator<T> getStateCreator() { return null; }
 
     /** Display name of the service. */
     public abstract String getDisplayName();
@@ -103,16 +105,11 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
             if (activity == null) {
                 throw new IllegalStateException("#setActivity(MainActivity) needs to be set before #getConnection() is called.");
             }
-            Parcelable.Creator<T> creator = getStateCreator();
-            if (creator == null) {
-                throw new UnsupportedOperationException("RadarServiceProvider " + getClass().getSimpleName() + " does not provide state creator");
-            }
-
             Class<?> serviceClass = getServiceClass();
             if (serviceClass == null) {
                 throw new UnsupportedOperationException("RadarServiceProvider " + getClass().getSimpleName() + " does not provide service class");
             }
-            connection = new DeviceServiceConnection<>(activity, creator, serviceClass.getName());
+            connection = new DeviceServiceConnection<>(activity, serviceClass.getName());
         }
         return connection;
     }

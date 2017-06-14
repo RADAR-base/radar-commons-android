@@ -29,7 +29,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
-import android.os.RemoteException;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -210,8 +209,6 @@ public abstract class MainActivity extends Activity {
                 try {
                     // Update all rows in the UI with the data from the connections
                     mUIUpdater.update();
-                } catch (RemoteException e) {
-                    logger.warn("Failed to update device data", e);
                 } finally {
                     Handler handler = getHandler();
                     if (handler != null) {
@@ -336,11 +333,7 @@ public abstract class MainActivity extends Activity {
     /** Disconnect from given service. */
     public void disconnect(DeviceServiceConnection connection) {
         if (connection.isRecording()) {
-            try {
-                connection.stopRecording();
-            } catch (RemoteException e) {
-                // it cannot be reached so it already stopped recording
-            }
+            connection.stopRecording();
         }
     }
 
@@ -365,23 +358,15 @@ public abstract class MainActivity extends Activity {
                     continue;
                 }
             }
-            try {
-                logger.info("Starting recording on connection {}", connection);
-                connection.startRecording(deviceFilters.get(connection));
-            } catch (RemoteException ex) {
-                logger.error("Failed to start recording for device {}", connection, ex);
-            }
+            logger.info("Starting recording on connection {}", connection);
+            connection.startRecording(deviceFilters.get(connection));
         }
     }
 
     public void serviceConnected(final DeviceServiceConnection<?> connection) {
-        try {
-            ServerStatusListener.Status status = connection.getServerStatus();
-            logger.info("Initial server status: {}", status);
-            updateServerStatus(status);
-        } catch (RemoteException e) {
-            logger.warn("Failed to update UI server status");
-        }
+        ServerStatusListener.Status status = connection.getServerStatus();
+        logger.info("Initial server status: {}", status);
+        updateServerStatus(status);
         startScanning();
     }
 
@@ -508,13 +493,9 @@ public abstract class MainActivity extends Activity {
             getHandler().post(new Runnable() {
                 @Override
                 public void run() {
-                    try {
-                        if (connection.isRecording()) {
-                            connection.stopRecording();
-                            // will restart recording once the status is set to disconnected.
-                        }
-                    } catch (RemoteException e) {
-                        logger.error("Cannot restart scanning");
+                    if (connection.isRecording()) {
+                        connection.stopRecording();
+                        // will restart recording once the status is set to disconnected.
                     }
                 }
             });

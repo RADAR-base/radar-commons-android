@@ -50,7 +50,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -80,15 +79,6 @@ import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
  */
 public abstract class DeviceService extends Service implements DeviceStatusListener, ServerStatusListener {
     private static final int ONGOING_NOTIFICATION_ID = 11;
-    public static final int TRANSACT_GET_RECORDS = 12;
-    public static final int TRANSACT_GET_DEVICE_STATUS = 13;
-    public static final int TRANSACT_START_RECORDING = 14;
-    public static final int TRANSACT_STOP_RECORDING = 15;
-    public static final int TRANSACT_GET_SERVER_STATUS = 16;
-    public static final int TRANSACT_GET_DEVICE_NAME = 17;
-    public static final int TRANSACT_UPDATE_CONFIG = 18;
-    public static final int TRANSACT_GET_CACHE_SIZE = 19;
-    public static final int TRANSACT_SET_USER_ID = 20;
     private static final String PREFIX = "org.radarcns.android.";
     public static final String SERVER_STATUS_CHANGED = PREFIX + "ServerStatusListener.Status";
     public static final String SERVER_RECORDS_SENT_TOPIC = PREFIX + "ServerStatusListener.topic";
@@ -486,63 +476,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         @Override
         public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
-            try {
-                switch (code) {
-                    case TRANSACT_GET_RECORDS: {
-                        AvroTopic<MeasurementKey, ? extends SpecificRecord> topic = getTopics()
-                                .getTopic(data.readString());
-                        int limit = data.readInt();
-                        dataHandler.getCache(topic).writeRecordsToParcel(reply, limit);
-                        break;
-                    }
-                    case TRANSACT_GET_DEVICE_STATUS:
-                        getDeviceStatus().writeToParcel(reply, 0);
-                        break;
-                    case TRANSACT_START_RECORDING: {
-                        if (getUserId() == null) {
-                            reply.writeByte((byte)0);
-                            break;
-                        } else {
-                            int setSize = data.readInt();
-                            Set<String> acceptableIds = new HashSet<>();
-                            for (int i = 0; i < setSize; i++) {
-                                acceptableIds.add(data.readString());
-                            }
-                            BaseDeviceState deviceState = startRecording(acceptableIds);
-                            reply.writeByte((byte)1);
-                            deviceState.writeToParcel(reply, 0);
-                        }
-                        break;
-                    }
-                    case TRANSACT_STOP_RECORDING:
-                        stopRecording();
-                        break;
-                    case TRANSACT_GET_SERVER_STATUS:
-                        reply.writeInt(getServerStatus().ordinal());
-                        break;
-                    case TRANSACT_GET_DEVICE_NAME:
-                        reply.writeString(getDeviceName());
-                        break;
-                    case TRANSACT_UPDATE_CONFIG:
-                        updateConfiguration(data.readBundle(getClass().getClassLoader()));
-                        break;
-                    case TRANSACT_GET_CACHE_SIZE: {
-                        Pair<Long, Long> value = numberOfRecords();
-                        reply.writeLong(value.first);
-                        reply.writeLong(value.second);
-                        break;
-                    }
-                    case TRANSACT_SET_USER_ID:
-                        String userId = data.readString();
-                        setUserId(userId);
-                        break;
-                    default:
-                        return false;
-                }
-                return true;
-            } catch (IOException e) {
-                throw new RemoteException("IOException: " + e.getMessage());
-            }
+            throw new UnsupportedOperationException();
         }
     }
 
@@ -655,11 +589,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     public synchronized DeviceManager getDeviceManager() {
         return deviceScanner;
-    }
-
-    /** Get the service local binder. */
-    public LocalBinder getBinder() {
-        return mBinder;
     }
 
     /** User ID to send data for. */
