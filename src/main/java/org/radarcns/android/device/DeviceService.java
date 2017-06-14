@@ -509,12 +509,12 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         boolean sendOnlyWithWifi = RadarConfiguration.getBooleanExtra(
                 bundle, SEND_ONLY_WITH_WIFI, true);
+        int maxBytes = RadarConfiguration.getIntExtra(
+                bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
 
         boolean newlyCreated;
         synchronized (this) {
             if (dataHandler == null) {
-                int maxBytes = RadarConfiguration.getIntExtra(
-                        bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
                 try {
                     dataHandler = new TableDataHandler(
                             this, kafkaConfig, remoteSchemaRetriever, getCachedTopics(), maxBytes,
@@ -537,6 +537,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 localDataHandler.setKafkaConfig(kafkaConfig);
                 localDataHandler.setSchemaRetriever(remoteSchemaRetriever);
             }
+            localDataHandler.setMaximumCacheSize(maxBytes);
         }
 
         localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
