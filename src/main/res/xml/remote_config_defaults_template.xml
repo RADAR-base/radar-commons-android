@@ -68,5 +68,9 @@
         <key>send_only_with_wifi</key>
         <value>true</value>
     </entry>
+    <entry>
+        <key>send_with_compression</key>
+        <value>false</value>
+    </entry>
 </defaultsMap>
 <!-- END xml_defaults -->
