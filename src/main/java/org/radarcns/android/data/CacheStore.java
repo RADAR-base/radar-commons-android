@@ -27,6 +27,7 @@ import org.radarcns.util.CountedReference;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
@@ -85,4 +86,9 @@ public class CacheStore {
             }
         }
     }
+
+    public Iterator<DataCache> cacheIterator(Context context) {
+
+    }
+
 }
