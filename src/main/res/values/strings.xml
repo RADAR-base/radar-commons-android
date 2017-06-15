@@ -6,4 +6,5 @@
     <string name="service_notification_title">Wearables data collection</string>
 
     <string name="filter_split_regex">,</string>
+    <string name="retry_oauth_login">Failed to login to authorization service, please retry</string>
 </resources>
