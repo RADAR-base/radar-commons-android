@@ -45,6 +45,7 @@ import java.lang.ref.WeakReference;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_AUTHORIZE_URL;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_ID;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
+import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_BEARER;
 
 public class OAuth2StateManager {
     private static final int OAUTH_INTENT_HANDLER_REQUEST_CODE = 8422341;
@@ -108,13 +109,14 @@ public class OAuth2StateManager {
     }
 
     @AnyThread
-    public synchronized void updateAfterAuthorization(@NonNull final LoginActivity context,
-                                                      @Nullable Intent intent) {
+    public synchronized void updateAfterAuthorization(@NonNull final LoginActivity context) {
+        Intent intent = context.getIntent();
+
         if (intent == null) {
             return;
         }
 
-        AuthorizationResponse resp = AuthorizationResponse.fromIntent(intent);
+        AuthorizationResponse resp = AuthorizationResponse.fromIntent(context.getIntent());
         AuthorizationException ex = AuthorizationException.fromIntent(intent);
 
         if (resp != null || ex != null) {
@@ -132,14 +134,21 @@ public class OAuth2StateManager {
                                 TokenResponse resp, AuthorizationException ex) {
                             if (resp != null) {
                                 updateAfterTokenResponse(resp, ex);
-                                context.oauthSucceeded();
+                                Long expiration = mCurrentAuthState.getAccessTokenExpirationTime();
+                                if (expiration == null) {
+                                    expiration = 0L;
+                                }
+                                AppAuthState state = new AppAuthState(null,
+                                        mCurrentAuthState.getAccessToken(), AUTH_TYPE_BEARER,
+                                        expiration);
+                                context.loginSucceeded(null, state);
                             } else {
-                                context.oauthFailed(ex);
+                                context.loginFailed(null, ex);
                             }
                         }
                     });
         } else if (ex != null) {
-            context.oauthFailed(ex);
+            context.loginFailed(null, ex);
         }
     }
 

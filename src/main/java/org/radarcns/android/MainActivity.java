@@ -38,6 +38,7 @@ import android.widget.Toast;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
+import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
@@ -223,6 +224,8 @@ public abstract class MainActivity extends Activity {
 
         checkPermissions();
     }
+
+    protected abstract LoginActivity getLoginActivity();
 
     /**
      * Called whenever the RadarConfiguration is changed. This can be at activity start or

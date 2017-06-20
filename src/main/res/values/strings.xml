@@ -7,4 +7,5 @@
 
     <string name="filter_split_regex">,</string>
     <string name="retry_oauth_login">Failed to login to authorization service, please retry</string>
+    <string name="login_failed">Failed to log in</string>
 </resources>

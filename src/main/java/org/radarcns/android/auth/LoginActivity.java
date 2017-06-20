@@ -17,14 +17,11 @@
 package org.radarcns.android.auth;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.View;
-
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
-
-import net.openid.appauth.AuthorizationException;
+import android.support.annotation.NonNull;
 
 import org.radarcns.android.R;
 import org.radarcns.android.RadarConfiguration;
@@ -32,56 +29,68 @@ import org.radarcns.android.util.Boast;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class LoginActivity extends Activity {
+import java.util.List;
+
+/** Activity to log in using a variety of login managers. */
+public abstract class LoginActivity extends Activity implements LoginListener {
     private static final Logger logger = LoggerFactory.getLogger(LoginActivity.class);
-    public static final int LOGIN_OAUTH2_SUCCESS = 12231;
 
     private RadarConfiguration config;
-
-    protected abstract int fragmentContainer();
+    private List<LoginManager> loginManagers;
 
     @Override
     public void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
-        config = RadarConfiguration.getInstance();
+        AppAuthState appAuth = readAppAuthState(this);
 
-        if (getIntent() != null) {
-            OAuth2StateManager.getInstance(this).updateAfterAuthorization(this, getIntent());
-        }
-    }
+        if (appAuth.isExpired()) {
+            loginSucceeded(null, appAuth);
+        } else {
+            config = RadarConfiguration.getInstance();
+            loginManagers = createLoginManagers();
 
-    public void oauthFailed(AuthorizationException ex) {
-        Boast.makeText(LoginActivity.this,
-                getString(R.string.retry_oauth_login)).show();
-        logger.warn("Log in failed. Please try again.", ex);
-    }
+            if (loginManagers.isEmpty()) {
+                throw new IllegalStateException("Cannot use login managers, none are configured.");
+            }
 
-    public void loginOAuth2(View view) {
-        OAuth2StateManager.getInstance(this).login(this, config);
-    }
-
-    public void scanQRCode(View view) {
-        IntentIntegrator qrIntegrator = new IntentIntegrator(this);
-        qrIntegrator.initiateScan();
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        if (result != null) {
-            if (result.getContents() == null) {
-                cancelledQrCode();
-            } else {
-                processQrCode(result.getContents());
+            for (LoginManager manager : loginManagers) {
+                manager.onActivityCreate();
             }
         }
     }
 
-    protected abstract void cancelledQrCode();
-    protected abstract void processQrCode(String value);
+    /**
+     * Create your login managers here. Be sure to call the appropriate login manager's start()
+     * method if the user indicates that login method
+     * @return non-empty list of login managers to use
+     */
+    @NonNull
+    protected abstract List<LoginManager> createLoginManagers();
 
-    public void oauthSucceeded() {
-        setResult(LOGIN_OAUTH2_SUCCESS);
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        for (LoginManager manager : loginManagers) {
+            manager.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    public void loginFailed(LoginManager manager, Exception ex) {
+        logger.error("Failed to log in with {}", manager, ex);
+        Boast.makeText(this, R.string.login_failed).show();
+    }
+
+    public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
+        appAuthState.store(getSharedPreferences("auth", MODE_PRIVATE));
+        setResult(RESULT_OK, appAuthState.toIntent());
         finish();
+    }
+
+    public RadarConfiguration getConfig() {
+        return config;
+    }
+
+    public static AppAuthState readAppAuthState(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("auth", MODE_PRIVATE);
+        return new AppAuthState(prefs);
     }
 }
