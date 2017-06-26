@@ -66,8 +66,10 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     /**
      * Creator for a device state.
      * @return non-null state creator.
+     * @deprecated state creators are no longer used
      */
-    public abstract Parcelable.Creator<T> getStateCreator();
+    @Deprecated
+    public Parcelable.Creator<T> getStateCreator() { return null; }
 
     /** Display name of the service. */
     public abstract String getDisplayName();
@@ -104,16 +106,11 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
             if (activity == null) {
                 throw new IllegalStateException("#setActivity(MainActivity) needs to be set before #getConnection() is called.");
             }
-            Parcelable.Creator<T> creator = getStateCreator();
-            if (creator == null) {
-                throw new UnsupportedOperationException("RadarServiceProvider " + getClass().getSimpleName() + " does not provide state creator");
-            }
-
             Class<?> serviceClass = getServiceClass();
             if (serviceClass == null) {
                 throw new UnsupportedOperationException("RadarServiceProvider " + getClass().getSimpleName() + " does not provide service class");
             }
-            connection = new DeviceServiceConnection<>(activity, creator, serviceClass.getName());
+            connection = new DeviceServiceConnection<>(activity, serviceClass.getName());
         }
         return connection;
     }
@@ -206,41 +203,41 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      */
     public static List<DeviceServiceProvider> loadProviders(@NonNull MainActivity activity,
                                                             @NonNull RadarConfiguration config) {
-        List<DeviceServiceProvider> factories = loadProviders(config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT));
-        for (DeviceServiceProvider factory : factories) {
-            factory.setActivity(activity);
-            factory.setConfig(config);
+        List<DeviceServiceProvider> providers = loadProviders(config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT));
+        for (DeviceServiceProvider provider : providers) {
+            provider.setActivity(activity);
+            provider.setConfig(config);
         }
-        return factories;
+        return providers;
     }
 
     /**
      * Loads the service providers specified in given whitespace-delimited String.
      */
     public static List<DeviceServiceProvider> loadProviders(@NonNull String deviceServicesToConnect) {
-        List<DeviceServiceProvider> factories = new ArrayList<>();
+        List<DeviceServiceProvider> providers = new ArrayList<>();
         Scanner scanner = new Scanner(deviceServicesToConnect);
         while (scanner.hasNext()) {
             String className = scanner.next();
             if (className.charAt(0) == '.') {
                 className = "org.radarcns" + className;
             }
-            Class<?> factoryClass;
+            Class<?> providerClass;
             try {
-                factoryClass = Class.forName(className);
+                providerClass = Class.forName(className);
             } catch (ClassNotFoundException ex) {
                 throw new IllegalArgumentException("Class " + className + " not found in classpath", ex);
             }
             try {
-                DeviceServiceProvider serviceProvider = (DeviceServiceProvider)factoryClass.newInstance();
-                factories.add(serviceProvider);
+                DeviceServiceProvider serviceProvider = (DeviceServiceProvider)providerClass.newInstance();
+                providers.add(serviceProvider);
             } catch (InstantiationException | IllegalAccessException ex) {
                 throw new IllegalArgumentException("Class " + className + " cannot be instantiated", ex);
             } catch (ClassCastException ex) {
                 throw new IllegalArgumentException("Class " + className + " is not a " + DeviceServiceProvider.class.getSimpleName());
             }
         }
-        return factories;
+        return providers;
     }
 
     /** Get the MainActivity associated to the current connection. */

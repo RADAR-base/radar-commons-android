@@ -43,7 +43,7 @@ public class MappedQueueFileStorage implements QueueStorage {
 
     /** Filename, for toString purposes */
     private final String fileName;
-    private final int maximumLength;
+    private int maximumLength;
 
     private MappedByteBuffer byteBuffer;
     private boolean closed;
@@ -63,11 +63,11 @@ public class MappedQueueFileStorage implements QueueStorage {
      */
     public MappedQueueFileStorage(File file, int initialLength, int maximumLength) throws IOException {
         this.fileName = file.getName();
-        if (initialLength < getMinimumLength()) {
+        if (initialLength < MINIMUM_LENGTH) {
             throw new IllegalArgumentException("Initial length " + initialLength
                     + " is smaller than minimum length " + getMinimumLength());
         }
-        if (maximumLength < getMinimumLength()) {
+        if (maximumLength < MINIMUM_LENGTH) {
             throw new IllegalArgumentException("Maximum length " + maximumLength
                     + " is smaller than minimum length " + getMinimumLength());
         }
@@ -81,9 +81,6 @@ public class MappedQueueFileStorage implements QueueStorage {
         if (existed) {
             // Read header from file
             long currentLength = randomAccessFile.length();
-            if (currentLength > getMaximumLength()) {
-                throw new IOException("File length " + length + " is larger than maximum length supported " + getMaximumLength());
-            }
             if (currentLength < QueueFileHeader.HEADER_LENGTH) {
                 throw new IOException("File length " + length + " is smaller than queue header length " + QueueFileHeader.HEADER_LENGTH);
             }
@@ -130,11 +127,11 @@ public class MappedQueueFileStorage implements QueueStorage {
     @Override
     public void resize(long newLength) throws IOException {
         requireNotClosed();
-        if (newLength > getMaximumLength()) {
+        if (newLength > maximumLength) {
             throw new IllegalArgumentException("New length " + newLength
-                    + " exceeds maximum length " + getMaximumLength());
+                    + " exceeds maximum length " + maximumLength);
         }
-        if (newLength < getMinimumLength()) {
+        if (newLength < MINIMUM_LENGTH) {
             throw new IllegalArgumentException("New length " + newLength
                     + " is less than minimum length " + QueueFileHeader.HEADER_LENGTH);
         }
@@ -240,6 +237,15 @@ public class MappedQueueFileStorage implements QueueStorage {
     @Override
     public long getMaximumLength() {
         return maximumLength;
+    }
+
+    @Override
+    public void setMaximumLength(long newLength) {
+        if (newLength < MINIMUM_LENGTH || newLength > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Maximum cache size out of range "
+                    + MINIMUM_LENGTH + " <= " + newLength + " <= " + Integer.MAX_VALUE);
+        }
+        this.maximumLength = (int)newLength;
     }
 
     @Override

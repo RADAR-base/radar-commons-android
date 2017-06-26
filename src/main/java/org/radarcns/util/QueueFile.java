@@ -508,6 +508,10 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         return storage.getMaximumLength();
     }
 
+    public void setMaximumFileSize(long newSize) {
+        storage.setMaximumLength(newSize);
+    }
+
     void commitOutputStream(QueueFileElement newFirst, QueueFileElement newLast, int count) throws IOException {
         if (!newLast.isEmpty()) {
             last.update(newLast);

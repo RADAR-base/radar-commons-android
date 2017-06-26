@@ -114,9 +114,10 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
-//            tables.put(topic, new MeasurementTable<>(context, topic, DATABASE_COMMIT_RATE_DEFAULT));
-            tables.put(topic, new TapeCache<>(
-                    context, topic, DATABASE_COMMIT_RATE_DEFAULT, executorFactory, maxBytes));
+            DataCache<MeasurementKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
+                    .getOrCreateCache(context.getApplicationContext(), topic);
+            cache.setMaximumSize(maxBytes);
+            tables.put(topic, cache);
         }
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
@@ -287,6 +288,13 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     @Override
     public <V extends SpecificRecord> void addMeasurement(DataCache<MeasurementKey, V> table, MeasurementKey key, V value) {
         table.addMeasurement(key, value);
+    }
+
+    @Override
+    public void setMaximumCacheSize(int numBytes) {
+        for (DataCache cache : tables.values()) {
+            cache.setMaximumSize(numBytes);
+        }
     }
 
     public Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> getCaches() {

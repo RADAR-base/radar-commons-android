@@ -90,6 +90,8 @@ public interface QueueStorage extends Closeable, Flushable {
     /** Maximum size of the storage in bytes. */
     long getMaximumLength();
 
+    void setMaximumLength(long newLength);
+
     /** Whether the close function was called. */
     boolean isClosed();
 

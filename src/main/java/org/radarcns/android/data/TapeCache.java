@@ -70,6 +70,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     private final BackedObjectQueue.Converter<Record<K, V>> converter;
     private final Runnable flusher;
     private final int maxBytes;
+    private QueueFile queueFile;
 
     private BackedObjectQueue<Record<K, V>> queue;
     private Future<?> addMeasurementFuture;
@@ -82,20 +83,16 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
      * TapeCache to cache measurements with
      * @param context Android context to get the cache directory and broadcast the cache size.
      * @param topic Kafka Avro topic to write data for.
-     * @param timeWindowMillis time that data may be cached before writing
      * @param executorFactory factory to get a single-threaded {@link ScheduledExecutorService}
      *                        from.
-     * @param maxBytes number of bytes the backing cache file may have, with minimum value
-     *                 {@link org.radarcns.util.MappedQueueFileStorage#MINIMUM_LENGTH}.
      * @throws IOException if a BackedObjectQueue cannot be created.
      */
-    public TapeCache(final Context context, AvroTopic<K, V> topic, long timeWindowMillis,
-                     SingleThreadExecutorFactory executorFactory, int maxBytes) throws IOException {
+    public TapeCache(final Context context, AvroTopic<K, V> topic,
+                     SingleThreadExecutorFactory executorFactory) throws IOException {
         this.topic = topic;
-        this.timeWindowMillis = timeWindowMillis;
-        this.maxBytes = maxBytes;
+        this.timeWindowMillis = 10_000L;
+        this.maxBytes = 450_000_000;
         outputFile = new File(context.getCacheDir(), topic.getName() + ".tape");
-        QueueFile queueFile;
         try {
             queueFile = QueueFile.newMapped(outputFile, maxBytes);
         } catch (IOException ex) {
@@ -110,6 +107,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
         this.executor = executorFactory.getScheduledExecutorService();
 
+        // TODO: move to kafka data sender
         this.executor.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -159,7 +157,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                             logger.warn("Failed to close corrupt queue", ioex);
                         }
                         if (outputFile.delete()) {
-                            QueueFile queueFile = QueueFile.newMapped(outputFile, maxBytes);
+                            queueFile = QueueFile.newMapped(outputFile, maxBytes);
                             queueSize.set(queueFile.size());
                             queue = new BackedObjectQueue<>(queueFile, converter);
                             return Collections.emptyList();
@@ -199,6 +197,20 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     @Override
     public synchronized void setTimeWindow(long timeWindowMillis) {
         this.timeWindowMillis = timeWindowMillis;
+    }
+
+    @Override
+    public void setMaximumSize(final int numBytes) {
+        try {
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    queueFile.setMaximumFileSize(numBytes);
+                }
+            }).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Failed to update maximum size");
+        }
     }
 
     @Override
