@@ -128,28 +128,39 @@ public class OAuth2StateManager {
             AuthorizationService service = new AuthorizationService(context);
             // authorization succeeded
             service.performTokenRequest(
-                    resp.createTokenExchangeRequest(),
-                    new AuthorizationService.TokenResponseCallback() {
-                        @Override public void onTokenRequestCompleted(
-                                TokenResponse resp, AuthorizationException ex) {
-                            if (resp != null) {
-                                updateAfterTokenResponse(resp, ex);
-                                Long expiration = mCurrentAuthState.getAccessTokenExpirationTime();
-                                if (expiration == null) {
-                                    expiration = 0L;
-                                }
-                                AppAuthState state = new AppAuthState(null,
-                                        mCurrentAuthState.getAccessToken(), AUTH_TYPE_BEARER,
-                                        expiration);
-                                context.loginSucceeded(null, state);
-                            } else {
-                                context.loginFailed(null, ex);
-                            }
-                        }
-                    });
+                    resp.createTokenExchangeRequest(), processTokenResponse(context));
         } else if (ex != null) {
             context.loginFailed(null, ex);
         }
+    }
+
+    public synchronized void refresh(@NonNull final LoginActivity context) {
+        AuthorizationService service = new AuthorizationService(context);
+        // authorization succeeded
+        service.performTokenRequest(
+                mCurrentAuthState.createTokenRefreshRequest(), processTokenResponse(context));
+    }
+
+    private AuthorizationService.TokenResponseCallback processTokenResponse(@NonNull final LoginActivity context) {
+        return new AuthorizationService.TokenResponseCallback() {
+            @Override public void onTokenRequestCompleted(
+                    TokenResponse resp, AuthorizationException ex) {
+                if (resp != null) {
+                    updateAfterTokenResponse(resp, ex);
+                    Long expiration = mCurrentAuthState.getAccessTokenExpirationTime();
+                    if (expiration == null) {
+                        expiration = 0L;
+                    }
+                    AppAuthState state = new AppAuthState(null,
+                            mCurrentAuthState.getAccessToken(),
+                            mCurrentAuthState.getRefreshToken(),
+                            AUTH_TYPE_BEARER, expiration);
+                    context.loginSucceeded(null, state);
+                } else {
+                    context.loginFailed(null, ex);
+                }
+            }
+        };
     }
 
     @AnyThread

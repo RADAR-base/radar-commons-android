@@ -17,9 +17,7 @@
 package org.radarcns.android.auth;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 
@@ -30,20 +28,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Objects;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
     private static final Logger logger = LoggerFactory.getLogger(LoginActivity.class);
+    public static final String ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login";
 
     private RadarConfiguration config;
     private List<LoginManager> loginManagers;
+    private boolean startedFromActivity;
 
     @Override
     public void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
-        AppAuthState appAuth = readAppAuthState(this);
+        startedFromActivity = Objects.equals(getIntent().getAction(), ACTION_LOGIN);
+        AppAuthState appAuth = AppAuthState.read(this);
 
-        if (appAuth.isExpired()) {
+        if (appAuth.isValid()) {
             loginSucceeded(null, appAuth);
         } else {
             config = RadarConfiguration.getInstance();
@@ -51,6 +53,13 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
             if (loginManagers.isEmpty()) {
                 throw new IllegalStateException("Cannot use login managers, none are configured.");
+            }
+            for (LoginManager manager : loginManagers) {
+                AppAuthState localState = manager.refresh();
+                if (localState != null && localState.isValid()) {
+                    loginSucceeded(manager, localState);
+                    return;
+                }
             }
 
             for (LoginManager manager : loginManagers) {
@@ -67,6 +76,9 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     @NonNull
     protected abstract List<LoginManager> createLoginManagers();
 
+    @NonNull
+    protected abstract Class<? extends Activity> nextActivity();
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         for (LoginManager manager : loginManagers) {
@@ -80,17 +92,17 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     }
 
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
-        appAuthState.store(getSharedPreferences("auth", MODE_PRIVATE));
-        setResult(RESULT_OK, appAuthState.toIntent());
+        appAuthState.store(this);
+        if (startedFromActivity) {
+            setResult(RESULT_OK, appAuthState.toIntent());
+        } else {
+            Intent next = new Intent(this, nextActivity());
+            startActivity(next);
+        }
         finish();
     }
 
     public RadarConfiguration getConfig() {
         return config;
-    }
-
-    public static AppAuthState readAppAuthState(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences("auth", MODE_PRIVATE);
-        return new AppAuthState(prefs);
     }
 }

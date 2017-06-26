@@ -24,6 +24,8 @@ public interface LoginManager {
     /** HTTP basic authentication. */
     int AUTH_TYPE_HTTP_BASIC = 2;
 
+    AppAuthState refresh();
+
     void start();
     void onActivityCreate();
     void onActivityResult(int requestCode, int resultCode, Intent data);

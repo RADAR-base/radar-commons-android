@@ -37,6 +37,7 @@ import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
+import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
@@ -56,7 +57,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.radarcns.android.RadarConfiguration.ACCESS_TOKEN;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
 import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
@@ -511,7 +511,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         boolean sendOnlyWithWifi = RadarConfiguration.getBooleanExtra(
                 bundle, SEND_ONLY_WITH_WIFI, true);
 
-        String accessToken = RadarConfiguration.getStringExtra(bundle, ACCESS_TOKEN, null);
+        AppAuthState authState = new AppAuthState(bundle);
         int maxBytes = RadarConfiguration.getIntExtra(
                 bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
 
@@ -521,7 +521,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 try {
                     dataHandler = new TableDataHandler(
                             this, kafkaConfig, remoteSchemaRetriever, getCachedTopics(), maxBytes,
-                            sendOnlyWithWifi, accessToken);
+                            sendOnlyWithWifi, authState);
                     newlyCreated = true;
                 } catch (IOException ex) {
                     logger.error("Failed to instantiate Data Handler", ex);

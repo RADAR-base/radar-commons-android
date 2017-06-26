@@ -16,14 +16,17 @@
 
 package org.radarcns.android.auth;
 
-/** AuthStringProcessor to process a string with some form of authentication and convert it to a
+import android.support.annotation.NonNull;
+
+/** AuthStringProcessor to parse a string with some form of authentication and convert it to a
  * proper state. */
-public interface AuthStringProcessor {
+public interface AuthStringParser {
     /**
-     * Create an authentication state from a string.
+     * Parse an authentication state from a string.
      * @param authString string that contains some form of identification.
      * @return authentication state.
      * @throws IllegalArgumentException if the string is not a valid authentication string
      */
-    AppAuthState process(String authString);
+    @NonNull
+    AppAuthState parse(@NonNull String authString);
 }

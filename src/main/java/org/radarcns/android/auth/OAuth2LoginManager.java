@@ -32,10 +32,23 @@ import io.jsonwebtoken.Jwts;
 public class OAuth2LoginManager implements LoginManager, LoginListener {
     private final String userIdClaim;
     private final LoginActivity activity;
+    private final AppAuthState authState;
 
-    public OAuth2LoginManager(LoginActivity activity, String userIdClaim) {
+    public OAuth2LoginManager(LoginActivity activity, String userIdClaim, AppAuthState authState) {
+        this.authState = authState;
         this.activity = activity;
         this.userIdClaim = userIdClaim;
+    }
+
+    @Override
+    public AppAuthState refresh() {
+        if (authState.isValid()) {
+            return authState;
+        }
+        if (authState.getTokenType() == AUTH_TYPE_BEARER && authState.getRefreshToken() != null) {
+            OAuth2StateManager.getInstance(activity).refresh(activity);
+        }
+        return null;
     }
 
     @Override
@@ -60,7 +73,8 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
             String userId = (String) jwt.getBody().get(userIdClaim);
             long expiration = jwt.getBody().getExpiration().getTime();
 
-            appAuthState = new AppAuthState(userId, appAuthState.getToken(), AUTH_TYPE_BEARER, expiration);
+            appAuthState = new AppAuthState(userId, appAuthState.getToken(),
+                    appAuthState.getRefreshToken(), AUTH_TYPE_BEARER, expiration);
             this.activity.loginSucceeded(this, appAuthState);
         } catch (JwtException ex) {
             this.activity.loginFailed(this, ex);

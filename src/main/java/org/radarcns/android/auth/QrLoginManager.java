@@ -17,17 +17,23 @@
 package org.radarcns.android.auth;
 
 import android.content.Intent;
+import android.support.annotation.NonNull;
 
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
-public abstract class QrLoginManager implements LoginManager {
+public class QrLoginManager implements LoginManager {
     private final LoginActivity activity;
-    private AuthStringProcessor processor;
+    private AuthStringParser processor;
 
-    public QrLoginManager(LoginActivity activity, AuthStringProcessor processor) {
+    public QrLoginManager(@NonNull LoginActivity activity, @NonNull AuthStringParser processor) {
         this.activity = activity;
         this.processor = processor;
+    }
+
+    @Override
+    public AppAuthState refresh() {
+        return null;
     }
 
     @Override
@@ -48,16 +54,17 @@ public abstract class QrLoginManager implements LoginManager {
             if (result.getContents() == null) {
                 activity.loginFailed(this, null);
             } else {
-                AppAuthState state = processor.process(result.getContents());
-                if (state != null) {
+                try {
+                    AppAuthState state = processor.parse(result.getContents());
                     activity.loginSucceeded(this, state);
-                } else {
-                    activity.loginFailed(this, null);
+                } catch (IllegalArgumentException ex) {
+                    activity.loginFailed(this, ex);
                 }
             }
         }
     }
 
+    @NonNull
     public LoginActivity getActivity() {
         return activity;
     }

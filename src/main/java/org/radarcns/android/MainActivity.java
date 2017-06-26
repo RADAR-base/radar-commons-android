@@ -37,6 +37,7 @@ import android.widget.Toast;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
+import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
@@ -58,6 +59,7 @@ import java.util.Set;
 import static android.Manifest.permission.ACCESS_NETWORK_STATE;
 import static android.Manifest.permission.BLUETOOTH;
 import static android.Manifest.permission.INTERNET;
+import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
@@ -67,6 +69,7 @@ public abstract class MainActivity extends Activity {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
+    private static final int LOGIN_REQUEST_CODE = 232619693;
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters;
@@ -104,6 +107,7 @@ public abstract class MainActivity extends Activity {
 
     /** Current server status. */
     private ServerStatusListener.Status serverStatus;
+    private AppAuthState authState;
 
     public MainActivity() {
         super();
@@ -159,9 +163,18 @@ public abstract class MainActivity extends Activity {
      */
     protected abstract RadarConfiguration createConfiguration();
 
+    protected abstract Class<? extends LoginActivity> loginActivity();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        authState = AppAuthState.read(this);
+        if (!authState.isValid()) {
+            startActivity(new Intent(this, loginActivity()));
+            finish();
+            return;
+        }
 
         radarConfiguration = createConfiguration();
         onConfigChanged();
@@ -272,6 +285,11 @@ public abstract class MainActivity extends Activity {
     protected void onStart() {
         logger.info("mainActivity onStart");
         super.onStart();
+        if (!authState.isValid()) {
+            Intent intent = new Intent(this, loginActivity());
+            intent.setAction(ACTION_LOGIN);
+            startActivityForResult(intent, LOGIN_REQUEST_CODE);
+        }
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
 
@@ -317,6 +335,19 @@ public abstract class MainActivity extends Activity {
                 provider.unbind();
             } else {
                 logger.info("Already unbound: {}", provider);
+            }
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent result) {
+        if (requestCode == LOGIN_REQUEST_CODE) {
+            if (resultCode != RESULT_OK) {
+                throw new IllegalStateException("Login should not be cancellable");
+            }
+            authState = new AppAuthState(result.getExtras());
+            for (DeviceServiceProvider provider : mConnections) {
+                provider.updateConfiguration();
             }
         }
     }
@@ -479,7 +510,9 @@ public abstract class MainActivity extends Activity {
         this.serverStatus = status;
 
         if (status == ServerStatusListener.Status.UNAUTHORIZED) {
-            // TODO: redirect to login activity or dialog
+            Intent intent = new Intent(this, loginActivity());
+            intent.setAction(ACTION_LOGIN);
+            startActivityForResult(intent, LOGIN_REQUEST_CODE);
         }
     }
 
@@ -541,5 +574,9 @@ public abstract class MainActivity extends Activity {
 
     public RadarConfiguration getRadarConfiguration() {
         return radarConfiguration;
+    }
+
+    public AppAuthState getAuthState() {
+        return authState;
     }
 }
