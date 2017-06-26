@@ -56,7 +56,9 @@ public class TapeCacheTest {
                 new AndroidThreadFactory("test", THREAD_PRIORITY_BACKGROUND));
         tapeCache = new TapeCache<>(
                 RuntimeEnvironment.application.getApplicationContext(),
-                topic, 100, executorFactory, 4096);
+                topic, executorFactory);
+        tapeCache.setMaximumSize(4096);
+        tapeCache.setTimeWindow(100);
 
         key = new MeasurementKey("a", "b");
         double time = System.currentTimeMillis() / 1000d;
