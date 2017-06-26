@@ -30,6 +30,7 @@ import io.jsonwebtoken.Jwts;
  */
 
 public class OAuth2LoginManager implements LoginManager, LoginListener {
+    public static final String LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken";
     private final String userIdClaim;
     private final LoginActivity activity;
     private final AppAuthState authState;
@@ -45,7 +46,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         if (authState.isValid()) {
             return authState;
         }
-        if (authState.getTokenType() == AUTH_TYPE_BEARER && authState.getRefreshToken() != null) {
+        if (authState.getTokenType() == AUTH_TYPE_BEARER && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
             OAuth2StateManager.getInstance(activity).refresh(activity);
         }
         return null;
@@ -74,7 +75,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
             long expiration = jwt.getBody().getExpiration().getTime();
 
             appAuthState = new AppAuthState(userId, appAuthState.getToken(),
-                    appAuthState.getRefreshToken(), AUTH_TYPE_BEARER, expiration);
+                    appAuthState.getProperties(), AUTH_TYPE_BEARER, expiration, appAuthState.getHeaders());
             this.activity.loginSucceeded(this, appAuthState);
         } catch (JwtException ex) {
             this.activity.loginFailed(this, ex);

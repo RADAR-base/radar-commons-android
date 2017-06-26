@@ -40,8 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.AbstractMap;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,8 +51,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_BEARER;
 
 /**
  * Stores data in databases and sends it to the server.
@@ -77,7 +73,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private final BatteryLevelReceiver batteryLevelReceiver;
     private final NetworkConnectedReceiver networkConnectedReceiver;
     private final AtomicBoolean sendOnlyWithWifi;
-    private List<Map.Entry<String, String>> headers;
+    private AppAuthState authState;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
     private int kafkaRecordsSendLimit;
@@ -114,14 +110,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
         this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
         this.useCompression = false;
-
-        if (authState.getTokenType() == AUTH_TYPE_BEARER) {
-            this.headers = Collections.<Map.Entry<String, String>>singletonList(
-                    new AbstractMap.SimpleImmutableEntry<>(
-                            "Authorization", "Bearer " + authState.getToken()));
-        } else {
-            this.headers = Collections.emptyList();
-        }
+        this.authState = authState;
 
         tables = new HashMap<>(topics.size() * 2);
         for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
@@ -180,7 +169,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
                 .encoders(new SpecificRecordEncoder(false), new SpecificRecordEncoder(false))
                 .connectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS)
                 .useCompression(useCompression)
-                .headers(headers)
+                .headers(authState.getHeaders())
                 .build();
         this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
                 kafkaRecordsSendLimit, getPreferredUploadRate(), kafkaCleanRate);
@@ -394,15 +383,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     }
 
     public synchronized void setAuthState(AppAuthState state) {
-        if (state.getTokenType() == AUTH_TYPE_BEARER) {
-            this.headers = Collections.<Map.Entry<String, String>>singletonList(
-                    new AbstractMap.SimpleImmutableEntry<>(
-                            "Authorization", "Bearer " + state.getToken()));
-        } else {
-            this.headers = Collections.emptyList();
-        }
+        this.authState = state;
         if (sender != null) {
-            sender.setHeaders(headers);
+            sender.setHeaders(authState.getHeaders());
         }
     }
 

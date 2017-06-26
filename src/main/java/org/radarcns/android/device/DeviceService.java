@@ -541,6 +541,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 localDataHandler.setSchemaRetriever(remoteSchemaRetriever);
             }
             localDataHandler.setMaximumCacheSize(maxBytes);
+            localDataHandler.setAuthState(authState);
         }
 
         localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);

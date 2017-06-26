@@ -41,11 +41,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.ref.WeakReference;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.radarcns.android.RadarConfiguration.OAUTH2_AUTHORIZE_URL;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_ID;
+import static org.radarcns.android.RadarConfiguration.OAUTH2_REDIRECT_URL;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
 import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_BEARER;
+import static org.radarcns.android.auth.OAuth2LoginManager.LOGIN_REFRESH_TOKEN;
 
 public class OAuth2StateManager {
     private static final int OAUTH_INTENT_HANDLER_REQUEST_CODE = 8422341;
@@ -87,6 +93,7 @@ public class OAuth2StateManager {
     public synchronized void login(@NonNull LoginActivity context, @NonNull RadarConfiguration config) {
         Uri authorizeUri = Uri.parse(config.getString(OAUTH2_AUTHORIZE_URL));
         Uri tokenUri = Uri.parse(config.getString(OAUTH2_TOKEN_URL));
+        Uri redirectUri = Uri.parse(config.getString(OAUTH2_REDIRECT_URL));
         String clientId = config.getString(OAUTH2_CLIENT_ID);
 
         AuthorizationServiceConfiguration authConfig =
@@ -97,7 +104,7 @@ public class OAuth2StateManager {
                         authConfig, // the authorization service configuration
                         clientId, // the client ID, typically pre-registered and static
                         ResponseTypeValues.CODE, // the response_type value: we want a code
-                        Uri.parse("org.radarcns.android:/oauth2redirect/radar")); // the redirect URI to which the auth response is sent
+                        redirectUri); // the redirect URI to which the auth response is sent
 
         AuthorizationService service = new AuthorizationService(context);
         service.performAuthorizationRequest(
@@ -151,10 +158,13 @@ public class OAuth2StateManager {
                     if (expiration == null) {
                         expiration = 0L;
                     }
+                    HashMap<String, String> props = new HashMap<>();
+                    props.put(LOGIN_REFRESH_TOKEN, mCurrentAuthState.getRefreshToken());
+                    ArrayList<Map.Entry<String, String>> headers = new ArrayList<>();
+                    headers.add(new AbstractMap.SimpleImmutableEntry<>("Authorization", "Bearer " + mCurrentAuthState.getAccessToken()));
                     AppAuthState state = new AppAuthState(null,
-                            mCurrentAuthState.getAccessToken(),
-                            mCurrentAuthState.getRefreshToken(),
-                            AUTH_TYPE_BEARER, expiration);
+                            mCurrentAuthState.getAccessToken(), props,
+                            AUTH_TYPE_BEARER, expiration, headers);
                     context.loginSucceeded(null, state);
                 } else {
                     context.loginFailed(null, ex);

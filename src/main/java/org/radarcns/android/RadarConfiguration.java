@@ -70,6 +70,7 @@ public class RadarConfiguration {
     public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
     public static final String OAUTH2_AUTHORIZE_URL = "oauth2_authorize_url";
     public static final String OAUTH2_TOKEN_URL = "oauth2_token_url";
+    public static final String OAUTH2_REDIRECT_URL = "oauth2_redirect_url";
     public static final String OAUTH2_CLIENT_ID = "oauth2_client_id";
 
     public static final Pattern IS_TRUE = Pattern.compile(
