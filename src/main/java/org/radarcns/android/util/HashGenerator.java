@@ -105,6 +105,8 @@ public class HashGenerator {
             }
         } catch (NumberFormatException ex) {
             // If non-numerical, then hash the target directly
+            // The + symbol at the front of a number will not throw this exception,
+            // it is interpreted as a indicator that the number is positive.
             return createHash(target);
         }
 
