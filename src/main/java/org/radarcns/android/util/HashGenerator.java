@@ -69,7 +69,7 @@ public class HashGenerator {
         }
     }
 
-    public byte[] createHash(Integer target) {
+    public byte[] createHash(int target) {
         Serialization.intToBytes(target, hashBuffer, 0);
         return sha256.doFinal(hashBuffer);
     }
@@ -78,7 +78,7 @@ public class HashGenerator {
         return sha256.doFinal(target.getBytes());
     }
 
-    public ByteBuffer createHashByteBuffer(Integer target) {
+    public ByteBuffer createHashByteBuffer(int target) {
         return ByteBuffer.wrap(createHash(target));
     }
 
