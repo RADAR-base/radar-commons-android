@@ -169,14 +169,16 @@ public abstract class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        radarConfiguration = createConfiguration();
+
         authState = AppAuthState.read(this);
         if (!authState.isValid()) {
             startActivity(new Intent(this, loginActivity()));
             finish();
             return;
         }
+        radarConfiguration.put(RadarConfiguration.DEFAULT_GROUP_ID_KEY, authState.getUserId());
 
-        radarConfiguration = createConfiguration();
         onConfigChanged();
         logger.info("RADAR configuration at create: {}", radarConfiguration);
 
@@ -234,8 +236,6 @@ public abstract class MainActivity extends Activity {
 
         checkPermissions();
     }
-
-    protected abstract LoginActivity getLoginActivity();
 
     /**
      * Called whenever the RadarConfiguration is changed. This can be at activity start or
@@ -346,6 +346,7 @@ public abstract class MainActivity extends Activity {
                 throw new IllegalStateException("Login should not be cancellable");
             }
             authState = new AppAuthState(result.getExtras());
+            radarConfiguration.put(RadarConfiguration.DEFAULT_GROUP_ID_KEY, authState.getUserId());
             for (DeviceServiceProvider provider : mConnections) {
                 provider.updateConfiguration();
             }
