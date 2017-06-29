@@ -286,9 +286,7 @@ public abstract class MainActivity extends Activity {
         logger.info("mainActivity onStart");
         super.onStart();
         if (!authState.isValid()) {
-            Intent intent = new Intent(this, loginActivity());
-            intent.setAction(ACTION_LOGIN);
-            startActivityForResult(intent, LOGIN_REQUEST_CODE);
+            startLogin();
         }
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
@@ -511,10 +509,14 @@ public abstract class MainActivity extends Activity {
         this.serverStatus = status;
 
         if (status == ServerStatusListener.Status.UNAUTHORIZED) {
-            Intent intent = new Intent(this, loginActivity());
-            intent.setAction(ACTION_LOGIN);
-            startActivityForResult(intent, LOGIN_REQUEST_CODE);
+            startLogin();
         }
+    }
+
+    protected void startLogin() {
+        Intent intent = new Intent(this, loginActivity());
+        intent.setAction(ACTION_LOGIN);
+        startActivityForResult(intent, LOGIN_REQUEST_CODE);
     }
 
     public void updateServerRecordsSent(DeviceServiceConnection<?> connection, String topic,

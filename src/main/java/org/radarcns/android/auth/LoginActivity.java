@@ -22,7 +22,6 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 
 import org.radarcns.android.R;
-import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.util.Boast;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,12 +34,11 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private static final Logger logger = LoggerFactory.getLogger(LoginActivity.class);
     public static final String ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login";
 
-    private RadarConfiguration config;
     private List<LoginManager> loginManagers;
     private boolean startedFromActivity;
 
     @Override
-    public void onCreate(Bundle savedInstanceBundle) {
+    protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
         startedFromActivity = Objects.equals(getIntent().getAction(), ACTION_LOGIN);
         AppAuthState appAuth = AppAuthState.read(this);
@@ -48,8 +46,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         if (appAuth.isValid()) {
             loginSucceeded(null, appAuth);
         } else {
-            config = RadarConfiguration.getInstance();
-            loginManagers = createLoginManagers();
+            loginManagers = createLoginManagers(appAuth);
 
             if (loginManagers.isEmpty()) {
                 throw new IllegalStateException("Cannot use login managers, none are configured.");
@@ -71,10 +68,11 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     /**
      * Create your login managers here. Be sure to call the appropriate login manager's start()
      * method if the user indicates that login method
+     * @param appAuth previous invalid authentication
      * @return non-empty list of login managers to use
      */
     @NonNull
-    protected abstract List<LoginManager> createLoginManagers();
+    protected abstract List<LoginManager> createLoginManagers(AppAuthState appAuth);
 
     @NonNull
     protected abstract Class<? extends Activity> nextActivity();
@@ -100,9 +98,5 @@ public abstract class LoginActivity extends Activity implements LoginListener {
             startActivity(next);
         }
         finish();
-    }
-
-    public RadarConfiguration getConfig() {
-        return config;
     }
 }
