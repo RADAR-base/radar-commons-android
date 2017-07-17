@@ -20,7 +20,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Base64;
 
-import org.radarcns.android.device.DeviceService;
 import org.radarcns.util.Serialization;
 
 import java.io.IOException;
@@ -32,16 +31,27 @@ import java.security.SecureRandom;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+/**
+ * Hash generator that uses the HmacSHA256 algorithm to hash data. This algorithm ensures that
+ * it is very very hard to guess what data went in. The fixed key to the algorithm is stored in
+ * the SharedPreferences. As long as the key remains there, a given input string will always
+ * return the same output hash.
+ *
+ * HashGenerator must be used from a single thread or synchronized externally.
+ */
 public class HashGenerator {
-    private final SharedPreferences preferences;
-
     private static final String HASH_KEY = "hash.key";
+
+    private final SharedPreferences preferences;
     private final Mac sha256;
     private final byte[] hashBuffer = new byte[4];
 
-    public HashGenerator(DeviceService deviceService) {
-        Context context = deviceService.getApplicationContext();
-        preferences = context.getSharedPreferences(DeviceService.class.getName(), Context.MODE_PRIVATE);
+    /**
+     * Create a hash generator. This persists the hash.key property in the given preferences.
+     * @param preferences to store key in
+     */
+    public HashGenerator(SharedPreferences preferences) {
+        this.preferences = preferences;
 
         try {
             this.sha256 = Mac.getInstance("HmacSHA256");
@@ -53,6 +63,15 @@ public class HashGenerator {
         } catch (IOException ex) {
             throw new IllegalStateException("Cannot load hashing key", ex);
         }
+    }
+
+    /**
+     * Create a hash generator. This persists the hash in the SharedPreferences with the class name
+     * of the passed context, in the hash.key property.
+     * @param context service that the hash is needed for.
+     */
+    public HashGenerator(Context context) {
+        this(context.getSharedPreferences(context.getClass().getName(), Context.MODE_PRIVATE));
     }
 
     private byte[] loadHashKey() throws IOException {
@@ -69,58 +88,30 @@ public class HashGenerator {
         }
     }
 
+    /** Create a unique hash for a given target. */
     public byte[] createHash(int target) {
         Serialization.intToBytes(target, hashBuffer, 0);
         return sha256.doFinal(hashBuffer);
     }
 
+    /** Create a unique hash for a given target. */
     public byte[] createHash(String target) {
         return sha256.doFinal(target.getBytes());
     }
 
+    /**
+     * Create a unique hash for a given target. Internally this calls
+     * {@link #createHash(int)}.
+     */
     public ByteBuffer createHashByteBuffer(int target) {
         return ByteBuffer.wrap(createHash(target));
     }
 
+    /**
+     * Create a unique hash for a given target. Internally this calls
+     * {@link #createHash(String)}.
+     */
     public ByteBuffer createHashByteBuffer(String target) {
         return ByteBuffer.wrap(createHash(target));
-    }
-
-    /**
-     * Extracts last 9 characters and hashes the result with a salt.
-     * For phone numbers this means that the area code is removed
-     * E.g.: +31232014111 becomes 232014111 and 0612345678 becomes 612345678 (before hashing)
-     * If target is a name instead of a number (e.g. when sms), then hash this name
-     * @param target String
-     * @return String
-     */
-    public byte[] createHashFromPhoneNumber(String target) {
-        // Test if target is numerical
-        try {
-            Long targetLong = Long.parseLong(target);
-
-            // Anonymous calls have target -1 or -2, do not hash them
-            if (targetLong < 0) {
-                return null;
-            }
-        } catch (NumberFormatException ex) {
-            // If non-numerical, then hash the target directly
-            // The + symbol at the front of a number will not throw this exception,
-            // it is interpreted as a indicator that the number is positive.
-            return createHash(target);
-        }
-
-        int length = target.length();
-        if (length > 9) {
-            target = target.substring(length - 9, length);
-            // remove all non-numeric characters
-            target = target.replaceAll("[^0-9]", "");
-            // for example, a
-            if (target.isEmpty()) {
-                return null;
-            }
-        }
-
-        return createHash(Integer.valueOf(target));
     }
 }
