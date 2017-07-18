@@ -391,15 +391,35 @@ public class RadarConfiguration {
     }
 
     /**
-     * Get a configured long value. If the configured value is not present or not a valid long,
+     * Get a configured int value. If the configured value is not present or not a valid int,
      * return a default value.
      * @param key key of the value
      * @param defaultValue default value
-     * @return configured long value, or defaultValue if no suitable value was found.
+     * @return configured int value, or defaultValue if no suitable value was found.
      */
     public int getInt(@NonNull String key, int defaultValue) {
         try {
             Integer ret = getRawInteger(key);
+            if (ret != null) {
+                return ret;
+            }
+        } catch (IllegalArgumentException ex) {
+            // return default
+        }
+        return defaultValue;
+    }
+
+
+    /**
+     * Get a configured float value. If the configured value is not present or not a valid float,
+     * return a default value.
+     * @param key key of the value
+     * @param defaultValue default value
+     * @return configured float value, or defaultValue if no suitable value was found.
+     */
+    public float getFloat(@NonNull String key, float defaultValue) {
+        try {
+            Float ret = getRawFloat(key);
             if (ret != null) {
                 return ret;
             }
