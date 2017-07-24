@@ -68,15 +68,15 @@ public class RadarConfiguration {
     public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
     public static final String SEND_WITH_COMPRESSION = "send_with_compression";
     public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
-    public static final String MIN_DISK_SPACE = "min.disk.space";
+    public static final String MIN_DISK_SPACE = "disk.space.notification.min.mb";
+    public static final java.lang.String DISK_SPACE_CHECK_TIMEOUT = "disk.space.notification.poll.minutes";
+    public static final java.lang.String DISK_SPACE_CHECK_RENOTIFY = "disk.space.notification.cooldown.minutes";
+    public static final java.lang.String DISK_SPACE_CHECK_ENABLE = "disk.space.notification.enable";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
     public static final Pattern IS_FALSE = Pattern.compile(
             "^(0|false|f|no|n|off|)$", CASE_INSENSITIVE);
-    public static final java.lang.String DISK_SPACE_CHECK_TIMEOUT = "disk.space.poll.timeout.minutes";
-    public static final java.lang.String DISK_SPACE_CHECK_RENOTIFY = "disk.space.notify.timeout.minutes";
-    public static final java.lang.String DISK_SPACE_CHECK_ENABLE = "disk.space.enable";
 
     public FirebaseStatus getStatus() {
         return status;

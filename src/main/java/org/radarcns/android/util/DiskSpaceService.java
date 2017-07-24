@@ -31,6 +31,7 @@ import org.radarcns.android.RadarConfiguration;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_RENOTIFY;
 import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_TIMEOUT;
@@ -43,8 +44,8 @@ public final class DiskSpaceService extends Service {
     public static final int DISK_SPACE_SERVICE_NOTIFICATION = 926988;
 
     private final AtomicInteger notificationCounter = new AtomicInteger(0);
+    private final AtomicLong lastNotification = new AtomicLong(0);
     private Handler handler;
-    private long lastNotification;
 
     public static long getAvailableSpace() {
         StatFs statfs = new StatFs(Environment.getRootDirectory().getAbsolutePath());
@@ -54,7 +55,6 @@ public final class DiskSpaceService extends Service {
     @Override
     public void onCreate() {
         handler = new Handler();
-        lastNotification = 0L;
     }
 
     @Nullable
@@ -66,7 +66,8 @@ public final class DiskSpaceService extends Service {
         final long minSpace = RadarConfiguration.getLongExtra(extras, MIN_DISK_SPACE);
         final long timeout = TimeUnit.MINUTES.toMillis(
                 RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_TIMEOUT));
-        final long renotify = RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_RENOTIFY);
+        final long renotify = TimeUnit.MINUTES.toMillis(
+                RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_RENOTIFY));
 
         handler.postDelayed(new Runnable() {
             @Override
@@ -76,11 +77,13 @@ public final class DiskSpaceService extends Service {
                     return;
                 }
 
-                if (System.currentTimeMillis() - lastNotification > renotify
+                if (System.currentTimeMillis() - lastNotification.get() >= renotify
                         && getAvailableSpace() < minSpace) {
                     notifyFull();
+                    handler.postDelayed(this, renotify);
+                } else {
+                    handler.postDelayed(this, timeout);
                 }
-                handler.postDelayed(this, timeout);
             }
         }, timeout);
 
@@ -97,6 +100,6 @@ public final class DiskSpaceService extends Service {
         ((RadarApplication)getApplication()).updateNotificationAppSettings(builder);
 
         startForeground(DISK_SPACE_SERVICE_NOTIFICATION, builder.build());
-        lastNotification = System.currentTimeMillis();
+        lastNotification.set(System.currentTimeMillis());
     }
 }
