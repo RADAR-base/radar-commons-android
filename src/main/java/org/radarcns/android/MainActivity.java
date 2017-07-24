@@ -23,7 +23,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -95,7 +94,6 @@ public abstract class MainActivity extends Activity {
 
     /** Connections. **/
     private List<DeviceServiceProvider> mConnections;
-    private ServiceConnection diskSpaceChecker;
 
     /** An overview of how many records have been sent throughout the application. */
     private final Map<DeviceServiceConnection, TimedInt> mTotalRecordsSent;
