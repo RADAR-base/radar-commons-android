@@ -63,11 +63,12 @@ public final class DiskSpaceService extends Service {
         final int currentCount = notificationCounter.getAndIncrement();
 
         Bundle extras = intent.getExtras();
-        final long minSpace = RadarConfiguration.getLongExtra(extras, MIN_DISK_SPACE);
+        final long minSpace = RadarConfiguration.getLongExtra(extras, MIN_DISK_SPACE, 300)
+                * 1_000_000;
         final long timeout = TimeUnit.MINUTES.toMillis(
-                RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_TIMEOUT));
+                RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_TIMEOUT, 15));
         final long renotify = TimeUnit.MINUTES.toMillis(
-                RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_RENOTIFY));
+                RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_RENOTIFY, 24 * 60));
 
         handler.postDelayed(new Runnable() {
             @Override

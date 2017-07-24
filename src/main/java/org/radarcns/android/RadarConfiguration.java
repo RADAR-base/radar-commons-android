@@ -68,10 +68,10 @@ public class RadarConfiguration {
     public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
     public static final String SEND_WITH_COMPRESSION = "send_with_compression";
     public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
-    public static final String MIN_DISK_SPACE = "disk.space.notification.min.mb";
-    public static final java.lang.String DISK_SPACE_CHECK_TIMEOUT = "disk.space.notification.poll.minutes";
-    public static final java.lang.String DISK_SPACE_CHECK_RENOTIFY = "disk.space.notification.cooldown.minutes";
-    public static final java.lang.String DISK_SPACE_CHECK_ENABLE = "disk.space.notification.enable";
+    public static final String MIN_DISK_SPACE = "disk_space_notification_min_mb";
+    public static final String DISK_SPACE_CHECK_TIMEOUT = "disk_space_notification_poll_minutes";
+    public static final String DISK_SPACE_CHECK_RENOTIFY = "disk_space_notification_cooldown_minutes";
+    public static final String DISK_SPACE_CHECK_ENABLE = "disk_space_notification_enable";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
