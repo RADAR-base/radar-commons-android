@@ -24,8 +24,9 @@ import android.graphics.Bitmap;
 public abstract class RadarApplication extends Application {
     public Notification.Builder updateNotificationAppSettings(Notification.Builder builder) {
         return builder
-            .setLargeIcon(getLargeIcon())
-            .setSmallIcon(getSmallIcon());
+                .setWhen(System.currentTimeMillis())
+                .setLargeIcon(getLargeIcon())
+                .setSmallIcon(getSmallIcon());
     }
 
     /** Large icon bitmap. */
