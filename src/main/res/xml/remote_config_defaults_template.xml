@@ -72,7 +72,8 @@
         <key>send_with_compression</key>
         <value>false</value>
     </entry>
-    <!-- OAuth 2.0 URL with which to authorize the current user. -->
+
+  <!-- OAuth 2.0 URL with which to authorize the current user. -->
     <entry>
         <key>oauth2_authorize_url</key>
         <value></value>
@@ -95,6 +96,26 @@
     <entry>
         <key>oauth2_client_id</key>
         <value></value>
+
+    <!-- Disk space notifications -->
+    <entry>
+        <key>disk_space_notification_min_mb</key>
+        <value>300</value>
+    </entry>
+    <!-- How often to check the disk space. -->
+    <entry>
+        <key>disk_space_notification_poll_minutes</key>
+        <value>15</value>
+    </entry>
+    <!-- When to send another notification if one was already sent. Defaults to 1 day. -->
+    <entry>
+        <key>disk_space_notification_cooldown_minutes</key>
+        <value>1440</value>
+    </entry>
+    <!-- Enable disk space notifications. Disabled by default. -->
+    <entry>
+        <key>disk_space_notification_enable</key>
+        <value>false</value>
     </entry>
 </defaultsMap>
 <!-- END xml_defaults -->
