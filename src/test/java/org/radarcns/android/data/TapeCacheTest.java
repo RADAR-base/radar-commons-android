@@ -120,7 +120,7 @@ public class TapeCacheTest {
                 RuntimeEnvironment.application.getApplicationContext(),
                 topic, executorFactory);
 
-        localTapeCache.setMaximumSize(4096);
+        localTapeCache.setMaximumSize(45000000);
         localTapeCache.setTimeWindow(100);
 
         Random random = new Random();
@@ -133,7 +133,10 @@ public class TapeCacheTest {
         localTapeCache.flush();
         List<Record<MeasurementKey, ActiveAudioRecording>> records = localTapeCache.unsentRecords(100);
 
-        assertEquals(Collections.singletonList(new Record<>(0, key, localValue)), records);
+        assertEquals(1, records.size());
+        Record<MeasurementKey, ActiveAudioRecording> firstRecord = records.get(0);
+        assertEquals(firstRecord.key, key);
+        assertEquals(firstRecord.value, localValue);
     }
 
     @Test
