@@ -148,6 +148,7 @@ public abstract class MainActivity extends Activity {
                 }
             }
         };
+
         latestNumberOfRecordsSent = new TimedInt();
     }
 

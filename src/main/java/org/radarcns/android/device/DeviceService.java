@@ -21,14 +21,17 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcel;
 import android.os.RemoteException;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Pair;
@@ -40,6 +43,7 @@ import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
+import org.radarcns.android.util.DiskSpaceService;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
 import org.radarcns.key.MeasurementKey;
@@ -60,6 +64,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
 import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_ENABLE;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
@@ -126,21 +131,36 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
     private TableDataHandler dataHandler;
     private DeviceManager deviceScanner;
-    private final LocalBinder mBinder = new LocalBinder();
+    private LocalBinder mBinder;
     private final AtomicInteger numberOfActivitiesBound = new AtomicInteger(0);
     private boolean isInForeground;
     private boolean isConnected;
     private int latestStartId = -1;
     private String userId;
+    private ServiceConnection diskSpaceChecker;
 
+    @CallSuper
     @Override
     public void onCreate() {
         logger.info("Creating DeviceService {}", this);
         super.onCreate();
+        mBinder = createBinder();
 
         // Register for broadcasts on BluetoothAdapter state change
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         registerReceiver(mBluetoothReceiver, filter);
+
+        diskSpaceChecker = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName name, IBinder service) {
+                // noop
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                // noop
+            }
+        };
 
         synchronized (this) {
             numberOfActivitiesBound.set(0);
@@ -149,6 +169,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
     }
 
+    @CallSuper
     @Override
     public void onDestroy() {
         logger.info("Destroying DeviceService {}", this);
@@ -157,6 +178,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         unregisterReceiver(mBluetoothReceiver);
         stopDeviceManager(unsetDeviceManager());
 
+        unbindService(diskSpaceChecker);
+
         try {
             dataHandler.close();
         } catch (IOException e) {
@@ -164,6 +187,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
     }
 
+    @CallSuper
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         logger.info("Starting DeviceService {}", this);
@@ -174,7 +198,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             onInvocation(intent.getExtras());
         }
         // If we get killed, after returning from here, restart
-        return START_STICKY;
+        // keep all the configuration from the previous iteration
+        return START_REDELIVER_INTENT;
     }
 
     @Nullable
@@ -184,12 +209,20 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return mBinder;
     }
 
+    @CallSuper
     @Override
     public void onRebind(Intent intent) {
         logger.info("Received (re)bind in {}", this);
         numberOfActivitiesBound.incrementAndGet();
         if (intent != null) {
-            onInvocation(intent.getExtras());
+            Bundle extras = intent.getExtras();
+            onInvocation(extras);
+
+            if (RadarConfiguration.getBooleanExtra(extras, DISK_SPACE_CHECK_ENABLE, false)) {
+                Intent diskSpaceIntent = new Intent(this, DiskSpaceService.class);
+                diskSpaceIntent.putExtras(extras);
+                bindService(diskSpaceIntent, diskSpaceChecker, BIND_AUTO_CREATE);
+            }
         }
     }
 
@@ -276,25 +309,14 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         Notification.Builder notificationBuilder = new Notification.Builder(
                 getApplicationContext());
         notificationBuilder
-                .setWhen(System.currentTimeMillis())
                 .setContentIntent(intent)
                 .setTicker(getText(R.string.service_notification_ticker))
                 .setContentText(getText(R.string.service_notification_text))
                 .setContentTitle(getText(R.string.service_notification_title));
 
-        if (getApplication() instanceof RadarApplication) {
-            ((RadarApplication)getApplication()).updateNotificationAppSettings(notificationBuilder);
-        } else {
-            notificationBuilder.setSmallIcon(R.drawable.ic_bt_connected);
-        }
-        updateBackgroundNotificationText(notificationBuilder);
+        ((RadarApplication)getApplication()).updateNotificationAppSettings(notificationBuilder);
 
         return notificationBuilder.build();
-    }
-
-    protected Notification.Builder updateBackgroundNotificationText(Notification.Builder builder) {
-        // Do not update anything
-        return builder;
     }
 
     public void stopBackgroundListener() {
@@ -658,8 +680,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     }
 
     /** Get the service local binder. */
-    public LocalBinder getBinder() {
-        return mBinder;
+    protected LocalBinder createBinder() {
+        return new LocalBinder();
     }
 
     /** User ID to send data for. */
