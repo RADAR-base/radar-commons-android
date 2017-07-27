@@ -122,7 +122,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
     private TableDataHandler dataHandler;
     private DeviceManager deviceScanner;
-    private LocalBinder mBinder;
+    private DeviceBinder mBinder;
     private final AtomicInteger numberOfActivitiesBound = new AtomicInteger(0);
     private boolean isInForeground;
     private boolean isConnected;
@@ -422,7 +422,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         stopDeviceManager(unsetDeviceManager());
     }
 
-    private class LocalBinder extends Binder implements DeviceServiceBinder {
+    protected class DeviceBinder extends Binder implements DeviceServiceBinder {
         @Override
         public <V extends SpecificRecord> List<Record<MeasurementKey, V>> getRecords(
                 @NonNull AvroTopic<MeasurementKey, V> topic, int limit) throws IOException {
@@ -625,8 +625,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     }
 
     /** Get the service local binder. */
-    protected LocalBinder createBinder() {
-        return new LocalBinder();
+    @NonNull
+    protected DeviceBinder createBinder() {
+        return new DeviceBinder();
     }
 
     /** User ID to send data for. */
