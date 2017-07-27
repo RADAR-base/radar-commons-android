@@ -431,13 +431,7 @@ public abstract class MainActivity extends Activity {
                     case CONNECTED:
                         break;
                     case CONNECTING:
-                        logger.info( "Device name is {} while connecting.", connection.getDeviceName() );
-                        // Reject if device name inputted does not equal device nameA
-                        if (!connection.isAllowedDevice(deviceFilters.get(connection))) {
-                            logger.info("Device name '{}' is not in the list of keys '{}'", connection.getDeviceName(), deviceFilters.get(connection));
-                            Boast.makeText(MainActivity.this, String.format("Device '%s' rejected", connection.getDeviceName()), Toast.LENGTH_LONG).show();
-                            disconnect();
-                        }
+                        logger.info( "Device name is {} while connecting.", connection.getDeviceName());
                         break;
                     case DISCONNECTED:
                         startScanning();
