@@ -141,17 +141,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         registerReceiver(mBluetoothReceiver, filter);
 
-        diskSpaceChecker = new ServiceConnection() {
-            @Override
-            public void onServiceConnected(ComponentName name, IBinder service) {
-                // noop
-            }
-
-            @Override
-            public void onServiceDisconnected(ComponentName name) {
-                // noop
-            }
-        };
+        diskSpaceChecker = null;
 
         synchronized (this) {
             numberOfActivitiesBound.set(0);
@@ -169,7 +159,10 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         unregisterReceiver(mBluetoothReceiver);
         stopDeviceManager(unsetDeviceManager());
 
-        unbindService(diskSpaceChecker);
+        if (diskSpaceChecker != null) {
+            unbindService(diskSpaceChecker);
+            diskSpaceChecker = null;
+        }
 
         try {
             dataHandler.close();
@@ -209,7 +202,20 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             Bundle extras = intent.getExtras();
             onInvocation(extras);
 
-            if (RadarConfiguration.getBooleanExtra(extras, DISK_SPACE_CHECK_ENABLE, false)) {
+            if (RadarConfiguration.getBooleanExtra(extras, DISK_SPACE_CHECK_ENABLE, false)
+                    && diskSpaceChecker == null) {
+                diskSpaceChecker = new ServiceConnection() {
+                    @Override
+                    public void onServiceConnected(ComponentName name, IBinder service) {
+                        // noop
+                    }
+
+                    @Override
+                    public void onServiceDisconnected(ComponentName name) {
+                        // noop
+                    }
+                };
+
                 Intent diskSpaceIntent = new Intent(this, DiskSpaceService.class);
                 diskSpaceIntent.putExtras(extras);
                 bindService(diskSpaceIntent, diskSpaceChecker, BIND_AUTO_CREATE);
