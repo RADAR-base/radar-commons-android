@@ -31,6 +31,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcel;
 import android.os.RemoteException;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Pair;
@@ -130,7 +131,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
     private TableDataHandler dataHandler;
     private DeviceManager deviceScanner;
-    private final LocalBinder mBinder = new LocalBinder();
+    private LocalBinder mBinder;
     private final AtomicInteger numberOfActivitiesBound = new AtomicInteger(0);
     private boolean isInForeground;
     private boolean isConnected;
@@ -138,10 +139,12 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private String userId;
     private ServiceConnection diskSpaceChecker;
 
+    @CallSuper
     @Override
     public void onCreate() {
         logger.info("Creating DeviceService {}", this);
         super.onCreate();
+        mBinder = createBinder();
 
         // Register for broadcasts on BluetoothAdapter state change
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
@@ -166,6 +169,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
     }
 
+    @CallSuper
     @Override
     public void onDestroy() {
         logger.info("Destroying DeviceService {}", this);
@@ -183,6 +187,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
     }
 
+    @CallSuper
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         logger.info("Starting DeviceService {}", this);
@@ -204,6 +209,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return mBinder;
     }
 
+    @CallSuper
     @Override
     public void onRebind(Intent intent) {
         logger.info("Received (re)bind in {}", this);
@@ -674,8 +680,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     }
 
     /** Get the service local binder. */
-    public LocalBinder getBinder() {
-        return mBinder;
+    protected LocalBinder createBinder() {
+        return new LocalBinder();
     }
 
     /** User ID to send data for. */

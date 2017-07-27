@@ -21,8 +21,6 @@ import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.key.MeasurementKey;
 import org.radarcns.topic.AvroTopic;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -33,8 +31,6 @@ import java.io.IOException;
  * @param <T> state type that the manager will update.
  */
 public abstract class AbstractDeviceManager<S extends DeviceService, T extends BaseDeviceState> implements DeviceManager {
-    private static final Logger logger = LoggerFactory.getLogger(AbstractDeviceManager.class);
-
     private final TableDataHandler dataHandler;
     private final T deviceStatus;
     private String deviceName;
