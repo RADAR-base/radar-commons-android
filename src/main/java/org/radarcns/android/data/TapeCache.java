@@ -134,7 +134,12 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         if (queue.isEmpty()) {
             firstInQueue = 0L;
         } else {
-            firstInQueue = queue.peek().offset;
+            try {
+                firstInQueue = queue.peek().offset;
+            } catch (IOException ex) {
+                fixCorruptQueue();
+                firstInQueue = queue.peek().offset;
+            }
         }
         lastOffsetSent = firstInQueue - 1L;
         nextOffset = new AtomicLong(firstInQueue + queue.size());
@@ -149,21 +154,9 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                 public List<Record<K, V>> call() throws Exception {
                     try {
                         return queue.peek(limit);
-                    } catch (IllegalStateException ex) {
-                        logger.error("Queue was corrupted. Removing cache.");
-                        try {
-                            queue.close();
-                        } catch (IOException ioex) {
-                            logger.warn("Failed to close corrupt queue", ioex);
-                        }
-                        if (outputFile.delete()) {
-                            queueFile = QueueFile.newMapped(outputFile, maxBytes);
-                            queueSize.set(queueFile.size());
-                            queue = new BackedObjectQueue<>(queueFile, converter);
-                            return Collections.emptyList();
-                        } else {
-                            throw new IOException("Cannot create new cache.");
-                        }
+                    } catch (IOException | IllegalStateException ex) {
+                        fixCorruptQueue();
+                        return Collections.emptyList();
                     }
                 }
             }).get());
@@ -176,8 +169,6 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
             Throwable cause = ex.getCause();
             if (cause instanceof RuntimeException) {
                 throw (RuntimeException) cause;
-            } else if (cause instanceof IOException) {
-                throw (IOException) cause;
             } else {
                 throw new IOException("Unknown error occurred", ex);
             }
@@ -348,5 +339,21 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         }
 
         listPool.add(localList);
+    }
+
+    private void fixCorruptQueue() throws IOException {
+        logger.error("Queue was corrupted. Removing cache.");
+        try {
+            queue.close();
+        } catch (IOException ioex) {
+            logger.warn("Failed to close corrupt queue", ioex);
+        }
+        if (outputFile.delete()) {
+            queueFile = QueueFile.newMapped(outputFile, maxBytes);
+            queueSize.set(queueFile.size());
+            queue = new BackedObjectQueue<>(queueFile, converter);
+        } else {
+            throw new IOException("Cannot create new cache.");
+        }
     }
 }
