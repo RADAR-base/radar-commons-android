@@ -226,16 +226,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     @Override
     public boolean onUnbind(Intent intent) {
         logger.info("Received unbind in {}", this);
-        int startId = -1;
-        synchronized (this) {
-            if (numberOfActivitiesBound.decrementAndGet() == 0 && !isConnected) {
-                startId = latestStartId;
-            }
-        }
-        if (startId != -1) {
-            logger.info("Stopping self if latest start ID was {}", latestStartId);
-            stopSelf(latestStartId);
-        }
+        stopSelfIfUnconnected();
         return true;
     }
 
@@ -247,17 +238,19 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         sendBroadcast(statusChanged);
     }
 
-    @Override
-    public void deviceStatusUpdated(DeviceManager deviceManager,
-                                    DeviceStatusListener.Status status) {
+
+    private void broadcastDeviceStatus(String name, DeviceStatusListener.Status status) {
         Intent statusChanged = new Intent(DEVICE_STATUS_CHANGED);
         statusChanged.putExtra(DEVICE_STATUS_CHANGED, status.ordinal());
         statusChanged.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-        if (deviceManager.getName() != null) {
-            statusChanged.putExtra(DEVICE_STATUS_NAME, deviceManager.getName());
+        if (name != null) {
+            statusChanged.putExtra(DEVICE_STATUS_NAME, name);
         }
         sendBroadcast(statusChanged);
+    }
 
+    @Override
+    public void deviceStatusUpdated(DeviceManager deviceManager, DeviceStatusListener.Status status) {
         switch (status) {
             case CONNECTED:
                 synchronized (this) {
@@ -266,28 +259,35 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 startBackgroundListener();
                 break;
             case DISCONNECTED:
+                stopBackgroundListener();
+                stopDeviceManager(deviceManager);
                 synchronized (this) {
                     deviceScanner = null;
                     isConnected = false;
                 }
-                stopBackgroundListener();
-                stopDeviceManager(deviceManager);
-                int startId = -1;
-                synchronized (this) {
-                    if (numberOfActivitiesBound.get() == 0) {
-                        startId = latestStartId;
-                    }
-                }
-                if (startId != -1) {
-                    stopSelf(startId);
-                }
+                stopSelfIfUnconnected();
                 break;
             default:
                 // do nothing
                 break;
         }
+        broadcastDeviceStatus(deviceManager.getName(), status);
     }
 
+    /** Stop service if no devices or activities are connected to it. */
+    protected void stopSelfIfUnconnected() {
+        int startId;
+        synchronized (this) {
+            if (numberOfActivitiesBound.get() > 0 || isConnected) {
+                return;
+            }
+            startId = latestStartId;
+        }
+        logger.info("Stopping self if latest start ID was {}", startId);
+        stopSelf(startId);
+    }
+
+    /** Maintain current service in the background. */
     public void startBackgroundListener() {
         synchronized (this) {
             if (isInForeground) {
@@ -316,6 +316,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return notificationBuilder.build();
     }
 
+    /** Service no longer needs to be maintained in the background. */
     public void stopBackgroundListener() {
         synchronized (this) {
             if (!isInForeground) {
@@ -340,9 +341,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 } catch (IOException e) {
                     logger.warn("Failed to close device scanner", e);
                 }
-            }
-            if (deviceManager.getState().getStatus() != DeviceStatusListener.Status.DISCONNECTED) {
-                deviceStatusUpdated(deviceManager, DeviceStatusListener.Status.DISCONNECTED);
             }
         }
     }

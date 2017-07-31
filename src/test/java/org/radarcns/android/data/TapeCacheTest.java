@@ -110,7 +110,6 @@ public class TapeCacheTest {
         assertEquals(new Pair<>(2L, 0L), tapeCache.numberOfRecords());
     }
 
-
     @Test
     public void testBinaryObject() throws IOException {
         AvroTopic<MeasurementKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
