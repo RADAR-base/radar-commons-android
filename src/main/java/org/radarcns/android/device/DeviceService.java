@@ -20,22 +20,12 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
-import android.content.BroadcastReceiver;
-import android.content.ComponentName;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.ServiceConnection;
-import android.os.Binder;
-import android.os.Bundle;
-import android.os.IBinder;
-import android.os.Parcel;
-import android.os.RemoteException;
+import android.content.*;
+import android.os.*;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Pair;
-
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
@@ -55,27 +45,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
-import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
-import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
-import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_ENABLE;
-import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
-import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
-import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
-import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
-import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
-import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
-import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.RadarConfiguration.*;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send store the data of a
@@ -424,7 +397,11 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         @Override
         public <V extends SpecificRecord> List<Record<MeasurementKey, V>> getRecords(
                 @NonNull AvroTopic<MeasurementKey, V> topic, int limit) throws IOException {
-            return getDataHandler().getCache(topic).getRecords(limit);
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler == null) {
+                return Collections.emptyList();
+            }
+            return localDataHandler.getCache(topic).getRecords(limit);
         }
 
         @Override
@@ -432,9 +409,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             DeviceManager localManager = getDeviceManager();
             if (localManager == null) {
                 return getDefaultState();
-            } else {
-                return localManager.getState();
             }
+            return localManager.getState();
         }
 
         @Override
@@ -442,9 +418,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             DeviceManager localManager = getDeviceManager();
             if (localManager == null) {
                 return null;
-            } else {
-                return localManager.getName();
             }
+            return localManager.getName();
         }
 
         @Override
@@ -459,12 +434,20 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         @Override
         public ServerStatusListener.Status getServerStatus() {
-            return getDataHandler().getStatus();
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler == null) {
+                return ServerStatusListener.Status.DISCONNECTED;
+            }
+            return localDataHandler.getStatus();
         }
 
         @Override
         public Map<String,Integer> getServerRecordsSent() {
-            return getDataHandler().getRecordsSent();
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler == null) {
+                return Collections.emptyMap();
+            }
+            return localDataHandler.getRecordsSent();
         }
 
         @Override
@@ -476,20 +459,23 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         public Pair<Long, Long> numberOfRecords() {
             long unsent = -1L;
             long sent = -1L;
-            for (DataCache<?, ?> cache : getDataHandler().getCaches().values()) {
-                Pair<Long, Long> pair = cache.numberOfRecords();
-                if (pair.first != -1L) {
-                    if (unsent == -1L) {
-                        unsent = pair.first;
-                    } else {
-                        unsent += pair.first;
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler != null) {
+                for (DataCache<?, ?> cache : localDataHandler.getCaches().values()) {
+                    Pair<Long, Long> pair = cache.numberOfRecords();
+                    if (pair.first != -1L) {
+                        if (unsent == -1L) {
+                            unsent = pair.first;
+                        } else {
+                            unsent += pair.first;
+                        }
                     }
-                }
-                if (pair.second != -1L) {
-                    if (sent == -1L) {
-                        sent = pair.second;
-                    } else {
-                        sent += pair.second;
+                    if (pair.second != -1L) {
+                        if (sent == -1L) {
+                            sent = pair.second;
+                        } else {
+                            sent += pair.second;
+                        }
                     }
                 }
             }
