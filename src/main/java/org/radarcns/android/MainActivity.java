@@ -17,18 +17,15 @@
 package org.radarcns.android;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.AppOpsManager;
 import android.bluetooth.BluetoothAdapter;
-import android.content.BroadcastReceiver;
-import android.content.ComponentName;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
+import android.content.*;
 import android.content.pm.PackageManager;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.HandlerThread;
+import android.location.LocationManager;
+import android.os.*;
 import android.os.Process;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -56,9 +53,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static android.Manifest.permission.ACCESS_NETWORK_STATE;
-import static android.Manifest.permission.BLUETOOTH;
-import static android.Manifest.permission.INTERNET;
+import static android.Manifest.permission.*;
+import static android.widget.Toast.LENGTH_LONG;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
@@ -70,6 +66,8 @@ public abstract class MainActivity extends Activity {
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
     private static final int LOGIN_REQUEST_CODE = 232619693;
+    private static final int LOCATION_REQUEST_CODE = 232619694;
+    private static final int USAGE_REQUEST_CODE = 232619695;
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters;
@@ -349,6 +347,8 @@ public abstract class MainActivity extends Activity {
             for (DeviceServiceProvider provider : mConnections) {
                 provider.updateConfiguration();
             }
+        } else if (requestCode == LOCATION_REQUEST_CODE || requestCode == USAGE_REQUEST_CODE) {
+            checkPermissions();
         }
     }
 
@@ -470,18 +470,76 @@ public abstract class MainActivity extends Activity {
             permissions.addAll(provider.needsPermissions());
         }
 
+        if (permissions.contains(ACCESS_FINE_LOCATION) || permissions.contains(ACCESS_COARSE_LOCATION)) {
+            LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            boolean isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            boolean isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+
+            //Start your Activity if location was enabled:
+            if (!isGpsEnabled && !isNetworkEnabled) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+                builder.setTitle(R.string.enable_location_title)
+                        .setMessage(R.string.enable_location)
+                        .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                                if (intent.resolveActivity(getPackageManager()) == null) {
+                                    intent = new Intent(Settings.ACTION_SETTINGS);
+                                }
+                                startActivityForResult(intent, LOCATION_REQUEST_CODE);
+                                dialog.cancel();
+                            }
+                        })
+                        .setIcon(android.R.drawable.ic_dialog_alert)
+                        .show();
+            }
+        }
+
         List<String> permissionsToRequest = new ArrayList<>();
         for (String permission : permissions) {
+            if (permission.equals(PACKAGE_USAGE_STATS)) {
+                AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+                int mode = appOps.checkOpNoThrow(
+                        "android:get_usage_stats", android.os.Process.myUid(), getPackageName());
+
+                if (mode == AppOpsManager.MODE_ALLOWED) {
+                    continue;
+                } else if (mode != AppOpsManager.MODE_DEFAULT) {
+                    permissionsToRequest.add(permission);
+                    continue;
+                }
+                // for mode_default, check again
+            }
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
                 logger.info("Need to request permission for {}", permission);
                 permissionsToRequest.add(permission);
             }
         }
-        if (!permissionsToRequest.isEmpty()) {
-            ActivityCompat.requestPermissions(this,
-                    permissionsToRequest.toArray(new String[permissionsToRequest.size()]),
-                    REQUEST_ENABLE_PERMISSIONS);
+        if (permissionsToRequest.isEmpty()) {
+            return;
         }
+
+        if (permissionsToRequest.contains(PACKAGE_USAGE_STATS)) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+            builder.setTitle(R.string.enable_package_usage_title)
+                    .setMessage(R.string.enable_package_usage)
+                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int which) {
+                            Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                            if (intent.resolveActivity(getPackageManager()) == null) {
+                                intent = new Intent(Settings.ACTION_SETTINGS);
+                            }
+                            startActivityForResult(intent, USAGE_REQUEST_CODE);
+                            dialog.cancel();
+                        }
+                    })
+                    .setIcon(android.R.drawable.ic_dialog_alert)
+                    .show();
+        }
+
+        ActivityCompat.requestPermissions(this,
+                permissionsToRequest.toArray(new String[permissionsToRequest.size()]),
+                REQUEST_ENABLE_PERMISSIONS);
     }
 
     @Override
