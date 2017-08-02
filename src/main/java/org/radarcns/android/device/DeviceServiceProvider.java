@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 
 import org.radarcns.android.MainActivity;
@@ -101,8 +102,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * Get or create a DeviceServiceConnection. Once created, it will be a single fixed connection
      * object.
      * @throws IllegalStateException if {@link #setActivity(MainActivity)} has not been called.
-     * @throws UnsupportedOperationException if {@link #getStateCreator()} or
-     *                                       {@link #getServiceClass()} returns null.
+     * @throws UnsupportedOperationException if {@link #getServiceClass()} returns null.
      */
     public DeviceServiceConnection<T> getConnection() {
         if (connection == null) {
@@ -187,8 +187,8 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
 
     /**
      * Configure the service from the set RadarConfiguration.
-     * Override and call {@code super.configure(bundle)} to pass additional options.
      */
+    @CallSuper
     protected void configure(Bundle bundle) {
         // Add the default configuration parameters given to the service intents
         config.putExtras(bundle,

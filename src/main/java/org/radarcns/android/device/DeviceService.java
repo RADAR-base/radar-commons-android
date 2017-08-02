@@ -495,9 +495,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     /**
      * Override this function to get any parameters from the given intent.
-     * Also call the superclass.
      * @param bundle intent extras that the activity provided.
      */
+    @CallSuper
     protected void onInvocation(Bundle bundle) {
         TableDataHandler localDataHandler;
 
