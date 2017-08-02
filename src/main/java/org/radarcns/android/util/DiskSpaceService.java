@@ -16,7 +16,9 @@
 
 package org.radarcns.android.util;
 
+import android.app.AlarmManager;
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Bundle;
@@ -100,7 +102,8 @@ public final class DiskSpaceService extends Service {
 
         ((RadarApplication)getApplication()).updateNotificationAppSettings(builder);
 
-        startForeground(DISK_SPACE_SERVICE_NOTIFICATION, builder.build());
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        manager.notify(DISK_SPACE_SERVICE_NOTIFICATION, builder.build());
         lastNotification.set(System.currentTimeMillis());
     }
 }
