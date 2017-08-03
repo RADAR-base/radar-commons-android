@@ -54,7 +54,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static android.Manifest.permission.*;
-import static android.widget.Toast.LENGTH_LONG;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
@@ -85,8 +84,8 @@ public abstract class MainActivity extends Activity {
     private Handler mHandler;
 
     /** The UI to show the service data. */
-    private Runnable mUIScheduler;
-    private MainActivityView mUIUpdater;
+    private Runnable mViewUpdater;
+    private MainActivityView mView;
     private boolean isForcedDisconnected;
 
     /** Defines callbacks for service binding, passed to bindService() */
@@ -217,17 +216,19 @@ public abstract class MainActivity extends Activity {
 
         // Start the UI thread
         uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
-        mUIUpdater = createView();
-        mUIScheduler = new Runnable() {
+        mViewUpdater = new Runnable() {
             @Override
             public void run() {
                 try {
                     // Update all rows in the UI with the data from the connections
-                    mUIUpdater.update();
+                    MainActivityView localView = mView;
+                    if (localView != null) {
+                        localView.update();
+                    }
                 } finally {
                     Handler handler = getHandler();
                     if (handler != null) {
-                        handler.postDelayed(mUIScheduler, uiRefreshRate);
+                        handler.postDelayed(mViewUpdater, uiRefreshRate);
                     }
                 }
             }
@@ -270,13 +271,13 @@ public abstract class MainActivity extends Activity {
     protected void onResume() {
         logger.info("mainActivity onResume");
         super.onResume();
-        getHandler().post(mUIScheduler);
+        getHandler().post(mViewUpdater);
     }
 
     @Override
     protected void onPause() {
         logger.info("mainActivity onPause");
-        getHandler().removeCallbacks(mUIScheduler);
+        getHandler().removeCallbacks(mViewUpdater);
         super.onPause();
     }
 
@@ -296,6 +297,7 @@ public abstract class MainActivity extends Activity {
         synchronized (this) {
             mHandler = localHandler;
         }
+        mView = createView();
 
         new AsyncTask<DeviceServiceProvider, Void, Void>() {
             @Override
@@ -325,6 +327,7 @@ public abstract class MainActivity extends Activity {
             mHandler = null;
         }
         mHandlerThread.quitSafely();
+        mView = null;
 
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.isBound()) {

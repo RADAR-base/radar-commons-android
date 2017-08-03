@@ -262,6 +262,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     /** Maintain current service in the background. */
     public void startBackgroundListener() {
+        logger.info("Preventing {} to get stopped.", this);
         synchronized (this) {
             if (isInForeground) {
                 return;
@@ -291,6 +292,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     /** Service no longer needs to be maintained in the background. */
     public void stopBackgroundListener() {
+        logger.info("{} may be stopped.", this);
         synchronized (this) {
             if (!isInForeground) {
                 return;
@@ -372,18 +374,11 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
         if (localManager == null) {
             logger.info("Starting recording");
-            localManager = createDeviceManager();
-            boolean didSet;
             synchronized (this) {
                 if (deviceScanner == null) {
-                    deviceScanner = localManager;
-                    didSet = true;
-                } else {
-                    didSet = false;
+                    deviceScanner = createDeviceManager();
+                    deviceScanner.start(acceptableIds);
                 }
-            }
-            if (didSet) {
-                localManager.start(acceptableIds);
             }
         }
         return getDeviceManager().getState();
@@ -391,6 +386,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     public void stopRecording() {
         stopDeviceManager(unsetDeviceManager());
+        logger.info("Stopped recording {}", this);
     }
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
@@ -568,10 +564,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             localDataHandler.setKafkaUploadRate(
                     RadarConfiguration.getLongExtra(bundle, KAFKA_UPLOAD_RATE_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, KAFKA_CLEAN_RATE_KEY)) {
-            localDataHandler.setKafkaCleanRate(
-                    RadarConfiguration.getLongExtra(bundle, KAFKA_CLEAN_RATE_KEY));
-        }
         if (RadarConfiguration.hasExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY)) {
             localDataHandler.setKafkaRecordsSendLimit(
                     RadarConfiguration.getIntExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY));
@@ -617,5 +609,15 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     /** User ID to send data for. */
     public String getUserId() {
         return userId;
+    }
+
+    @Override
+    public String toString() {
+        DeviceManager localManager = getDeviceManager();
+        if (localManager == null) {
+            return getClass().getSimpleName() + "<null>";
+        } else {
+            return getClass().getSimpleName() + "<" + localManager.getName() + ">";
+        }
     }
 }
