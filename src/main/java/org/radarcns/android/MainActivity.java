@@ -429,18 +429,27 @@ public abstract class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Boast.makeText(MainActivity.this, status.toString(), Toast.LENGTH_SHORT).show();
+                int showRes = -1;
                 switch (status) {
+                    case READY:
+                        showRes = R.string.device_ready;
+                        break;
                     case CONNECTED:
+                        showRes = R.string.device_connected;
                         break;
                     case CONNECTING:
+                        showRes = R.string.device_connecting;
                         logger.info( "Device name is {} while connecting.", connection.getDeviceName());
                         break;
                     case DISCONNECTED:
+                        showRes = R.string.device_disconnected;
                         startScanning();
                         break;
                     default:
                         break;
+                }
+                if (showRes != -1) {
+                    Boast.makeText(MainActivity.this, showRes).show();
                 }
             }
         });

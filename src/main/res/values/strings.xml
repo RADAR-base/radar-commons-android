@@ -13,4 +13,9 @@
     <string name="enable_package_usage">Enable usage access to keep track of what kind of applications you use.</string>
     <string name="enable_location_title">Enable location tracking</string>
     <string name="enable_package_usage_title">Enable usage tracking</string>
+
+    <string name="device_connected">CONNECTED</string>
+    <string name="device_connecting">CONNECTING</string>
+    <string name="device_disconnected">DISCONNECTED</string>
+    <string name="device_ready">READY</string>
 </resources>
