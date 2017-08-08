@@ -611,6 +611,13 @@ public abstract class MainActivity extends Activity {
         this.serverStatus = status;
 
         if (status == ServerStatusListener.Status.UNAUTHORIZED) {
+            synchronized (this) {
+                // login already started
+                if (authState.isInvalidated()) {
+                    return;
+                }
+                authState.invalidate(this);
+            }
             startLogin();
         }
     }
