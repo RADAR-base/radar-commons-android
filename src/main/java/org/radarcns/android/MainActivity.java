@@ -607,6 +607,10 @@ public abstract class MainActivity extends Activity {
         }
     }
 
+    protected boolean hasPermission(String permissionName) {
+        return !needsPermissions.contains(permissionName);
+    }
+
     public void updateServerStatus(final ServerStatusListener.Status status) {
         this.serverStatus = status;
 

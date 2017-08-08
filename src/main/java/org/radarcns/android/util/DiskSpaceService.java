@@ -16,7 +16,6 @@
 
 package org.radarcns.android.util;
 
-import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.Service;
@@ -27,7 +26,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.StatFs;
 import android.support.annotation.Nullable;
-
+import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 
@@ -35,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static android.app.Notification.DEFAULT_ALL;
+import static android.app.Notification.PRIORITY_HIGH;
 import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_RENOTIFY;
 import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_TIMEOUT;
 import static org.radarcns.android.RadarConfiguration.MIN_DISK_SPACE;
@@ -94,16 +95,16 @@ public final class DiskSpaceService extends Service {
     }
 
     private void notifyFull() {
-        Notification.Builder builder = new Notification.Builder(getApplicationContext());
-        builder.setContentTitle("Storage almost full");
-        builder.setContentText("Your storage space is almost full. Please ensure that you have " +
-                "an internet connection to upload the data and/or move unnecessary photos and " +
-                "multimedia from your device.");
-
-        ((RadarApplication)getApplication()).updateNotificationAppSettings(builder);
+        Notification notification = ((RadarApplication)getApplication())
+                .updateNotificationAppSettings(new Notification.Builder(this))
+                .setContentTitle(getString(R.string.storage_full))
+                .setContentText(getString(R.string.storage_full_text))
+                .setPriority(PRIORITY_HIGH)
+                .setDefaults(DEFAULT_ALL)
+                .build();
 
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        manager.notify(DISK_SPACE_SERVICE_NOTIFICATION, builder.build());
+        manager.notify(DISK_SPACE_SERVICE_NOTIFICATION, notification);
         lastNotification.set(System.currentTimeMillis());
     }
 }
