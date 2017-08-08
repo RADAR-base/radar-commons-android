@@ -41,6 +41,11 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
         startedFromActivity = Objects.equals(getIntent().getAction(), ACTION_LOGIN);
+
+        if (startedFromActivity) {
+            Boast.makeText(this, R.string.login_failed).show();
+        }
+
         AppAuthState appAuth = AppAuthState.read(this);
 
         if (appAuth.isValid()) {

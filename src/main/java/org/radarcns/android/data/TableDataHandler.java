@@ -68,7 +68,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
-    private KafkaDataSubmitter<MeasurementKey, SpecificRecord> submitter;
+    private KafkaDataSubmitter<SpecificRecord> submitter;
     private RestSender<MeasurementKey, SpecificRecord> sender;
     private final AtomicFloat minimumBatteryLevel;
     private boolean useCompression;
@@ -154,7 +154,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
                 .headers(authState.getHeaders())
                 .build();
         this.submitter = new KafkaDataSubmitter<>(this, sender, kafkaRecordsSendLimit,
-                getPreferredUploadRate());
+                getPreferredUploadRate(), authState.getUserId());
     }
 
     public synchronized boolean isStarted() {
@@ -216,11 +216,13 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             this.submitter = null;
             this.sender = null;
         }
+        if (schemaRetriever != null) {
+            schemaRetriever.close();
+        }
         clean();
         for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
         }
-        schemaRetriever.close();
         executorFactory.close();
     }
 
@@ -363,6 +365,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         if (sender != null) {
             sender.setHeaders(authState.getHeaders());
         }
+        if (submitter != null) {
+            submitter.setUserId(authState.getUserId());
+        }
     }
 
     public synchronized void setSenderConnectionTimeout(long senderConnectionTimeout) {
@@ -385,7 +390,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
         SchemaRetriever oldSchemaRetriever = this.schemaRetriever;
         this.schemaRetriever = schemaRetriever;
-        oldSchemaRetriever.close();
+        if (oldSchemaRetriever != null) {
+            oldSchemaRetriever.close();
+        }
     }
 
     public synchronized void setCompression(boolean useCompression) {
