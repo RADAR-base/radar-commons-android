@@ -138,7 +138,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                 firstInQueue = queue.peek().offset;
             } catch (IOException ex) {
                 fixCorruptQueue();
-                firstInQueue = queue.peek().offset;
+                firstInQueue = 0L;
             }
         }
         lastOffsetSent = firstInQueue - 1L;
