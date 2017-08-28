@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 
 import org.radarcns.android.MainActivity;
@@ -33,11 +34,15 @@ import java.util.Objects;
 import java.util.Scanner;
 
 import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_ENABLE;
+import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_RENOTIFY;
+import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_TIMEOUT;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
+import static org.radarcns.android.RadarConfiguration.MIN_DISK_SPACE;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
@@ -97,8 +102,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * Get or create a DeviceServiceConnection. Once created, it will be a single fixed connection
      * object.
      * @throws IllegalStateException if {@link #setActivity(MainActivity)} has not been called.
-     * @throws UnsupportedOperationException if {@link #getStateCreator()} or
-     *                                       {@link #getServiceClass()} returns null.
+     * @throws UnsupportedOperationException if {@link #getServiceClass()} returns null.
      */
     public DeviceServiceConnection<T> getConnection() {
         if (connection == null) {
@@ -183,15 +187,16 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
 
     /**
      * Configure the service from the set RadarConfiguration.
-     * Override and call {@code super.configure(bundle)} to pass additional options.
      */
+    @CallSuper
     protected void configure(Bundle bundle) {
         // Add the default configuration parameters given to the service intents
         config.putExtras(bundle,
                 KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, DEFAULT_GROUP_ID_KEY,
                 KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
-                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
+                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION, MIN_DISK_SPACE,
+                DISK_SPACE_CHECK_TIMEOUT, DISK_SPACE_CHECK_RENOTIFY, DISK_SPACE_CHECK_ENABLE);
         activity.getAuthState().addToBundle(bundle);
     }
 

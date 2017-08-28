@@ -111,6 +111,8 @@ public final class AppAuthState {
         return expiration > System.currentTimeMillis();
     }
 
+    public boolean isInvalidated() { return expiration == 0L; }
+
     /** Convert the state into the extras of a new Intent. */
     @NonNull
     public Intent toIntent() {

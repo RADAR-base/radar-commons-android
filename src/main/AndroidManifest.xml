@@ -7,7 +7,6 @@
     <application android:allowBackup="true" android:label="@string/app_name"
         android:supportsRtl="true">
 
-        <service android:name=".kafka.DataSendService" />
+        <service android:name=".util.DiskSpaceService"/>
     </application>
-
 </manifest>

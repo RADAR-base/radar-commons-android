@@ -28,13 +28,16 @@ import org.radarcns.application.ApplicationUptime;
 import org.radarcns.data.Record;
 import org.radarcns.key.MeasurementKey;
 import org.radarcns.topic.AvroTopic;
+import org.radarcns.util.ActiveAudioRecording;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static org.junit.Assert.assertEquals;
@@ -107,6 +110,33 @@ public class TapeCacheTest {
         assertEquals(new Pair<>(2L, 0L), tapeCache.numberOfRecords());
     }
 
+    @Test
+    public void testBinaryObject() throws IOException {
+        AvroTopic<MeasurementKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
+                MeasurementKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                MeasurementKey.class, ActiveAudioRecording.class);
+        TapeCache<MeasurementKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
+                RuntimeEnvironment.application.getApplicationContext(),
+                topic, executorFactory);
+
+        localTapeCache.setMaximumSize(45000000);
+        localTapeCache.setTimeWindow(100);
+
+        Random random = new Random();
+        byte[] data = new byte[176482];
+        random.nextBytes(data);
+        ByteBuffer buffer = ByteBuffer.wrap(data);
+        ActiveAudioRecording localValue = new ActiveAudioRecording(buffer);
+
+        localTapeCache.addMeasurement(key, localValue);
+        localTapeCache.flush();
+        List<Record<MeasurementKey, ActiveAudioRecording>> records = localTapeCache.unsentRecords(100);
+
+        assertEquals(1, records.size());
+        Record<MeasurementKey, ActiveAudioRecording> firstRecord = records.get(0);
+        assertEquals(firstRecord.key, key);
+        assertEquals(firstRecord.value, localValue);
+    }
 
     @Test
     public void flush() throws Exception {

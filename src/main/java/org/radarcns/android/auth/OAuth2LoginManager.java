@@ -19,6 +19,8 @@ package org.radarcns.android.auth;
 import android.content.Intent;
 import android.support.annotation.NonNull;
 
+import org.radarcns.android.RadarConfiguration;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Header;
 import io.jsonwebtoken.Jwt;
@@ -46,7 +48,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         if (authState.isValid()) {
             return authState;
         }
-        if (authState.getTokenType() == AUTH_TYPE_BEARER && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
+        if (authState.getTokenType() == AUTH_TYPE_BEARER && !authState.isInvalidated() && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
             OAuth2StateManager.getInstance(activity).refresh(activity);
         }
         return null;
@@ -54,7 +56,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
 
     @Override
     public void start() {
-        OAuth2StateManager.getInstance(activity).login(activity, activity.getConfig());
+        OAuth2StateManager.getInstance(activity).login(activity, RadarConfiguration.getInstance());
     }
 
     @Override

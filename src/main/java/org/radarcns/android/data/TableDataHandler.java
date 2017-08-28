@@ -19,17 +19,11 @@ package org.radarcns.android.data;
 import android.content.Context;
 import android.os.Process;
 import android.support.annotation.NonNull;
-
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.android.util.AndroidThreadFactory;
-import org.radarcns.android.util.AtomicFloat;
-import org.radarcns.android.util.BatteryLevelReceiver;
-import org.radarcns.android.util.NetworkConnectedReceiver;
-import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
-import org.radarcns.android.util.SingleThreadExecutorFactory;
+import org.radarcns.android.util.*;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.SpecificRecordEncoder;
 import org.radarcns.key.MeasurementKey;
@@ -40,14 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.ThreadFactory;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -60,13 +47,11 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
 
     public static final long DATA_RETENTION_DEFAULT = 86400000L;
     public static final int SEND_LIMIT_DEFAULT = 1000;
-    public static final long CLEAN_RATE_DEFAULT = 3600L;
     public static final long UPLOAD_RATE_DEFAULT = 10L;
     public static final long SENDER_CONNECTION_TIMEOUT_DEFAULT = 10L;
     public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
     public static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
-    private final ThreadFactory threadFactory;
     private final Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> tables;
     private final Set<ServerStatusListener> statusListeners;
     private final SingleThreadExecutorFactory executorFactory;
@@ -79,12 +64,11 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private int kafkaRecordsSendLimit;
     private final AtomicLong dataRetention;
     private long kafkaUploadRate;
-    private long kafkaCleanRate;
     private long senderConnectionTimeout;
 
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
-    private KafkaDataSubmitter<MeasurementKey, SpecificRecord> submitter;
+    private KafkaDataSubmitter<SpecificRecord> submitter;
     private RestSender<MeasurementKey, SpecificRecord> sender;
     private final AtomicFloat minimumBatteryLevel;
     private boolean useCompression;
@@ -99,7 +83,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
-        this.kafkaCleanRate = CLEAN_RATE_DEFAULT;
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
         this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
@@ -125,7 +108,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         sender = null;
 
         statusListeners = new HashSet<>();
-        this.threadFactory = new AndroidThreadFactory("DataHandler", android.os.Process.THREAD_PRIORITY_BACKGROUND);
 
         if (kafkaUrl != null) {
             doEnableSubmitter();
@@ -171,8 +153,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
                 .useCompression(useCompression)
                 .headers(authState.getHeaders())
                 .build();
-        this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
-                kafkaRecordsSendLimit, getPreferredUploadRate(), kafkaCleanRate);
+        this.submitter = new KafkaDataSubmitter<>(this, sender, kafkaRecordsSendLimit,
+                getPreferredUploadRate(), authState.getUserId());
     }
 
     public synchronized boolean isStarted() {
@@ -233,6 +215,9 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             this.submitter.close();  // will also close sender
             this.submitter = null;
             this.sender = null;
+        }
+        if (schemaRetriever != null) {
+            schemaRetriever.close();
         }
         clean();
         for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {
@@ -375,17 +360,13 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         updateUploadRate();
     }
 
-    public synchronized void setKafkaCleanRate(long kafkaCleanRate) {
-        if (submitter != null) {
-            submitter.setCleanRate(kafkaCleanRate);
-        }
-        this.kafkaCleanRate = kafkaCleanRate;
-    }
-
     public synchronized void setAuthState(AppAuthState state) {
         this.authState = state;
         if (sender != null) {
             sender.setHeaders(authState.getHeaders());
+        }
+        if (submitter != null) {
+            submitter.setUserId(authState.getUserId());
         }
     }
 
@@ -407,7 +388,11 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         if (sender != null) {
             sender.setSchemaRetriever(schemaRetriever);
         }
+        SchemaRetriever oldSchemaRetriever = this.schemaRetriever;
         this.schemaRetriever = schemaRetriever;
+        if (oldSchemaRetriever != null) {
+            oldSchemaRetriever.close();
+        }
     }
 
     public synchronized void setCompression(boolean useCompression) {

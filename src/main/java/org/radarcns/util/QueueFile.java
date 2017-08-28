@@ -475,6 +475,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
 
             int countAvailable = Math.min(count, totalLength - bytesRead);
             storagePosition = storage.read(storagePosition, bytes, offset, countAvailable);
+
             bytesRead += countAvailable;
             return countAvailable;
         }

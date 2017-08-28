@@ -1,0 +1,110 @@
+/*
+ * Copyright 2017 The Hyve
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.radarcns.android.util;
+
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.Service;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.StatFs;
+import android.support.annotation.Nullable;
+import org.radarcns.android.R;
+import org.radarcns.android.RadarApplication;
+import org.radarcns.android.RadarConfiguration;
+
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static android.app.Notification.DEFAULT_ALL;
+import static android.app.Notification.PRIORITY_HIGH;
+import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_RENOTIFY;
+import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_TIMEOUT;
+import static org.radarcns.android.RadarConfiguration.MIN_DISK_SPACE;
+
+/**
+ * Service to check the available disk space periodically.
+ */
+public final class DiskSpaceService extends Service {
+    public static final int DISK_SPACE_SERVICE_NOTIFICATION = 926988;
+
+    private final AtomicInteger notificationCounter = new AtomicInteger(0);
+    private final AtomicLong lastNotification = new AtomicLong(0);
+    private Handler handler;
+
+    public static long getAvailableSpace() {
+        StatFs statfs = new StatFs(Environment.getRootDirectory().getAbsolutePath());
+        return statfs.getAvailableBlocksLong() * statfs.getBlockSizeLong();
+    }
+
+    @Override
+    public void onCreate() {
+        handler = new Handler();
+    }
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        final int currentCount = notificationCounter.getAndIncrement();
+
+        Bundle extras = intent.getExtras();
+        final long minSpace = RadarConfiguration.getLongExtra(extras, MIN_DISK_SPACE, 300)
+                * 1_000_000;
+        final long timeout = TimeUnit.MINUTES.toMillis(
+                RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_TIMEOUT, 15));
+        final long renotify = TimeUnit.MINUTES.toMillis(
+                RadarConfiguration.getLongExtra(extras, DISK_SPACE_CHECK_RENOTIFY, 24 * 60));
+
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // a new notification was added
+                if (currentCount != notificationCounter.get()) {
+                    return;
+                }
+
+                if (System.currentTimeMillis() - lastNotification.get() >= renotify
+                        && getAvailableSpace() < minSpace) {
+                    notifyFull();
+                    handler.postDelayed(this, renotify);
+                } else {
+                    handler.postDelayed(this, timeout);
+                }
+            }
+        }, timeout);
+
+        return null;
+    }
+
+    private void notifyFull() {
+        Notification notification = ((RadarApplication)getApplication())
+                .updateNotificationAppSettings(new Notification.Builder(this))
+                .setContentTitle(getString(R.string.storage_full))
+                .setContentText(getString(R.string.storage_full_text))
+                .setPriority(PRIORITY_HIGH)
+                .setDefaults(DEFAULT_ALL)
+                .build();
+
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        manager.notify(DISK_SPACE_SERVICE_NOTIFICATION, notification);
+        lastNotification.set(System.currentTimeMillis());
+    }
+}

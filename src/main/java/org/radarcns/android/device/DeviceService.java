@@ -20,19 +20,12 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.os.Binder;
-import android.os.Bundle;
-import android.os.IBinder;
-import android.os.Parcel;
-import android.os.RemoteException;
+import android.content.*;
+import android.os.*;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Pair;
-
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
@@ -41,6 +34,7 @@ import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
+import org.radarcns.android.util.DiskSpaceService;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
 import org.radarcns.key.MeasurementKey;
@@ -51,26 +45,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
-import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
-import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
-import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
-import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
-import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
-import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
-import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
-import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.RadarConfiguration.*;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send store the data of a
@@ -117,21 +95,26 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
     private TableDataHandler dataHandler;
     private DeviceManager deviceScanner;
-    private final LocalBinder mBinder = new LocalBinder();
+    private DeviceBinder mBinder;
     private final AtomicInteger numberOfActivitiesBound = new AtomicInteger(0);
     private boolean isInForeground;
     private boolean isConnected;
     private int latestStartId = -1;
     private String userId;
+    private ServiceConnection diskSpaceChecker;
 
+    @CallSuper
     @Override
     public void onCreate() {
         logger.info("Creating DeviceService {}", this);
         super.onCreate();
+        mBinder = createBinder();
 
         // Register for broadcasts on BluetoothAdapter state change
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         registerReceiver(mBluetoothReceiver, filter);
+
+        diskSpaceChecker = null;
 
         synchronized (this) {
             numberOfActivitiesBound.set(0);
@@ -140,6 +123,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
     }
 
+    @CallSuper
     @Override
     public void onDestroy() {
         logger.info("Destroying DeviceService {}", this);
@@ -148,6 +132,11 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         unregisterReceiver(mBluetoothReceiver);
         stopDeviceManager(unsetDeviceManager());
 
+        if (diskSpaceChecker != null) {
+            unbindService(diskSpaceChecker);
+            diskSpaceChecker = null;
+        }
+
         try {
             dataHandler.close();
         } catch (IOException e) {
@@ -155,6 +144,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
     }
 
+    @CallSuper
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         logger.info("Starting DeviceService {}", this);
@@ -165,7 +155,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             onInvocation(intent.getExtras());
         }
         // If we get killed, after returning from here, restart
-        return START_STICKY;
+        // keep all the configuration from the previous iteration
+        return START_REDELIVER_INTENT;
     }
 
     @Nullable
@@ -175,28 +166,40 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return mBinder;
     }
 
+    @CallSuper
     @Override
     public void onRebind(Intent intent) {
         logger.info("Received (re)bind in {}", this);
         numberOfActivitiesBound.incrementAndGet();
         if (intent != null) {
-            onInvocation(intent.getExtras());
+            Bundle extras = intent.getExtras();
+            onInvocation(extras);
+
+            if (RadarConfiguration.getBooleanExtra(extras, DISK_SPACE_CHECK_ENABLE, false)
+                    && diskSpaceChecker == null) {
+                diskSpaceChecker = new ServiceConnection() {
+                    @Override
+                    public void onServiceConnected(ComponentName name, IBinder service) {
+                        // noop
+                    }
+
+                    @Override
+                    public void onServiceDisconnected(ComponentName name) {
+                        // noop
+                    }
+                };
+
+                Intent diskSpaceIntent = new Intent(this, DiskSpaceService.class);
+                diskSpaceIntent.putExtras(extras);
+                bindService(diskSpaceIntent, diskSpaceChecker, BIND_AUTO_CREATE);
+            }
         }
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
         logger.info("Received unbind in {}", this);
-        int startId = -1;
-        synchronized (this) {
-            if (numberOfActivitiesBound.decrementAndGet() == 0 && !isConnected) {
-                startId = latestStartId;
-            }
-        }
-        if (startId != -1) {
-            logger.info("Stopping self if latest start ID was {}", latestStartId);
-            stopSelf(latestStartId);
-        }
+        stopSelfIfUnconnected();
         return true;
     }
 
@@ -208,17 +211,19 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         sendBroadcast(statusChanged);
     }
 
-    @Override
-    public void deviceStatusUpdated(DeviceManager deviceManager,
-                                    DeviceStatusListener.Status status) {
+
+    private void broadcastDeviceStatus(String name, DeviceStatusListener.Status status) {
         Intent statusChanged = new Intent(DEVICE_STATUS_CHANGED);
         statusChanged.putExtra(DEVICE_STATUS_CHANGED, status.ordinal());
         statusChanged.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-        if (deviceManager.getName() != null) {
-            statusChanged.putExtra(DEVICE_STATUS_NAME, deviceManager.getName());
+        if (name != null) {
+            statusChanged.putExtra(DEVICE_STATUS_NAME, name);
         }
         sendBroadcast(statusChanged);
+    }
 
+    @Override
+    public void deviceStatusUpdated(DeviceManager deviceManager, DeviceStatusListener.Status status) {
         switch (status) {
             case CONNECTED:
                 synchronized (this) {
@@ -227,29 +232,37 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 startBackgroundListener();
                 break;
             case DISCONNECTED:
+                stopBackgroundListener();
+                stopDeviceManager(deviceManager);
                 synchronized (this) {
                     deviceScanner = null;
                     isConnected = false;
                 }
-                stopBackgroundListener();
-                stopDeviceManager(deviceManager);
-                int startId = -1;
-                synchronized (this) {
-                    if (numberOfActivitiesBound.get() == 0) {
-                        startId = latestStartId;
-                    }
-                }
-                if (startId != -1) {
-                    stopSelf(startId);
-                }
+                stopSelfIfUnconnected();
                 break;
             default:
                 // do nothing
                 break;
         }
+        broadcastDeviceStatus(deviceManager.getName(), status);
     }
 
+    /** Stop service if no devices or activities are connected to it. */
+    protected void stopSelfIfUnconnected() {
+        int startId;
+        synchronized (this) {
+            if (numberOfActivitiesBound.get() > 0 || isConnected) {
+                return;
+            }
+            startId = latestStartId;
+        }
+        logger.info("Stopping self if latest start ID was {}", startId);
+        stopSelf(startId);
+    }
+
+    /** Maintain current service in the background. */
     public void startBackgroundListener() {
+        logger.info("Preventing {} to get stopped.", this);
         synchronized (this) {
             if (isInForeground) {
                 return;
@@ -267,28 +280,19 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         Notification.Builder notificationBuilder = new Notification.Builder(
                 getApplicationContext());
         notificationBuilder
-                .setWhen(System.currentTimeMillis())
                 .setContentIntent(intent)
                 .setTicker(getText(R.string.service_notification_ticker))
                 .setContentText(getText(R.string.service_notification_text))
                 .setContentTitle(getText(R.string.service_notification_title));
 
-        if (getApplication() instanceof RadarApplication) {
-            ((RadarApplication)getApplication()).updateNotificationAppSettings(notificationBuilder);
-        } else {
-            notificationBuilder.setSmallIcon(R.drawable.ic_bt_connected);
-        }
-        updateBackgroundNotificationText(notificationBuilder);
+        ((RadarApplication)getApplication()).updateNotificationAppSettings(notificationBuilder);
 
         return notificationBuilder.build();
     }
 
-    protected Notification.Builder updateBackgroundNotificationText(Notification.Builder builder) {
-        // Do not update anything
-        return builder;
-    }
-
+    /** Service no longer needs to be maintained in the background. */
     public void stopBackgroundListener() {
+        logger.info("{} may be stopped.", this);
         synchronized (this) {
             if (!isInForeground) {
                 return;
@@ -312,9 +316,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 } catch (IOException e) {
                     logger.warn("Failed to close device scanner", e);
                 }
-            }
-            if (deviceManager.getState().getStatus() != DeviceStatusListener.Status.DISCONNECTED) {
-                deviceStatusUpdated(deviceManager, DeviceStatusListener.Status.DISCONNECTED);
             }
         }
     }
@@ -373,18 +374,11 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         }
         if (localManager == null) {
             logger.info("Starting recording");
-            localManager = createDeviceManager();
-            boolean didSet;
             synchronized (this) {
                 if (deviceScanner == null) {
-                    deviceScanner = localManager;
-                    didSet = true;
-                } else {
-                    didSet = false;
+                    deviceScanner = createDeviceManager();
+                    deviceScanner.start(acceptableIds);
                 }
-            }
-            if (didSet) {
-                localManager.start(acceptableIds);
             }
         }
         return getDeviceManager().getState();
@@ -392,13 +386,18 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     public void stopRecording() {
         stopDeviceManager(unsetDeviceManager());
+        logger.info("Stopped recording {}", this);
     }
 
-    private class LocalBinder extends Binder implements DeviceServiceBinder {
+    protected class DeviceBinder extends Binder implements DeviceServiceBinder {
         @Override
         public <V extends SpecificRecord> List<Record<MeasurementKey, V>> getRecords(
                 @NonNull AvroTopic<MeasurementKey, V> topic, int limit) throws IOException {
-            return getDataHandler().getCache(topic).getRecords(limit);
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler == null) {
+                return Collections.emptyList();
+            }
+            return localDataHandler.getCache(topic).getRecords(limit);
         }
 
         @Override
@@ -406,9 +405,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             DeviceManager localManager = getDeviceManager();
             if (localManager == null) {
                 return getDefaultState();
-            } else {
-                return localManager.getState();
             }
+            return localManager.getState();
         }
 
         @Override
@@ -416,9 +414,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             DeviceManager localManager = getDeviceManager();
             if (localManager == null) {
                 return null;
-            } else {
-                return localManager.getName();
             }
+            return localManager.getName();
         }
 
         @Override
@@ -433,12 +430,20 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         @Override
         public ServerStatusListener.Status getServerStatus() {
-            return getDataHandler().getStatus();
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler == null) {
+                return ServerStatusListener.Status.DISCONNECTED;
+            }
+            return localDataHandler.getStatus();
         }
 
         @Override
         public Map<String,Integer> getServerRecordsSent() {
-            return getDataHandler().getRecordsSent();
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler == null) {
+                return Collections.emptyMap();
+            }
+            return localDataHandler.getRecordsSent();
         }
 
         @Override
@@ -450,20 +455,23 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         public Pair<Long, Long> numberOfRecords() {
             long unsent = -1L;
             long sent = -1L;
-            for (DataCache<?, ?> cache : getDataHandler().getCaches().values()) {
-                Pair<Long, Long> pair = cache.numberOfRecords();
-                if (pair.first != -1L) {
-                    if (unsent == -1L) {
-                        unsent = pair.first;
-                    } else {
-                        unsent += pair.first;
+            TableDataHandler localDataHandler = getDataHandler();
+            if (localDataHandler != null) {
+                for (DataCache<?, ?> cache : localDataHandler.getCaches().values()) {
+                    Pair<Long, Long> pair = cache.numberOfRecords();
+                    if (pair.first != -1L) {
+                        if (unsent == -1L) {
+                            unsent = pair.first;
+                        } else {
+                            unsent += pair.first;
+                        }
                     }
-                }
-                if (pair.second != -1L) {
-                    if (sent == -1L) {
-                        sent = pair.second;
-                    } else {
-                        sent += pair.second;
+                    if (pair.second != -1L) {
+                        if (sent == -1L) {
+                            sent = pair.second;
+                        } else {
+                            sent += pair.second;
+                        }
                     }
                 }
             }
@@ -483,9 +491,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     /**
      * Override this function to get any parameters from the given intent.
-     * Also call the superclass.
      * @param bundle intent extras that the activity provided.
      */
+    @CallSuper
     protected void onInvocation(Bundle bundle) {
         TableDataHandler localDataHandler;
 
@@ -556,10 +564,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             localDataHandler.setKafkaUploadRate(
                     RadarConfiguration.getLongExtra(bundle, KAFKA_UPLOAD_RATE_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, KAFKA_CLEAN_RATE_KEY)) {
-            localDataHandler.setKafkaCleanRate(
-                    RadarConfiguration.getLongExtra(bundle, KAFKA_CLEAN_RATE_KEY));
-        }
         if (RadarConfiguration.hasExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY)) {
             localDataHandler.setKafkaRecordsSendLimit(
                     RadarConfiguration.getIntExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY));
@@ -596,8 +600,24 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return deviceScanner;
     }
 
+    /** Get the service local binder. */
+    @NonNull
+    protected DeviceBinder createBinder() {
+        return new DeviceBinder();
+    }
+
     /** User ID to send data for. */
     public String getUserId() {
         return userId;
+    }
+
+    @Override
+    public String toString() {
+        DeviceManager localManager = getDeviceManager();
+        if (localManager == null) {
+            return getClass().getSimpleName() + "<null>";
+        } else {
+            return getClass().getSimpleName() + "<" + localManager.getName() + ">";
+        }
     }
 }
