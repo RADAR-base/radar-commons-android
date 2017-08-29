@@ -19,6 +19,8 @@ package org.radarcns.android;
 import android.app.Application;
 import android.app.Notification;
 import android.graphics.Bitmap;
+import android.os.Bundle;
+import org.radarcns.android.device.DeviceService;
 
 /** Provides the name and some metadata of the main activity */
 public abstract class RadarApplication extends Application {
@@ -34,4 +36,7 @@ public abstract class RadarApplication extends Application {
     public abstract Bitmap getLargeIcon();
     /** Small icon drawable resource ID. */
     public abstract int getSmallIcon();
+
+    public void onDeviceServiceInvocation(DeviceService service, Bundle bundle, boolean isNew) {}
+    public void onDeviceServiceDestroy(DeviceService service) {}
 }

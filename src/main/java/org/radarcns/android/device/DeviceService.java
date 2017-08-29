@@ -34,7 +34,6 @@ import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.android.util.DiskSpaceService;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
 import org.radarcns.key.MeasurementKey;
@@ -101,7 +100,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private boolean isConnected;
     private int latestStartId = -1;
     private String userId;
-    private ServiceConnection diskSpaceChecker;
 
     @CallSuper
     @Override
@@ -113,8 +111,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         // Register for broadcasts on BluetoothAdapter state change
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         registerReceiver(mBluetoothReceiver, filter);
-
-        diskSpaceChecker = null;
 
         synchronized (this) {
             numberOfActivitiesBound.set(0);
@@ -131,11 +127,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         // Unregister broadcast listeners
         unregisterReceiver(mBluetoothReceiver);
         stopDeviceManager(unsetDeviceManager());
-
-        if (diskSpaceChecker != null) {
-            unbindService(diskSpaceChecker);
-            diskSpaceChecker = null;
-        }
+        ((RadarApplication)getApplicationContext()).onDeviceServiceDestroy(this);
 
         try {
             dataHandler.close();
@@ -170,29 +162,14 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     @Override
     public void onRebind(Intent intent) {
         logger.info("Received (re)bind in {}", this);
-        numberOfActivitiesBound.incrementAndGet();
+        boolean isNew = numberOfActivitiesBound.getAndIncrement() == 0;
+        RadarApplication application = (RadarApplication)getApplicationContext();
         if (intent != null) {
             Bundle extras = intent.getExtras();
             onInvocation(extras);
-
-            if (RadarConfiguration.getBooleanExtra(extras, DISK_SPACE_CHECK_ENABLE, false)
-                    && diskSpaceChecker == null) {
-                diskSpaceChecker = new ServiceConnection() {
-                    @Override
-                    public void onServiceConnected(ComponentName name, IBinder service) {
-                        // noop
-                    }
-
-                    @Override
-                    public void onServiceDisconnected(ComponentName name) {
-                        // noop
-                    }
-                };
-
-                Intent diskSpaceIntent = new Intent(this, DiskSpaceService.class);
-                diskSpaceIntent.putExtras(extras);
-                bindService(diskSpaceIntent, diskSpaceChecker, BIND_AUTO_CREATE);
-            }
+            application.onDeviceServiceInvocation(this, extras, isNew);
+        } else {
+            application.onDeviceServiceInvocation(this, null, isNew);
         }
     }
 
