@@ -37,6 +37,7 @@ public abstract class RadarApplication extends Application {
     /** Small icon drawable resource ID. */
     public abstract int getSmallIcon();
 
+    public void configureProvider(RadarConfiguration config, Bundle bundle) {}
     public void onDeviceServiceInvocation(DeviceService service, Bundle bundle, boolean isNew) {}
     public void onDeviceServiceDestroy(DeviceService service) {}
 }

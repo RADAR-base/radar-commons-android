@@ -24,6 +24,7 @@ import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 
 import org.radarcns.android.MainActivity;
+import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,15 +35,11 @@ import java.util.Objects;
 import java.util.Scanner;
 
 import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
-import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_ENABLE;
-import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_RENOTIFY;
-import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_TIMEOUT;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
-import static org.radarcns.android.RadarConfiguration.MIN_DISK_SPACE;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
@@ -195,8 +192,8 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, DEFAULT_GROUP_ID_KEY,
                 KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
-                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION, MIN_DISK_SPACE,
-                DISK_SPACE_CHECK_TIMEOUT, DISK_SPACE_CHECK_RENOTIFY, DISK_SPACE_CHECK_ENABLE);
+                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
+        ((RadarApplication)activity.getApplicationContext()).configureProvider(config, bundle);
         activity.getAuthState().addToBundle(bundle);
     }
 
