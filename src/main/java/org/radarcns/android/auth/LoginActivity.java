@@ -21,6 +21,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 
+import android.widget.Toast;
 import org.radarcns.android.R;
 import org.radarcns.android.util.Boast;
 import org.slf4j.Logger;
@@ -43,7 +44,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         startedFromActivity = Objects.equals(getIntent().getAction(), ACTION_LOGIN);
 
         if (startedFromActivity) {
-            Boast.makeText(this, R.string.login_failed).show();
+            Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
         }
 
         AppAuthState appAuth = AppAuthState.read(this);
@@ -91,7 +92,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
     public void loginFailed(LoginManager manager, Exception ex) {
         logger.error("Failed to log in with {}", manager, ex);
-        Boast.makeText(this, R.string.login_failed).show();
+        Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
     }
 
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
