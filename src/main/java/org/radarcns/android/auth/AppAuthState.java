@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Base64;
@@ -43,6 +44,7 @@ public final class AppAuthState {
     public static final String LOGIN_TOKEN = "org.radarcns.android.auth.AppAuthState.token";
     public static final String LOGIN_TOKEN_TYPE = "org.radarcns.android.auth.AppAuthState.tokenType";
     public static final String LOGIN_EXPIRATION = "org.radarcns.android.auth.AppAuthState.expiration";
+    public static final String LOGIN_UPDATE = "org.radarcns.android.auth.AppAuthState.lastUpdate";
     private static final String AUTH_PREFS = "org.radarcns.auth";
     private static final String LOGIN_PROPERTIES = "org.radarcns.android.auth.AppAuthState.properties";
     private static final String LOGIN_HEADERS = "org.radarcns.android.auth.AppAuthState.headers";
@@ -52,18 +54,26 @@ public final class AppAuthState {
     private final String token;
     private final int tokenType;
     private long expiration;
+    private long lastUpdate;
     private final HashMap<String, String> properties;
     private final ArrayList<Map.Entry<String, String>> headers;
 
     public AppAuthState(@Nullable String userId, @Nullable String token,
                         @Nullable HashMap<String, String> properties, int tokenType, long expiration,
                         @Nullable ArrayList<Map.Entry<String, String>> headers) {
+        this(userId, token, properties, tokenType, expiration, headers, SystemClock.elapsedRealtime());
+    }
+
+    private AppAuthState(@Nullable String userId, @Nullable String token,
+                        @Nullable HashMap<String, String> properties, int tokenType, long expiration,
+                        @Nullable ArrayList<Map.Entry<String, String>> headers, long lastUpdate) {
         this.userId = userId;
         this.token = token;
         this.tokenType = tokenType;
         this.expiration = expiration;
         this.properties = properties == null ? new HashMap<String, String>() : properties;
         this.headers = headers == null ? new ArrayList<Map.Entry<String, String>>() : headers;
+        this.lastUpdate = lastUpdate;
     }
 
     @SuppressWarnings("unchecked")
@@ -72,7 +82,8 @@ public final class AppAuthState {
                 bundle.getString(LOGIN_TOKEN),
                 (HashMap<String, String>)bundle.getSerializable(LOGIN_PROPERTIES),
                 bundle.getInt(LOGIN_TOKEN_TYPE, 0), bundle.getLong(LOGIN_EXPIRATION, 0L),
-                (ArrayList<Map.Entry<String, String>>)bundle.getSerializable(LOGIN_HEADERS));
+                (ArrayList<Map.Entry<String, String>>)bundle.getSerializable(LOGIN_HEADERS),
+                bundle.getLong(LOGIN_UPDATE));
     }
 
     @Nullable
@@ -134,6 +145,7 @@ public final class AppAuthState {
         bundle.putString(LOGIN_TOKEN, token);
         bundle.putInt(LOGIN_TOKEN_TYPE, tokenType);
         bundle.putLong(LOGIN_EXPIRATION, expiration);
+        bundle.putLong(LOGIN_UPDATE, lastUpdate);
         return bundle;
     }
 
@@ -148,7 +160,8 @@ public final class AppAuthState {
 
         return new AppAuthState(prefs.getString(LOGIN_USER_ID, null),
                 prefs.getString(LOGIN_TOKEN, null), props,
-                prefs.getInt(LOGIN_TOKEN_TYPE, 0), prefs.getLong(LOGIN_EXPIRATION, 0L), headers);
+                prefs.getInt(LOGIN_TOKEN_TYPE, 0), prefs.getLong(LOGIN_EXPIRATION, 0L), headers,
+                prefs.getLong(LOGIN_UPDATE, 0L));
     }
 
     public void store(@NonNull Context context) {
@@ -160,6 +173,7 @@ public final class AppAuthState {
                 .putString(LOGIN_PROPERTIES, getSerialization(LOGIN_PROPERTIES, properties))
                 .putInt(LOGIN_TOKEN_TYPE, tokenType)
                 .putLong(LOGIN_EXPIRATION, expiration)
+                .putLong(LOGIN_UPDATE, lastUpdate)
                 .apply();
     }
 
@@ -200,5 +214,9 @@ public final class AppAuthState {
             }
         }
         return null;
+    }
+
+    public long timeSinceLastUpdate() {
+        return SystemClock.elapsedRealtime() - lastUpdate;
     }
 }

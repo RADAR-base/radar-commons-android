@@ -616,8 +616,8 @@ public abstract class MainActivity extends Activity {
 
         if (status == ServerStatusListener.Status.UNAUTHORIZED) {
             synchronized (this) {
-                // login already started
-                if (authState.isInvalidated()) {
+                // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
+                if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
                     return;
                 }
                 authState.invalidate(this);
