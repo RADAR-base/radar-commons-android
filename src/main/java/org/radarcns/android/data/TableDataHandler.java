@@ -19,6 +19,7 @@ package org.radarcns.android.data;
 import android.content.Context;
 import android.os.Process;
 import android.support.annotation.NonNull;
+import okhttp3.Headers;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
@@ -27,8 +28,8 @@ import org.radarcns.android.util.*;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.SpecificRecordEncoder;
 import org.radarcns.key.MeasurementKey;
-import org.radarcns.producer.SchemaRetriever;
 import org.radarcns.producer.rest.RestSender;
+import org.radarcns.producer.rest.SchemaRetriever;
 import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -363,7 +364,14 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public synchronized void setAuthState(AppAuthState state) {
         this.authState = state;
         if (sender != null) {
-            sender.setHeaders(authState.getHeaders());
+            ArrayList<Map.Entry<String, String>> authHeaders = authState.getHeaders();
+            Headers.Builder builder = new Headers.Builder();
+            if (authHeaders != null) {
+                for (Map.Entry<String, String> header : authHeaders) {
+                    builder.add(header.getKey(), header.getValue());
+                }
+            }
+            sender.setHeaders(builder.build());
         }
         if (submitter != null) {
             submitter.setUserId(authState.getUserId());

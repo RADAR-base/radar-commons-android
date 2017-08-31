@@ -37,7 +37,7 @@ import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
 import org.radarcns.key.MeasurementKey;
-import org.radarcns.producer.SchemaRetriever;
+import org.radarcns.producer.rest.SchemaRetriever;
 import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
