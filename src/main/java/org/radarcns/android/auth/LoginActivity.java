@@ -73,7 +73,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
     /**
      * Create your login managers here. Be sure to call the appropriate login manager's start()
-     * method if the user indicates that login method
+     * method if the user indicates that login method.
      * @param appAuth previous invalid authentication
      * @return non-empty list of login managers to use
      */
