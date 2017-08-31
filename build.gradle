@@ -79,7 +79,7 @@ dependencies {
     compile 'com.google.firebase:firebase-config:11.0.4'
     compile 'net.openid:appauth:0.6.1'
     compile 'io.jsonwebtoken:jjwt:0.7.0'
-    compile ('org.radarcns:radar-commons:0.4.2') {
+    compile ('org.radarcns:radar-commons:0.5') {
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
