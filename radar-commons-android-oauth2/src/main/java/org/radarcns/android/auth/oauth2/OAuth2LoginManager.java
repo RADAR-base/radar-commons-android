@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.android.auth;
+package org.radarcns.android.auth.oauth2;
 
 import android.content.Intent;
 import android.support.annotation.NonNull;
@@ -26,11 +26,14 @@ import io.jsonwebtoken.Header;
 import io.jsonwebtoken.Jwt;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.auth.LoginListener;
+import org.radarcns.android.auth.LoginManager;
 
 /**
  * Authenticates against the RADAR Management Portal.
  */
-
 public class OAuth2LoginManager implements LoginManager, LoginListener {
     public static final String LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken";
     private final String userIdClaim;
@@ -48,7 +51,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         if (authState.isValid()) {
             return authState;
         }
-        if (authState.getTokenType() == AUTH_TYPE_BEARER && !authState.isInvalidated() && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
+        if (authState.getTokenType() == LoginManager.AUTH_TYPE_BEARER && !authState.isInvalidated() && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
             OAuth2StateManager.getInstance(activity).refresh(activity);
         }
         return null;
@@ -77,7 +80,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
             long expiration = jwt.getBody().getExpiration().getTime();
 
             appAuthState = new AppAuthState(userId, appAuthState.getToken(),
-                    appAuthState.getProperties(), AUTH_TYPE_BEARER, expiration, appAuthState.getHeaders());
+                    appAuthState.getProperties(), LoginManager.AUTH_TYPE_BEARER, expiration, appAuthState.getHeaders());
             this.activity.loginSucceeded(this, appAuthState);
         } catch (JwtException ex) {
             this.activity.loginFailed(this, ex);

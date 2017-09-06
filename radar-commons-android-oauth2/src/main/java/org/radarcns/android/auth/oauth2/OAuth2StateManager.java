@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.android.auth;
+package org.radarcns.android.auth.oauth2;
 
 import android.app.PendingIntent;
 import android.content.Context;
@@ -37,6 +37,9 @@ import net.openid.appauth.TokenResponse;
 
 import org.json.JSONException;
 import org.radarcns.android.RadarConfiguration;
+import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.auth.LoginManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,12 +49,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.radarcns.android.RadarConfiguration.OAUTH2_AUTHORIZE_URL;
-import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_ID;
-import static org.radarcns.android.RadarConfiguration.OAUTH2_REDIRECT_URL;
-import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
-import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_BEARER;
-import static org.radarcns.android.auth.OAuth2LoginManager.LOGIN_REFRESH_TOKEN;
+import static org.radarcns.android.auth.oauth2.OAuth2LoginManager.LOGIN_REFRESH_TOKEN;
 
 public class OAuth2StateManager {
     private static final int OAUTH_INTENT_HANDLER_REQUEST_CODE = 8422341;
@@ -91,10 +89,10 @@ public class OAuth2StateManager {
 
     @AnyThread
     public synchronized void login(@NonNull LoginActivity context, @NonNull RadarConfiguration config) {
-        Uri authorizeUri = Uri.parse(config.getString(OAUTH2_AUTHORIZE_URL));
-        Uri tokenUri = Uri.parse(config.getString(OAUTH2_TOKEN_URL));
-        Uri redirectUri = Uri.parse(config.getString(OAUTH2_REDIRECT_URL));
-        String clientId = config.getString(OAUTH2_CLIENT_ID);
+        Uri authorizeUri = Uri.parse(config.getString(RadarConfiguration.OAUTH2_AUTHORIZE_URL));
+        Uri tokenUri = Uri.parse(config.getString(RadarConfiguration.OAUTH2_TOKEN_URL));
+        Uri redirectUri = Uri.parse(config.getString(RadarConfiguration.OAUTH2_REDIRECT_URL));
+        String clientId = config.getString(RadarConfiguration.OAUTH2_CLIENT_ID);
 
         AuthorizationServiceConfiguration authConfig =
                 new AuthorizationServiceConfiguration(authorizeUri, tokenUri, null);
@@ -164,7 +162,7 @@ public class OAuth2StateManager {
                     headers.add(new AbstractMap.SimpleImmutableEntry<>("Authorization", "Bearer " + mCurrentAuthState.getAccessToken()));
                     AppAuthState state = new AppAuthState(null,
                             mCurrentAuthState.getAccessToken(), props,
-                            AUTH_TYPE_BEARER, expiration, headers);
+                            LoginManager.AUTH_TYPE_BEARER, expiration, headers);
                     context.loginSucceeded(null, state);
                 } else {
                     context.loginFailed(null, ex);

@@ -22,7 +22,6 @@ android {
         targetSdkVersion 26
         versionCode 5
         versionName '0.3-SNAPSHOT'
-        manifestPlaceholders = ['appAuthRedirectScheme': 'org.radarcns.android']
     }
     lintOptions {
         abortOnError false
@@ -72,19 +71,23 @@ repositories {
 }
 
 dependencies {
-    compile 'com.journeyapps:zxing-android-embedded:3.5.0'
-    compile 'com.squareup.okhttp3:okhttp:3.6.0'
-    compile 'org.apache.avro:avro:1.8.1'
-    compile 'org.xerial.snappy:snappy-java:1.1.2.6'
+    compile 'com.squareup.okhttp3:okhttp:3.8.0'
+    compile ('org.apache.avro:avro:1.8.2') {
+        exclude group: 'com.thoughtworks.paranamer'
+        exclude group: 'org.xerial.snappy'
+        exclude group: 'org.tukaani'
+        exclude group: 'org.apache.commons', module: 'commons-compress'
+    }
     compile 'com.google.firebase:firebase-config:11.0.4'
-    compile 'net.openid:appauth:0.6.1'
-    compile 'io.jsonwebtoken:jjwt:0.7.0'
     compile ('org.radarcns:radar-commons:0.5') {
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
+        exclude group: 'org.apache.avro'
     }
-    compile 'org.radarcns:radar-schemas-commons:0.2-alpha.1'
+    compile ('org.radarcns:radar-schemas-commons:0.2-alpha.2') {
+        exclude group: 'org.apache.avro'
+    }
 
     testCompile 'junit:junit:4.12'
     testCompile 'org.slf4j:slf4j-simple:1.7.21'
