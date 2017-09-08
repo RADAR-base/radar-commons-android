@@ -66,11 +66,13 @@ allprojects {
             exclude group: 'org.apache.commons', module: 'commons-compress'
         }
         compile 'com.google.firebase:firebase-config:11.0.4'
-        compile('org.radarcns:radar-commons:0.5') {
+        compile('org.radarcns:radar-commons:0.5.1-SNAPSHOT') {
             exclude group: 'io.confluent', module: 'kafka-avro-serializer'
             exclude group: 'org.apache.kafka', module: 'kafka-clients'
             exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
+            exclude group: 'com.fasterxml.jackson.core'
             exclude group: 'org.apache.avro'
+            exclude group: 'org.json'
         }
         compile('org.radarcns:radar-schemas-commons:0.2-alpha.2') {
             exclude group: 'org.apache.avro'
