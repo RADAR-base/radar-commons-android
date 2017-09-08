@@ -1,2 +1,2 @@
-include ':radar-commons-android-oauth2'
-include ':radar-commons-android-qr'
+include ':radar-android-login-oauth2'
+include ':radar-android-login-qr'
