@@ -191,6 +191,7 @@ public abstract class MainActivity extends Activity {
             finish();
             return;
         }
+        radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
         radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
 
         onConfigChanged();
@@ -362,6 +363,7 @@ public abstract class MainActivity extends Activity {
                 throw new IllegalStateException("Login should not be cancellable");
             }
             authState = AppAuthState.Builder.from(result.getExtras()).build();
+            radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
             radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
             onConfigChanged();
             for (DeviceServiceProvider provider : mConnections) {
