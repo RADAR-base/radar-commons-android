@@ -26,7 +26,7 @@ import android.util.Pair;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.data.Record;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.Strings;
 import org.slf4j.Logger;
@@ -73,10 +73,10 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
         }
     }
 
-    public <V extends SpecificRecord> List<Record<MeasurementKey, V>> getRecords(@NonNull AvroTopic<MeasurementKey, V> topic, int limit) throws IOException {
-        LinkedList<Record<MeasurementKey, V>> result = new LinkedList<>();
+    public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(@NonNull AvroTopic<ObservationKey, V> topic, int limit) throws IOException {
+        LinkedList<Record<ObservationKey, V>> result = new LinkedList<>();
 
-        for (Record<MeasurementKey, V> record : serviceBinder.getRecords(topic, limit)) {
+        for (Record<ObservationKey, V> record : serviceBinder.getRecords(topic, limit)) {
             result.addFirst(record);
         }
 

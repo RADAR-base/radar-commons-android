@@ -36,7 +36,7 @@ import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.SchemaRetriever;
 import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
@@ -332,7 +332,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
      * Topics that should cache information. This implementation returns all topics in
      * getTopics().getTopics().
      */
-    protected List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> getCachedTopics() {
+    protected List<AvroTopic<ObservationKey, ? extends SpecificRecord>> getCachedTopics() {
         return getTopics().getTopics();
     }
 
@@ -368,8 +368,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
         @Override
-        public <V extends SpecificRecord> List<Record<MeasurementKey, V>> getRecords(
-                @NonNull AvroTopic<MeasurementKey, V> topic, int limit) throws IOException {
+        public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(
+                @NonNull AvroTopic<ObservationKey, V> topic, int limit) throws IOException {
             TableDataHandler localDataHandler = getDataHandler();
             if (localDataHandler == null) {
                 return Collections.emptyList();

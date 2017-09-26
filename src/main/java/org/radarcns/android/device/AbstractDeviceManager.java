@@ -19,7 +19,7 @@ package org.radarcns.android.device;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 
 import java.io.IOException;
@@ -77,17 +77,17 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
     }
 
     /** Send a single record, using the cache to persist the data. */
-    protected <V extends SpecificRecord> void send(DataCache<MeasurementKey, V> table, V value) {
+    protected <V extends SpecificRecord> void send(DataCache<ObservationKey, V> table, V value) {
         dataHandler.addMeasurement(table, deviceStatus.getId(), value);
     }
 
     /** Try to send a single record without any caching mechanism. */
-    protected <V extends SpecificRecord> void trySend(AvroTopic<MeasurementKey, V> topic, long offset, V value) {
+    protected <V extends SpecificRecord> void trySend(AvroTopic<ObservationKey, V> topic, long offset, V value) {
         dataHandler.trySend(topic, offset, deviceStatus.getId(), value);
     }
 
     /** Get a data cache to send data with at a later time. */
-    protected <V extends SpecificRecord> DataCache<MeasurementKey, V> getCache(AvroTopic<MeasurementKey, V> topic) {
+    protected <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(AvroTopic<ObservationKey, V> topic) {
         return dataHandler.getCache(topic);
     }
 
@@ -135,7 +135,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
         return "DeviceManager{name='" + deviceName + "', status=" + deviceStatus + '}';
     }
 
-    /** Tests equality based on the device MeasurementKey. */
+    /** Tests equality based on the device ObservationKey. */
     @Override
     public boolean equals(Object other) {
         if (other == this) {

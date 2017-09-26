@@ -27,7 +27,7 @@ import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.*;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.SpecificRecordEncoder;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.RestSender;
 import org.radarcns.producer.rest.SchemaRetriever;
 import org.radarcns.topic.AvroTopic;
@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Stores data in databases and sends it to the server.
  */
-public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRecord>, BatteryLevelReceiver.BatteryLevelListener, NetworkConnectedReceiver.NetworkConnectedListener {
+public class TableDataHandler implements DataHandler<ObservationKey, SpecificRecord>, BatteryLevelReceiver.BatteryLevelListener, NetworkConnectedReceiver.NetworkConnectedListener {
     private static final Logger logger = LoggerFactory.getLogger(TableDataHandler.class);
 
     public static final long DATA_RETENTION_DEFAULT = 86400000L;
@@ -53,7 +53,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
     public static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
-    private final Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> tables;
+    private final Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> tables;
     private final Set<ServerStatusListener> statusListeners;
     private final SingleThreadExecutorFactory executorFactory;
     private final BatteryLevelReceiver batteryLevelReceiver;
@@ -70,7 +70,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
     private KafkaDataSubmitter<SpecificRecord> submitter;
-    private RestSender<MeasurementKey, SpecificRecord> sender;
+    private RestSender<ObservationKey, SpecificRecord> sender;
     private final AtomicFloat minimumBatteryLevel;
     private boolean useCompression;
 
@@ -78,7 +78,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> topics,
+                            List<AvroTopic<ObservationKey, ? extends SpecificRecord>> topics,
                             int maxBytes, boolean sendOnlyWithWifi, AppAuthState authState)
             throws IOException {
         this.kafkaConfig = kafkaUrl;
@@ -97,8 +97,8 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.authState = authState;
 
         tables = new HashMap<>(topics.size() * 2);
-        for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
-            DataCache<MeasurementKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
+        for (AvroTopic<ObservationKey, ? extends SpecificRecord> topic : topics) {
+            DataCache<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
                     .getOrCreateCache(context.getApplicationContext(), topic);
             cache.setMaximumSize(maxBytes);
             tables.put(topic, cache);
@@ -146,7 +146,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
 
         updateServerStatus(Status.CONNECTING);
-        this.sender = new RestSender.Builder<MeasurementKey, SpecificRecord>()
+        this.sender = new RestSender.Builder<ObservationKey, SpecificRecord>()
                 .server(kafkaConfig)
                 .schemaRetriever(schemaRetriever)
                 .encoders(new SpecificRecordEncoder(false), new SpecificRecordEncoder(false))
@@ -221,7 +221,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             schemaRetriever.close();
         }
         clean();
-        for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {
+        for (DataCache<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
         }
         executorFactory.close();
@@ -230,7 +230,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     @Override
     public void clean() {
         long timestamp = (System.currentTimeMillis() - dataRetention.get());
-        for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {
+        for (DataCache<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.removeBeforeTimestamp(timestamp);
         }
     }
@@ -239,7 +239,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      * Try to submit given data. This will only send data if the submitter is active and there is
      * a connection with the server. Otherwise, the data is discarded.
      */
-    public synchronized boolean trySend(AvroTopic topic, long offset, MeasurementKey deviceId,
+    public synchronized boolean trySend(AvroTopic topic, long offset, ObservationKey deviceId,
                                         SpecificRecord record) {
         return submitter != null && submitter.trySend(topic, offset, deviceId, record);
     }
@@ -267,12 +267,12 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      */
     @SuppressWarnings("unchecked")
     @Override
-    public <V extends SpecificRecord> DataCache<MeasurementKey, V> getCache(AvroTopic<MeasurementKey, V> topic) {
-        return (DataCache<MeasurementKey, V>)this.tables.get(topic);
+    public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(AvroTopic<ObservationKey, V> topic) {
+        return (DataCache<ObservationKey, V>)this.tables.get(topic);
     }
 
     @Override
-    public <V extends SpecificRecord> void addMeasurement(DataCache<MeasurementKey, V> table, MeasurementKey key, V value) {
+    public <V extends SpecificRecord> void addMeasurement(DataCache<ObservationKey, V> table, ObservationKey key, V value) {
         table.addMeasurement(key, value);
     }
 
@@ -283,7 +283,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
     }
 
-    public Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> getCaches() {
+    public Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> getCaches() {
         return tables;
     }
 

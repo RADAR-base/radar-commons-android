@@ -24,9 +24,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
-import org.radarcns.application.ApplicationUptime;
+import org.radarcns.monitor.application.ApplicationUptime;
 import org.radarcns.data.Record;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.ActiveAudioRecording;
 import org.robolectric.RobolectricTestRunner;
@@ -46,15 +46,15 @@ import static org.junit.Assert.assertEquals;
 @Config(manifest = Config.NONE)
 public class TapeCacheTest {
     private SharedSingleThreadExecutorFactory executorFactory;
-    private TapeCache<MeasurementKey, ApplicationUptime> tapeCache;
-    private MeasurementKey key;
+    private TapeCache<ObservationKey, ApplicationUptime> tapeCache;
+    private ObservationKey key;
     private ApplicationUptime value;
 
     @Before
     public void setUp() throws IOException {
-        AvroTopic<MeasurementKey, ApplicationUptime> topic = new AvroTopic<>("test",
-                MeasurementKey.getClassSchema(), ApplicationUptime.getClassSchema(),
-                MeasurementKey.class, ApplicationUptime.class);
+        AvroTopic<ObservationKey, ApplicationUptime> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
+                ObservationKey.class, ApplicationUptime.class);
         executorFactory = new SharedSingleThreadExecutorFactory(
                 new AndroidThreadFactory("test", THREAD_PRIORITY_BACKGROUND));
         tapeCache = new TapeCache<>(
@@ -63,9 +63,9 @@ public class TapeCacheTest {
         tapeCache.setMaximumSize(4096);
         tapeCache.setTimeWindow(100);
 
-        key = new MeasurementKey("a", "b");
+        key = new ObservationKey("test", "a", "b");
         double time = System.currentTimeMillis() / 1000d;
-        value = new ApplicationUptime(time, time, System.nanoTime() / 1_000_000_000d);
+        value = new ApplicationUptime(time, System.nanoTime() / 1_000_000_000d);
     }
 
     @After
@@ -87,13 +87,13 @@ public class TapeCacheTest {
 
         Thread.sleep(100);
 
-        List<Record<MeasurementKey, ApplicationUptime>> unsent = tapeCache.unsentRecords(100);
+        List<Record<ObservationKey, ApplicationUptime>> unsent = tapeCache.unsentRecords(100);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
         unsent = tapeCache.unsentRecords(100);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
-        Record<MeasurementKey, ApplicationUptime> record = unsent.get(0);
+        Record<ObservationKey, ApplicationUptime> record = unsent.get(0);
         assertEquals(key, record.key);
         assertEquals(value, record.value);
         tapeCache.markSent(record.offset);
@@ -112,10 +112,10 @@ public class TapeCacheTest {
 
     @Test
     public void testBinaryObject() throws IOException {
-        AvroTopic<MeasurementKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
-                MeasurementKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
-                MeasurementKey.class, ActiveAudioRecording.class);
-        TapeCache<MeasurementKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
+        AvroTopic<ObservationKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                ObservationKey.class, ActiveAudioRecording.class);
+        TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
                 RuntimeEnvironment.application.getApplicationContext(),
                 topic, executorFactory);
 
@@ -130,10 +130,10 @@ public class TapeCacheTest {
 
         localTapeCache.addMeasurement(key, localValue);
         localTapeCache.flush();
-        List<Record<MeasurementKey, ActiveAudioRecording>> records = localTapeCache.unsentRecords(100);
+        List<Record<ObservationKey, ActiveAudioRecording>> records = localTapeCache.unsentRecords(100);
 
         assertEquals(1, records.size());
-        Record<MeasurementKey, ActiveAudioRecording> firstRecord = records.get(0);
+        Record<ObservationKey, ActiveAudioRecording> firstRecord = records.get(0);
         assertEquals(firstRecord.key, key);
         assertEquals(firstRecord.value, localValue);
     }

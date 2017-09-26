@@ -21,7 +21,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.radarcns.android.data.TapeAvroConverter;
 import org.radarcns.data.Record;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 
 import java.io.File;
@@ -48,22 +48,22 @@ public class BackedObjectQueueTest {
         random.nextBytes(data);
 
         assertTrue(file.delete());
-        AvroTopic<MeasurementKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
-                MeasurementKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
-                MeasurementKey.class, ActiveAudioRecording.class);
-        try (BackedObjectQueue<Record<MeasurementKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
+        AvroTopic<ObservationKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                ObservationKey.class, ActiveAudioRecording.class);
+        try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
                 QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic))) {
 
             ByteBuffer buffer = ByteBuffer.wrap(data);
-            Record<MeasurementKey, ActiveAudioRecording> record = new Record<>(
-                    0L, new MeasurementKey("a", "b"), new ActiveAudioRecording(buffer));
+            Record<ObservationKey, ActiveAudioRecording> record = new Record<>(
+                    0L, new ObservationKey("test", "a", "b"), new ActiveAudioRecording(buffer));
 
             queue.add(record);
         }
 
-        try (BackedObjectQueue<Record<MeasurementKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
+        try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
                 QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic))) {
-            Record<MeasurementKey, ActiveAudioRecording> result = queue.peek();
+            Record<ObservationKey, ActiveAudioRecording> result = queue.peek();
 
             assertArrayEquals(data, result.value.getData().array());
         }
@@ -73,16 +73,17 @@ public class BackedObjectQueueTest {
     public void testRegularObject() throws IOException {
         File file = folder.newFile();
         assertTrue(file.delete());
-        AvroTopic<MeasurementKey, MeasurementKey> topic = new AvroTopic<>("test",
-                MeasurementKey.getClassSchema(), MeasurementKey.getClassSchema(),
-                MeasurementKey.class, MeasurementKey.class);
+        AvroTopic<ObservationKey, ObservationKey> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
+                ObservationKey.class, ObservationKey.class);
 
-        BackedObjectQueue<Record<MeasurementKey, MeasurementKey>> queue;
+        BackedObjectQueue<Record<ObservationKey, ObservationKey>> queue;
         queue = new BackedObjectQueue<>(
                 QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic));
 
-        Record<MeasurementKey, MeasurementKey> record = new Record<>(
-                0L, new MeasurementKey("a", "b"), new MeasurementKey("c", "d"));
+        Record<ObservationKey, ObservationKey> record = new Record<>(
+                0L, new ObservationKey("test", "a", "b"),
+                new ObservationKey("test", "c", "d"));
 
         queue.add(record);
         queue.peek();
