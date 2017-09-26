@@ -36,14 +36,16 @@ import org.radarcns.android.auth.LoginManager;
  */
 public class OAuth2LoginManager implements LoginManager, LoginListener {
     public static final String LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken";
+    private final String projectIdClaim;
     private final String userIdClaim;
     private final LoginActivity activity;
     private final AppAuthState authState;
 
-    public OAuth2LoginManager(LoginActivity activity, String userIdClaim, AppAuthState authState) {
-        this.authState = authState;
+    public OAuth2LoginManager(LoginActivity activity, String projectIdClaim, String userIdClaim, AppAuthState authState) {
         this.activity = activity;
+        this.projectIdClaim = projectIdClaim;
         this.userIdClaim = userIdClaim;
+        this.authState = authState;
     }
 
     @Override
@@ -76,11 +78,15 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         try {
             Jwt<Header, Claims> jwt = Jwts.parser().parseClaimsJwt(appAuthState.getToken());
+            String projectId = (String) jwt.getBody().get(projectIdClaim);
             String userId = (String) jwt.getBody().get(userIdClaim);
             long expiration = jwt.getBody().getExpiration().getTime();
 
-            appAuthState = new AppAuthState(userId, appAuthState.getToken(),
-                    appAuthState.getProperties(), LoginManager.AUTH_TYPE_BEARER, expiration, appAuthState.getHeaders());
+            appAuthState = appAuthState.newBuilder()
+                    .projectId(projectId)
+                    .userId(userId)
+                    .expiration(expiration)
+                    .build();
             this.activity.loginSucceeded(this, appAuthState);
         } catch (JwtException ex) {
             this.activity.loginFailed(this, ex);

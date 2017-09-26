@@ -44,15 +44,15 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
      * @param service service that the manager is started by
      * @param state new empty state variable
      * @param dataHandler data handler for sending data and getting topics.
-     * @param userId user ID that data should be sent with
-     * @param sourceId initial source ID, override later by calling getId().setSourceId()
+     * @param key key to send data with
      */
-    public AbstractDeviceManager(S service, T state, TableDataHandler dataHandler, String userId, String sourceId) {
+    public AbstractDeviceManager(S service, T state, TableDataHandler dataHandler, ObservationKey key) {
         this.dataHandler = dataHandler;
         this.service = service;
         this.deviceStatus = state;
-        this.deviceStatus.getId().setUserId(userId);
-        this.deviceStatus.getId().setSourceId(sourceId);
+        this.deviceStatus.getId().setProjectId(key.getProjectId());
+        this.deviceStatus.getId().setUserId(key.getUserId());
+        this.deviceStatus.getId().setSourceId(key.getSourceId());
         this.deviceName = android.os.Build.MODEL;
         closed = false;
     }
@@ -141,9 +141,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
         if (other == this) {
             return true;
         }
-        if (other == null
-                || !getClass().equals(other.getClass())
-                || deviceStatus.getId().getSourceId() == null) {
+        if (other == null || !getClass().equals(other.getClass())) {
             return false;
         }
 

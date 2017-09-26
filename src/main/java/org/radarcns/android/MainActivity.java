@@ -185,13 +185,13 @@ public abstract class MainActivity extends Activity {
 
         radarConfiguration = createConfiguration();
 
-        authState = AppAuthState.read(this);
+        authState = AppAuthState.Builder.from(this).build();
         if (!authState.isValid()) {
             startActivity(new Intent(this, loginActivity()));
             finish();
             return;
         }
-        radarConfiguration.put(RadarConfiguration.DEFAULT_GROUP_ID_KEY, authState.getUserId());
+        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
 
         onConfigChanged();
         logger.info("RADAR configuration at create: {}", radarConfiguration);
@@ -361,8 +361,8 @@ public abstract class MainActivity extends Activity {
             if (resultCode != RESULT_OK) {
                 throw new IllegalStateException("Login should not be cancellable");
             }
-            authState = new AppAuthState(result.getExtras());
-            radarConfiguration.put(RadarConfiguration.DEFAULT_GROUP_ID_KEY, authState.getUserId());
+            authState = AppAuthState.Builder.from(result.getExtras()).build();
+            radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
             onConfigChanged();
             for (DeviceServiceProvider provider : mConnections) {
                 provider.updateConfiguration();

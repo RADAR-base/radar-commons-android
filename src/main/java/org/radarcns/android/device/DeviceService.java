@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.radarcns.android.RadarConfiguration.*;
 
 /**
- * A service that manages a DeviceManager and a TableDataHandler to send store the data of a
+ * A service that manages a DeviceManager and a TableDataHandler to send addToPreferences the data of a
  * wearable device and send it to a Kafka REST proxy.
  *
  * Specific wearables should extend this class.
@@ -100,6 +100,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private boolean isConnected;
     private int latestStartId = -1;
     private String userId;
+    private String projectId;
 
     @CallSuper
     @Override
@@ -366,6 +367,10 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         logger.info("Stopped recording {}", this);
     }
 
+    public void setProjectId(String projectId) {
+        this.projectId = projectId;
+    }
+
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
         @Override
         public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(
@@ -468,6 +473,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     /**
      * Override this function to get any parameters from the given intent.
+     *
      * @param bundle intent extras that the activity provided.
      */
     @CallSuper
@@ -496,7 +502,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         boolean sendOnlyWithWifi = RadarConfiguration.getBooleanExtra(
                 bundle, SEND_ONLY_WITH_WIFI, true);
 
-        AppAuthState authState = new AppAuthState(bundle);
+        AppAuthState authState = AppAuthState.Builder.from(bundle).build();
         int maxBytes = RadarConfiguration.getIntExtra(
                 bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
 
@@ -553,8 +559,11 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             localDataHandler.setDatabaseCommitRate(
                     RadarConfiguration.getLongExtra(bundle, DATABASE_COMMIT_RATE_KEY));
         }
-        if (RadarConfiguration.hasExtra(bundle, DEFAULT_GROUP_ID_KEY)) {
-            setUserId(RadarConfiguration.getStringExtra(bundle, DEFAULT_GROUP_ID_KEY));
+        if (RadarConfiguration.hasExtra(bundle, USER_ID_KEY)) {
+            setUserId(RadarConfiguration.getStringExtra(bundle, USER_ID_KEY));
+        }
+        if (RadarConfiguration.hasExtra(bundle, PROJECT_ID_KEY)) {
+            setProjectId(RadarConfiguration.getStringExtra(bundle, PROJECT_ID_KEY));
         }
         if (RadarConfiguration.hasExtra(bundle, KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
             localDataHandler.setMinimumBatteryLevel(RadarConfiguration.getFloatExtra(bundle,
@@ -586,6 +595,10 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     /** User ID to send data for. */
     public String getUserId() {
         return userId;
+    }
+
+    public String getProjectId() {
+        return projectId;
     }
 
     @Override

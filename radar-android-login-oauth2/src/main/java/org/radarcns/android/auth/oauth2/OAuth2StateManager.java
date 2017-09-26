@@ -156,13 +156,13 @@ public class OAuth2StateManager {
                     if (expiration == null) {
                         expiration = 0L;
                     }
-                    HashMap<String, String> props = new HashMap<>();
-                    props.put(LOGIN_REFRESH_TOKEN, mCurrentAuthState.getRefreshToken());
-                    ArrayList<Map.Entry<String, String>> headers = new ArrayList<>();
-                    headers.add(new AbstractMap.SimpleImmutableEntry<>("Authorization", "Bearer " + mCurrentAuthState.getAccessToken()));
-                    AppAuthState state = new AppAuthState(null,
-                            mCurrentAuthState.getAccessToken(), props,
-                            LoginManager.AUTH_TYPE_BEARER, expiration, headers);
+                    AppAuthState state = new AppAuthState.Builder()
+                            .token(mCurrentAuthState.getAccessToken())
+                            .property(LOGIN_REFRESH_TOKEN, mCurrentAuthState.getRefreshToken())
+                            .tokenType(LoginManager.AUTH_TYPE_BEARER)
+                            .expiration(expiration)
+                            .header("Authorization", "Bearer " + mCurrentAuthState.getAccessToken())
+                            .build();
                     context.loginSucceeded(null, state);
                 } else {
                     context.loginFailed(null, ex);

@@ -47,7 +47,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
             Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
         }
 
-        AppAuthState appAuth = AppAuthState.read(this);
+        AppAuthState appAuth = AppAuthState.Builder.from(this).build();
 
         if (appAuth.isValid()) {
             loginSucceeded(null, appAuth);
@@ -96,7 +96,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     }
 
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
-        appAuthState.store(this);
+        appAuthState.addToPreferences(this);
         if (startedFromActivity) {
             setResult(RESULT_OK, appAuthState.toIntent());
         } else {

@@ -49,7 +49,8 @@ public class RadarConfiguration {
 
     public static final String KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url";
     public static final String SCHEMA_REGISTRY_URL_KEY = "schema_registry_url";
-    public static final String DEFAULT_GROUP_ID_KEY = "default_group_id";
+    public static final String PROJECT_ID_KEY = "project_id";
+    public static final String USER_ID_KEY = "user_id";
     public static final String SOURCE_ID_KEY = "source_id";
     public static final String EMPATICA_API_KEY = "empatica_api_key";
     public static final String UI_REFRESH_RATE_KEY = "ui_refresh_rate_millis";
