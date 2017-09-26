@@ -17,10 +17,12 @@
 package org.radarcns.android.device;
 
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.content.*;
+import android.content.pm.PackageManager;
 import android.os.*;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
@@ -48,6 +50,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.radarcns.android.RadarConfiguration.*;
+import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send addToPreferences the data of a
@@ -57,6 +60,7 @@ import static org.radarcns.android.RadarConfiguration.*;
  */
 public abstract class DeviceService extends Service implements DeviceStatusListener, ServerStatusListener {
     private static final int ONGOING_NOTIFICATION_ID = 11;
+    private static final int BLUETOOTH_NOTIFICATION_ID = 12;
     private static final String PREFIX = "org.radarcns.android.";
     public static final String SERVER_STATUS_CHANGED = PREFIX + "ServerStatusListener.Status";
     public static final String SERVER_RECORDS_SENT_TOPIC = PREFIX + "ServerStatusListener.topic";
@@ -81,6 +85,22 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 switch (state) {
                     case BluetoothAdapter.STATE_TURNING_OFF: case BluetoothAdapter.STATE_OFF:
                         logger.warn("Bluetooth is off");
+                        RadarApplication app = (RadarApplication) context.getApplicationContext();
+
+                        PackageManager pm = context.getPackageManager();
+
+                        Intent launchIntent = pm.getLaunchIntentForPackage(context.getPackageName());
+                        PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, launchIntent, 0);
+
+                        Notification notification = app.updateNotificationAppSettings(new Notification.Builder(app))
+                                .setContentIntent(pendingIntent)
+                                .setContentText("Need bluetooth for data collection.")
+                                .setContentTitle("Bluetooth needed")
+                                .build();
+
+                        NotificationManager manager = (NotificationManager) app.getSystemService(NOTIFICATION_SERVICE);
+                        manager.notify(BLUETOOTH_NOTIFICATION_ID, createBackgroundNotification(pendingIntent));
+
                         stopDeviceManager(unsetDeviceManager());
                         break;
                     default:
@@ -101,6 +121,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     private int latestStartId = -1;
     private String userId;
     private String projectId;
+    private boolean needsBluetooth;
 
     @CallSuper
     @Override
@@ -108,10 +129,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         logger.info("Creating DeviceService {}", this);
         super.onCreate();
         mBinder = createBinder();
-
-        // Register for broadcasts on BluetoothAdapter state change
-        IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
-        registerReceiver(mBluetoothReceiver, filter);
 
         synchronized (this) {
             numberOfActivitiesBound.set(0);
@@ -125,8 +142,10 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     public void onDestroy() {
         logger.info("Destroying DeviceService {}", this);
         super.onDestroy();
-        // Unregister broadcast listeners
-        unregisterReceiver(mBluetoothReceiver);
+        if (needsBluetooth) {
+            // Unregister broadcast listeners
+            unregisterReceiver(mBluetoothReceiver);
+        }
         stopDeviceManager(unsetDeviceManager());
         ((RadarApplication)getApplicationContext()).onDeviceServiceDestroy(this);
 
@@ -247,25 +266,22 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
             }
             isInForeground = true;
         }
-        Context context = getApplicationContext();
-        Intent notificationIntent = new Intent(context, DeviceService.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, notificationIntent, 0);
+
+        PackageManager pm = getPackageManager();
+        Intent intent = pm.getLaunchIntentForPackage(getPackageName());
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
 
         startForeground(ONGOING_NOTIFICATION_ID, createBackgroundNotification(pendingIntent));
     }
 
     protected Notification createBackgroundNotification(PendingIntent intent) {
-        Notification.Builder notificationBuilder = new Notification.Builder(
-                getApplicationContext());
-        notificationBuilder
+        RadarApplication app = (RadarApplication) getApplicationContext();
+        return app.updateNotificationAppSettings(new Notification.Builder(app))
                 .setContentIntent(intent)
                 .setTicker(getText(R.string.service_notification_ticker))
                 .setContentText(getText(R.string.service_notification_text))
-                .setContentTitle(getText(R.string.service_notification_title));
-
-        ((RadarApplication)getApplication()).updateNotificationAppSettings(notificationBuilder);
-
-        return notificationBuilder.build();
+                .setContentTitle(getText(R.string.service_notification_title))
+                .build();
     }
 
     /** Service no longer needs to be maintained in the background. */
@@ -568,6 +584,16 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         if (RadarConfiguration.hasExtra(bundle, KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
             localDataHandler.setMinimumBatteryLevel(RadarConfiguration.getFloatExtra(bundle,
                     KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL));
+        }
+        boolean willNeedBluetooth = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false);
+        if (!willNeedBluetooth && needsBluetooth) {
+            unregisterReceiver(mBluetoothReceiver);
+            needsBluetooth = false;
+        } else if (willNeedBluetooth && !needsBluetooth) {
+            // Register for broadcasts on BluetoothAdapter state change
+            IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+            registerReceiver(mBluetoothReceiver, filter);
+            needsBluetooth = true;
         }
 
         if (newlyCreated) {

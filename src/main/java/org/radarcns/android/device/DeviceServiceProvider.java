@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 
+import static android.Manifest.permission.BLUETOOTH;
+import static android.Manifest.permission.BLUETOOTH_ADMIN;
 import static org.radarcns.android.RadarConfiguration.PROJECT_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.USER_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
@@ -52,6 +54,7 @@ import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
  * @param <T> state that the Service will provide.
  */
 public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
+    public static final String NEEDS_BLUETOOTH_KEY = DeviceServiceProvider.class.getName() + ".needsBluetooth";
     private static final Logger logger = LoggerFactory.getLogger(DeviceServiceProvider.class);
 
     private MainActivity activity;
@@ -195,6 +198,9 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
                 SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
         ((RadarApplication)activity.getApplicationContext()).configureProvider(config, bundle);
+        List<String> permissions = needsPermissions();
+        bundle.putBoolean(NEEDS_BLUETOOTH_KEY, permissions.contains(BLUETOOTH) ||
+                permissions.contains(BLUETOOTH_ADMIN));
         activity.getAuthState().addToBundle(bundle);
     }
 
