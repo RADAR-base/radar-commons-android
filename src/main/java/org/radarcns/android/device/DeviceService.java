@@ -146,9 +146,11 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         super.onCreate();
         mBinder = createBinder();
 
-        // Register for broadcasts on BluetoothAdapter state change
-        IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
-        registerReceiver(mBluetoothReceiver, filter);
+        if (isBluetoothConnectionRequired()) {
+            // Register for broadcasts on BluetoothAdapter state change
+            IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+            registerReceiver(mBluetoothReceiver, filter);
+        }
 
         diskSpaceChecker = new ServiceConnection() {
             @Override
@@ -174,8 +176,10 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     public void onDestroy() {
         logger.info("Destroying DeviceService {}", this);
         super.onDestroy();
-        // Unregister broadcast listeners
-        unregisterReceiver(mBluetoothReceiver);
+        if (isBluetoothConnectionRequired()) {
+            // Unregister broadcast listeners
+            unregisterReceiver(mBluetoothReceiver);
+        }
         stopDeviceManager(unsetDeviceManager());
 
         unbindService(diskSpaceChecker);
@@ -687,5 +691,9 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     /** User ID to send data for. */
     public String getUserId() {
         return userId;
+    }
+
+    protected boolean isBluetoothConnectionRequired() {
+        return true;
     }
 }
