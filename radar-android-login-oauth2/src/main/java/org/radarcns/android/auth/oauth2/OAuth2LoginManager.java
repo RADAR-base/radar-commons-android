@@ -74,27 +74,23 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
     @Override
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         try {
-            Jwt jwt = Jwt.parse(appAuthState.getToken());
-            JSONObject body = jwt.getBody();
+            AppAuthState.Builder authStateBuilder = processJwt(
+                    appAuthState.newBuilder(),
+                    Jwt.parse(appAuthState.getToken()));
 
-            AppAuthState.Builder authStateBuilder = appAuthState.newBuilder();
-
-            if (body.has(projectIdClaim)) {
-                authStateBuilder.projectId(body.getString(projectIdClaim));
-            }
-            if (body.has(userIdClaim)) {
-                authStateBuilder.userId(body.getString(userIdClaim));
-            }
-
-            appAuthState = authStateBuilder
-                    .expiration(body.getLong("expires_in") * 1_000L
-                            + System.currentTimeMillis())
-                    .build();
-
-            this.activity.loginSucceeded(this, appAuthState);
+            this.activity.loginSucceeded(this, authStateBuilder.build());
         } catch (JSONException ex) {
             this.activity.loginFailed(this, ex);
         }
+    }
+
+    protected AppAuthState.Builder processJwt(AppAuthState.Builder builder, Jwt jwt) throws JSONException {
+        JSONObject body = jwt.getBody();
+
+        return builder
+                .projectId(body.optString(projectIdClaim))
+                .userId(body.optString(userIdClaim))
+                .expiration(body.optLong("exp", Long.MAX_VALUE / 1000L) * 1000L);
     }
 
     @Override
