@@ -314,4 +314,26 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * Android permissions that the underlying service needs to function correctly.
      */
     public abstract List<String> needsPermissions();
+
+    /**
+     * Match device type.
+     *
+     * @param deviceProducer producer of given device
+     * @param deviceModel model of given device
+     * @param version version of the device plugin API
+     */
+    public boolean matches(@NonNull String deviceProducer, @NonNull String deviceModel,
+            String version) {
+        return deviceProducer.equals(getDeviceProducer()) && deviceModel.equals(getDeviceModel())
+                && version == null || version.equals(getVersion());
+    }
+
+    @NonNull
+    public abstract String getDeviceProducer();
+
+    @NonNull
+    public abstract String getDeviceModel();
+
+    @NonNull
+    public abstract String getVersion();
 }
