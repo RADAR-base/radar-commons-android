@@ -69,8 +69,8 @@ allprojects {
             exclude group: 'io.confluent', module: 'kafka-avro-serializer'
             exclude group: 'org.apache.kafka', module: 'kafka-clients'
             exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
-            exclude group: 'com.fasterxml.jackson.core'
-            exclude group: 'org.json'
+            exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
+            exclude group: 'org.json', module: 'json'
         }
         compile 'org.radarcns:radar-schemas-commons:0.2-alpha.3-SNAPSHOT'
 
@@ -208,6 +208,32 @@ publishing {
                 root.appendNode('description', description)
                 root.appendNode('name', moduleName)
                 root.appendNode('url', githubUrl)
+
+                //Creating additional node for dependencies
+                def dependenciesNode = root.appendNode('dependencies')
+
+                //Defining configuration names from which dependencies will be taken (debugCompile or releaseCompile and compile)
+                configurations['compile'].allDependencies.each {
+                    if (it.group != null && it.name != null) {
+                        def dependencyNode = dependenciesNode.appendNode('dependency')
+                        dependencyNode.appendNode('groupId', it.group)
+                        dependencyNode.appendNode('artifactId', it.name)
+                        dependencyNode.appendNode('version', it.version)
+
+                        //If there are any exclusions in dependency
+                        if (it.excludeRules.size() > 0) {
+                            def exclusionsNode = dependencyNode.appendNode('exclusions')
+                            it.excludeRules.each { rule ->
+                                def exclusionNode = exclusionsNode.appendNode('exclusion')
+                                exclusionNode.appendNode('groupId', rule.group)
+                                if (rule.module) {
+                                    exclusionNode.appendNode('artifactId', rule.module)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 root.children().last() + pomConfig
             }
         }
