@@ -22,6 +22,7 @@ buildscript {
         classpath 'com.android.tools.build:gradle:2.3.0'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
+        classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.4.18'
     }
 }
 
@@ -30,6 +31,8 @@ allprojects {
     apply plugin: 'com.jfrog.bintray'
     apply plugin: 'com.github.dcendents.android-maven'
     apply plugin: 'idea'
+    apply plugin: 'maven-publish'
+    apply plugin: 'com.jfrog.artifactory'
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
@@ -79,7 +82,7 @@ allprojects {
 //---------------------------------------------------------------------------//
 // Build system metadata                                                     //
 //---------------------------------------------------------------------------//
-    def pomConfig = {
+    ext.pomConfig = {
         licenses {
             license {
                 name 'The Apache Software License, Version 2.0'
@@ -194,19 +197,19 @@ artifacts {
     archives sourcesJar
 }
 
-install {
-    repositories.mavenInstaller {
-        pom.project {
-            groupId project.group
-            artifactId moduleName
-            version project.version
-        }
-        pom.withXml {
-            def root = asNode()
-            root.appendNode('description', description)
-            root.appendNode('name', moduleName)
-            root.appendNode('url', githubUrl)
-            root.children().last() + pomConfig
+publishing {
+    publications {
+        RadarCommonsPublication(MavenPublication) {
+            artifact("${buildDir}/outputs/aar/${project.getName()}-${version}.aar")
+            artifact sourcesJar
+            artifact javadocJar
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', description)
+                root.appendNode('name', moduleName)
+                root.appendNode('url', githubUrl)
+                root.children().last() + pomConfig
+            }
         }
     }
 }
@@ -215,7 +218,7 @@ bintray {
     user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
     key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
     override = false
-    configurations = ['archives']
+    publications = ['RadarCommonsPublication']
     pkg {
         repo = project.group
         name = moduleName
@@ -237,6 +240,25 @@ bintray {
             }
         }
     }
+}
+
+bintrayUpload.dependsOn 'assembleRelease'
+
+artifactory {
+    contextUrl = 'https://oss.jfrog.org/artifactory'
+    publish {
+        repository {
+            repoKey = 'oss-snapshot-local'
+            username = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
+            password = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+            maven = true
+        }
+    }
+}
+
+artifactoryPublish {
+    publications('RadarCommonsPublication')
+    dependsOn 'assembleRelease'
 }
 
 task wrapper(type: Wrapper) {
