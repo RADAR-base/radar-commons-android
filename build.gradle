@@ -55,31 +55,21 @@ allprojects {
     repositories {
         jcenter()
         maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
-        flatDir {
-            dirs "${project.rootDir}/libs"
-        }
     }
 
     dependencies {
         compile 'com.squareup.okhttp3:okhttp:3.8.0'
-        compile('org.apache.avro:avro:1.8.2') {
-            exclude group: 'com.thoughtworks.paranamer'
-            exclude group: 'org.xerial.snappy'
-            exclude group: 'org.tukaani'
-            exclude group: 'org.apache.commons', module: 'commons-compress'
-        }
+
         compile 'com.google.firebase:firebase-config:11.0.4'
+
         compile('org.radarcns:radar-commons:0.6-SNAPSHOT') {
             exclude group: 'io.confluent', module: 'kafka-avro-serializer'
             exclude group: 'org.apache.kafka', module: 'kafka-clients'
             exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
             exclude group: 'com.fasterxml.jackson.core'
-            exclude group: 'org.apache.avro'
             exclude group: 'org.json'
         }
-        compile('org.radarcns:radar-schemas-commons:0.2-alpha.3-SNAPSHOT') {
-            exclude group: 'org.apache.avro'
-        }
+        compile 'org.radarcns:radar-schemas-commons:0.2-alpha.3-SNAPSHOT'
 
         testCompile 'junit:junit:4.12'
         testCompile 'org.slf4j:slf4j-simple:1.7.21'
