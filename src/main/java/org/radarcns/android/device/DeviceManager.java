@@ -23,7 +23,7 @@ import java.io.IOException;
 import java.util.Set;
 
 /** Device manager of a wearable device. */
-public interface DeviceManager extends Closeable {
+public interface DeviceManager<T> extends Closeable {
 
     /**
      * Start scanning and try to connect. Check that {@link #isClosed()} is false before calling
@@ -48,7 +48,7 @@ public interface DeviceManager extends Closeable {
      * status.
      * @return device state
      */
-    BaseDeviceState getState();
+    T getState();
 
     /**
      * Get the name of a connected wearable device.

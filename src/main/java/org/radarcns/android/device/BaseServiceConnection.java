@@ -137,10 +137,6 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
         serviceBinder.updateConfiguration(bundle);
     }
 
-    public void setUserId(String userId) {
-        serviceBinder.setUserId(userId);
-    }
-
     public Pair<Long, Long> numberOfRecords() {
         return serviceBinder.numberOfRecords();
     }
