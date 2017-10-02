@@ -35,7 +35,6 @@ ext.description = 'RADAR Android OAuth2 LoginManager.'
 dependencies {
     compile project(":")
     compile 'net.openid:appauth:0.6.1'
-    compile 'io.jsonwebtoken:jjwt:0.7.0'
 }
 
 

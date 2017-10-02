@@ -161,7 +161,8 @@ public class OAuth2StateManager {
                             .property(LOGIN_REFRESH_TOKEN, mCurrentAuthState.getRefreshToken())
                             .tokenType(LoginManager.AUTH_TYPE_BEARER)
                             .expiration(expiration)
-                            .header("Authorization", "Bearer " + mCurrentAuthState.getAccessToken())
+                            .header("Authorization",
+                                    "Bearer " + mCurrentAuthState.getAccessToken())
                             .build();
                     context.loginSucceeded(null, state);
                 } else {

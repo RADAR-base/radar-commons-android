@@ -18,14 +18,9 @@ package org.radarcns.android.auth.oauth2;
 
 import android.content.Intent;
 import android.support.annotation.NonNull;
-
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.radarcns.android.RadarConfiguration;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Header;
-import io.jsonwebtoken.Jwt;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.auth.LoginListener;
@@ -41,7 +36,8 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
     private final LoginActivity activity;
     private final AppAuthState authState;
 
-    public OAuth2LoginManager(LoginActivity activity, String projectIdClaim, String userIdClaim, AppAuthState authState) {
+    public OAuth2LoginManager(LoginActivity activity, String projectIdClaim, String userIdClaim,
+            AppAuthState authState) {
         this.activity = activity;
         this.projectIdClaim = projectIdClaim;
         this.userIdClaim = userIdClaim;
@@ -53,7 +49,8 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         if (authState.isValid()) {
             return authState;
         }
-        if (authState.getTokenType() == LoginManager.AUTH_TYPE_BEARER && !authState.isInvalidated() && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
+        if (authState.getTokenType() == LoginManager.AUTH_TYPE_BEARER
+                && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
             OAuth2StateManager.getInstance(activity).refresh(activity);
         }
         return null;
@@ -77,18 +74,25 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
     @Override
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         try {
-            Jwt<Header, Claims> jwt = Jwts.parser().parseClaimsJwt(appAuthState.getToken());
-            String projectId = (String) jwt.getBody().get(projectIdClaim);
-            String userId = (String) jwt.getBody().get(userIdClaim);
-            long expiration = jwt.getBody().getExpiration().getTime();
+            Jwt jwt = Jwt.parse(appAuthState.getToken());
+            JSONObject body = jwt.getBody();
 
-            appAuthState = appAuthState.newBuilder()
-                    .projectId(projectId)
-                    .userId(userId)
-                    .expiration(expiration)
+            AppAuthState.Builder authStateBuilder = appAuthState.newBuilder();
+
+            if (body.has(projectIdClaim)) {
+                authStateBuilder.projectId(body.getString(projectIdClaim));
+            }
+            if (body.has(userIdClaim)) {
+                authStateBuilder.userId(body.getString(userIdClaim));
+            }
+
+            appAuthState = authStateBuilder
+                    .expiration(body.getLong("expires_in") * 1_000L
+                            + System.currentTimeMillis())
                     .build();
+
             this.activity.loginSucceeded(this, appAuthState);
-        } catch (JwtException ex) {
+        } catch (JSONException ex) {
             this.activity.loginFailed(this, ex);
         }
     }
