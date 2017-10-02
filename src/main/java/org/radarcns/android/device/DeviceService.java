@@ -376,6 +376,10 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             logger.info("Starting recording");
             synchronized (this) {
                 if (deviceScanner == null) {
+                    if (key.getSourceId() == null) {
+                        key.setSourceId(RadarConfiguration.getOrSetUUID(
+                                getApplicationContext(), SOURCE_ID_KEY));
+                    }
                     deviceScanner = createDeviceManager();
                     deviceScanner.start(acceptableIds);
                 }
