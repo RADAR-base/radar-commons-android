@@ -58,6 +58,7 @@ import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_
  *
  * Specific wearables should extend this class.
  */
+@SuppressWarnings("WeakerAccess")
 public abstract class DeviceService<T extends BaseDeviceState> extends Service implements DeviceStatusListener, ServerStatusListener {
     private static final int ONGOING_NOTIFICATION_ID = 11;
     private static final int BLUETOOTH_NOTIFICATION_ID = 12;
@@ -391,10 +392,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public void stopRecording() {
         stopDeviceManager(unsetDeviceManager());
         logger.info("Stopped recording {}", this);
-    }
-
-    public void setProjectId(String projectId) {
-        this.key.setProjectId(projectId);
     }
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {

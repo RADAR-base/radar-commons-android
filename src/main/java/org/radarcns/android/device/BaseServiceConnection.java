@@ -41,6 +41,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+@SuppressWarnings({"unused", "WeakerAccess"})
 public class BaseServiceConnection<S extends BaseDeviceState> implements ServiceConnection {
     private static final Logger logger = LoggerFactory.getLogger(BaseServiceConnection.class);
     private DeviceStatusListener.Status deviceStatus;

@@ -30,6 +30,7 @@ import java.io.IOException;
  * @param <S> service type the manager is started by
  * @param <T> state type that the manager will update.
  */
+@SuppressWarnings({"unused", "WeakerAccess"})
 public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extends BaseDeviceState>
         implements DeviceManager<T> {
     private final TableDataHandler dataHandler;
