@@ -18,7 +18,7 @@ package org.radarcns.android.device;
 
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 
 import java.util.ArrayList;
@@ -28,26 +28,26 @@ import java.util.Map;
 import java.util.Objects;
 
 public abstract class DeviceTopics {
-    private final Map<String, AvroTopic<MeasurementKey, ? extends SpecificRecord>> topicMap;
+    private final Map<String, AvroTopic<ObservationKey, ? extends SpecificRecord>> topicMap;
 
     protected DeviceTopics() {
         topicMap = new HashMap<>();
     }
 
-    protected <W extends SpecificRecord> AvroTopic<MeasurementKey, W> createTopic(String name,
+    protected <W extends SpecificRecord> AvroTopic<ObservationKey, W> createTopic(String name,
                                                         Schema valueSchema, Class<W> valueClass) {
-        AvroTopic<MeasurementKey, W> topic = new AvroTopic<>(
-                name, MeasurementKey.getClassSchema(), valueSchema,
-                MeasurementKey.class, valueClass);
+        AvroTopic<ObservationKey, W> topic = new AvroTopic<>(
+                name, ObservationKey.getClassSchema(), valueSchema,
+                ObservationKey.class, valueClass);
         topicMap.put(name, topic);
         return topic;
     }
 
-    public AvroTopic<MeasurementKey, ? extends SpecificRecord> getTopic(String name) {
+    public AvroTopic<ObservationKey, ? extends SpecificRecord> getTopic(String name) {
         return Objects.requireNonNull(topicMap.get(name), "Topic " + name + " unknown");
     }
 
-    public List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> getTopics() {
+    public List<AvroTopic<ObservationKey, ? extends SpecificRecord>> getTopics() {
         return new ArrayList<>(topicMap.values());
     }
 }

@@ -16,21 +16,20 @@
 
 package org.radarcns.android.kafka;
 
+import android.os.Handler;
+import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.KafkaSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Random;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Checks the connection of a sender.
  *
- * It does so using two mechanisms: a regular heartbeat signal when the connection is assumed to be
+ * It does so using two mechanisms: a regular heartbeatInterval signal when the connection is assumed to be
  * present, and a exponential back-off mechanism if the connection is severed. If the connection is
  * assessed to be present through another mechanism, {@link #didConnect()} should be called,
  * conversely, if it is assessed to be severed, {@link #didDisconnect(IOException)} should be
@@ -39,27 +38,29 @@ import java.util.concurrent.atomic.AtomicBoolean;
 class KafkaConnectionChecker implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(KafkaConnectionChecker.class);
 
-    private static final int INCREMENTAL_BACKOFF_SECONDS = 60;
-    private static final int MAX_BACKOFF_SECONDS = 14400; // 4 hours
-    private static final long HEARTBEAT_SECONDS = 60L;
+    private static final int INCREMENTAL_BACKOFF_MILLISECONDS = 60_000;
+    private static final int MAX_BACKOFF_MILLISECONDS = 14_400_000; // 4 hours
     private final KafkaSender sender;
-    private final ScheduledExecutorService executor;
     private final ServerStatusListener listener;
     private final AtomicBoolean isConnected;
     private final Random random;
-    private Future<?> scheduledFuture;
+    private final Handler mHandler;
+    private final long heartbeatInterval;
     private long lastConnection;
     private int retries;
+    private boolean isPosted;
 
-    KafkaConnectionChecker(KafkaSender sender, ScheduledExecutorService executor, ServerStatusListener listener) {
+    KafkaConnectionChecker(KafkaSender sender, Handler handler, ServerStatusListener listener,
+                           long heartbeatSecondsInterval) {
         this.sender = sender;
-        this.executor = executor;
+        this.mHandler = handler;
         isConnected = new AtomicBoolean(true);
         lastConnection = -1L;
         this.retries = 0;
         this.listener = listener;
         this.random = new Random();
-        this.scheduledFuture = null;
+        this.heartbeatInterval = heartbeatSecondsInterval * 1000L;
+        this.isPosted = false;
     }
 
     /**
@@ -67,39 +68,59 @@ class KafkaConnectionChecker implements Runnable {
      */
     @Override
     public void run() {
+        synchronized (this) {
+            isPosted = false;
+        }
         if (!isConnected.get()) {
             if (sender.isConnected() || sender.resetConnection()) {
-                updateFuture(null);
                 didConnect();
                 listener.updateServerStatus(ServerStatusListener.Status.CONNECTED);
                 logger.info("Sender reconnected");
             } else {
-                synchronized (this) {
-                    retries++;
-                    updateFuture(executor.schedule(this, nextWait(), TimeUnit.SECONDS));
-                }
+                retry();
             }
-        } else if (isConnected.get() && System.currentTimeMillis() - lastConnection > 15_000L) {
+        } else if (System.currentTimeMillis() - lastConnection > 15_000L) {
             if (sender.isConnected()) {
                 didConnect();
             } else {
                 didDisconnect(null);
             }
+        } else {
+            post(heartbeatInterval);
         }
     }
 
+    private synchronized void post(long delay) {
+        if (isPosted) {
+            mHandler.removeCallbacks(this);
+        } else {
+            isPosted = true;
+        }
+        mHandler.postDelayed(this, delay);
+    }
+
     /** Check the connection as soon as possible. */
-    public void check() {
-        executor.execute(this);
+    public synchronized void check() {
+        post(0);
+    }
+
+    /** Retry the connection with an incremental backoff. */
+    private void retry() {
+        double sample = random.nextDouble();
+        synchronized (this) {
+            retries++;
+            int range = Math.min(INCREMENTAL_BACKOFF_MILLISECONDS * (1 << retries - 1),
+                    MAX_BACKOFF_MILLISECONDS);
+            long nextWait = Math.round(sample * range * 1000d);
+            post(nextWait);
+        }
     }
 
     /** Signal that the sender successfully connected. */
     public synchronized void didConnect() {
         lastConnection = System.currentTimeMillis();
         isConnected.set(true);
-        if (scheduledFuture == null) {
-            scheduledFuture = executor.scheduleAtFixedRate(this, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS);
-        }
+        post(heartbeatInterval);
         retries = 0;
     }
 
@@ -111,27 +132,19 @@ class KafkaConnectionChecker implements Runnable {
         logger.warn("Sender is disconnected", ex);
 
         if (isConnected.compareAndSet(true, false)) {
-            listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED);
-            // try to reconnect immediately
-            executor.execute(this);
+            if (ex instanceof AuthenticationException) {
+                logger.warn("Failed to authenticate to server: {}", ex.getMessage());
+                listener.updateServerStatus(ServerStatusListener.Status.UNAUTHORIZED);
+            } else {
+                listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED);
+                // try to reconnect immediately
+                check();
+            }
         }
     }
 
     /** Whether the connection is currently assumed to be present. */
     public boolean isConnected() {
         return isConnected.get();
-    }
-
-    private synchronized void updateFuture(Future<?> future) {
-        if (scheduledFuture != null) {
-            scheduledFuture.cancel(false);
-        }
-        scheduledFuture = future;
-    }
-
-    /** Return the next waiting period in seconds */
-    private long nextWait() {
-        int range = Math.min(INCREMENTAL_BACKOFF_SECONDS * (1 << retries - 1), MAX_BACKOFF_SECONDS);
-        return Math.round(random.nextFloat() * range);
     }
 }

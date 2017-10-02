@@ -42,4 +42,10 @@ public interface DataHandler<K, V> extends ServerStatusListener {
      * @param value value of the measurement.
      */
     <W extends V> void addMeasurement(DataCache<K, W> cache, K key, W value);
+
+    /**
+     * Set maximum number of bytes a single cache may contain.
+     * @param numBytes number of bytes
+     */
+    void setMaximumCacheSize(int numBytes);
 }

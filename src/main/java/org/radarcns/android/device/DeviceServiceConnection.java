@@ -22,8 +22,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.IBinder;
-import android.os.Parcelable;
-import android.os.RemoteException;
 import android.support.annotation.NonNull;
 
 import org.radarcns.android.MainActivity;
@@ -32,11 +30,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.radarcns.android.device.DeviceService.DEVICE_SERVICE_CLASS;
+import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_CHANGED;
+import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
 import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
-import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_CHANGED;
-import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
 public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServiceConnection<S> {
     private static final Logger logger = LoggerFactory.getLogger(DeviceServiceConnection.class);
@@ -78,8 +76,8 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
                 && getServiceClassName().equals(intent.getStringExtra(DEVICE_SERVICE_CLASS));
     }
 
-    public DeviceServiceConnection(@NonNull MainActivity mainActivity, @NonNull Parcelable.Creator<S> deviceStateCreator, String serviceClassName) {
-        super(deviceStateCreator, serviceClassName);
+    public DeviceServiceConnection(@NonNull MainActivity mainActivity, String serviceClassName) {
+        super(serviceClassName);
         this.mainActivity = mainActivity;
     }
 
@@ -97,20 +95,6 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
         if (!hasService()) {
             super.onServiceConnected(className, service);
             mainActivity.serviceConnected(this);
-
-            if (isRemoteService()) {
-                try {
-                    getServiceBinder().linkToDeath(new IBinder.DeathRecipient() {
-                        @Override
-                        public void binderDied() {
-                            mainActivity.deviceStatusUpdated(DeviceServiceConnection.this, getDeviceStatus());
-                            onServiceDisconnected(className);
-                        }
-                    }, 0);
-                } catch (RemoteException e) {
-                    logger.error("Failed to link to death", e);
-                }
-            }
         }
     }
 

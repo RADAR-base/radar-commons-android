@@ -475,6 +475,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
 
             int countAvailable = Math.min(count, totalLength - bytesRead);
             storagePosition = storage.read(storagePosition, bytes, offset, countAvailable);
+
             bytesRead += countAvailable;
             return countAvailable;
         }
@@ -506,6 +507,10 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
 
     public long getMaximumFileSize() {
         return storage.getMaximumLength();
+    }
+
+    public void setMaximumFileSize(long newSize) {
+        storage.setMaximumLength(newSize);
     }
 
     void commitOutputStream(QueueFileElement newFirst, QueueFileElement newLast, int count) throws IOException {

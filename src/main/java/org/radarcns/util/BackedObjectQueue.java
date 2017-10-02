@@ -131,7 +131,7 @@ public class BackedObjectQueue<T> implements Closeable {
 
     /**
      * Close the queue. This also closes the backing file.
-     * @throws IOException
+     * @throws IOException if the file cannot be closed.
      */
     @Override
     public void close() throws IOException {
@@ -141,11 +141,16 @@ public class BackedObjectQueue<T> implements Closeable {
     /** Converts streams into objects. */
     public interface Converter<T> {
         /**
-         * Deserialize an object from given offset of given bytes
+         * Deserialize an object from given input stream.
+         * @param in input, which will not be closed after this call.
+         * @return deserialized object
+         * @throws IOException if a valid object could not be deserialized from the stream
          */
         T deserialize(InputStream in) throws IOException;
         /**
-         * Serialize an object to given offset of given bytes.
+         * Serialize an object to given output stream.
+         * @param out output, which will not be closed after this call.
+         * @throws IOException if a valid object could not be serialized to the stream
          */
         void serialize(T value, OutputStream out) throws IOException;
     }

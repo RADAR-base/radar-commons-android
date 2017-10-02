@@ -20,9 +20,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 
 import org.radarcns.android.MainActivity;
+import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,16 +34,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 
-import static org.radarcns.android.RadarConfiguration.DEFAULT_GROUP_ID_KEY;
-import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_ENABLE;
-import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_RENOTIFY;
-import static org.radarcns.android.RadarConfiguration.DISK_SPACE_CHECK_TIMEOUT;
+import static android.Manifest.permission.BLUETOOTH;
+import static android.Manifest.permission.BLUETOOTH_ADMIN;
+import static org.radarcns.android.RadarConfiguration.PROJECT_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.USER_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
-import static org.radarcns.android.RadarConfiguration.MIN_DISK_SPACE;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
@@ -53,6 +54,7 @@ import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
  * @param <T> state that the Service will provide.
  */
 public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
+    public static final String NEEDS_BLUETOOTH_KEY = DeviceServiceProvider.class.getName() + ".needsBluetooth";
     private static final Logger logger = LoggerFactory.getLogger(DeviceServiceProvider.class);
 
     private MainActivity activity;
@@ -69,8 +71,10 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     /**
      * Creator for a device state.
      * @return non-null state creator.
+     * @deprecated state creators are no longer used
      */
-    public abstract Parcelable.Creator<T> getStateCreator();
+    @Deprecated
+    public Parcelable.Creator<T> getStateCreator() { return null; }
 
     /** Display name of the service. */
     public abstract String getDisplayName();
@@ -99,24 +103,18 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * Get or create a DeviceServiceConnection. Once created, it will be a single fixed connection
      * object.
      * @throws IllegalStateException if {@link #setActivity(MainActivity)} has not been called.
-     * @throws UnsupportedOperationException if {@link #getStateCreator()} or
-     *                                       {@link #getServiceClass()} returns null.
+     * @throws UnsupportedOperationException if {@link #getServiceClass()} returns null.
      */
     public DeviceServiceConnection<T> getConnection() {
         if (connection == null) {
             if (activity == null) {
                 throw new IllegalStateException("#setActivity(MainActivity) needs to be set before #getConnection() is called.");
             }
-            Parcelable.Creator<T> creator = getStateCreator();
-            if (creator == null) {
-                throw new UnsupportedOperationException("RadarServiceProvider " + getClass().getSimpleName() + " does not provide state creator");
-            }
-
             Class<?> serviceClass = getServiceClass();
             if (serviceClass == null) {
                 throw new UnsupportedOperationException("RadarServiceProvider " + getClass().getSimpleName() + " does not provide service class");
             }
-            connection = new DeviceServiceConnection<>(activity, creator, serviceClass.getName());
+            connection = new DeviceServiceConnection<>(activity, serviceClass.getName());
         }
         return connection;
     }
@@ -190,16 +188,20 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
 
     /**
      * Configure the service from the set RadarConfiguration.
-     * Override and call {@code super.configure(bundle)} to pass additional options.
      */
+    @CallSuper
     protected void configure(Bundle bundle) {
         // Add the default configuration parameters given to the service intents
         config.putExtras(bundle,
-                KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, DEFAULT_GROUP_ID_KEY,
+                KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, PROJECT_ID_KEY, USER_ID_KEY,
                 KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
-                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION, MIN_DISK_SPACE,
-                DISK_SPACE_CHECK_TIMEOUT, DISK_SPACE_CHECK_RENOTIFY, DISK_SPACE_CHECK_ENABLE);
+                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
+        ((RadarApplication)activity.getApplicationContext()).configureProvider(config, bundle);
+        List<String> permissions = needsPermissions();
+        bundle.putBoolean(NEEDS_BLUETOOTH_KEY, permissions.contains(BLUETOOTH) ||
+                permissions.contains(BLUETOOTH_ADMIN));
+        activity.getAuthState().addToBundle(bundle);
     }
 
     /**
@@ -210,41 +212,41 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      */
     public static List<DeviceServiceProvider> loadProviders(@NonNull MainActivity activity,
                                                             @NonNull RadarConfiguration config) {
-        List<DeviceServiceProvider> factories = loadProviders(config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT));
-        for (DeviceServiceProvider factory : factories) {
-            factory.setActivity(activity);
-            factory.setConfig(config);
+        List<DeviceServiceProvider> providers = loadProviders(config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT));
+        for (DeviceServiceProvider provider : providers) {
+            provider.setActivity(activity);
+            provider.setConfig(config);
         }
-        return factories;
+        return providers;
     }
 
     /**
      * Loads the service providers specified in given whitespace-delimited String.
      */
     public static List<DeviceServiceProvider> loadProviders(@NonNull String deviceServicesToConnect) {
-        List<DeviceServiceProvider> factories = new ArrayList<>();
+        List<DeviceServiceProvider> providers = new ArrayList<>();
         Scanner scanner = new Scanner(deviceServicesToConnect);
         while (scanner.hasNext()) {
             String className = scanner.next();
             if (className.charAt(0) == '.') {
                 className = "org.radarcns" + className;
             }
-            Class<?> factoryClass;
+            Class<?> providerClass;
             try {
-                factoryClass = Class.forName(className);
+                providerClass = Class.forName(className);
             } catch (ClassNotFoundException ex) {
                 throw new IllegalArgumentException("Class " + className + " not found in classpath", ex);
             }
             try {
-                DeviceServiceProvider serviceProvider = (DeviceServiceProvider)factoryClass.newInstance();
-                factories.add(serviceProvider);
+                DeviceServiceProvider serviceProvider = (DeviceServiceProvider)providerClass.newInstance();
+                providers.add(serviceProvider);
             } catch (InstantiationException | IllegalAccessException ex) {
                 throw new IllegalArgumentException("Class " + className + " cannot be instantiated", ex);
             } catch (ClassCastException ex) {
                 throw new IllegalArgumentException("Class " + className + " is not a " + DeviceServiceProvider.class.getSimpleName());
             }
         }
-        return factories;
+        return providers;
     }
 
     /** Get the MainActivity associated to the current connection. */
@@ -312,4 +314,26 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * Android permissions that the underlying service needs to function correctly.
      */
     public abstract List<String> needsPermissions();
+
+    /**
+     * Match device type.
+     *
+     * @param deviceProducer producer of given device
+     * @param deviceModel model of given device
+     * @param version version of the device plugin API
+     */
+    public boolean matches(@NonNull String deviceProducer, @NonNull String deviceModel,
+            String version) {
+        return deviceProducer.equals(getDeviceProducer()) && deviceModel.equals(getDeviceModel())
+                && version == null || version.equals(getVersion());
+    }
+
+    @NonNull
+    public abstract String getDeviceProducer();
+
+    @NonNull
+    public abstract String getDeviceModel();
+
+    @NonNull
+    public abstract String getVersion();
 }

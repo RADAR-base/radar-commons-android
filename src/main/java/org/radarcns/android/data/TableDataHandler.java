@@ -19,34 +19,23 @@ package org.radarcns.android.data;
 import android.content.Context;
 import android.os.Process;
 import android.support.annotation.NonNull;
-
+import okhttp3.Headers;
 import org.apache.avro.specific.SpecificRecord;
+import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.android.util.AndroidThreadFactory;
-import org.radarcns.android.util.AtomicFloat;
-import org.radarcns.android.util.BatteryLevelReceiver;
-import org.radarcns.android.util.NetworkConnectedReceiver;
-import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
-import org.radarcns.android.util.SingleThreadExecutorFactory;
+import org.radarcns.android.util.*;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.SpecificRecordEncoder;
-import org.radarcns.key.MeasurementKey;
-import org.radarcns.producer.SchemaRetriever;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.RestSender;
+import org.radarcns.producer.rest.SchemaRetriever;
 import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.ThreadFactory;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -54,37 +43,34 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Stores data in databases and sends it to the server.
  */
-public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRecord>, BatteryLevelReceiver.BatteryLevelListener, NetworkConnectedReceiver.NetworkConnectedListener {
+public class TableDataHandler implements DataHandler<ObservationKey, SpecificRecord>, BatteryLevelReceiver.BatteryLevelListener, NetworkConnectedReceiver.NetworkConnectedListener {
     private static final Logger logger = LoggerFactory.getLogger(TableDataHandler.class);
 
     public static final long DATA_RETENTION_DEFAULT = 86400000L;
-    public static final long DATABASE_COMMIT_RATE_DEFAULT = 2500L;
     public static final int SEND_LIMIT_DEFAULT = 1000;
-    public static final long CLEAN_RATE_DEFAULT = 3600L;
     public static final long UPLOAD_RATE_DEFAULT = 10L;
     public static final long SENDER_CONNECTION_TIMEOUT_DEFAULT = 10L;
     public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
     public static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
-    private final ThreadFactory threadFactory;
-    private final Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> tables;
+    private final Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> tables;
     private final Set<ServerStatusListener> statusListeners;
     private final SingleThreadExecutorFactory executorFactory;
     private final BatteryLevelReceiver batteryLevelReceiver;
     private final NetworkConnectedReceiver networkConnectedReceiver;
     private final AtomicBoolean sendOnlyWithWifi;
+    private AppAuthState authState;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
     private int kafkaRecordsSendLimit;
     private final AtomicLong dataRetention;
     private long kafkaUploadRate;
-    private long kafkaCleanRate;
     private long senderConnectionTimeout;
 
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
-    private KafkaDataSubmitter<MeasurementKey, SpecificRecord> submitter;
-    private RestSender<MeasurementKey, SpecificRecord> sender;
+    private KafkaDataSubmitter<SpecificRecord> submitter;
+    private RestSender<ObservationKey, SpecificRecord> sender;
     private final AtomicFloat minimumBatteryLevel;
     private boolean useCompression;
 
@@ -92,12 +78,12 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            List<AvroTopic<MeasurementKey, ? extends SpecificRecord>> topics,
-                            int maxBytes, boolean sendOnlyWithWifi) throws IOException {
+                            List<AvroTopic<ObservationKey, ? extends SpecificRecord>> topics,
+                            int maxBytes, boolean sendOnlyWithWifi, AppAuthState authState)
+            throws IOException {
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
-        this.kafkaCleanRate = CLEAN_RATE_DEFAULT;
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
         this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
@@ -108,12 +94,14 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
         this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
         this.useCompression = false;
+        this.authState = authState;
 
         tables = new HashMap<>(topics.size() * 2);
-        for (AvroTopic<MeasurementKey, ? extends SpecificRecord> topic : topics) {
-//            tables.put(topic, new MeasurementTable<>(context, topic, DATABASE_COMMIT_RATE_DEFAULT));
-            tables.put(topic, new TapeCache<>(
-                    context, topic, DATABASE_COMMIT_RATE_DEFAULT, executorFactory, maxBytes));
+        for (AvroTopic<ObservationKey, ? extends SpecificRecord> topic : topics) {
+            DataCache<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
+                    .getOrCreateCache(context.getApplicationContext(), topic);
+            cache.setMaximumSize(maxBytes);
+            tables.put(topic, cache);
         }
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
@@ -121,7 +109,6 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         sender = null;
 
         statusListeners = new HashSet<>();
-        this.threadFactory = new AndroidThreadFactory("DataHandler", android.os.Process.THREAD_PRIORITY_BACKGROUND);
 
         if (kafkaUrl != null) {
             doEnableSubmitter();
@@ -159,15 +146,16 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         }
 
         updateServerStatus(Status.CONNECTING);
-        this.sender = new RestSender.Builder<MeasurementKey, SpecificRecord>()
+        this.sender = new RestSender.Builder<ObservationKey, SpecificRecord>()
                 .server(kafkaConfig)
                 .schemaRetriever(schemaRetriever)
                 .encoders(new SpecificRecordEncoder(false), new SpecificRecordEncoder(false))
                 .connectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS)
                 .useCompression(useCompression)
+                .headers(authState.getHeaders())
                 .build();
-        this.submitter = new KafkaDataSubmitter<>(this, sender, threadFactory,
-                kafkaRecordsSendLimit, getPreferredUploadRate(), kafkaCleanRate);
+        this.submitter = new KafkaDataSubmitter<>(this, sender, kafkaRecordsSendLimit,
+                getPreferredUploadRate(), authState.getUserId());
     }
 
     public synchronized boolean isStarted() {
@@ -229,8 +217,11 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
             this.submitter = null;
             this.sender = null;
         }
+        if (schemaRetriever != null) {
+            schemaRetriever.close();
+        }
         clean();
-        for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {
+        for (DataCache<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
         }
         executorFactory.close();
@@ -239,7 +230,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
     @Override
     public void clean() {
         long timestamp = (System.currentTimeMillis() - dataRetention.get());
-        for (DataCache<MeasurementKey, ? extends SpecificRecord> table : tables.values()) {
+        for (DataCache<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.removeBeforeTimestamp(timestamp);
         }
     }
@@ -248,7 +239,7 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      * Try to submit given data. This will only send data if the submitter is active and there is
      * a connection with the server. Otherwise, the data is discarded.
      */
-    public synchronized boolean trySend(AvroTopic topic, long offset, MeasurementKey deviceId,
+    public synchronized boolean trySend(AvroTopic topic, long offset, ObservationKey deviceId,
                                         SpecificRecord record) {
         return submitter != null && submitter.trySend(topic, offset, deviceId, record);
     }
@@ -276,16 +267,23 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
      */
     @SuppressWarnings("unchecked")
     @Override
-    public <V extends SpecificRecord> DataCache<MeasurementKey, V> getCache(AvroTopic<MeasurementKey, V> topic) {
-        return (DataCache<MeasurementKey, V>)this.tables.get(topic);
+    public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(AvroTopic<ObservationKey, V> topic) {
+        return (DataCache<ObservationKey, V>)this.tables.get(topic);
     }
 
     @Override
-    public <V extends SpecificRecord> void addMeasurement(DataCache<MeasurementKey, V> table, MeasurementKey key, V value) {
+    public <V extends SpecificRecord> void addMeasurement(DataCache<ObservationKey, V> table, ObservationKey key, V value) {
         table.addMeasurement(key, value);
     }
 
-    public Map<AvroTopic<MeasurementKey, ? extends SpecificRecord>, DataCache<MeasurementKey, ? extends SpecificRecord>> getCaches() {
+    @Override
+    public void setMaximumCacheSize(int numBytes) {
+        for (DataCache cache : tables.values()) {
+            cache.setMaximumSize(numBytes);
+        }
+    }
+
+    public Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> getCaches() {
         return tables;
     }
 
@@ -363,11 +361,21 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         updateUploadRate();
     }
 
-    public synchronized void setKafkaCleanRate(long kafkaCleanRate) {
-        if (submitter != null) {
-            submitter.setCleanRate(kafkaCleanRate);
+    public synchronized void setAuthState(AppAuthState state) {
+        this.authState = state;
+        if (sender != null) {
+            ArrayList<Map.Entry<String, String>> authHeaders = authState.getHeaders();
+            Headers.Builder builder = new Headers.Builder();
+            if (authHeaders != null) {
+                for (Map.Entry<String, String> header : authHeaders) {
+                    builder.add(header.getKey(), header.getValue());
+                }
+            }
+            sender.setHeaders(builder.build());
         }
-        this.kafkaCleanRate = kafkaCleanRate;
+        if (submitter != null) {
+            submitter.setUserId(authState.getUserId());
+        }
     }
 
     public synchronized void setSenderConnectionTimeout(long senderConnectionTimeout) {
@@ -388,7 +396,11 @@ public class TableDataHandler implements DataHandler<MeasurementKey, SpecificRec
         if (sender != null) {
             sender.setSchemaRetriever(schemaRetriever);
         }
+        SchemaRetriever oldSchemaRetriever = this.schemaRetriever;
         this.schemaRetriever = schemaRetriever;
+        if (oldSchemaRetriever != null) {
+            oldSchemaRetriever.close();
+        }
     }
 
     public synchronized void setCompression(boolean useCompression) {

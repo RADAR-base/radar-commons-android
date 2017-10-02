@@ -66,9 +66,13 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
         decoder = decoderFactory.binaryDecoder(in, decoder);
 
         long kafkaOffset = QueueFile.bytesToLong(headerBuffer, 0);
-        K key = keyReader.read(null, decoder);
-        V value = valueReader.read(null, decoder);
-        return new Record<>(kafkaOffset, key, value);
+        try {
+            K key = keyReader.read(null, decoder);
+            V value = valueReader.read(null, decoder);
+            return new Record<>(kafkaOffset, key, value);
+        } catch (RuntimeException ex) {
+            throw new IOException("Failed to deserialize object", ex);
+        }
     }
 
     public void serialize(Record<K, V> o, OutputStream out) throws IOException {
