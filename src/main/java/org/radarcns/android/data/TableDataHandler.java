@@ -364,12 +364,10 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     public synchronized void setAuthState(AppAuthState state) {
         this.authState = state;
         if (sender != null) {
-            ArrayList<Map.Entry<String, String>> authHeaders = authState.getHeaders();
+            List<Map.Entry<String, String>> authHeaders = authState.getHeaders();
             Headers.Builder builder = new Headers.Builder();
-            if (authHeaders != null) {
-                for (Map.Entry<String, String> header : authHeaders) {
-                    builder.add(header.getKey(), header.getValue());
-                }
+            for (Map.Entry<String, String> header : authHeaders) {
+                builder.add(header.getKey(), header.getValue());
             }
             sender.setHeaders(builder.build());
         }

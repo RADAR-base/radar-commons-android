@@ -23,6 +23,7 @@ buildscript {
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
         classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.4.18'
+        classpath 'de.mobilej.unmock:UnMockPlugin:0.6.4'
     }
 }
 
@@ -33,6 +34,7 @@ allprojects {
     apply plugin: 'idea'
     apply plugin: 'maven-publish'
     apply plugin: 'com.jfrog.artifactory'
+    apply plugin: 'de.mobilej.unmock'
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
@@ -77,6 +79,8 @@ allprojects {
         testCompile 'junit:junit:4.12'
         testCompile 'org.slf4j:slf4j-simple:1.7.21'
         testCompile 'org.robolectric:robolectric:3.4.2'
+
+        unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
     }
 
 //---------------------------------------------------------------------------//
@@ -167,6 +171,35 @@ android {
 
 ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
+
+unMock {
+    keep "android.widget.BaseAdapter"
+    keep "android.widget.ArrayAdapter"
+    keep "android.os.Bundle"
+    keepStartingWith "android.database.MatrixCursor"
+    keep "android.database.AbstractCursor"
+    keep "android.database.CrossProcessCursor"
+    keepStartingWith "android.text.TextUtils"
+    keepStartingWith "android.util."
+    keepStartingWith "android.text."
+    keepStartingWith "android.content.ContentValues"
+    keepStartingWith "android.content.ComponentName"
+    keepStartingWith "android.content.ContentUris"
+    keepStartingWith "android.content.ContentProviderOperation"
+    keepStartingWith "android.content.ContentProviderResult"
+    keepStartingWith "android.content.UriMatcher"
+    keepStartingWith "android.content.Intent"
+    keep "android.location.Location"
+    keepStartingWith "android.content.res.Configuration"
+    keepStartingWith "org."
+    keepStartingWith "libcore."
+    keepStartingWith "com.android.internal.R"
+    keepStartingWith "com.android.internal.util."
+    keep "android.net.Uri"
+    keepStartingWith "org.json."
+
+    keepAndRename "java.nio.charset.Charsets" to "xjava.nio.charset.Charsets"
+}
 
 ext.sharedManifest = manifest {
     attributes("Implementation-Title": moduleName,

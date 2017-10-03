@@ -22,7 +22,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Set;
 
-/** Device manager of a wearable device. */
+/** AppSource manager of a wearable device. */
 public interface DeviceManager<T> extends Closeable {
 
     /**

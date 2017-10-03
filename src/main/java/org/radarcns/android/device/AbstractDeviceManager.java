@@ -40,7 +40,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     private boolean closed;
 
     /**
-     * Device manager initialization. After initialization, be sure to call
+     * AppSource manager initialization. After initialization, be sure to call
      * {@link #setName(String)}.
      *
      * @param service service that the manager is started by
