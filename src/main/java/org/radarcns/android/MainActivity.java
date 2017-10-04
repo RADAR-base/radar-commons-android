@@ -17,27 +17,31 @@
 package org.radarcns.android;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.AppOpsManager;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
-import android.os.RemoteException;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.widget.Toast;
-
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
-
+import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
@@ -51,13 +55,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static android.Manifest.permission.ACCESS_COARSE_LOCATION;
+import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.ACCESS_NETWORK_STATE;
 import static android.Manifest.permission.BLUETOOTH;
 import static android.Manifest.permission.INTERNET;
+import static android.Manifest.permission.PACKAGE_USAGE_STATS;
+import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
@@ -67,6 +76,9 @@ public abstract class MainActivity extends Activity {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
+    private static final int LOGIN_REQUEST_CODE = 232619693;
+    private static final int LOCATION_REQUEST_CODE = 232619694;
+    private static final int USAGE_REQUEST_CODE = 232619695;
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters;
@@ -84,8 +96,8 @@ public abstract class MainActivity extends Activity {
     private Handler mHandler;
 
     /** The UI to show the service data. */
-    private Runnable mUIScheduler;
-    private MainActivityView mUIUpdater;
+    private Runnable mViewUpdater;
+    private MainActivityView mView;
     private boolean isForcedDisconnected;
 
     /** Defines callbacks for service binding, passed to bindService() */
@@ -104,6 +116,10 @@ public abstract class MainActivity extends Activity {
 
     /** Current server status. */
     private ServerStatusListener.Status serverStatus;
+    private AppAuthState authState;
+
+    private final LinkedHashSet<String> needsPermissions;
+    private boolean requestedBt;
 
     public MainActivity() {
         super();
@@ -150,6 +166,7 @@ public abstract class MainActivity extends Activity {
         };
 
         latestNumberOfRecordsSent = new TimedInt();
+        needsPermissions = new LinkedHashSet<>();
     }
 
     /**
@@ -160,11 +177,23 @@ public abstract class MainActivity extends Activity {
      */
     protected abstract RadarConfiguration createConfiguration();
 
+    protected abstract Class<? extends LoginActivity> loginActivity();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         radarConfiguration = createConfiguration();
+
+        authState = AppAuthState.Builder.from(this).build();
+        if (!authState.isValid()) {
+            startActivity(new Intent(this, loginActivity()));
+            finish();
+            return;
+        }
+        radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
+        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+
         onConfigChanged();
         logger.info("RADAR configuration at create: {}", radarConfiguration);
 
@@ -204,19 +233,19 @@ public abstract class MainActivity extends Activity {
 
         // Start the UI thread
         uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
-        mUIUpdater = createView();
-        mUIScheduler = new Runnable() {
+        mViewUpdater = new Runnable() {
             @Override
             public void run() {
                 try {
                     // Update all rows in the UI with the data from the connections
-                    mUIUpdater.update();
-                } catch (RemoteException e) {
-                    logger.warn("Failed to update device data", e);
+                    MainActivityView localView = mView;
+                    if (localView != null) {
+                        localView.update();
+                    }
                 } finally {
                     Handler handler = getHandler();
                     if (handler != null) {
-                        handler.postDelayed(mUIScheduler, uiRefreshRate);
+                        handler.postDelayed(mViewUpdater, uiRefreshRate);
                     }
                 }
             }
@@ -259,13 +288,13 @@ public abstract class MainActivity extends Activity {
     protected void onResume() {
         logger.info("mainActivity onResume");
         super.onResume();
-        getHandler().post(mUIScheduler);
+        getHandler().post(mViewUpdater);
     }
 
     @Override
     protected void onPause() {
         logger.info("mainActivity onPause");
-        getHandler().removeCallbacks(mUIScheduler);
+        getHandler().removeCallbacks(mViewUpdater);
         super.onPause();
     }
 
@@ -273,6 +302,9 @@ public abstract class MainActivity extends Activity {
     protected void onStart() {
         logger.info("mainActivity onStart");
         super.onStart();
+        if (!authState.isValid()) {
+            startLogin();
+        }
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
 
@@ -282,6 +314,7 @@ public abstract class MainActivity extends Activity {
         synchronized (this) {
             mHandler = localHandler;
         }
+        mView = createView();
 
         new AsyncTask<DeviceServiceProvider, Void, Void>() {
             @Override
@@ -311,6 +344,7 @@ public abstract class MainActivity extends Activity {
             mHandler = null;
         }
         mHandlerThread.quitSafely();
+        mView = null;
 
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.isBound()) {
@@ -319,6 +353,24 @@ public abstract class MainActivity extends Activity {
             } else {
                 logger.info("Already unbound: {}", provider);
             }
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent result) {
+        if (requestCode == LOGIN_REQUEST_CODE) {
+            if (resultCode != RESULT_OK) {
+                throw new IllegalStateException("Login should not be cancellable");
+            }
+            authState = AppAuthState.Builder.from(result.getExtras()).build();
+            radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
+            radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+            onConfigChanged();
+            for (DeviceServiceProvider provider : mConnections) {
+                provider.updateConfiguration();
+            }
+        } else if (requestCode == LOCATION_REQUEST_CODE || requestCode == USAGE_REQUEST_CODE) {
+            checkPermissions();
         }
     }
 
@@ -337,11 +389,7 @@ public abstract class MainActivity extends Activity {
     /** Disconnect from given service. */
     public void disconnect(DeviceServiceConnection connection) {
         if (connection.isRecording()) {
-            try {
-                connection.stopRecording();
-            } catch (RemoteException e) {
-                // it cannot be reached so it already stopped recording
-            }
+            connection.stopRecording();
         }
     }
 
@@ -352,37 +400,42 @@ public abstract class MainActivity extends Activity {
         if (isForcedDisconnected) {
             return;
         }
-        boolean requestedBt = false;
-        for (DeviceServiceProvider provider : mConnections) {
+        requestedBt = false;
+        for (DeviceServiceProvider<?> provider : mConnections) {
             DeviceServiceConnection connection = provider.getConnection();
-            if (!connection.hasService() || connection.isRecording()) {
+            if (!connection.hasService() || connection.isRecording() || !checkPermissions(provider)) {
                 continue;
             }
-            if (provider.needsPermissions().contains(BLUETOOTH)) {
-                if (requestedBt || requestEnableBt()) {
-                    logger.info("Cannot start scanning on service {} until bluetooth is turned on.",
-                            connection);
-                    requestedBt = true;
-                    continue;
-                }
-            }
-            try {
-                logger.info("Starting recording on connection {}", connection);
-                connection.startRecording(deviceFilters.get(connection));
-            } catch (RemoteException ex) {
-                logger.error("Failed to start recording for device {}", connection, ex);
-            }
+
+            logger.info("Starting recording on connection {}", connection);
+            connection.startRecording(deviceFilters.get(connection));
         }
     }
 
-    public void serviceConnected(final DeviceServiceConnection<?> connection) {
-        try {
-            ServerStatusListener.Status status = connection.getServerStatus();
-            logger.info("Initial server status: {}", status);
-            updateServerStatus(status);
-        } catch (RemoteException e) {
-            logger.warn("Failed to update UI server status");
+    protected boolean checkPermissions(DeviceServiceProvider<?> provider) {
+        List<String> providerPermissions = provider.needsPermissions();
+
+        if (providerPermissions.contains(BLUETOOTH)) {
+            if (requestedBt || requestEnableBt()) {
+                logger.info("Cannot start scanning on service {} until bluetooth is turned on.",
+                        provider.getConnection());
+                requestedBt = true;
+                return false;
+            }
         }
+        for (String permission : providerPermissions) {
+            if (needsPermissions.contains(permission)) {
+                // cannot start
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void serviceConnected(final DeviceServiceConnection<?> connection) {
+        ServerStatusListener.Status status = connection.getServerStatus();
+        logger.info("Initial server status: {}", status);
+        updateServerStatus(status);
         startScanning();
     }
 
@@ -408,24 +461,27 @@ public abstract class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Boast.makeText(MainActivity.this, status.toString(), Toast.LENGTH_SHORT).show();
+                int showRes = -1;
                 switch (status) {
+                    case READY:
+                        showRes = R.string.device_ready;
+                        break;
                     case CONNECTED:
+                        showRes = R.string.device_connected;
                         break;
                     case CONNECTING:
-                        logger.info( "Device name is {} while connecting.", connection.getDeviceName() );
-                        // Reject if device name inputted does not equal device nameA
-                        if (!connection.isAllowedDevice(deviceFilters.get(connection))) {
-                            logger.info("Device name '{}' is not in the list of keys '{}'", connection.getDeviceName(), deviceFilters.get(connection));
-                            Boast.makeText(MainActivity.this, String.format("Device '%s' rejected", connection.getDeviceName()), Toast.LENGTH_LONG).show();
-                            disconnect();
-                        }
+                        showRes = R.string.device_connecting;
+                        logger.info( "Device name is {} while connecting.", connection.getDeviceName());
                         break;
                     case DISCONNECTED:
+                        showRes = R.string.device_disconnected;
                         startScanning();
                         break;
                     default:
                         break;
+                }
+                if (showRes != -1) {
+                    Boast.makeText(MainActivity.this, showRes).show();
                 }
             }
         });
@@ -458,18 +514,81 @@ public abstract class MainActivity extends Activity {
             permissions.addAll(provider.needsPermissions());
         }
 
-        List<String> permissionsToRequest = new ArrayList<>();
+        needsPermissions.clear();
+
         for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            if (permission.equals(ACCESS_FINE_LOCATION) || permission.equals(ACCESS_COARSE_LOCATION)) {
+                LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                boolean isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+                boolean isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+
+                //Start your Activity if location was enabled:
+                if (!isGpsEnabled && !isNetworkEnabled) {
+                    needsPermissions.add(LOCATION_SERVICE);
+                    needsPermissions.add(permission);
+                }
+            }
+
+            if (permission.equals(PACKAGE_USAGE_STATS)) {
+                AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+                int mode = appOps.checkOpNoThrow(
+                        "android:get_usage_stats", android.os.Process.myUid(), getPackageName());
+
+                if (mode != AppOpsManager.MODE_ALLOWED) {
+                    needsPermissions.add(permission);
+                }
+            } else if (ContextCompat.checkSelfPermission(this, permission) != PackageManager
+                    .PERMISSION_GRANTED) {
                 logger.info("Need to request permission for {}", permission);
-                permissionsToRequest.add(permission);
+                needsPermissions.add(permission);
             }
         }
-        if (!permissionsToRequest.isEmpty()) {
+
+        if (needsPermissions.contains(LOCATION_SERVICE)) {
+            requestLocationProvider();
+        } else if (needsPermissions.contains(PACKAGE_USAGE_STATS)) {
+            requestPackageUsageStats();
+        } else if (!needsPermissions.isEmpty()) {
             ActivityCompat.requestPermissions(this,
-                    permissionsToRequest.toArray(new String[permissionsToRequest.size()]),
+                    needsPermissions.toArray(new String[needsPermissions.size()]),
                     REQUEST_ENABLE_PERMISSIONS);
         }
+    }
+
+    private void requestLocationProvider() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+        builder.setTitle(R.string.enable_location_title)
+                .setMessage(R.string.enable_location)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                        if (intent.resolveActivity(getPackageManager()) == null) {
+                            intent = new Intent(Settings.ACTION_SETTINGS);
+                        }
+                        startActivityForResult(intent, LOCATION_REQUEST_CODE);
+                        dialog.cancel();
+                    }
+                })
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .show();
+    }
+
+    private void requestPackageUsageStats() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+        builder.setTitle(R.string.enable_package_usage_title)
+                .setMessage(R.string.enable_package_usage)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                        if (intent.resolveActivity(getPackageManager()) == null) {
+                            intent = new Intent(Settings.ACTION_SETTINGS);
+                        }
+                        startActivityForResult(intent, USAGE_REQUEST_CODE);
+                        dialog.cancel();
+                    }
+                })
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .show();
     }
 
     @Override
@@ -479,8 +598,10 @@ public abstract class MainActivity extends Activity {
             for (int i = 0; i < permissions.length; i++) {
                 if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
                     logger.info("Granted permission {}", permissions[i]);
+                    needsPermissions.remove(permissions[i]);
                 } else {
                     logger.info("Denied permission {}", permissions[i]);
+                    return;
                 }
             }
             // Permission granted.
@@ -488,8 +609,29 @@ public abstract class MainActivity extends Activity {
         }
     }
 
+    protected boolean hasPermission(String permissionName) {
+        return !needsPermissions.contains(permissionName);
+    }
+
     public void updateServerStatus(final ServerStatusListener.Status status) {
         this.serverStatus = status;
+
+        if (status == ServerStatusListener.Status.UNAUTHORIZED) {
+            synchronized (this) {
+                // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
+                if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
+                    return;
+                }
+                authState.invalidate(this);
+            }
+            startLogin();
+        }
+    }
+
+    protected void startLogin() {
+        Intent intent = new Intent(this, loginActivity());
+        intent.setAction(ACTION_LOGIN);
+        startActivityForResult(intent, LOGIN_REQUEST_CODE);
     }
 
     public void updateServerRecordsSent(DeviceServiceConnection<?> connection, String topic,
@@ -509,13 +651,9 @@ public abstract class MainActivity extends Activity {
             getHandler().post(new Runnable() {
                 @Override
                 public void run() {
-                    try {
-                        if (connection.isRecording()) {
-                            connection.stopRecording();
-                            // will restart recording once the status is set to disconnected.
-                        }
-                    } catch (RemoteException e) {
-                        logger.error("Cannot restart scanning");
+                    if (connection.isRecording()) {
+                        connection.stopRecording();
+                        // will restart recording once the status is set to disconnected.
                     }
                 }
             });
@@ -554,5 +692,9 @@ public abstract class MainActivity extends Activity {
 
     public RadarConfiguration getRadarConfiguration() {
         return radarConfiguration;
+    }
+
+    public AppAuthState getAuthState() {
+        return authState;
     }
 }

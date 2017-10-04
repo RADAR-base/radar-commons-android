@@ -1,27 +1,146 @@
+/*
+ * Copyright 2017 The Hyve
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 buildscript {
     repositories {
         jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.2.3'
+        classpath 'com.android.tools.build:gradle:2.3.0'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
     }
 }
 
-apply plugin: 'com.android.library'
-apply plugin: 'com.jfrog.bintray'
-apply plugin: 'com.github.dcendents.android-maven'
+allprojects {
+    apply plugin: 'com.android.library'
+    apply plugin: 'com.jfrog.bintray'
+    apply plugin: 'com.github.dcendents.android-maven'
+    apply plugin: 'idea'
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+    version = '0.3-SNAPSHOT'
+    ext.versionCode = 5
+    group = 'org.radarcns'
+    ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
+
+    ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
+    ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
+    ext.website = 'http://radar-cns.org'
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+    configurations.compile {
+        resolutionStrategy.cacheChangingModulesFor 0, 'SECONDS'
+    }
+
+    repositories {
+        jcenter()
+        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+    }
+
+    dependencies {
+        compile 'com.squareup.okhttp3:okhttp:3.8.0'
+
+        compile 'com.google.firebase:firebase-config:11.0.4'
+
+        compile('org.radarcns:radar-commons:0.6-SNAPSHOT') {
+            exclude group: 'io.confluent', module: 'kafka-avro-serializer'
+            exclude group: 'org.apache.kafka', module: 'kafka-clients'
+            exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
+            exclude group: 'com.fasterxml.jackson.core'
+            exclude group: 'org.json'
+        }
+        compile 'org.radarcns:radar-schemas-commons:0.2-alpha.3-SNAPSHOT'
+
+        testCompile 'junit:junit:4.12'
+        testCompile 'org.slf4j:slf4j-simple:1.7.21'
+        testCompile 'org.robolectric:robolectric:3.4.2'
+    }
+
+//---------------------------------------------------------------------------//
+// Build system metadata                                                     //
+//---------------------------------------------------------------------------//
+    def pomConfig = {
+        licenses {
+            license {
+                name 'The Apache Software License, Version 2.0'
+                url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution 'repo'
+            }
+        }
+        developers {
+            developer {
+                id 'blootsvoets'
+                name 'Joris Borgdorff'
+                email 'joris@thehyve.nl'
+                organization 'The Hyve'
+            }
+            developer {
+                id 'MaximMoinat'
+                name 'Maxim Moinat'
+                email 'maxim@thehyve.nl'
+                organization 'The Hyve'
+            }
+        }
+        issueManagement {
+            system 'GitHub'
+            url githubUrl + '/issues'
+        }
+        organization {
+            name 'RADAR-CNS'
+            url website
+        }
+        scm {
+            connection 'scm:git:' + githubUrl
+            url githubUrl
+        }
+    }
+
+    idea {
+        module {
+            downloadSources = true
+        }
+    }
+
+    tasks.matching { it instanceof Test }.all {
+        testLogging {
+            showExceptions = true
+            showStandardStreams = true
+            showCauses = true
+            showStackTraces = true
+            exceptionFormat "full"
+        }
+    }
+}
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.3"
+    compileSdkVersion 26
+    buildToolsVersion "26.0.1"
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 25
-        versionCode 5
-        versionName '0.3-SNAPSHOT'
+        targetSdkVersion 26
+        versionCode versionCode
+        versionName version
     }
     lintOptions {
         abortOnError false
@@ -43,48 +162,8 @@ android {
     }
 }
 
-//---------------------------------------------------------------------------//
-// Configuration                                                             //
-//---------------------------------------------------------------------------//
-
-group = 'org.radarcns'
 ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
-ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
-version = android.defaultConfig.versionName
-
-ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
-ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
-ext.website = 'http://radar-cns.org'
-
-//---------------------------------------------------------------------------//
-// Sources and classpath configurations                                      //
-//---------------------------------------------------------------------------//
-
-repositories {
-    jcenter()
-}
-
-dependencies {
-    compile 'com.squareup.okhttp3:okhttp:3.6.0'
-    compile 'org.apache.avro:avro:1.8.1'
-    compile 'org.xerial.snappy:snappy-java:1.1.2.6'
-    compile 'com.google.firebase:firebase-config:10.2.6'
-    compile ('org.radarcns:radar-commons:0.4.2') {
-        exclude group: 'io.confluent', module: 'kafka-avro-serializer'
-        exclude group: 'org.apache.kafka', module: 'kafka-clients'
-        exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
-    }
-    compile 'org.radarcns:radar-schemas-commons:0.2-alpha.1'
-
-    testCompile 'junit:junit:4.12'
-    testCompile 'org.slf4j:slf4j-simple:1.7.21'
-    testCompile 'org.robolectric:robolectric:3.3.2'
-}
-
-//---------------------------------------------------------------------------//
-// Build system metadata                                                     //
-//---------------------------------------------------------------------------//
 
 ext.sharedManifest = manifest {
     attributes("Implementation-Title": moduleName,
@@ -113,42 +192,6 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 artifacts {
     archives javadocJar
     archives sourcesJar
-}
-
-def pomConfig = {
-    licenses {
-        license {
-            name "The Apache Software License, Version 2.0"
-            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
-            distribution 'repo'
-        }
-    }
-    developers {
-        developer {
-            id 'blootsvoets'
-            name 'Joris Borgdorff'
-            email 'joris@thehyve.nl'
-            organization 'The Hyve'
-        }
-        developer {
-            id 'MaximMoinat'
-            name 'Maxim Moinat'
-            email 'maxim@thehyve.nl'
-            organization 'The Hyve'
-        }
-    }
-    issueManagement {
-        system 'GitHub'
-        url githubUrl + '/issues'
-    }
-    organization {
-        name 'RADAR-CNS'
-        url website
-    }
-    scm {
-        connection 'scm:git:' + githubUrl
-        url githubUrl
-    }
 }
 
 install {
@@ -197,6 +240,6 @@ bintray {
 }
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '3.4.1'
-    distributionUrl distributionUrl.replace("bin", "all")
+    gradleVersion = '4.1'
+    distributionType 'all'
 }

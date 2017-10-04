@@ -134,6 +134,8 @@ public class QueueFileOutputStream extends OutputStream {
         long bytesNeeded = queue.usedBytes() + newStreamBytesUsed;
 
         if (bytesNeeded > queue.getMaximumFileSize()) {
+            // reset current element
+            current.setLength(0);
             throw new IOException("Data does not fit in queue");
         }
 

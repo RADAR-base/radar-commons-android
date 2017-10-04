@@ -19,7 +19,7 @@ package org.radarcns.android.device;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 
 import java.io.IOException;
@@ -44,15 +44,15 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
      * @param service service that the manager is started by
      * @param state new empty state variable
      * @param dataHandler data handler for sending data and getting topics.
-     * @param userId user ID that data should be sent with
-     * @param sourceId initial source ID, override later by calling getId().setSourceId()
+     * @param key key to send data with
      */
-    public AbstractDeviceManager(S service, T state, TableDataHandler dataHandler, String userId, String sourceId) {
+    public AbstractDeviceManager(S service, T state, TableDataHandler dataHandler, ObservationKey key) {
         this.dataHandler = dataHandler;
         this.service = service;
         this.deviceStatus = state;
-        this.deviceStatus.getId().setUserId(userId);
-        this.deviceStatus.getId().setSourceId(sourceId);
+        this.deviceStatus.getId().setProjectId(key.getProjectId());
+        this.deviceStatus.getId().setUserId(key.getUserId());
+        this.deviceStatus.getId().setSourceId(key.getSourceId());
         this.deviceName = android.os.Build.MODEL;
         closed = false;
     }
@@ -77,17 +77,17 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
     }
 
     /** Send a single record, using the cache to persist the data. */
-    protected <V extends SpecificRecord> void send(DataCache<MeasurementKey, V> table, V value) {
+    protected <V extends SpecificRecord> void send(DataCache<ObservationKey, V> table, V value) {
         dataHandler.addMeasurement(table, deviceStatus.getId(), value);
     }
 
     /** Try to send a single record without any caching mechanism. */
-    protected <V extends SpecificRecord> void trySend(AvroTopic<MeasurementKey, V> topic, long offset, V value) {
+    protected <V extends SpecificRecord> void trySend(AvroTopic<ObservationKey, V> topic, long offset, V value) {
         dataHandler.trySend(topic, offset, deviceStatus.getId(), value);
     }
 
     /** Get a data cache to send data with at a later time. */
-    protected <V extends SpecificRecord> DataCache<MeasurementKey, V> getCache(AvroTopic<MeasurementKey, V> topic) {
+    protected <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(AvroTopic<ObservationKey, V> topic) {
         return dataHandler.getCache(topic);
     }
 
@@ -135,15 +135,13 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
         return "DeviceManager{name='" + deviceName + "', status=" + deviceStatus + '}';
     }
 
-    /** Tests equality based on the device MeasurementKey. */
+    /** Tests equality based on the device ObservationKey. */
     @Override
     public boolean equals(Object other) {
         if (other == this) {
             return true;
         }
-        if (other == null
-                || !getClass().equals(other.getClass())
-                || deviceStatus.getId().getSourceId() == null) {
+        if (other == null || !getClass().equals(other.getClass())) {
             return false;
         }
 

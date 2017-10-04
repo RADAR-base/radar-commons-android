@@ -57,7 +57,7 @@ public class QueueFileElement {
 
     /** Position that the data begins. */
     public long dataPosition() {
-        if (isEmpty()) {
+        if (length == 0) {
             throw new IllegalStateException("Cannot get data position of empty element");
         }
         return position + QueueFileElement.HEADER_LENGTH;
@@ -65,7 +65,7 @@ public class QueueFileElement {
 
     /** Position of the next element. */
     public long nextPosition() {
-        if (isEmpty()) {
+        if (length == 0) {
             return QueueFileHeader.HEADER_LENGTH;
         } else {
             return position + QueueFileElement.HEADER_LENGTH + length;

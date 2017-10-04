@@ -19,20 +19,21 @@ package org.radarcns.android.device;
 import android.os.Parcel;
 import android.os.Parcelable;
 
-import org.radarcns.key.MeasurementKey;
+import android.support.annotation.CallSuper;
+import org.radarcns.kafka.ObservationKey;
 
 /** Current state of a wearable device. */
 public class BaseDeviceState implements Parcelable {
     public static final Parcelable.Creator<BaseDeviceState> CREATOR = new DeviceStateCreator<>(BaseDeviceState.class);
 
-    private final MeasurementKey id = new MeasurementKey(null, null);
+    private final ObservationKey id = new ObservationKey(null, null, null);
     private DeviceStatusListener.Status status = DeviceStatusListener.Status.DISCONNECTED;
 
     public DeviceStatusListener.Status getStatus() {
         return status;
     }
 
-    public MeasurementKey getId() {
+    public ObservationKey getId() {
         return id;
     }
 
@@ -41,13 +42,17 @@ public class BaseDeviceState implements Parcelable {
         return 0;
     }
 
+    @CallSuper
     public void writeToParcel(Parcel dest, int flags) {
+        dest.writeString(id.getProjectId());
         dest.writeString(id.getUserId());
         dest.writeString(id.getSourceId());
         dest.writeInt(status.ordinal());
     }
 
+    @CallSuper
     public void updateFromParcel(Parcel in) {
+        id.setProjectId(in.readString());
         id.setUserId(in.readString());
         id.setSourceId(in.readString());
         status = DeviceStatusListener.Status.values()[in.readInt()];

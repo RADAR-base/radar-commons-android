@@ -49,7 +49,9 @@ public class RadarConfiguration {
 
     public static final String KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url";
     public static final String SCHEMA_REGISTRY_URL_KEY = "schema_registry_url";
-    public static final String DEFAULT_GROUP_ID_KEY = "default_group_id";
+    public static final String MANAGEMENT_PORTAL_URL = "management_portal_url";
+    public static final String PROJECT_ID_KEY = "project_id";
+    public static final String USER_ID_KEY = "user_id";
     public static final String SOURCE_ID_KEY = "source_id";
     public static final String EMPATICA_API_KEY = "empatica_api_key";
     public static final String UI_REFRESH_RATE_KEY = "ui_refresh_rate_millis";
@@ -68,10 +70,10 @@ public class RadarConfiguration {
     public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
     public static final String SEND_WITH_COMPRESSION = "send_with_compression";
     public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
-    public static final String MIN_DISK_SPACE = "disk_space_notification_min_mb";
-    public static final String DISK_SPACE_CHECK_TIMEOUT = "disk_space_notification_poll_minutes";
-    public static final String DISK_SPACE_CHECK_RENOTIFY = "disk_space_notification_cooldown_minutes";
-    public static final String DISK_SPACE_CHECK_ENABLE = "disk_space_notification_enable";
+    public static final String OAUTH2_AUTHORIZE_URL = "oauth2_authorize_url";
+    public static final String OAUTH2_TOKEN_URL = "oauth2_token_url";
+    public static final String OAUTH2_REDIRECT_URL = "oauth2_redirect_url";
+    public static final String OAUTH2_CLIENT_ID = "oauth2_client_id";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
@@ -89,15 +91,14 @@ public class RadarConfiguration {
     public static final Set<String> LONG_VALUES = new HashSet<>(Arrays.asList(
             UI_REFRESH_RATE_KEY, KAFKA_UPLOAD_RATE_KEY, DATABASE_COMMIT_RATE_KEY,
             KAFKA_CLEAN_RATE_KEY, SENDER_CONNECTION_TIMEOUT_KEY, DATA_RETENTION_KEY,
-            FIREBASE_FETCH_TIMEOUT_MS_KEY, MIN_DISK_SPACE, DISK_SPACE_CHECK_TIMEOUT,
-            DISK_SPACE_CHECK_RENOTIFY));
+            FIREBASE_FETCH_TIMEOUT_MS_KEY));
 
     public static final Set<String> INT_VALUES = new HashSet<>(Arrays.asList(
             KAFKA_RECORDS_SEND_LIMIT_KEY, MAX_CACHE_SIZE));
 
     public static final Set<String> BOOLEAN_VALUES = new HashSet<>(Arrays.asList(
             CONDENSED_DISPLAY_KEY, SEND_ONLY_WITH_WIFI, SEND_WITH_COMPRESSION,
-            UNSAFE_KAFKA_CONNECTION, DISK_SPACE_CHECK_ENABLE));
+            UNSAFE_KAFKA_CONNECTION));
 
     public static final Set<String> FLOAT_VALUES = Collections.singleton(
             KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL);
