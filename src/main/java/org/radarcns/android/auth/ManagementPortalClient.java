@@ -42,12 +42,17 @@ public class ManagementPortalClient implements Closeable {
 
             return state.newBuilder()
                     .property(SOURCES_PROPERTY, parseSources(deviceTypes, sources))
+                    .userId(parseUserId(object))
                     .projectId(parseProjectId(project))
                     .build();
         } catch (JSONException e) {
             throw new IOException(
                     "ManagementPortal did not give a valid response: " + bodyString, e);
         }
+    }
+
+    static String parseUserId(JSONObject object) throws JSONException {
+        return object.getString("login");
     }
 
     static SparseArray<AppSource> parseDeviceTypes(JSONObject project) throws JSONException {

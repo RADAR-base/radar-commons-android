@@ -79,6 +79,7 @@ allprojects {
         testCompile 'junit:junit:4.12'
         testCompile 'org.slf4j:slf4j-simple:1.7.21'
         testCompile 'org.robolectric:robolectric:3.4.2'
+        testCompile 'com.squareup.okhttp3:mockwebserver:3.8.0'
 
         unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
     }
@@ -197,6 +198,7 @@ unMock {
     keepStartingWith "com.android.internal.util."
     keep "android.net.Uri"
     keepStartingWith "org.json."
+    keep 'android.os.SystemClock'
 
     keepAndRename "java.nio.charset.Charsets" to "xjava.nio.charset.Charsets"
 }
