@@ -116,9 +116,6 @@ public class ManagementPortalClientTest {
 
     @Test
     public void parseNonDynamicSources() throws Exception {
-        JSONObject object = new JSONObject(exampleRequest);
-        JSONObject project = object.getJSONObject("project");
-
         SparseArray<AppSource> deviceTypes = new SparseArray<>(1);
         deviceTypes.put(0,
                 new AppSource("p", "m", "v", false));
@@ -131,6 +128,8 @@ public class ManagementPortalClientTest {
 
     @Test
     public void parseProjectId() throws Exception {
+        JSONObject object = new JSONObject(exampleRequest);
+        JSONObject project = object.getJSONObject("project");
+        assertEquals("string", ManagementPortalClient.parseProjectId(project));
     }
-
 }

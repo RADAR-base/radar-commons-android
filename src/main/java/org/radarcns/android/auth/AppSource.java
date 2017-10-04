@@ -1,8 +1,9 @@
 package org.radarcns.android.auth;
 
+import java.io.Serializable;
 import java.util.Objects;
 
-public class AppSource {
+public class AppSource implements Serializable {
     private final String deviceProducer;
     private final String deviceModel;
     private final String catalogVersion;
