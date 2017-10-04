@@ -72,6 +72,7 @@ import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
+@SuppressWarnings({"unused", "WeakerAccess"})
 public abstract class MainActivity extends Activity {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 

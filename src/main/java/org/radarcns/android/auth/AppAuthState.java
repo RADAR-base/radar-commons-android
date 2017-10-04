@@ -36,12 +36,15 @@ import java.io.Serializable;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_UNKNOWN;
 
 /** Authentication state of the application. */
+@SuppressWarnings("unused")
 public final class AppAuthState {
     public static final String LOGIN_PROJECT_ID = "org.radarcns.android.auth.AppAuthState.projectId";
     public static final String LOGIN_USER_ID = "org.radarcns.android.auth.AppAuthState.userId";
@@ -60,20 +63,20 @@ public final class AppAuthState {
     private final int tokenType;
     private long expiration;
     private long lastUpdate;
-    private final HashMap<String, String> properties;
-    private final ArrayList<Map.Entry<String, String>> headers;
+    private final Map<String, ? extends Serializable> properties;
+    private final List<Map.Entry<String, String>> headers;
 
     private AppAuthState(String projectId, String userId,
-            String token, HashMap<String, String> properties, int tokenType,
-            long expiration, ArrayList<Map.Entry<String, String>> headers,
+            String token, Map<String, ? extends Serializable> properties, int tokenType,
+            long expiration, List<Map.Entry<String, String>> headers,
             long lastUpdate) {
         this.projectId = projectId;
         this.userId = userId;
         this.token = token;
         this.tokenType = tokenType;
         this.expiration = expiration;
-        this.properties = properties == null ? new HashMap<String, String>() : properties;
-        this.headers = headers == null ? new ArrayList<Map.Entry<String, String>>() : headers;
+        this.properties = properties;
+        this.headers = headers;
         this.lastUpdate = lastUpdate;
     }
 
@@ -97,17 +100,17 @@ public final class AppAuthState {
     }
 
     @Nullable
-    public String getProperty(@NonNull String key) {
+    public Serializable getProperty(@NonNull String key) {
         return properties.get(key);
     }
 
     @NonNull
-    public HashMap<String, String> getProperties() {
+    public Map<String, ? extends Serializable> getProperties() {
         return properties;
     }
 
     @NonNull
-    public ArrayList<Map.Entry<String, String>> getHeaders() {
+    public List<Map.Entry<String, String>> getHeaders() {
         return headers;
     }
 
@@ -134,8 +137,8 @@ public final class AppAuthState {
     public Bundle addToBundle(@NonNull Bundle bundle) {
         bundle.putString(LOGIN_PROJECT_ID, projectId);
         bundle.putString(LOGIN_USER_ID, userId);
-        bundle.putSerializable(LOGIN_PROPERTIES, properties);
-        bundle.putSerializable(LOGIN_HEADERS, headers);
+        bundle.putSerializable(LOGIN_PROPERTIES, new HashMap<>(properties));
+        bundle.putSerializable(LOGIN_HEADERS, new ArrayList<>(headers));
         bundle.putString(LOGIN_TOKEN, token);
         bundle.putInt(LOGIN_TOKEN_TYPE, tokenType);
         bundle.putLong(LOGIN_EXPIRATION, expiration);
@@ -149,8 +152,8 @@ public final class AppAuthState {
                 .putString(LOGIN_PROJECT_ID, projectId)
                 .putString(LOGIN_USER_ID, userId)
                 .putString(LOGIN_TOKEN, token)
-                .putString(LOGIN_HEADERS, getSerialization(LOGIN_HEADERS, headers))
-                .putString(LOGIN_PROPERTIES, getSerialization(LOGIN_PROPERTIES, properties))
+                .putString(LOGIN_HEADERS, getSerialization(LOGIN_HEADERS, new ArrayList<>(headers)))
+                .putString(LOGIN_PROPERTIES, getSerialization(LOGIN_PROPERTIES, new HashMap<>(properties)))
                 .putInt(LOGIN_TOKEN_TYPE, tokenType)
                 .putLong(LOGIN_EXPIRATION, expiration)
                 .putLong(LOGIN_UPDATE, lastUpdate)
@@ -213,13 +216,14 @@ public final class AppAuthState {
     }
 
     public static class Builder {
+        private final HashMap<String, Serializable> properties = new HashMap<>();
+        private final ArrayList<Map.Entry<String, String>> headers = new ArrayList<>();
+
         private String projectId;
         private String userId;
         private String token;
-        private HashMap<String, String> properties = new HashMap<>();
         private int tokenType = AUTH_TYPE_UNKNOWN;
         private long expiration;
-        private ArrayList<Map.Entry<String, String>> headers = new ArrayList<>();
         private long lastUpdate = SystemClock.elapsedRealtime();
 
         @SuppressWarnings("unchecked")
@@ -276,12 +280,12 @@ public final class AppAuthState {
             return this;
         }
 
-        public Builder property(@NonNull String key, @Nullable String value) {
+        public Builder property(@NonNull String key, @Nullable Serializable value) {
             this.properties.put(key, value);
             return this;
         }
 
-        public Builder properties(Map<String, String> properties) {
+        public Builder properties(Map<String, ? extends Serializable> properties) {
             if (properties != null) {
                 this.properties.putAll(properties);
             }
@@ -321,8 +325,9 @@ public final class AppAuthState {
         }
 
         public AppAuthState build() {
-            return new AppAuthState(projectId, userId, token, properties, tokenType, expiration,
-                    headers, lastUpdate);
+            return new AppAuthState(projectId, userId, token,
+                    Collections.unmodifiableMap(properties), tokenType, expiration,
+                    Collections.unmodifiableList(headers), lastUpdate);
         }
     }
 }

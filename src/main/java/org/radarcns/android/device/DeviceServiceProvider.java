@@ -53,6 +53,7 @@ import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
  * RADAR service provider, to bind and configure to a service. It is not thread-safe.
  * @param <T> state that the Service will provide.
  */
+@SuppressWarnings({"unused", "WeakerAccess"})
 public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     public static final String NEEDS_BLUETOOTH_KEY = DeviceServiceProvider.class.getName() + ".needsBluetooth";
     private static final Logger logger = LoggerFactory.getLogger(DeviceServiceProvider.class);

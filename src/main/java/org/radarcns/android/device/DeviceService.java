@@ -58,7 +58,8 @@ import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_
  *
  * Specific wearables should extend this class.
  */
-public abstract class DeviceService extends Service implements DeviceStatusListener, ServerStatusListener {
+@SuppressWarnings("WeakerAccess")
+public abstract class DeviceService<T extends BaseDeviceState> extends Service implements DeviceStatusListener, ServerStatusListener {
     private static final int ONGOING_NOTIFICATION_ID = 11;
     private static final int BLUETOOTH_NOTIFICATION_ID = 12;
     private static final String PREFIX = "org.radarcns.android.";
@@ -72,6 +73,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     public static final String DEVICE_STATUS_CHANGED = PREFIX + "DeviceStatusListener.Status";
     public static final String DEVICE_STATUS_NAME = PREFIX + "Devicemanager.getName";
     public static final String DEVICE_CONNECT_FAILED = PREFIX + "DeviceStatusListener.deviceFailedToConnect";
+    private final ObservationKey key = new ObservationKey();
 
     /** Stops the device when bluetooth is disabled. */
     private final BroadcastReceiver mBluetoothReceiver = new BroadcastReceiver() {
@@ -99,7 +101,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                                 .build();
 
                         NotificationManager manager = (NotificationManager) app.getSystemService(NOTIFICATION_SERVICE);
-                        manager.notify(BLUETOOTH_NOTIFICATION_ID, createBackgroundNotification(pendingIntent));
+                        manager.notify(BLUETOOTH_NOTIFICATION_ID, notification);
 
                         stopDeviceManager(unsetDeviceManager());
                         break;
@@ -113,14 +115,12 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
     private TableDataHandler dataHandler;
-    private DeviceManager deviceScanner;
+    private DeviceManager<T> deviceScanner;
     private DeviceBinder mBinder;
     private final AtomicInteger numberOfActivitiesBound = new AtomicInteger(0);
     private boolean isInForeground;
     private boolean isConnected;
     private int latestStartId = -1;
-    private String userId;
-    private String projectId;
     private boolean needsBluetooth;
 
     @CallSuper
@@ -335,12 +335,27 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     /**
      * New device manager for the current device.
      */
-    protected abstract DeviceManager createDeviceManager();
+    protected abstract DeviceManager<T> createDeviceManager();
+
+    protected T getState() {
+        DeviceManager<T> localManager = getDeviceManager();
+        if (localManager == null) {
+            T state = getDefaultState();
+            ObservationKey stateKey = state.getId();
+            stateKey.setProjectId(key.getProjectId());
+            stateKey.setUserId(key.getUserId());
+            stateKey.setSourceId(key.getSourceId());
+            return state;
+        }
+        return localManager.getState();
+    }
 
     /**
      * Default state when no device manager is active.
+     *
+     * Be sure to use the service key object in this state.
      */
-    protected abstract BaseDeviceState getDefaultState();
+    protected abstract T getDefaultState();
 
     /** Kafka topics that this service will send data to. */
     protected abstract DeviceTopics getTopics();
@@ -353,23 +368,19 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return getTopics().getTopics();
     }
 
-    public synchronized void setUserId(@NonNull String userId) {
-        Objects.requireNonNull(userId);
-        this.userId = userId;
-        if (deviceScanner != null) {
-            deviceScanner.getState().getId().setUserId(userId);
-        }
-    }
-
     public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
         DeviceManager localManager = getDeviceManager();
-        if (getUserId() == null) {
+        if (key.getUserId() == null) {
             throw new IllegalStateException("Cannot start recording: user ID is not set.");
         }
         if (localManager == null) {
             logger.info("Starting recording");
             synchronized (this) {
                 if (deviceScanner == null) {
+                    if (key.getSourceId() == null) {
+                        key.setSourceId(RadarConfiguration.getOrSetUUID(
+                                getApplicationContext(), SOURCE_ID_KEY));
+                    }
                     deviceScanner = createDeviceManager();
                     deviceScanner.start(acceptableIds);
                 }
@@ -381,10 +392,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
     public void stopRecording() {
         stopDeviceManager(unsetDeviceManager());
         logger.info("Stopped recording {}", this);
-    }
-
-    public void setProjectId(String projectId) {
-        this.projectId = projectId;
     }
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
@@ -400,11 +407,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
 
         @Override
         public BaseDeviceState getDeviceStatus() {
-            DeviceManager localManager = getDeviceManager();
-            if (localManager == null) {
-                return getDefaultState();
-            }
-            return localManager.getState();
+            return getState();
         }
 
         @Override
@@ -474,11 +477,6 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                 }
             }
             return new Pair<>(unsent, sent);
-        }
-
-        @Override
-        public void setUserId(@NonNull String userId) {
-            DeviceService.this.setUserId(userId);
         }
 
         @Override
@@ -576,10 +574,10 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
                     RadarConfiguration.getLongExtra(bundle, DATABASE_COMMIT_RATE_KEY));
         }
         if (RadarConfiguration.hasExtra(bundle, USER_ID_KEY)) {
-            setUserId(RadarConfiguration.getStringExtra(bundle, USER_ID_KEY));
+            key.setUserId(RadarConfiguration.getStringExtra(bundle, USER_ID_KEY));
         }
         if (RadarConfiguration.hasExtra(bundle, PROJECT_ID_KEY)) {
-            setProjectId(RadarConfiguration.getStringExtra(bundle, PROJECT_ID_KEY));
+            key.setProjectId(RadarConfiguration.getStringExtra(bundle, PROJECT_ID_KEY));
         }
         if (RadarConfiguration.hasExtra(bundle, KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
             localDataHandler.setMinimumBatteryLevel(RadarConfiguration.getFloatExtra(bundle,
@@ -608,7 +606,7 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return dataHandler;
     }
 
-    public synchronized DeviceManager getDeviceManager() {
+    public synchronized DeviceManager<T> getDeviceManager() {
         return deviceScanner;
     }
 
@@ -618,13 +616,8 @@ public abstract class DeviceService extends Service implements DeviceStatusListe
         return new DeviceBinder();
     }
 
-    /** User ID to send data for. */
-    public String getUserId() {
-        return userId;
-    }
-
-    public String getProjectId() {
-        return projectId;
+    public ObservationKey getKey() {
+        return key;
     }
 
     @Override

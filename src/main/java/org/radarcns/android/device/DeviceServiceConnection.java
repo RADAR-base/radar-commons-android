@@ -47,7 +47,7 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
                 if (getServiceClassName().equals(intent.getStringExtra(DEVICE_SERVICE_CLASS))) {
                     if (intent.hasExtra(DEVICE_STATUS_NAME)) {
                         deviceName = intent.getStringExtra(DEVICE_STATUS_NAME);
-                        logger.info("Device status changed of device {}", deviceName);
+                        logger.info("AppSource status changed of device {}", deviceName);
                     }
                     setDeviceStatus(DeviceStatusListener.Status.values()[intent.getIntExtra(DEVICE_STATUS_CHANGED, 0)]);
                     logger.info("Updated device status to {}", getDeviceStatus());
