@@ -30,7 +30,9 @@ import java.io.IOException;
  * @param <S> service type the manager is started by
  * @param <T> state type that the manager will update.
  */
-public abstract class AbstractDeviceManager<S extends DeviceService, T extends BaseDeviceState> implements DeviceManager {
+@SuppressWarnings({"unused", "WeakerAccess"})
+public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extends BaseDeviceState>
+        implements DeviceManager<T> {
     private final TableDataHandler dataHandler;
     private final T deviceStatus;
     private String deviceName;
@@ -38,22 +40,16 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
     private boolean closed;
 
     /**
-     * Device manager initialization. After initialization, be sure to call
+     * AppSource manager initialization. After initialization, be sure to call
      * {@link #setName(String)}.
      *
      * @param service service that the manager is started by
-     * @param state new empty state variable
-     * @param dataHandler data handler for sending data and getting topics.
-     * @param key key to send data with
      */
-    public AbstractDeviceManager(S service, T state, TableDataHandler dataHandler, ObservationKey key) {
-        this.dataHandler = dataHandler;
+    public AbstractDeviceManager(S service) {
         this.service = service;
-        this.deviceStatus = state;
-        this.deviceStatus.getId().setProjectId(key.getProjectId());
-        this.deviceStatus.getId().setUserId(key.getUserId());
-        this.deviceStatus.getId().setSourceId(key.getSourceId());
+        this.dataHandler = service.getDataHandler();
         this.deviceName = android.os.Build.MODEL;
+        this.deviceStatus = service.getState();
         closed = false;
     }
 

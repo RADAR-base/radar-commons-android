@@ -23,6 +23,7 @@ import android.support.annotation.CallSuper;
 import org.radarcns.kafka.ObservationKey;
 
 /** Current state of a wearable device. */
+@SuppressWarnings({"unused", "WeakerAccess"})
 public class BaseDeviceState implements Parcelable {
     public static final Parcelable.Creator<BaseDeviceState> CREATOR = new DeviceStateCreator<>(BaseDeviceState.class);
 
