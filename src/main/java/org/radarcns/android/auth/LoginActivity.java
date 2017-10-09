@@ -39,9 +39,11 @@ import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 public abstract class LoginActivity extends Activity implements LoginListener {
     private static final Logger logger = LoggerFactory.getLogger(LoginActivity.class);
     public static final String ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login";
+    public static final String ACTION_REFRESH = "org.radarcns.auth.LoginActivity.refresh";
 
     private List<LoginManager> loginManagers;
     private boolean startedFromActivity;
+    private boolean refreshOnly;
     private AppAuthState appAuth;
     private String managementPortalUrl;
     private ManagementPortalClient mpClient;
@@ -50,11 +52,14 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
         if (savedInstanceBundle != null) {
+            refreshOnly = savedInstanceBundle.getBoolean(ACTION_REFRESH);
             startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
             managementPortalUrl = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
         } else {
             Intent intent = getIntent();
-            startedFromActivity = Objects.equals(intent.getAction(), ACTION_LOGIN);
+            String action = intent.getAction();
+            refreshOnly = Objects.equals(action, ACTION_REFRESH);
+            startedFromActivity = Objects.equals(action, ACTION_LOGIN);
             managementPortalUrl = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
         }
 
@@ -98,6 +103,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
     @Override
     public void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(ACTION_REFRESH, refreshOnly);
         outState.putBoolean(ACTION_LOGIN, startedFromActivity);
         outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortalUrl);
 
@@ -145,7 +151,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         this.appAuth.addToPreferences(this);
         if (startedFromActivity) {
             setResult(RESULT_OK, this.appAuth.toIntent());
-        } else {
+        } else if (!refreshOnly) {
             Intent next = new Intent(this, nextActivity());
             startActivity(next);
         }

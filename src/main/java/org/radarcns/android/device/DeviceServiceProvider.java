@@ -86,6 +86,23 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     public abstract String getDisplayName();
 
     /**
+     * Image to display when onboarding for this service.
+     * @return resource number or -1 if none is available.
+     */
+    public int getDescriptionImage() {
+        return -1;
+    }
+
+    /**
+     * Description of the service. This should tell what the service does and why certain
+     * permissions are needed.
+     * @return description or {@code null} if no description is needed.
+     */
+    public String getDescription() {
+        return null;
+    }
+
+    /**
      * Whether the service has a UI detail view that can be invoked. If not,
      * {@link #showDetailView()} will throw an UnsupportedOperationException.
      */
@@ -204,7 +221,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
                 SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
         String mpUrl = config.getString(MANAGEMENT_PORTAL_URL_KEY, null);
-        if (mpUrl != null) {
+        if (mpUrl != null && !mpUrl.isEmpty()) {
             config.put(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, mpUrl);
         }
         ((RadarApplication)activity.getApplicationContext()).configureProvider(config, bundle);

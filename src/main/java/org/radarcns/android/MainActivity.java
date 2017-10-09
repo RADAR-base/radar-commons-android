@@ -190,8 +190,7 @@ public abstract class MainActivity extends Activity {
 
         authState = AppAuthState.Builder.from(this).build();
         if (!authState.isValid()) {
-            startActivity(new Intent(this, loginActivity()));
-            finish();
+            startLogin(false);
             return;
         }
         radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
@@ -306,7 +305,7 @@ public abstract class MainActivity extends Activity {
         logger.info("mainActivity onStart");
         super.onStart();
         if (!authState.isValid()) {
-            startLogin();
+            startLogin(true);
         }
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
@@ -635,14 +634,20 @@ public abstract class MainActivity extends Activity {
                 }
                 authState.invalidate(this);
             }
-            startLogin();
+            startLogin(true);
         }
     }
 
-    protected void startLogin() {
+    protected void startLogin(boolean forResult) {
         Intent intent = new Intent(this, loginActivity());
-        intent.setAction(ACTION_LOGIN);
-        startActivityForResult(intent, LOGIN_REQUEST_CODE);
+
+        if (forResult) {
+            intent.setAction(ACTION_LOGIN);
+            startActivityForResult(intent, LOGIN_REQUEST_CODE);
+        } else {
+            startActivity(intent);
+            finish();
+        }
     }
 
     public void updateServerRecordsSent(DeviceServiceConnection<?> connection, String topic,
