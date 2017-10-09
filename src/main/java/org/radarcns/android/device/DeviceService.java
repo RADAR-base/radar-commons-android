@@ -328,6 +328,9 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     @Override
     public void updateServerStatus(ServerStatusListener.Status status) {
+        // TODO: if status == UNAUTHORIZED, start login activity
+        // TODO: make sure that the AppAuthState gets propagated back to all services -> perhaps
+        //       with a broadcast instead of going through MainActivity
         Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
         statusIntent.putExtra(SERVER_STATUS_CHANGED, status.ordinal());
         statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
