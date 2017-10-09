@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -28,8 +27,10 @@ public class ManagementPortalClient implements Closeable {
     public static final String SOURCES_PROPERTY =
             ManagementPortalClient.class.getName() + ".sources";
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalClient.class);
-    private static final MediaType APPLICATION_JSON = MediaType
-            .parse("application/json; charset=utf-8");
+    private static final String APPLICATION_JSON = "application/json";
+    private static final String APPLICATION_JSON_UTF8 = APPLICATION_JSON + "; charset=utf-8";
+    private static final MediaType APPLICATION_JSON_MEDIA_TYPE = MediaType
+            .parse(APPLICATION_JSON_UTF8);
 
     private final RestClient client;
 
@@ -40,6 +41,7 @@ public class ManagementPortalClient implements Closeable {
     public AppAuthState getSubject(AppAuthState state) throws IOException {
         Request request = client.requestBuilder("api/subjects/" + state.getUserId())
                 .headers(state.getOkHttpHeaders())
+                .header("Accept", APPLICATION_JSON)
                 .build();
 
         String bodyString = client.requestString(request);
@@ -64,15 +66,15 @@ public class ManagementPortalClient implements Closeable {
 
     public AppSource registerSource(AppAuthState auth, AppSource source)
             throws IOException, JSONException {
-        RequestBody body = RequestBody.create(APPLICATION_JSON,
+        RequestBody body = RequestBody.create(APPLICATION_JSON_MEDIA_TYPE,
                 sourceRegistrationBody(source).toString());
 
         Request request = client.requestBuilder(
                 "api/subjects/" + auth.getUserId() + "/sources")
                 .post(body)
                 .headers(auth.getOkHttpHeaders())
-                .header("Content-Type", "application/json; charset=utf-8")
-                .header("Accept", "application/json")
+                .header("Content-Type", APPLICATION_JSON_UTF8)
+                .header("Accept", APPLICATION_JSON)
                 .build();
 
         try (Response response = client.request(request)) {
