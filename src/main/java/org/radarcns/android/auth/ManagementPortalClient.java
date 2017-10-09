@@ -72,6 +72,7 @@ public class ManagementPortalClient implements Closeable {
                 .post(body)
                 .headers(auth.getOkHttpHeaders())
                 .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", "application/json")
                 .build();
 
         try (Response response = client.request(request)) {
@@ -171,17 +172,22 @@ public class ManagementPortalClient implements Closeable {
         int numSources = sources.length();
         for (int i = 0; i < numSources; i++) {
             JSONObject sourceObj = sources.getJSONObject(i);
-            int id = sourceObj.getInt("deviceTypeId");
-            AppSource device = devices.get(id);
+            String sourceId = sourceObj.getString("sourceId");
+            if (!sourceObj.optBoolean("assigned", true)) {
+                logger.info("Skipping unassigned source {}", sourceId);
+            }
+            int deviceId = sourceObj.getInt("deviceTypeId");
+            AppSource device = devices.get(deviceId);
             if (device == null) {
-                logger.error("AppSource type {} not recognized");
+                logger.error("Source {} type {} not recognized", sourceId, deviceId);
                 continue;
             }
-            devices.remove(id);
+            devices.remove(deviceId);
             device.setExpectedSourceName(sourceObj.optString("expectedSourceName"));
-            device.setSourceId(sourceObj.getString("sourceId"));
+            device.setSourceId(sourceId);
             device.setAttributes(attributesToMap(sourceObj.optJSONObject("attributes")));
             actualSources.add(device);
+
         }
 
         for (int i = 0; i < devices.size(); i++) {
