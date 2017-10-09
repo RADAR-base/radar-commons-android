@@ -152,7 +152,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                 .encoders(new SpecificRecordEncoder(false), new SpecificRecordEncoder(false))
                 .connectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS)
                 .useCompression(useCompression)
-                .headers(authState.getHeaders())
+                .headers(authState.getOkHttpHeaders())
                 .build();
         this.submitter = new KafkaDataSubmitter<>(this, sender, kafkaRecordsSendLimit,
                 getPreferredUploadRate(), authState.getUserId());

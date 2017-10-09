@@ -16,11 +16,15 @@
 
 package org.radarcns.android.device;
 
+import android.support.annotation.CallSuper;
 import org.apache.avro.specific.SpecificRecord;
+import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -33,6 +37,8 @@ import java.io.IOException;
 @SuppressWarnings({"unused", "WeakerAccess"})
 public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extends BaseDeviceState>
         implements DeviceManager<T> {
+    private static final Logger logger = LoggerFactory.getLogger(AbstractDeviceManager.class);
+
     private final TableDataHandler dataHandler;
     private final T deviceStatus;
     private String deviceName;
@@ -69,17 +75,44 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
      */
     protected void updateStatus(DeviceStatusListener.Status status) {
         this.deviceStatus.setStatus(status);
+        if (status == DeviceStatusListener.Status.READY) {
+            registerDeviceAtReady();
+        }
         this.service.deviceStatusUpdated(this, status);
     }
 
-    /** Send a single record, using the cache to persist the data. */
-    protected <V extends SpecificRecord> void send(DataCache<ObservationKey, V> table, V value) {
-        dataHandler.addMeasurement(table, deviceStatus.getId(), value);
+    /**
+     * Register the device with the management portal once it is ready. If this is not desired,
+     * override with an empty implementation.
+     */
+    protected void registerDeviceAtReady() {
+        service.registerDevice(deviceName, null);
     }
 
-    /** Try to send a single record without any caching mechanism. */
+    /**
+     * Send a single record, using the cache to persist the data.
+     * If the current device is not registered when this is called, the data will NOT be sent.
+     */
+    protected <V extends SpecificRecord> void send(DataCache<ObservationKey, V> table, V value) {
+        ObservationKey key = deviceStatus.getId();
+        if (key.getSourceId() != null) {
+            dataHandler.addMeasurement(table, key, value);
+        } else {
+            logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Try to send a single record without any caching mechanism.
+     * If the current device is not registered when this is called, the data will NOT be sent.
+     */
     protected <V extends SpecificRecord> void trySend(AvroTopic<ObservationKey, V> topic, long offset, V value) {
-        dataHandler.trySend(topic, offset, deviceStatus.getId(), value);
+        ObservationKey key = deviceStatus.getId();
+        if (key.getSourceId() != null) {
+            dataHandler.trySend(topic, offset, key, value);
+        } else {
+            logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
+        }
     }
 
     /** Get a data cache to send data with at a later time. */
@@ -113,6 +146,12 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     @Override
     public String getName() {
         return deviceName;
+    }
+
+    @Override
+    @CallSuper
+    public void didRegister(AppSource source) {
+        deviceName = source.getSourceName();
     }
 
     /**

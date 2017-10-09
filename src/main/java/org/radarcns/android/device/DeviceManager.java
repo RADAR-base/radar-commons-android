@@ -17,6 +17,7 @@
 package org.radarcns.android.device;
 
 import android.support.annotation.NonNull;
+import org.radarcns.android.auth.AppSource;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -54,4 +55,10 @@ public interface DeviceManager<T> extends Closeable {
      * Get the name of a connected wearable device.
      */
     String getName();
+
+    /**
+     * Called when a source registration succeeds.
+     * @param source source metadata
+     */
+    void didRegister(AppSource source);
 }

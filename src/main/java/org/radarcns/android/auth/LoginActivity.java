@@ -20,29 +20,58 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-
 import android.widget.Toast;
 import org.radarcns.android.R;
 import org.radarcns.android.util.Boast;
+import org.radarcns.config.ServerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.List;
 import java.util.Objects;
+
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
     private static final Logger logger = LoggerFactory.getLogger(LoginActivity.class);
     public static final String ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login";
+    public static final String ACTION_REFRESH = "org.radarcns.auth.LoginActivity.refresh";
 
     private List<LoginManager> loginManagers;
     private boolean startedFromActivity;
+    private boolean refreshOnly;
     private AppAuthState appAuth;
+    private String managementPortalUrl;
+    private ManagementPortalClient mpClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
-        startedFromActivity = Objects.equals(getIntent().getAction(), ACTION_LOGIN);
+        if (savedInstanceBundle != null) {
+            refreshOnly = savedInstanceBundle.getBoolean(ACTION_REFRESH);
+            startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
+            managementPortalUrl = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
+        } else {
+            Intent intent = getIntent();
+            String action = intent.getAction();
+            refreshOnly = Objects.equals(action, ACTION_REFRESH);
+            startedFromActivity = Objects.equals(action, ACTION_LOGIN);
+            managementPortalUrl = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
+        }
+
+        if (managementPortalUrl != null && !managementPortalUrl.isEmpty()) {
+            try {
+                mpClient = new ManagementPortalClient(new ServerConfig(managementPortalUrl));
+            } catch (MalformedURLException e) {
+                logger.error("Cannot create ManagementPortal client from url {}",
+                        managementPortalUrl);
+                managementPortalUrl = null;
+            }
+        }
 
         if (startedFromActivity) {
             Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
@@ -72,9 +101,19 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         }
     }
 
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(ACTION_REFRESH, refreshOnly);
+        outState.putBoolean(ACTION_LOGIN, startedFromActivity);
+        outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortalUrl);
+
+        // call superclass to save any view hierarchy
+        super.onSaveInstanceState(outState);
+    }
+
     /**
-     * Create your login managers here. Be sure to call the appropriate login manager's start()
-     * method if the user indicates that login method.
+     * Create your login managers here. Call {@link LoginManager#start()} for the login method that
+     * a user indicates.
      * @param appAuth previous invalid authentication
      * @return non-empty list of login managers to use
      */
@@ -91,17 +130,28 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         }
     }
 
+    /** Call when part of the login procedure failed. */
     public void loginFailed(LoginManager manager, Exception ex) {
         logger.error("Failed to log in with {}", manager, ex);
         Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
     }
 
+    /** Call when the entire login procedure succeeded. */
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
-        this.appAuth = appAuthState;
+        if (mpClient == null) {
+            this.appAuth = appAuthState;
+        } else {
+            try {
+                this.appAuth = mpClient.getSubject(appAuthState);
+            } catch (IOException ex) {
+                logger.error("Failed to get subject metadata");
+                loginFailed(manager, ex);
+            }
+        }
         this.appAuth.addToPreferences(this);
         if (startedFromActivity) {
             setResult(RESULT_OK, this.appAuth.toIntent());
-        } else {
+        } else if (!refreshOnly) {
             Intent next = new Intent(this, nextActivity());
             startActivity(next);
         }
@@ -110,5 +160,12 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
     public AppAuthState getAuthState() {
         return appAuth;
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mpClient != null) {
+            mpClient.close();
+        }
     }
 }

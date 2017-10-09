@@ -26,6 +26,7 @@ import android.support.annotation.NonNull;
 import org.radarcns.android.MainActivity;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
+import org.radarcns.android.auth.AppSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,9 @@ import java.util.Scanner;
 
 import static android.Manifest.permission.BLUETOOTH;
 import static android.Manifest.permission.BLUETOOTH_ADMIN;
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.PROJECT_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.USER_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
@@ -57,11 +60,13 @@ import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     public static final String NEEDS_BLUETOOTH_KEY = DeviceServiceProvider.class.getName() + ".needsBluetooth";
     private static final Logger logger = LoggerFactory.getLogger(DeviceServiceProvider.class);
+    public static final String SOURCE_KEY = DeviceServiceProvider.class.getName() + ".source";
 
     private MainActivity activity;
     private RadarConfiguration config;
     private DeviceServiceConnection<T> connection;
     private boolean bound;
+    private AppSource source;
 
     /**
      * Class of the service.
@@ -79,6 +84,23 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
 
     /** Display name of the service. */
     public abstract String getDisplayName();
+
+    /**
+     * Image to display when onboarding for this service.
+     * @return resource number or -1 if none is available.
+     */
+    public int getDescriptionImage() {
+        return -1;
+    }
+
+    /**
+     * Description of the service. This should tell what the service does and why certain
+     * permissions are needed.
+     * @return description or {@code null} if no description is needed.
+     */
+    public String getDescription() {
+        return null;
+    }
 
     /**
      * Whether the service has a UI detail view that can be invoked. If not,
@@ -198,11 +220,16 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
                 SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
+        String mpUrl = config.getString(MANAGEMENT_PORTAL_URL_KEY, null);
+        if (mpUrl != null && !mpUrl.isEmpty()) {
+            config.put(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, mpUrl);
+        }
         ((RadarApplication)activity.getApplicationContext()).configureProvider(config, bundle);
         List<String> permissions = needsPermissions();
         bundle.putBoolean(NEEDS_BLUETOOTH_KEY, permissions.contains(BLUETOOTH) ||
                 permissions.contains(BLUETOOTH_ADMIN));
         activity.getAuthState().addToBundle(bundle);
+        bundle.putParcelable(SOURCE_KEY, source);
     }
 
     /**
@@ -319,14 +346,19 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     /**
      * Match device type.
      *
-     * @param deviceProducer producer of given device
-     * @param deviceModel model of given device
-     * @param version version of the device plugin API
+     * @param source stored source
+     * @param checkVersion whether to do a strict version check
      */
-    public boolean matches(@NonNull String deviceProducer, @NonNull String deviceModel,
-            String version) {
-        return deviceProducer.equals(getDeviceProducer()) && deviceModel.equals(getDeviceModel())
-                && version == null || version.equals(getVersion());
+    public boolean matches(AppSource source, boolean checkVersion) {
+        return source.getDeviceProducer().equals(getDeviceProducer())
+                && source.getDeviceModel().equals(getDeviceModel())
+                && !checkVersion
+                || source.getCatalogVersion() == null
+                || source.getCatalogVersion().equals(getVersion());
+    }
+
+    public void setSource(AppSource source) {
+        this.source = source;
     }
 
     @NonNull
@@ -337,4 +369,8 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
 
     @NonNull
     public abstract String getVersion();
+
+    public AppSource getSource() {
+        return source;
+    }
 }

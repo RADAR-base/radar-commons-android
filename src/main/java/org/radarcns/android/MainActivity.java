@@ -41,6 +41,7 @@ import android.widget.Toast;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -188,8 +190,7 @@ public abstract class MainActivity extends Activity {
 
         authState = AppAuthState.Builder.from(this).build();
         if (!authState.isValid()) {
-            startActivity(new Intent(this, loginActivity()));
-            finish();
+            startLogin(false);
             return;
         }
         radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
@@ -304,7 +305,7 @@ public abstract class MainActivity extends Activity {
         logger.info("mainActivity onStart");
         super.onStart();
         if (!authState.isValid()) {
-            startLogin();
+            startLogin(true);
         }
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
@@ -409,7 +410,15 @@ public abstract class MainActivity extends Activity {
             }
 
             logger.info("Starting recording on connection {}", connection);
-            connection.startRecording(deviceFilters.get(connection));
+            AppSource source = provider.getSource();
+            Set<String> filters;
+            if (source != null && source.getExpectedSourceName() != null) {
+                String[] expectedIds = source.getExpectedSourceName().split(",");
+                filters = new HashSet<>(Arrays.asList(expectedIds));
+            } else {
+                filters = deviceFilters.get(connection);
+            }
+            connection.startRecording(filters);
         }
     }
 
@@ -625,14 +634,20 @@ public abstract class MainActivity extends Activity {
                 }
                 authState.invalidate(this);
             }
-            startLogin();
+            startLogin(true);
         }
     }
 
-    protected void startLogin() {
+    protected void startLogin(boolean forResult) {
         Intent intent = new Intent(this, loginActivity());
-        intent.setAction(ACTION_LOGIN);
-        startActivityForResult(intent, LOGIN_REQUEST_CODE);
+
+        if (forResult) {
+            intent.setAction(ACTION_LOGIN);
+            startActivityForResult(intent, LOGIN_REQUEST_CODE);
+        } else {
+            startActivity(intent);
+            finish();
+        }
     }
 
     public void updateServerRecordsSent(DeviceServiceConnection<?> connection, String topic,
