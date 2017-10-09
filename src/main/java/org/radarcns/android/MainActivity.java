@@ -41,6 +41,7 @@ import android.widget.Toast;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -409,7 +411,15 @@ public abstract class MainActivity extends Activity {
             }
 
             logger.info("Starting recording on connection {}", connection);
-            connection.startRecording(deviceFilters.get(connection));
+            AppSource source = provider.getSource();
+            Set<String> filters;
+            if (source != null && source.getExpectedSourceName() != null) {
+                String[] expectedIds = source.getExpectedSourceName().split(",");
+                filters = new HashSet<>(Arrays.asList(expectedIds));
+            } else {
+                filters = deviceFilters.get(connection);
+            }
+            connection.startRecording(filters);
         }
     }
 

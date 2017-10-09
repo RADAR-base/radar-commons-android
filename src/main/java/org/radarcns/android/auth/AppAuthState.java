@@ -24,6 +24,7 @@ import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Base64;
+import okhttp3.Headers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,6 +113,15 @@ public final class AppAuthState {
     @NonNull
     public List<Map.Entry<String, String>> getHeaders() {
         return headers;
+    }
+
+    @NonNull
+    public Headers getOkHttpHeaders() {
+        Headers.Builder builder = new Headers.Builder();
+        for (Map.Entry<String, String> header : headers) {
+            builder.add(header.getKey(), header.getValue());
+        }
+        return builder.build();
     }
 
     public boolean isValid() {
