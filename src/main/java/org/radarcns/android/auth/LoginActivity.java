@@ -20,10 +20,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-
 import android.widget.Toast;
 import org.radarcns.android.R;
-import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.util.Boast;
 import org.radarcns.config.ServerConfig;
 import org.slf4j.Logger;
@@ -36,7 +34,6 @@ import java.util.Objects;
 
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
-import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
@@ -52,11 +49,11 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
-        Intent intent = getIntent();
         if (savedInstanceBundle != null) {
             startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
             managementPortalUrl = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
         } else {
+            Intent intent = getIntent();
             startedFromActivity = Objects.equals(intent.getAction(), ACTION_LOGIN);
             managementPortalUrl = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
         }
@@ -109,8 +106,8 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     }
 
     /**
-     * Create your login managers here. Be sure to call the appropriate login manager's start()
-     * method if the user indicates that login method.
+     * Create your login managers here. Call {@link LoginManager#start()} for the login method that
+     * a user indicates.
      * @param appAuth previous invalid authentication
      * @return non-empty list of login managers to use
      */
@@ -127,14 +124,15 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         }
     }
 
+    /** Call when part of the login procedure failed. */
     public void loginFailed(LoginManager manager, Exception ex) {
         logger.error("Failed to log in with {}", manager, ex);
         Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
     }
 
+    /** Call when the entire login procedure succeeded. */
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
-        // MP info is not needed or is up to date
-        if (mpClient == null || this.appAuth.getProperties().containsKey(SOURCES_PROPERTY)) {
+        if (mpClient == null) {
             this.appAuth = appAuthState;
         } else {
             try {
