@@ -23,12 +23,20 @@ import android.support.annotation.NonNull;
 
 import android.widget.Toast;
 import org.radarcns.android.R;
+import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.util.Boast;
+import org.radarcns.config.ServerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.List;
 import java.util.Objects;
+
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
+import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
@@ -38,11 +46,30 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private List<LoginManager> loginManagers;
     private boolean startedFromActivity;
     private AppAuthState appAuth;
+    private String managementPortalUrl;
+    private ManagementPortalClient mpClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
-        startedFromActivity = Objects.equals(getIntent().getAction(), ACTION_LOGIN);
+        Intent intent = getIntent();
+        if (savedInstanceBundle != null) {
+            startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
+            managementPortalUrl = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
+        } else {
+            startedFromActivity = Objects.equals(intent.getAction(), ACTION_LOGIN);
+            managementPortalUrl = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
+        }
+
+        if (managementPortalUrl != null && !managementPortalUrl.isEmpty()) {
+            try {
+                mpClient = new ManagementPortalClient(new ServerConfig(managementPortalUrl));
+            } catch (MalformedURLException e) {
+                logger.error("Cannot create ManagementPortal client from url {}",
+                        managementPortalUrl);
+                managementPortalUrl = null;
+            }
+        }
 
         if (startedFromActivity) {
             Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
@@ -72,6 +99,15 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         }
     }
 
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(ACTION_LOGIN, startedFromActivity);
+        outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortalUrl);
+
+        // call superclass to save any view hierarchy
+        super.onSaveInstanceState(outState);
+    }
+
     /**
      * Create your login managers here. Be sure to call the appropriate login manager's start()
      * method if the user indicates that login method.
@@ -97,7 +133,17 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     }
 
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
-        this.appAuth = appAuthState;
+        // MP info is not needed or is up to date
+        if (mpClient == null || this.appAuth.getProperties().containsKey(SOURCES_PROPERTY)) {
+            this.appAuth = appAuthState;
+        } else {
+            try {
+                this.appAuth = mpClient.getSubject(appAuthState);
+            } catch (IOException ex) {
+                logger.error("Failed to get subject metadata");
+                loginFailed(manager, ex);
+            }
+        }
         this.appAuth.addToPreferences(this);
         if (startedFromActivity) {
             setResult(RESULT_OK, this.appAuth.toIntent());
@@ -110,5 +156,12 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
     public AppAuthState getAuthState() {
         return appAuth;
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mpClient != null) {
+            mpClient.close();
+        }
     }
 }
