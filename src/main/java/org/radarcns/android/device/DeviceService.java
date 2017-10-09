@@ -364,8 +364,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     /**
      * Default state when no device manager is active.
-     *
-     * Be sure to use the service key object in this state.
      */
     protected abstract T getDefaultState();
 
