@@ -136,6 +136,11 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         super.onCreate();
         mBinder = createBinder();
 
+        if (isBluetoothConnectionRequired()) {
+            IntentFilter intentFilter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+            registerReceiver(mBluetoothReceiver, intentFilter);
+        }
+
         synchronized (this) {
             numberOfActivitiesBound.set(0);
             isInForeground = false;
@@ -148,7 +153,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public void onDestroy() {
         logger.info("Destroying DeviceService {}", this);
         super.onDestroy();
-        if (needsBluetooth) {
+
+        if (isBluetoothConnectionRequired()) {
             // Unregister broadcast listeners
             unregisterReceiver(mBluetoothReceiver);
         }
@@ -589,6 +595,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             localDataHandler.setMinimumBatteryLevel(RadarConfiguration.getFloatExtra(bundle,
                     KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL));
         }
+
         source = bundle.getParcelable(SOURCE_KEY);
         if (source.getSourceId() != null) {
             key.setSourceId(source.getSourceId());
@@ -613,6 +620,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             needsBluetooth = true;
         }
 
+        setHasBluetoothPermission(bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false));
+
         if (newlyCreated) {
             localDataHandler.addStatusListener(this);
             localDataHandler.start();
@@ -633,6 +642,28 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     @NonNull
     protected DeviceBinder createBinder() {
         return new DeviceBinder();
+    }
+
+    protected void setHasBluetoothPermission(boolean isRequired) {
+        boolean oldBluetoothNeeded = isBluetoothConnectionRequired();
+        needsBluetooth = isRequired;
+        boolean newBluetoothNeeded = isBluetoothConnectionRequired();
+
+        if (oldBluetoothNeeded && !newBluetoothNeeded) {
+            unregisterReceiver(mBluetoothReceiver);
+        } else if (!oldBluetoothNeeded && newBluetoothNeeded) {
+            // Register for broadcasts on BluetoothAdapter state change
+            IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+            registerReceiver(mBluetoothReceiver, filter);
+        }
+    }
+
+    protected boolean hasBluetoothPermission() {
+        return needsBluetooth;
+    }
+
+    protected boolean isBluetoothConnectionRequired() {
+        return hasBluetoothPermission();
     }
 
     public ObservationKey getKey() {
