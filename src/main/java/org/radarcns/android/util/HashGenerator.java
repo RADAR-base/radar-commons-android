@@ -37,7 +37,7 @@ import javax.crypto.spec.SecretKeySpec;
  * the SharedPreferences. As long as the key remains there, a given input string will always
  * return the same output hash.
  *
- * HashGenerator must be used from a single thread or synchronized externally.
+ * <p>HashGenerator must be used from a single thread or synchronized externally.
  */
 public class HashGenerator {
     private static final String HASH_KEY = "hash.key";

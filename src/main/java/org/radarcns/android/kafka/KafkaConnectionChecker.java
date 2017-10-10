@@ -27,9 +27,8 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Checks the connection of a sender.
- *
- * It does so using two mechanisms: a regular heartbeatInterval signal when the connection is assumed to be
+ * Checks the connection of a sender. It does so using two mechanisms: a regular
+ * heartbeatInterval signal when the connection is assumed to be
  * present, and a exponential back-off mechanism if the connection is severed. If the connection is
  * assessed to be present through another mechanism, {@link #didConnect()} should be called,
  * conversely, if it is assessed to be severed, {@link #didDisconnect(IOException)} should be
