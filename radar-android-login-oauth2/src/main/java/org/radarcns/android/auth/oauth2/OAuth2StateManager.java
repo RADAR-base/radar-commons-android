@@ -36,6 +36,7 @@ import net.openid.appauth.ResponseTypeValues;
 import net.openid.appauth.TokenResponse;
 
 import org.json.JSONException;
+import org.json.JSONObject;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
@@ -139,8 +140,18 @@ public class OAuth2StateManager {
         }
     }
 
-    public synchronized void refresh(@NonNull final LoginActivity context) {
+    public synchronized void refresh(@NonNull final LoginActivity context, String refreshToken) {
         AuthorizationService service = new AuthorizationService(context);
+        // refreshToken does not originate from the current auth state.
+        if (refreshToken != null && !refreshToken.equals(mCurrentAuthState.getRefreshToken())) {
+            try {
+                JSONObject json = mCurrentAuthState.jsonSerialize();
+                json.put("refreshToken", refreshToken);
+                mCurrentAuthState = AuthState.jsonDeserialize(json);
+            } catch (JSONException e) {
+                logger.error("Failed to update refresh token");
+            }
+        }
         // authorization succeeded
         service.performTokenRequest(
                 mCurrentAuthState.createTokenRefreshRequest(), processTokenResponse(context));

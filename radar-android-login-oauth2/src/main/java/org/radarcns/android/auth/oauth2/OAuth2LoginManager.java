@@ -51,7 +51,8 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         }
         if (authState.getTokenType() == LoginManager.AUTH_TYPE_BEARER
                 && authState.getProperty(LOGIN_REFRESH_TOKEN) != null) {
-            OAuth2StateManager.getInstance(activity).refresh(activity);
+            OAuth2StateManager.getInstance(activity).refresh(activity,
+                    (String) authState.getProperties().get(LOGIN_REFRESH_TOKEN));
         }
         return null;
     }
