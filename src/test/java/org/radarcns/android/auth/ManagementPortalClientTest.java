@@ -189,7 +189,10 @@ public class ManagementPortalClientTest {
         JSONObject object = new JSONObject(body);
         assertEquals("something", object.getString("sourceName"));
         assertEquals(0, object.getInt("deviceTypeId"));
-        assertEquals(new JSONObject("{\"firmware\":\"0.11\"}"), object.getJSONObject("attributes"));
+        JSONObject attr = object.getJSONObject("attributes");
+        assertEquals(3, object.names().length());
+        assertEquals("0.11", attr.getString("firmware"));
+        assertEquals(1, attr.names().length());
     }
 
     @Test
