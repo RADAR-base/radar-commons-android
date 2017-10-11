@@ -598,6 +598,9 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         source = bundle.getParcelable(SOURCE_KEY);
+        if (source == null) {
+            source = new AppSource(-1L, null, null, null, true);
+        }
         if (source.getSourceId() != null) {
             key.setSourceId(source.getSourceId());
         }
@@ -676,8 +679,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     public void registerDevice(String name, Map<String, String> attributes) {
-        if (source == null || source.getSourceId() != null) {
-            return;
+        registerDevice(null, name, attributes);
+    }
+
+    public void registerDevice(String sourceIdHint, String name, Map<String, String> attributes) {
+        if (source.getSourceId() != null) {
+            getDeviceManager().didRegister(source);;
         }
         source.setSourceName(name);
         source.setAttributes(attributes);
@@ -712,7 +719,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             });
             startService(intent);
         } else {
-            source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
+            if (sourceIdHint == null) {
+                source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
+            } else {
+                source.setSourceId(sourceIdHint);
+            }
+            key.setSourceId(source.getSourceId());
             getDeviceManager().didRegister(source);
         }
     }
