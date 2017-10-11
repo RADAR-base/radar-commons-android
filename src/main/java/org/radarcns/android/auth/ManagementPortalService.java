@@ -21,6 +21,9 @@ import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
+/**
+ * Handles intents to register sources to the ManagementPortal.
+ */
 public class ManagementPortalService extends IntentService {
     public static final String RESULT_RECEIVER_PROPERTY = ManagementPortalService.class.getName()
             + ".resultReceiver";
@@ -89,6 +92,7 @@ public class ManagementPortalService extends IntentService {
         }
     }
 
+    /** Build an intent to create a request for the management portal. */
     public static Intent createRequest(Context context, ServerConfig managementPortalUrl,
             AppSource source, AppAuthState state, ResultReceiver receiver) {
         Intent intent = new Intent(context, ManagementPortalService.class);

@@ -38,6 +38,14 @@ public class ManagementPortalClient implements Closeable {
         client = new RestClient(managementPortal);
     }
 
+    /**
+     * Get subject information from the Management portal. This includes project ID, available
+     * device types and assigned sources.
+     * @param state current authentication state
+     * @return updated authentication state including sources and a project ID
+     * @throws IOException if the management portal could not be reached or it gave an erroneous
+     *                     response.
+     */
     public AppAuthState getSubject(AppAuthState state) throws IOException {
         Request request = client.requestBuilder("api/subjects/" + state.getUserId())
                 .headers(state.getOkHttpHeaders())
@@ -64,6 +72,7 @@ public class ManagementPortalClient implements Closeable {
         }
     }
 
+    /** Register a source with the Management Portal. */
     public AppSource registerSource(AppAuthState auth, AppSource source)
             throws IOException, JSONException {
         RequestBody body = RequestBody.create(APPLICATION_JSON_MEDIA_TYPE,

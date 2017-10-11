@@ -201,6 +201,10 @@ public abstract class MainActivity extends Activity {
 
         try {
             mConnections = DeviceServiceProvider.loadProviders(this, radarConfiguration);
+            // TODO: check what sources are available in the authState (if any)
+            // if any sources are available:
+            //   - only start up providers that DeviceServiceProvider#matches one of the sources
+            //   - set that source in the DeviceServiceProvider.
             for (DeviceServiceProvider provider : mConnections) {
                 DeviceServiceConnection connection = provider.getConnection();
                 mTotalRecordsSent.put(connection, new TimedInt());
