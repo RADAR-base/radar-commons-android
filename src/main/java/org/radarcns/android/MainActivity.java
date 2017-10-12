@@ -37,6 +37,7 @@ import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
@@ -52,15 +53,7 @@ import org.radarcns.data.TimedInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static android.Manifest.permission.ACCESS_COARSE_LOCATION;
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
@@ -193,8 +186,11 @@ public abstract class MainActivity extends Activity {
             startLogin(false);
             return;
         }
+
         radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
         radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+
+        startService(new Intent(this, radarService()).putExtra(RadarService.EXTRA_CREATOR_CLASS, getClass().getName()));
 
         onConfigChanged();
         logger.info("RADAR configuration at create: {}", radarConfiguration);
@@ -229,6 +225,8 @@ public abstract class MainActivity extends Activity {
                     // Set global properties.
                     logger.info("RADAR configuration at create: {}", radarConfiguration);
                     onConfigChanged();
+
+                    sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
                 } else {
                     Boast.makeText(MainActivity.this, "Remote Config: Fetch Failed",
                             Toast.LENGTH_SHORT).show();
@@ -259,6 +257,8 @@ public abstract class MainActivity extends Activity {
 
         checkPermissions();
     }
+
+    protected abstract Class<? extends RadarService> radarService();
 
     /**
      * Called whenever the RadarConfiguration is changed. This can be at activity start or
@@ -338,6 +338,14 @@ public abstract class MainActivity extends Activity {
         }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
 
         radarConfiguration.fetch();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        if (RadarService.ACTION_CHECK_PERMISSIONS.equals(intent.getAction())) {
+            String[] permissions = intent.getStringArrayExtra(RadarService.EXTRA_PERMISSIONS);
+        }
+        super.onNewIntent(intent);
     }
 
     @Override
@@ -558,6 +566,10 @@ public abstract class MainActivity extends Activity {
             }
         }
 
+        checkPermissions(needsPermissions);
+    }
+
+    protected void checkPermissions(Collection<String> needsPermissions) {
         if (needsPermissions.contains(LOCATION_SERVICE)) {
             requestLocationProvider();
         } else if (needsPermissions.contains(PACKAGE_USAGE_STATS)) {
@@ -609,6 +621,12 @@ public abstract class MainActivity extends Activity {
     public void onRequestPermissionsResult(final int requestCode, @NonNull final String[] permissions, @NonNull final int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_ENABLE_PERMISSIONS) {
+            LocalBroadcastManager.getInstance(this)
+                    .sendBroadcast(new Intent()
+                            .setAction(RadarService.ACTION_PERMISSIONS_GRANTED)
+                            .putExtra(RadarService.EXTRA_PERMISSIONS, permissions)
+                            .putExtra(RadarService.EXTRA_GRANT_RESULTS, grantResults));
+
             for (int i = 0; i < permissions.length; i++) {
                 if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
                     logger.info("Granted permission {}", permissions[i]);

@@ -47,6 +47,8 @@ public class RadarConfiguration {
 
     public static final String RADAR_PREFIX = "org.radarcns.android.";
 
+    public static final String RADAR_CONFIGURATION_CHANGED = RadarConfiguration.class.getSimpleName() + ".CHANGED";
+
     public static final String KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url";
     public static final String SCHEMA_REGISTRY_URL_KEY = "schema_registry_url";
     public static final String MANAGEMENT_PORTAL_URL_KEY = "management_portal_url";
