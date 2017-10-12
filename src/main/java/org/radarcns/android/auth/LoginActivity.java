@@ -167,5 +167,6 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         if (mpClient != null) {
             mpClient.close();
         }
+        super.onDestroy();
     }
 }
