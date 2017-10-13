@@ -21,10 +21,9 @@ import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.HandlerThread;
+import android.os.*;
 import android.os.Process;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
@@ -77,6 +76,20 @@ public abstract class MainActivity extends Activity {
 
     private Collection<String> needsPermissions;
     private boolean requestedBt;
+
+    private IRadarService radarService;
+
+    private final ServiceConnection radarServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            radarService = (IRadarService) service;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            radarService = null;
+        }
+    };
 
     public MainActivity() {
         super();
@@ -159,7 +172,9 @@ public abstract class MainActivity extends Activity {
         };
     }
 
-    protected abstract Class<? extends RadarService> radarService();
+    protected Class<? extends RadarService> radarService() {
+        return RadarService.class;
+    }
 
     /**
      * Called whenever the RadarConfiguration is changed. This can be at activity start or
@@ -195,6 +210,8 @@ public abstract class MainActivity extends Activity {
     protected void onResume() {
         logger.info("mainActivity onResume");
         super.onResume();
+
+        bindService(new Intent().setComponent(new ComponentName(this, radarService())), radarServiceConnection, 0);
         getHandler().post(mViewUpdater);
     }
 
@@ -202,6 +219,7 @@ public abstract class MainActivity extends Activity {
     protected void onPause() {
         logger.info("mainActivity onPause");
         getHandler().removeCallbacks(mViewUpdater);
+        unbindService(radarServiceConnection);
         super.onPause();
     }
 
@@ -352,5 +370,9 @@ public abstract class MainActivity extends Activity {
             startActivity(intent);
             finish();
         }
+    }
+
+    public IRadarService getRadarService() {
+        return radarService;
     }
 }

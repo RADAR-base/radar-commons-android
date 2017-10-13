@@ -11,26 +11,37 @@ import android.location.LocationManager;
 import android.os.*;
 import android.support.v4.content.ContextCompat;
 import android.widget.Toast;
+import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.Boast;
+import org.radarcns.config.ServerConfig;
 import org.radarcns.data.TimedInt;
+import org.radarcns.kafka.ObservationKey;
+import org.radarcns.producer.rest.SchemaRetriever;
+import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.*;
 
 import static android.Manifest.permission.*;
+import static org.radarcns.android.RadarConfiguration.*;
+import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
 
-public abstract class RadarService extends Service {
+public class RadarService extends Service implements ServerStatusListener {
     private static final Logger logger = LoggerFactory.getLogger(RadarService.class);
 
     public static String RADAR_PACKAGE = RadarService.class.getPackage().getName();
@@ -65,22 +76,14 @@ public abstract class RadarService extends Service {
         }
     };
 
+    private IBinder binder;
 
+    private TableDataHandler dataHandler;
     private String mainActivityClass;
     private String loginActivityClass;
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters = new HashMap<>();
-
-
-    /**
-     * Background handler thread, to do the service orchestration. Having this in the background
-     * is important to avoid any lags in the UI. It is shutdown whenever the activity is not
-     * running.
-     */
-    private HandlerThread mHandlerThread;
-    /** Hander in the background. It is set to null whenever the activity is not running. */
-    private Handler mHandler;
 
     private boolean isForcedDisconnected;
 
@@ -106,7 +109,7 @@ public abstract class RadarService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-        return null;
+        return binder;
     }
 
     public RadarService() {
@@ -137,9 +140,8 @@ public abstract class RadarService extends Service {
             @Override
             public void onReceive(Context context, final Intent intent) {
                 if (intent.getAction().equals(DEVICE_CONNECT_FAILED)) {
-
-                    Boast.makeText(RadarService.this, "Cannot connect to device "
-                                    + intent.getStringExtra(DEVICE_STATUS_NAME),
+                    Boast.makeText(RadarService.this,
+                            "Cannot connect to device " + intent.getStringExtra(DEVICE_STATUS_NAME),
                             Toast.LENGTH_SHORT).show();
                 }
             }
@@ -149,6 +151,8 @@ public abstract class RadarService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+
+        binder = createBinder();
 
         authState = AppAuthState.Builder.from(this).build();
 
@@ -199,6 +203,10 @@ public abstract class RadarService extends Service {
 
     }
 
+    protected IBinder createBinder() {
+        return new RadarBinder();
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
@@ -235,11 +243,104 @@ public abstract class RadarService extends Service {
     }
 
     protected void configure() {
-      //  RadarConfiguration configuration = RadarConfiguration.getInstance();
+        RadarConfiguration configuration = RadarConfiguration.getInstance();
+
+        TableDataHandler localDataHandler;
+        ServerConfig kafkaConfig = null;
+        SchemaRetriever remoteSchemaRetriever = null;
+        boolean unsafeConnection = configuration.getBoolean(UNSAFE_KAFKA_CONNECTION, false);
+
+            String urlString = configuration.getString(KAFKA_REST_PROXY_URL_KEY);
+            if (!urlString.isEmpty()) {
+                try {
+                    ServerConfig schemaRegistry = new ServerConfig(configuration.getString(SCHEMA_REGISTRY_URL_KEY));
+                    schemaRegistry.setUnsafe(unsafeConnection);
+                    remoteSchemaRetriever = new SchemaRetriever(schemaRegistry, 30);
+                    kafkaConfig = new ServerConfig(urlString);
+                    kafkaConfig.setUnsafe(unsafeConnection);
+                } catch (MalformedURLException ex) {
+                    logger.error("Malformed Kafka server URL {}", urlString);
+                    throw new IllegalArgumentException(ex);
+                }
+            }
+
+
+        boolean sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, true);
+
+        int maxBytes = configuration.getInt(MAX_CACHE_SIZE, Integer.MAX_VALUE);
+
+        boolean newlyCreated;
+        synchronized (this) {
+            if (dataHandler == null) {
+                try {
+                    dataHandler = new TableDataHandler(
+                            this, kafkaConfig, remoteSchemaRetriever, Collections.<AvroTopic<ObservationKey, ? extends SpecificRecord>>emptyList(), maxBytes,
+                            sendOnlyWithWifi, authState);
+                    newlyCreated = true;
+                } catch (IOException ex) {
+                    logger.error("Failed to instantiate Data Handler", ex);
+                    throw new IllegalStateException(ex);
+                }
+            } else {
+                newlyCreated = false;
+            }
+            localDataHandler = dataHandler;
+        }
+
+        if (!newlyCreated) {
+            if (kafkaConfig == null) {
+                localDataHandler.disableSubmitter();
+            } else {
+                localDataHandler.setKafkaConfig(kafkaConfig);
+                localDataHandler.setSchemaRetriever(remoteSchemaRetriever);
+            }
+            localDataHandler.setMaximumCacheSize(maxBytes);
+            localDataHandler.setAuthState(authState);
+        }
+
+        localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
+        localDataHandler.setCompression(configuration.getBoolean(SEND_WITH_COMPRESSION, false));
+
+        if (configuration.has(DATA_RETENTION_KEY)) {
+            localDataHandler.setDataRetention(
+                    configuration.getLong(DATA_RETENTION_KEY));
+        }
+        if (configuration.has(KAFKA_UPLOAD_RATE_KEY)) {
+            localDataHandler.setKafkaUploadRate(
+                    configuration.getLong(KAFKA_UPLOAD_RATE_KEY));
+        }
+        if (configuration.has(KAFKA_RECORDS_SEND_LIMIT_KEY)) {
+            localDataHandler.setKafkaRecordsSendLimit(
+                    configuration.getInt(KAFKA_RECORDS_SEND_LIMIT_KEY));
+        }
+        if (configuration.has(SENDER_CONNECTION_TIMEOUT_KEY)) {
+            localDataHandler.setSenderConnectionTimeout(
+                    configuration.getLong(SENDER_CONNECTION_TIMEOUT_KEY));
+        }
+        if (configuration.has( DATABASE_COMMIT_RATE_KEY)) {
+            localDataHandler.setDatabaseCommitRate(
+                    configuration.getLong(DATABASE_COMMIT_RATE_KEY));
+        }
+        if (configuration.has(KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
+            localDataHandler.setMinimumBatteryLevel(configuration.getFloat(
+                    KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL));
+        }
+
+        if (newlyCreated) {
+            localDataHandler.addStatusListener(this);
+            localDataHandler.start();
+        } else if (kafkaConfig != null) {
+            localDataHandler.enableSubmitter();
+        }
+
 
         for (DeviceServiceProvider provider : mConnections) {
             provider.updateConfiguration();
         }
+    }
+
+    public TableDataHandler getDataHandler() {
+        return dataHandler;
     }
 
     protected void requestPermissions(String[] permissions) {
@@ -310,6 +411,11 @@ public abstract class RadarService extends Service {
             }
             startLogin();
         }
+    }
+
+    @Override
+    public void updateRecordsSent(String topicName, int numberOfRecords) {
+
     }
 
     public void deviceStatusUpdated(final DeviceServiceConnection<?> connection, final DeviceStatusListener.Status status) {
@@ -480,44 +586,54 @@ public abstract class RadarService extends Service {
         }
     }
 
-    public ServerStatusListener.Status getServerStatus() {
-        return serverStatus;
-    }
 
-    public TimedInt getTopicsSent(DeviceServiceConnection connection) {
-        return mTotalRecordsSent.get(connection);
-    }
+    protected class RadarBinder extends Binder implements IRadarService {
+        @Override
+        public ServerStatusListener.Status getServerStatus() {
+            return serverStatus;
+        }
 
-    public String getLatestTopicSent() {
-        return latestTopicSent;
-    }
+        @Override
+        public TimedInt getTopicsSent(DeviceServiceConnection connection) {
+            return mTotalRecordsSent.get(connection);
+        }
 
-    public TimedInt getLatestNumberOfRecordsSent() {
-        return latestNumberOfRecordsSent;
-    }
+        @Override
+        public String getLatestTopicSent() {
+            return latestTopicSent;
+        }
 
-    public List<DeviceServiceProvider> getConnections() {
-        return Collections.unmodifiableList(mConnections);
-    }
+        @Override
+        public TimedInt getLatestNumberOfRecordsSent() {
+            return latestNumberOfRecordsSent;
+        }
 
-    public AppAuthState getAuthState() {
-        return authState;
-    }
+        @Override
+        public List<DeviceServiceProvider> getConnections() {
+            return Collections.unmodifiableList(mConnections);
+        }
 
-    public void setAllowedDeviceIds(final DeviceServiceConnection connection, Set<String> allowedIds) {
-        deviceFilters.put(connection, allowedIds);
+        @Override
+        public AppAuthState getAuthState() {
+            return authState;
+        }
 
-        // Do NOT disconnect if input has not changed, is empty or equals the connected device.
-        if (connection.hasService() && !connection.isAllowedDevice(allowedIds)) {
-            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override
-                public void run() {
-                    if (connection.isRecording()) {
-                        connection.stopRecording();
-                        // will restart recording once the status is set to disconnected.
+        @Override
+        public void setAllowedDeviceIds(final DeviceServiceConnection connection, Set<String> allowedIds) {
+            deviceFilters.put(connection, allowedIds);
+
+            // Do NOT disconnect if input has not changed, is empty or equals the connected device.
+            if (connection.hasService() && !connection.isAllowedDevice(allowedIds)) {
+                new Handler(Looper.getMainLooper()).post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (connection.isRecording()) {
+                            connection.stopRecording();
+                            // will restart recording once the status is set to disconnected.
+                        }
                     }
-                }
-            });
+                });
+            }
         }
     }
 }

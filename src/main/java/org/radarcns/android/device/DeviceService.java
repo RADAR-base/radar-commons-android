@@ -493,6 +493,11 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
+        public void setDataHandler(TableDataHandler dataHandler) {
+            DeviceService.this.setDataHandler(dataHandler);
+        }
+
+        @Override
         public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
             throw new UnsupportedOperationException();
         }
@@ -505,7 +510,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     @CallSuper
     protected void onInvocation(Bundle bundle) {
-        TableDataHandler localDataHandler;
+
 
         ServerConfig kafkaConfig = null;
         SchemaRetriever remoteSchemaRetriever = null;
@@ -533,69 +538,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         int maxBytes = RadarConfiguration.getIntExtra(
                 bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
 
-        boolean newlyCreated;
-        synchronized (this) {
-            if (dataHandler == null) {
-                try {
-                    dataHandler = new TableDataHandler(
-                            this, kafkaConfig, remoteSchemaRetriever, getCachedTopics(), maxBytes,
-                            sendOnlyWithWifi, authState);
-                    newlyCreated = true;
-                } catch (IOException ex) {
-                    logger.error("Failed to instantiate Data Handler", ex);
-                    throw new IllegalStateException(ex);
-                }
-            } else {
-                newlyCreated = false;
-            }
-            localDataHandler = dataHandler;
-        }
 
-        if (!newlyCreated) {
-            if (kafkaConfig == null) {
-                localDataHandler.disableSubmitter();
-            } else {
-                localDataHandler.setKafkaConfig(kafkaConfig);
-                localDataHandler.setSchemaRetriever(remoteSchemaRetriever);
-            }
-            localDataHandler.setMaximumCacheSize(maxBytes);
-            localDataHandler.setAuthState(authState);
-        }
-
-        localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
-        localDataHandler.setCompression(RadarConfiguration.getBooleanExtra(
-                bundle, SEND_WITH_COMPRESSION, false));
-
-        if (RadarConfiguration.hasExtra(bundle, DATA_RETENTION_KEY)) {
-            localDataHandler.setDataRetention(
-                    RadarConfiguration.getLongExtra(bundle, DATA_RETENTION_KEY));
-        }
-        if (RadarConfiguration.hasExtra(bundle, KAFKA_UPLOAD_RATE_KEY)) {
-            localDataHandler.setKafkaUploadRate(
-                    RadarConfiguration.getLongExtra(bundle, KAFKA_UPLOAD_RATE_KEY));
-        }
-        if (RadarConfiguration.hasExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY)) {
-            localDataHandler.setKafkaRecordsSendLimit(
-                    RadarConfiguration.getIntExtra(bundle, KAFKA_RECORDS_SEND_LIMIT_KEY));
-        }
-        if (RadarConfiguration.hasExtra(bundle, SENDER_CONNECTION_TIMEOUT_KEY)) {
-            localDataHandler.setSenderConnectionTimeout(
-                    RadarConfiguration.getLongExtra(bundle, SENDER_CONNECTION_TIMEOUT_KEY));
-        }
-        if (RadarConfiguration.hasExtra(bundle, DATABASE_COMMIT_RATE_KEY)) {
-            localDataHandler.setDatabaseCommitRate(
-                    RadarConfiguration.getLongExtra(bundle, DATABASE_COMMIT_RATE_KEY));
-        }
-        if (RadarConfiguration.hasExtra(bundle, USER_ID_KEY)) {
-            key.setUserId(RadarConfiguration.getStringExtra(bundle, USER_ID_KEY));
-        }
-        if (RadarConfiguration.hasExtra(bundle, PROJECT_ID_KEY)) {
-            key.setProjectId(RadarConfiguration.getStringExtra(bundle, PROJECT_ID_KEY));
-        }
-        if (RadarConfiguration.hasExtra(bundle, KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
-            localDataHandler.setMinimumBatteryLevel(RadarConfiguration.getFloatExtra(bundle,
-                    KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL));
-        }
 
         source = bundle.getParcelable(SOURCE_KEY);
         if (source.getSourceId() != null) {
@@ -622,17 +565,14 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         setHasBluetoothPermission(bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false));
-
-        if (newlyCreated) {
-            localDataHandler.addStatusListener(this);
-            localDataHandler.start();
-        } else if (kafkaConfig != null) {
-            localDataHandler.enableSubmitter();
-        }
     }
 
     public synchronized TableDataHandler getDataHandler() {
         return dataHandler;
+    }
+
+    public synchronized void setDataHandler(TableDataHandler dataHandler) {
+        this.dataHandler = dataHandler;
     }
 
     public synchronized DeviceManager<T> getDeviceManager() {

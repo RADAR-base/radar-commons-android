@@ -21,6 +21,7 @@ import android.support.annotation.NonNull;
 import android.util.Pair;
 
 import org.apache.avro.specific.SpecificRecord;
+import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.data.Record;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.kafka.ObservationKey;
@@ -52,4 +53,6 @@ public interface DeviceServiceBinder {
     void updateConfiguration(Bundle bundle);
     /** Number of records in cache [unsent] and [sent] */
     Pair<Long, Long> numberOfRecords();
+
+    void setDataHandler(TableDataHandler dataHandler);
 }

@@ -82,8 +82,7 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
     }
 
     @Override
-    public void onServiceConnected(final ComponentName className,
-                                   IBinder service) {
+    public void onServiceConnected(ComponentName className, IBinder service) {
         radarService.registerReceiver(statusReceiver,
                 new IntentFilter(DEVICE_STATUS_CHANGED));
 
@@ -94,6 +93,7 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
 
         if (!hasService()) {
             super.onServiceConnected(className, service);
+            getServiceBinder().setDataHandler(radarService.getDataHandler());
             radarService.serviceConnected(this);
         }
     }

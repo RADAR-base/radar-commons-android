@@ -531,6 +531,10 @@ public class RadarConfiguration {
         }
     }
 
+    public boolean has(String key) {
+        return localConfiguration.containsKey(key) || !config.getString(key).isEmpty();
+    }
+
     public static boolean hasExtra(Bundle bundle, String key) {
         return bundle.containsKey(RADAR_PREFIX + key);
     }
