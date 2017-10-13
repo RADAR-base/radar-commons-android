@@ -20,6 +20,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
 import org.radarcns.android.R;
 import org.radarcns.android.util.Boast;
@@ -40,6 +41,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private static final Logger logger = LoggerFactory.getLogger(LoginActivity.class);
     public static final String ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login";
     public static final String ACTION_REFRESH = "org.radarcns.auth.LoginActivity.refresh";
+    public static final String ACTION_LOGIN_SUCCESS = "org.radarcns.auth.LoginActivity.success";
 
     private List<LoginManager> loginManagers;
     private boolean startedFromActivity;
@@ -149,6 +151,9 @@ public abstract class LoginActivity extends Activity implements LoginListener {
             }
         }
         this.appAuth.addToPreferences(this);
+
+        LocalBroadcastManager.getInstance(this).sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
+
         if (startedFromActivity) {
             setResult(RESULT_OK, this.appAuth.toIntent());
         } else if (!refreshOnly) {
