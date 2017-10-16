@@ -186,9 +186,13 @@ public class ManagementPortalClientTest {
         source.setAttributes(Collections.singletonMap("firmware", "0.11"));
 
         String body = ManagementPortalClient.sourceRegistrationBody(source).toString();
-        assertEquals("{\"sourceName\":\"something\","
-                + "\"deviceTypeId\":0,"
-                + "\"attributes\":{\"firmware\":\"0.11\"}}", body);
+        JSONObject object = new JSONObject(body);
+        assertEquals("something", object.getString("sourceName"));
+        assertEquals(0, object.getInt("deviceTypeId"));
+        JSONObject attr = object.getJSONObject("attributes");
+        assertEquals(3, object.names().length());
+        assertEquals("0.11", attr.getString("firmware"));
+        assertEquals(1, attr.names().length());
     }
 
     @Test
