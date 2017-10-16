@@ -53,12 +53,14 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
     public static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
-    private final Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> tables;
+    private final Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> tables = new HashMap<>();
     private final Set<ServerStatusListener> statusListeners;
     private final SingleThreadExecutorFactory executorFactory;
     private final BatteryLevelReceiver batteryLevelReceiver;
     private final NetworkConnectedReceiver networkConnectedReceiver;
     private final AtomicBoolean sendOnlyWithWifi;
+    private final Context context;
+    private int maxBytes;
     private AppAuthState authState;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
@@ -78,9 +80,9 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            List<AvroTopic<ObservationKey, ? extends SpecificRecord>> topics,
                             int maxBytes, boolean sendOnlyWithWifi, AppAuthState authState)
             throws IOException {
+        this.context =  context;
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
@@ -96,13 +98,6 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         this.useCompression = false;
         this.authState = authState;
 
-        tables = new HashMap<>(topics.size() * 2);
-        for (AvroTopic<ObservationKey, ? extends SpecificRecord> topic : topics) {
-            DataCache<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
-                    .getOrCreateCache(context.getApplicationContext(), topic);
-            cache.setMaximumSize(maxBytes);
-            tables.put(topic, cache);
-        }
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
         submitter = null;
@@ -115,6 +110,8 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         } else {
             updateServerStatus(Status.DISABLED);
         }
+
+        this.maxBytes = maxBytes;
     }
 
     private synchronized void updateUploadRate() {
@@ -278,6 +275,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     @Override
     public void setMaximumCacheSize(int numBytes) {
+        maxBytes = numBytes;
         for (DataCache cache : tables.values()) {
             cache.setMaximumSize(numBytes);
         }
@@ -453,5 +451,12 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             // are not right.
             start();
         }
+    }
+
+    public void registerTopic(AvroTopic<ObservationKey, ? extends SpecificRecord> topic) throws IOException {
+        DataCache<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
+                .getOrCreateCache(context.getApplicationContext(), topic);
+        cache.setMaximumSize(maxBytes);
+        tables.put(topic, cache);
     }
 }

@@ -148,9 +148,14 @@ public class RadarService extends Service implements ServerStatusListener {
         };
     }
 
+    protected IBinder createBinder() {
+        return new RadarBinder();
+    }
+
     @Override
-    public void onCreate() {
-        super.onCreate();
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
+        loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
 
         binder = createBinder();
 
@@ -164,9 +169,6 @@ public class RadarService extends Service implements ServerStatusListener {
                 new IntentFilter(LoginActivity.ACTION_LOGIN_SUCCESS));
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
-
-
-        configure();
 
         try {
             mConnections = DeviceServiceProvider.loadProviders(this, RadarConfiguration.getInstance());
@@ -184,6 +186,7 @@ public class RadarService extends Service implements ServerStatusListener {
             mConnections = Collections.emptyList();
         }
 
+        configure();
         checkPermissions();
 
         new AsyncTask<DeviceServiceProvider, Void, Void>() {
@@ -200,17 +203,6 @@ public class RadarService extends Service implements ServerStatusListener {
                 return null;
             }
         }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
-
-    }
-
-    protected IBinder createBinder() {
-        return new RadarBinder();
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
-        loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
 
         startForeground(1,
                 new Notification.Builder(this)
@@ -250,6 +242,7 @@ public class RadarService extends Service implements ServerStatusListener {
         SchemaRetriever remoteSchemaRetriever = null;
         boolean unsafeConnection = configuration.getBoolean(UNSAFE_KAFKA_CONNECTION, false);
 
+        if (configuration.has(KAFKA_REST_PROXY_URL_KEY)) {
             String urlString = configuration.getString(KAFKA_REST_PROXY_URL_KEY);
             if (!urlString.isEmpty()) {
                 try {
@@ -263,7 +256,7 @@ public class RadarService extends Service implements ServerStatusListener {
                     throw new IllegalArgumentException(ex);
                 }
             }
-
+        }
 
         boolean sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, true);
 
@@ -274,7 +267,7 @@ public class RadarService extends Service implements ServerStatusListener {
             if (dataHandler == null) {
                 try {
                     dataHandler = new TableDataHandler(
-                            this, kafkaConfig, remoteSchemaRetriever, Collections.<AvroTopic<ObservationKey, ? extends SpecificRecord>>emptyList(), maxBytes,
+                            this, kafkaConfig, remoteSchemaRetriever, maxBytes,
                             sendOnlyWithWifi, authState);
                     newlyCreated = true;
                 } catch (IOException ex) {

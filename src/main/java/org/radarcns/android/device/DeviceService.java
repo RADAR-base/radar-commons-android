@@ -510,38 +510,10 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     @CallSuper
     protected void onInvocation(Bundle bundle) {
-
-
-        ServerConfig kafkaConfig = null;
-        SchemaRetriever remoteSchemaRetriever = null;
-        boolean unsafeConnection = RadarConfiguration.getBooleanExtra(bundle, UNSAFE_KAFKA_CONNECTION, false);
-        if (RadarConfiguration.hasExtra(bundle, KAFKA_REST_PROXY_URL_KEY)) {
-            String urlString = RadarConfiguration.getStringExtra(bundle, KAFKA_REST_PROXY_URL_KEY);
-            if (!urlString.isEmpty()) {
-                try {
-                    ServerConfig schemaRegistry = new ServerConfig(RadarConfiguration.getStringExtra(bundle, SCHEMA_REGISTRY_URL_KEY));
-                    schemaRegistry.setUnsafe(unsafeConnection);
-                    remoteSchemaRetriever = new SchemaRetriever(schemaRegistry, 30);
-                    kafkaConfig = new ServerConfig(urlString);
-                    kafkaConfig.setUnsafe(unsafeConnection);
-                } catch (MalformedURLException ex) {
-                    logger.error("Malformed Kafka server URL {}", urlString);
-                    throw new IllegalArgumentException(ex);
-                }
-            }
-        }
-
-        boolean sendOnlyWithWifi = RadarConfiguration.getBooleanExtra(
-                bundle, SEND_ONLY_WITH_WIFI, true);
-
         authState = AppAuthState.Builder.from(bundle).build();
-        int maxBytes = RadarConfiguration.getIntExtra(
-                bundle, MAX_CACHE_SIZE, Integer.MAX_VALUE);
-
-
 
         source = bundle.getParcelable(SOURCE_KEY);
-        if (source.getSourceId() != null) {
+        if (source != null && source.getSourceId() != null) {
             key.setSourceId(source.getSourceId());
         }
         String managementPortalString = bundle.getString(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, null);
@@ -573,6 +545,13 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     public synchronized void setDataHandler(TableDataHandler dataHandler) {
         this.dataHandler = dataHandler;
+        for (AvroTopic<ObservationKey, ? extends SpecificRecord>topic: getTopics().getTopics()) {
+            try {
+                dataHandler.registerTopic(topic);
+            } catch (IOException e) {
+                logger.error("Error registering topic", e);
+            }
+        }
     }
 
     public synchronized DeviceManager<T> getDeviceManager() {
