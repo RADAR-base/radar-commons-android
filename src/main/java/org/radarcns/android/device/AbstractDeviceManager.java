@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 
 /**
  * Abstract DeviceManager that handles some common functionality.
@@ -86,17 +87,17 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
      * override with an empty implementation.
      */
     protected void registerDeviceAtReady() {
-        service.registerDevice(deviceName, null);
+        service.registerDevice(deviceName, Collections.<String, String>emptyMap());
     }
 
     /**
      * Send a single record, using the cache to persist the data.
      * If the current device is not registered when this is called, the data will NOT be sent.
      */
-    protected <V extends SpecificRecord> void send(DataCache<ObservationKey, V> table, V value) {
+    protected <V extends SpecificRecord> void send(AvroTopic<ObservationKey, V> topic, V value) {
         ObservationKey key = deviceStatus.getId();
         if (key.getSourceId() != null) {
-            dataHandler.addMeasurement(table, key, value);
+            dataHandler.addMeasurement(topic, key, value);
         } else {
             logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
         }
@@ -113,11 +114,6 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
         } else {
             logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
         }
-    }
-
-    /** Get a data cache to send data with at a later time. */
-    protected <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(AvroTopic<ObservationKey, V> topic) {
-        return dataHandler.getCache(topic);
     }
 
     /** Get the service that started this device manager. */

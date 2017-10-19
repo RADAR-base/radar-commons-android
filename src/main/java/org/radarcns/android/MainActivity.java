@@ -18,23 +18,16 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ComponentName;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.ServiceConnection;
-import android.content.pm.PackageManager;
+import android.content.*;
 import android.os.*;
 import android.os.Process;
 import android.provider.Settings;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
-import android.widget.Toast;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
-import org.radarcns.android.util.Boast;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +46,13 @@ public abstract class MainActivity extends Activity {
     private static final int LOGIN_REQUEST_CODE = 232619693;
     private static final int LOCATION_REQUEST_CODE = 232619694;
     private static final int USAGE_REQUEST_CODE = 232619695;
+
+    private final BroadcastReceiver configurationBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            onConfigChanged();
+        }
+    };
 
     /** Time between refreshes. */
     private long uiRefreshRate;
@@ -83,6 +83,7 @@ public abstract class MainActivity extends Activity {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             radarService = (IRadarService) service;
+            mView = createView();
         }
 
         @Override
@@ -122,34 +123,17 @@ public abstract class MainActivity extends Activity {
         radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
         radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
 
+        registerReceiver(configurationBroadcastReceiver,
+                new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+
         startService(new Intent(this, radarService())
                 .putExtra(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName())
                 .putExtra(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName()));
 
         onConfigChanged();
+
         logger.info("RADAR configuration at create: {}", radarConfiguration);
 
-        radarConfiguration.onFetchComplete(this, new OnCompleteListener<Void>() {
-            @Override
-            public void onComplete(@NonNull Task<Void> task) {
-                if (task.isSuccessful()) {
-                    // Once the config is successfully fetched it must be
-                    // activated before newly fetched values are returned.
-                    radarConfiguration.activateFetched();
-
-                    logger.info("Remote Config: Activate success.");
-                    // Set global properties.
-                    logger.info("RADAR configuration at create: {}", radarConfiguration);
-                    onConfigChanged();
-
-                    sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
-                } else {
-                    Boast.makeText(MainActivity.this, "Remote Config: Fetch Failed",
-                            Toast.LENGTH_SHORT).show();
-                    logger.info("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
-                }
-            }
-        });
 
         // Start the UI thread
         uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
@@ -172,6 +156,13 @@ public abstract class MainActivity extends Activity {
         };
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        unregisterReceiver(configurationBroadcastReceiver);
+    }
+
     protected Class<? extends RadarService> radarService() {
         return RadarService.class;
     }
@@ -180,31 +171,13 @@ public abstract class MainActivity extends Activity {
      * Called whenever the RadarConfiguration is changed. This can be at activity start or
      * when the configuration is updated from Firebase.
      */
-    protected abstract void onConfigChanged();
+    @CallSuper
+    protected void onConfigChanged() {
+
+    }
 
     /** Create a view to show the data of this activity. */
     protected abstract MainActivityView createView();
-
-    /** Configure whether a boot listener should start this application at boot. */
-    protected void configureRunAtBoot(@NonNull Class<?> bootReceiver) {
-        ComponentName receiver = new ComponentName(
-                getApplicationContext(), bootReceiver);
-        PackageManager pm = getApplicationContext().getPackageManager();
-
-        boolean startAtBoot = radarConfiguration.getBoolean(RadarConfiguration.START_AT_BOOT, false);
-        boolean isStartedAtBoot = pm.getComponentEnabledSetting(receiver) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
-        if (startAtBoot && !isStartedAtBoot) {
-            logger.info("From now on, this application will start at boot");
-            pm.setComponentEnabledSetting(receiver,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP);
-        } else if (!startAtBoot && isStartedAtBoot) {
-            logger.info("Not starting application at boot anymore");
-            pm.setComponentEnabledSetting(receiver,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP);
-        }
-    }
 
     @Override
     protected void onResume() {
@@ -231,16 +204,12 @@ public abstract class MainActivity extends Activity {
             startLogin(true);
         }
 
-
         mHandlerThread = new HandlerThread("Service connection", Process.THREAD_PRIORITY_BACKGROUND);
         mHandlerThread.start();
         Handler localHandler = new Handler(mHandlerThread.getLooper());
         synchronized (this) {
             mHandler = localHandler;
         }
-        mView = createView();
-
-        radarConfiguration.fetch();
     }
 
     @Override

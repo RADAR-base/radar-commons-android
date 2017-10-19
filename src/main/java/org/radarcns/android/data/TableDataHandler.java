@@ -263,14 +263,13 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Get the table of a given topic
      */
     @SuppressWarnings("unchecked")
-    @Override
     public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(AvroTopic<ObservationKey, V> topic) {
         return (DataCache<ObservationKey, V>)this.tables.get(topic);
     }
 
     @Override
-    public <V extends SpecificRecord> void addMeasurement(DataCache<ObservationKey, V> table, ObservationKey key, V value) {
-        table.addMeasurement(key, value);
+    public <W extends SpecificRecord> void addMeasurement(AvroTopic<ObservationKey, W> topic, ObservationKey key, W value) {
+        getCache(topic).addMeasurement(key, value);
     }
 
     @Override

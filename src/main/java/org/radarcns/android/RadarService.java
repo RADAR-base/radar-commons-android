@@ -9,9 +9,11 @@ import android.content.*;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.*;
+import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.widget.Toast;
-import org.apache.avro.specific.SpecificRecord;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
@@ -23,9 +25,7 @@ import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.Boast;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.TimedInt;
-import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.SchemaRetriever;
-import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,13 +55,6 @@ public class RadarService extends Service implements ServerStatusListener {
     public static String ACTION_PERMISSIONS_GRANTED = RADAR_PACKAGE + ".ACTION_PERMISSIONS_GRANTED";
     public static String EXTRA_GRANT_RESULTS = RADAR_PACKAGE + ".EXTRA_GRANT_RESULTS";
 
-    private final BroadcastReceiver configurationBroadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            configure();
-        }
-    };
-
     private final BroadcastReceiver permissionsBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -88,8 +81,36 @@ public class RadarService extends Service implements ServerStatusListener {
     private boolean isForcedDisconnected;
 
     /** Defines callbacks for service binding, passed to bindService() */
-    private final BroadcastReceiver bluetoothReceiver;
-    private final BroadcastReceiver deviceFailedReceiver;
+    private final BroadcastReceiver  bluetoothReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+
+            if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                logger.info("Bluetooth state {}", state);
+                // Upon state change, restart ui handler and restart Scanning.
+                if (state == BluetoothAdapter.STATE_ON) {
+                    logger.info("Bluetooth is on");
+                    startScanning();
+                } else if (state == BluetoothAdapter.STATE_OFF) {
+                    logger.warn("Bluetooth is off");
+                    startScanning();
+                }
+            }
+        }
+    };
+
+    private final BroadcastReceiver deviceFailedReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, final Intent intent) {
+            if (intent.getAction().equals(DEVICE_CONNECT_FAILED)) {
+                Boast.makeText(RadarService.this,
+                        "Cannot connect to device " + intent.getStringExtra(DEVICE_STATUS_NAME),
+                        Toast.LENGTH_SHORT).show();
+            }
+        }
+    };
 
     /** Connections. **/
     private List<DeviceServiceProvider> mConnections;
@@ -112,57 +133,14 @@ public class RadarService extends Service implements ServerStatusListener {
         return binder;
     }
 
-    public RadarService() {
-        super();
-
-
-        bluetoothReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                final String action = intent.getAction();
-
-                if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                    final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                    logger.info("Bluetooth state {}", state);
-                    // Upon state change, restart ui handler and restart Scanning.
-                    if (state == BluetoothAdapter.STATE_ON) {
-                        logger.info("Bluetooth is on");
-                        startScanning();
-                    } else if (state == BluetoothAdapter.STATE_OFF) {
-                        logger.warn("Bluetooth is off");
-                        startScanning();
-                    }
-                }
-            }
-        };
-
-        deviceFailedReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, final Intent intent) {
-                if (intent.getAction().equals(DEVICE_CONNECT_FAILED)) {
-                    Boast.makeText(RadarService.this,
-                            "Cannot connect to device " + intent.getStringExtra(DEVICE_STATUS_NAME),
-                            Toast.LENGTH_SHORT).show();
-                }
-            }
-        };
-    }
-
-    protected IBinder createBinder() {
-        return new RadarBinder();
-    }
-
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
-        loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
+    public void onCreate() {
+        super.onCreate();
 
         binder = createBinder();
 
         authState = AppAuthState.Builder.from(this).build();
 
-        registerReceiver(configurationBroadcastReceiver,
-                new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
         registerReceiver(permissionsBroadcastReceiver,
                 new IntentFilter(ACTION_PERMISSIONS_GRANTED));
         registerReceiver(loginBroadcastReceiver,
@@ -204,6 +182,43 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
 
+
+        final RadarConfiguration radarConfiguration = RadarConfiguration.getInstance();
+        radarConfiguration.onFetchComplete(null, new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                if (task.isSuccessful()) {
+                    // Once the config is successfully fetched it must be
+                    // activated before newly fetched values are returned.
+                    radarConfiguration.activateFetched();
+
+                    logger.info("Remote Config: Activate success.");
+                    // Set global properties.
+                    logger.info("RADAR configuration changed: {}", radarConfiguration);
+                    configure();
+                    sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+                } else {
+                    Boast.makeText(RadarService.this, "Remote Config: Fetch Failed",
+                            Toast.LENGTH_SHORT).show();
+                    logger.info("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
+                }
+            }
+        });
+
+        radarConfiguration.fetch();
+    }
+
+    protected IBinder createBinder() {
+        return new RadarBinder();
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
+        loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
+
+
+
         startForeground(1,
                 new Notification.Builder(this)
                         .setContentTitle("RADAR")
@@ -216,7 +231,6 @@ public class RadarService extends Service implements ServerStatusListener {
 
     @Override
     public void onDestroy() {
-        unregisterReceiver(configurationBroadcastReceiver);
         unregisterReceiver(permissionsBroadcastReceiver);
         unregisterReceiver(loginBroadcastReceiver);
         unregisterReceiver(bluetoothReceiver);
@@ -339,7 +353,8 @@ public class RadarService extends Service implements ServerStatusListener {
     protected void requestPermissions(String[] permissions) {
         startActivity(new Intent()
                 .setComponent(new ComponentName(this, mainActivityClass))
-                .setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .setAction(ACTION_CHECK_PERMISSIONS)
                 .putExtra(EXTRA_PERMISSIONS, permissions));
     }
@@ -485,8 +500,7 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     protected void checkPermissions() {
-        List<String> permissions = new ArrayList<>();
-        permissions.addAll(getServicePermissions());
+        Set<String> permissions = new HashSet<>(getServicePermissions());
         for (DeviceServiceProvider<?> provider : mConnections) {
             permissions.addAll(provider.needsPermissions());
         }
@@ -521,7 +535,9 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }
 
-        requestPermissions(needsPermissions.toArray(new String[needsPermissions.size()]));
+        if (!needsPermissions.isEmpty()) {
+            requestPermissions(needsPermissions.toArray(new String[needsPermissions.size()]));
+        }
     }
 
     protected List<String> getServicePermissions() {
@@ -579,6 +595,26 @@ public class RadarService extends Service implements ServerStatusListener {
         }
     }
 
+    /** Configure whether a boot listener should start this application at boot. */
+    protected void configureRunAtBoot(@NonNull Class<?> bootReceiver) {
+        ComponentName receiver = new ComponentName(
+                getApplicationContext(), bootReceiver);
+        PackageManager pm = getApplicationContext().getPackageManager();
+
+        boolean startAtBoot = RadarConfiguration.getInstance().getBoolean(RadarConfiguration.START_AT_BOOT, false);
+        boolean isStartedAtBoot = pm.getComponentEnabledSetting(receiver) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+        if (startAtBoot && !isStartedAtBoot) {
+            logger.info("From now on, this application will start at boot");
+            pm.setComponentEnabledSetting(receiver,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP);
+        } else if (!startAtBoot && isStartedAtBoot) {
+            logger.info("Not starting application at boot anymore");
+            pm.setComponentEnabledSetting(receiver,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP);
+        }
+    }
 
     protected class RadarBinder extends Binder implements IRadarService {
         @Override

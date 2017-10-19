@@ -519,6 +519,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         if (source.getSourceId() != null) {
             key.setSourceId(source.getSourceId());
         }
+        key.setUserId(authState.getUserId());
         String managementPortalString = bundle.getString(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, null);
         if (managementPortalString != null) {
             try {
