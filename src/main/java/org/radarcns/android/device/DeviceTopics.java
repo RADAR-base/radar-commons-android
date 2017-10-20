@@ -21,11 +21,9 @@ import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.*;
 
 public abstract class DeviceTopics {
     private final Map<String, AvroTopic<ObservationKey, ? extends SpecificRecord>> topicMap;
@@ -34,13 +32,18 @@ public abstract class DeviceTopics {
         topicMap = new HashMap<>();
     }
 
-    protected <W extends SpecificRecord> AvroTopic<ObservationKey, W> createTopic(String name,
-                                                        Schema valueSchema, Class<W> valueClass) {
-        AvroTopic<ObservationKey, W> topic = new AvroTopic<>(
-                name, ObservationKey.getClassSchema(), valueSchema,
-                ObservationKey.class, valueClass);
-        topicMap.put(name, topic);
-        return topic;
+    protected <W extends SpecificRecord> AvroTopic<ObservationKey, W> createTopic(String name, Class<W> valueClass) {
+        try {
+            Method method = valueClass.getMethod("getClassSchema");
+            Schema valueSchema = (Schema) method.invoke(null);
+            AvroTopic<ObservationKey, W> topic = new AvroTopic<>(
+                    name, ObservationKey.getClassSchema(), valueSchema,
+                    ObservationKey.class, valueClass);
+            topicMap.put(name, topic);
+            return topic;
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public AvroTopic<ObservationKey, ? extends SpecificRecord> getTopic(String name) {
