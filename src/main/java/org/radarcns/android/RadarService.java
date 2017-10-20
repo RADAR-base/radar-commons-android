@@ -35,8 +35,6 @@ import java.util.*;
 
 import static android.Manifest.permission.*;
 import static org.radarcns.android.RadarConfiguration.*;
-import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
-import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
@@ -113,7 +111,7 @@ public class RadarService extends Service implements ServerStatusListener {
     };
 
     /** Connections. **/
-    private List<DeviceServiceProvider> mConnections;
+    private final List<DeviceServiceProvider> mConnections = new ArrayList<>();
 
     /** An overview of how many records have been sent throughout the application. */
     private final Map<DeviceServiceConnection, TimedInt> mTotalRecordsSent = new HashMap<>();
@@ -148,24 +146,7 @@ public class RadarService extends Service implements ServerStatusListener {
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
 
-        try {
-            mConnections = DeviceServiceProvider.loadProviders(this, RadarConfiguration.getInstance());
-            // TODO: check what sources are available in the authState (if any)
-            // if any sources are available:
-            //   - only start up providers that DeviceServiceProvider#matches one of the sources
-            //   - set that source in the DeviceServiceProvider.
-            for (DeviceServiceProvider provider : mConnections) {
-                DeviceServiceConnection connection = provider.getConnection();
-                mTotalRecordsSent.put(connection, new TimedInt());
-                deviceFilters.put(connection, Collections.<String>emptySet());
-            }
-        } catch (IllegalArgumentException ex) {
-            logger.error("Cannot instantiate device provider, waiting to fetch to complete", ex);
-            mConnections = Collections.emptyList();
-        }
-
         configure();
-        checkPermissions();
 
         new AsyncTask<DeviceServiceProvider, Void, Void>() {
             @Override
@@ -217,7 +198,7 @@ public class RadarService extends Service implements ServerStatusListener {
         mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
         loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
 
-
+        checkPermissions();
 
         startForeground(1,
                 new Notification.Builder(this)
@@ -340,10 +321,32 @@ public class RadarService extends Service implements ServerStatusListener {
             localDataHandler.enableSubmitter();
         }
 
+        List<DeviceServiceProvider> connections = DeviceServiceProvider.loadProviders(this, RadarConfiguration.getInstance());
+
+        for (DeviceServiceProvider provider : new ArrayList<>(mConnections)) {
+            if (!connections.contains(provider)) {
+                provider.unbind();
+                mConnections.remove(provider);
+            }
+        }
+
+        for (DeviceServiceProvider provider : connections) {
+            if (!mConnections.contains(provider)) {
+                mConnections.add(provider);
+                DeviceServiceConnection connection = provider.getConnection();
+                mTotalRecordsSent.put(connection, new TimedInt());
+                deviceFilters.put(connection, Collections.<String>emptySet());
+            }
+        }
 
         for (DeviceServiceProvider provider : mConnections) {
             provider.updateConfiguration();
         }
+
+        // TODO: check what sources are available in the authState (if any)
+        // if any sources are available:
+        //   - only start up providers that DeviceServiceProvider#matches one of the sources
+        //   - set that source in the DeviceServiceProvider.
     }
 
     public TableDataHandler getDataHandler() {

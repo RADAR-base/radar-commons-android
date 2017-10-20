@@ -292,7 +292,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     public void setRadarService(@NonNull RadarService radarService) {
         if (this.connection != null) {
             throw new IllegalStateException(
-                    "Cannot change the MainActivity after a connection has been started.");
+                    "Cannot change the RadarService after a connection has been started.");
         }
         Objects.requireNonNull(radarService);
         this.radarService = radarService;
@@ -374,5 +374,15 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
 
     public AppSource getSource() {
         return source;
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj != null && obj.getClass() == getClass();
     }
 }

@@ -47,12 +47,7 @@ public abstract class MainActivity extends Activity {
     private static final int LOCATION_REQUEST_CODE = 232619694;
     private static final int USAGE_REQUEST_CODE = 232619695;
 
-    private final BroadcastReceiver configurationBroadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            onConfigChanged();
-        }
-    };
+    private BroadcastReceiver configurationBroadcastReceiver;
 
     /** Time between refreshes. */
     private long uiRefreshRate;
@@ -109,7 +104,7 @@ public abstract class MainActivity extends Activity {
     protected abstract Class<? extends LoginActivity> loginActivity();
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         radarConfiguration = createConfiguration();
@@ -120,19 +115,30 @@ public abstract class MainActivity extends Activity {
             return;
         }
 
-        radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+        create();
+    }
 
+    @CallSuper
+    protected void create() {
+        if (authState.getProjectId() != null) {
+            radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
+        }
+        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+        logger.info("RADAR configuration at create: {}", radarConfiguration);
+        onConfigChanged();
+
+        configurationBroadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                onConfigChanged();
+            }
+        };
         registerReceiver(configurationBroadcastReceiver,
                 new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
 
         startService(new Intent(this, radarService())
                 .putExtra(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName())
                 .putExtra(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName()));
-
-        onConfigChanged();
-
-        logger.info("RADAR configuration at create: {}", radarConfiguration);
 
 
         // Start the UI thread
@@ -160,7 +166,9 @@ public abstract class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
 
-        unregisterReceiver(configurationBroadcastReceiver);
+        if (configurationBroadcastReceiver != null) {
+            unregisterReceiver(configurationBroadcastReceiver);
+        }
     }
 
     protected Class<? extends RadarService> radarService() {
