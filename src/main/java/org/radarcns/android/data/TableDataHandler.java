@@ -453,6 +453,9 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     public void registerTopic(AvroTopic<ObservationKey, ? extends SpecificRecord> topic) throws IOException {
+        if (tables.containsKey(topic)) {
+            return;
+        }
         DataCache<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
                 .getOrCreateCache(context.getApplicationContext(), topic);
         cache.setMaximumSize(maxBytes);
