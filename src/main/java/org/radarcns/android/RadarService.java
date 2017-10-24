@@ -18,6 +18,7 @@ import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.data.TableDataHandler;
+import org.radarcns.android.device.DeviceService;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
@@ -76,7 +77,7 @@ public class RadarService extends Service implements ServerStatusListener {
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters = new HashMap<>();
 
-    private boolean isForcedDisconnected;
+    private boolean isForcedDisconnected; // TODO: Make working or remove
 
     /** Defines callbacks for service binding, passed to bindService() */
     private final BroadcastReceiver  bluetoothReceiver = new BroadcastReceiver() {
@@ -622,7 +623,7 @@ public class RadarService extends Service implements ServerStatusListener {
     protected class RadarBinder extends Binder implements IRadarService {
         @Override
         public ServerStatusListener.Status getServerStatus() {
-            return serverStatus;
+             return serverStatus;
         }
 
         @Override

@@ -370,17 +370,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     protected abstract T getDefaultState();
 
-    /** Kafka topics that this service will send data to. */
-    protected abstract DeviceTopics getTopics();
-
-    /**
-     * Topics that should cache information. This implementation returns all topics in
-     * getTopics().getTopics().
-     */
-    protected List<AvroTopic<ObservationKey, ? extends SpecificRecord>> getCachedTopics() {
-        return getTopics().getTopics();
-    }
-
     public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
         DeviceManager localManager = getDeviceManager();
         if (key.getUserId() == null) {
@@ -549,13 +538,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     public synchronized void setDataHandler(TableDataHandler dataHandler) {
         this.dataHandler = dataHandler;
-        for (AvroTopic<ObservationKey, ? extends SpecificRecord>topic: getTopics().getTopics()) {
-            try {
-                dataHandler.registerTopic(topic);
-            } catch (IOException e) {
-                logger.error("Error registering topic", e);
-            }
-        }
     }
 
     public synchronized DeviceManager<T> getDeviceManager() {

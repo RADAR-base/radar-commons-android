@@ -17,9 +17,9 @@
 package org.radarcns.android.device;
 
 import android.support.annotation.CallSuper;
+import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppSource;
-import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
@@ -27,6 +27,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Collections;
 
 /**
@@ -88,6 +90,27 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
      */
     protected void registerDeviceAtReady() {
         service.registerDevice(deviceName, Collections.<String, String>emptyMap());
+    }
+
+    /**
+     * Creates and registers an Avro topic
+     * @param name The name of the topic
+     * @param valueClass The value class
+     * @param <V>
+     * @return
+     */
+    protected <V extends SpecificRecord> AvroTopic<ObservationKey, V> createTopic(String name, Class<V> valueClass) {
+        try {
+            Method method = valueClass.getMethod("getClassSchema");
+            Schema valueSchema = (Schema) method.invoke(null);
+            AvroTopic<ObservationKey, V> topic = new AvroTopic<>(
+                    name, ObservationKey.getClassSchema(), valueSchema, ObservationKey.class, valueClass);
+            dataHandler.registerTopic(topic);
+            return topic;
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException | IOException e) {
+            logger.error("Error creating topic " + name, e);
+            throw new RuntimeException(e);
+        }
     }
 
     /**
