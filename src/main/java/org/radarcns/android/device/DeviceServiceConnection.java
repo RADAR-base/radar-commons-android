@@ -109,4 +109,8 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
             radarService.serviceDisconnected(this);
         }
     }
+
+    public Context getContext() {
+        return radarService;
+    }
 }

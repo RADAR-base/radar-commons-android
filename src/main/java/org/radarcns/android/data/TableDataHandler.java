@@ -54,6 +54,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     public static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
     private final Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> tables = new HashMap<>();
+    private final Map<String, DataCache<ObservationKey, ? extends SpecificRecord>> tablesByName = new HashMap<>();
     private final Set<ServerStatusListener> statusListeners;
     private final SingleThreadExecutorFactory executorFactory;
     private final BatteryLevelReceiver batteryLevelReceiver;
@@ -267,6 +268,10 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         return (DataCache<ObservationKey, V>)this.tables.get(topic);
     }
 
+    public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(String topic) {
+        return (DataCache<ObservationKey, V>) tablesByName.get(topic);
+    }
+
     @Override
     public <W extends SpecificRecord> void addMeasurement(AvroTopic<ObservationKey, W> topic, ObservationKey key, W value) {
         getCache(topic).addMeasurement(key, value);
@@ -460,5 +465,6 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                 .getOrCreateCache(context.getApplicationContext(), topic);
         cache.setMaximumSize(maxBytes);
         tables.put(topic, cache);
+        tablesByName.put(topic.getName(), cache);
     }
 }

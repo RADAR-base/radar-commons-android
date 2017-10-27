@@ -40,7 +40,7 @@ public interface DeviceServiceBinder {
     BaseDeviceState startRecording(@NonNull Set<String> acceptableIds);
     /** Stop scanning and recording */
     void stopRecording();
-    <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(@NonNull AvroTopic<ObservationKey, V> topic, int limit) throws IOException;
+    <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(@NonNull String topic, int limit) throws IOException;
     /** Get the current device status */
     BaseDeviceState getDeviceStatus();
     /** Get the current device name, or null if unknown. */

@@ -399,12 +399,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
         @Override
         public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(
-                @NonNull AvroTopic<ObservationKey, V> topic, int limit) throws IOException {
+                @NonNull String topic, int limit) throws IOException {
             TableDataHandler localDataHandler = getDataHandler();
             if (localDataHandler == null) {
                 return Collections.emptyList();
             }
-            return localDataHandler.getCache(topic).getRecords(limit);
+            return localDataHandler.<V>getCache(topic).getRecords(limit);
         }
 
         @Override
