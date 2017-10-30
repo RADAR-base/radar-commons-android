@@ -65,8 +65,6 @@ public abstract class MainActivity extends Activity {
     private Runnable mViewUpdater;
     private MainActivityView mView;
 
-    private RadarConfiguration radarConfiguration;
-
     private AppAuthState authState;
 
     private Collection<String> needsPermissions;
@@ -93,21 +91,13 @@ public abstract class MainActivity extends Activity {
         needsPermissions = new LinkedHashSet<>();
     }
 
-    /**
-     * Create a RadarConfiguration object. At implementation, the Firebase version needs to be set
-     * for this.
-     *
-     * @return configured RadarConfiguration
-     */
-    protected abstract RadarConfiguration createConfiguration();
+
 
     protected abstract Class<? extends LoginActivity> loginActivity();
 
     @Override
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        radarConfiguration = createConfiguration();
 
         authState = AppAuthState.Builder.from(this).build();
         if (!authState.isValid()) {
@@ -120,6 +110,8 @@ public abstract class MainActivity extends Activity {
 
     @CallSuper
     protected void create() {
+        RadarConfiguration radarConfiguration = RadarConfiguration.getInstance();
+
         if (authState.getProjectId() != null) {
             radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
         }
@@ -250,8 +242,8 @@ public abstract class MainActivity extends Activity {
                 throw new IllegalStateException("Login should not be cancellable");
             }
             authState = AppAuthState.Builder.from(result.getExtras()).build();
-            radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-            radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+            RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
+            RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
             onConfigChanged();
 
         } else if (requestCode == LOCATION_REQUEST_CODE || requestCode == USAGE_REQUEST_CODE) {
