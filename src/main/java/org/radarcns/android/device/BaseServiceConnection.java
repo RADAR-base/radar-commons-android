@@ -33,12 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 
 @SuppressWarnings({"unused", "WeakerAccess"})
@@ -74,13 +69,9 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
         }
     }
 
-    public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(@NonNull AvroTopic<ObservationKey, V> topic, int limit) throws IOException {
-        LinkedList<Record<ObservationKey, V>> result = new LinkedList<>();
-
-        for (Record<ObservationKey, V> record : serviceBinder.getRecords(topic, limit)) {
-            result.addFirst(record);
-        }
-
+    public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(@NonNull String topic, int limit) throws IOException {
+        List<Record<ObservationKey, V>> result = new ArrayList<>(serviceBinder.<V>getRecords(topic, limit));
+        Collections.reverse(result);
         return result;
     }
 

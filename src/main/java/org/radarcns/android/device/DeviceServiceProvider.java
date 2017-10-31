@@ -26,6 +26,8 @@ import android.support.annotation.NonNull;
 import org.radarcns.android.MainActivity;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
+import org.radarcns.android.RadarService;
+import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +64,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     private static final Logger logger = LoggerFactory.getLogger(DeviceServiceProvider.class);
     public static final String SOURCE_KEY = DeviceServiceProvider.class.getName() + ".source";
 
-    private MainActivity activity;
+    private RadarService radarService;
     private RadarConfiguration config;
     private DeviceServiceConnection<T> connection;
     private boolean bound;
@@ -125,19 +127,19 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     /**
      * Get or create a DeviceServiceConnection. Once created, it will be a single fixed connection
      * object.
-     * @throws IllegalStateException if {@link #setActivity(MainActivity)} has not been called.
+     * @throws IllegalStateException if {@link #setRadarService(RadarService)} has not been called.
      * @throws UnsupportedOperationException if {@link #getServiceClass()} returns null.
      */
     public DeviceServiceConnection<T> getConnection() {
         if (connection == null) {
-            if (activity == null) {
-                throw new IllegalStateException("#setActivity(MainActivity) needs to be set before #getConnection() is called.");
+            if (radarService == null) {
+                throw new IllegalStateException("#setRadarService(RadarService) needs to be set before #getConnection() is called.");
             }
             Class<?> serviceClass = getServiceClass();
             if (serviceClass == null) {
                 throw new UnsupportedOperationException("RadarServiceProvider " + getClass().getSimpleName() + " does not provide service class");
             }
-            connection = new DeviceServiceConnection<>(activity, serviceClass.getName());
+            connection = new DeviceServiceConnection<>(radarService, serviceClass.getName());
         }
         return connection;
     }
@@ -145,14 +147,14 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     /**
      * Bind the service to the MainActivity. Call this when the {@link MainActivity#onStart()} is
      * called.
-     * @throws IllegalStateException if {@link #setActivity(MainActivity)} and
+     * @throws IllegalStateException if {@link #setRadarService(RadarService)} and
      *                               {@link #setConfig(RadarConfiguration)} have not been called or
      *                               if the service is already bound.
      */
     public void bind() {
-        if (activity == null) {
+        if (radarService == null) {
             throw new IllegalStateException(
-                    "#setActivity(MainActivity) needs to be set before #bind() is called.");
+                    "#setRadarService(RadarService) needs to be set before #bind() is called.");
         }
         if (config == null) {
             throw new IllegalStateException(
@@ -162,13 +164,13 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
             throw new IllegalStateException("Service is already bound");
         }
         logger.info("Binding {}", this);
-        Intent intent = new Intent(activity, getServiceClass());
+        Intent intent = new Intent(radarService, getServiceClass());
         Bundle extras = new Bundle();
         configure(extras);
         intent.putExtras(extras);
 
-        activity.startService(intent);
-        activity.bindService(intent, getConnection(), Context.BIND_ABOVE_CLIENT);
+        radarService.startService(intent);
+        radarService.bindService(intent, getConnection(), Context.BIND_ABOVE_CLIENT);
 
         bound = true;
     }
@@ -178,15 +180,15 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * called.
      */
     public void unbind() {
-        if (activity == null) {
-            throw new IllegalStateException("#setActivity(MainActivity) needs to be set before #unbind() is called.");
+        if (radarService == null) {
+            throw new IllegalStateException("#setRadarService(RadarService) needs to be set before #unbind() is called.");
         }
         if (!bound) {
             throw new IllegalStateException("Service is not bound");
         }
         logger.info("Unbinding {}", this);
         bound = false;
-        activity.unbindService(connection);
+        radarService.unbindService(connection);
         connection.onServiceDisconnected(null);
     }
 
@@ -224,25 +226,25 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (mpUrl != null && !mpUrl.isEmpty()) {
             config.put(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, mpUrl);
         }
-        ((RadarApplication)activity.getApplicationContext()).configureProvider(config, bundle);
+        ((RadarApplication)radarService.getApplicationContext()).configureProvider(config, bundle);
         List<String> permissions = needsPermissions();
         bundle.putBoolean(NEEDS_BLUETOOTH_KEY, permissions.contains(BLUETOOTH) ||
                 permissions.contains(BLUETOOTH_ADMIN));
-        activity.getAuthState().addToBundle(bundle);
+        AppAuthState.Builder.from(radarService).build().addToBundle(bundle);
         bundle.putParcelable(SOURCE_KEY, source);
     }
 
     /**
      * Loads the service providers specified in the
      * {@link RadarConfiguration#DEVICE_SERVICES_TO_CONNECT}. This function will call
-     * {@link #setActivity(MainActivity)} and {@link #setConfig(RadarConfiguration)} on each of the
+     * {@link #setRadarService(RadarService)} and {@link #setConfig(RadarConfiguration)} on each of the
      * loaded service providers.
      */
-    public static List<DeviceServiceProvider> loadProviders(@NonNull MainActivity activity,
+    public static List<DeviceServiceProvider> loadProviders(@NonNull RadarService context,
                                                             @NonNull RadarConfiguration config) {
         List<DeviceServiceProvider> providers = loadProviders(config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT));
         for (DeviceServiceProvider provider : providers) {
-            provider.setActivity(activity);
+            provider.setRadarService(context);
             provider.setConfig(config);
         }
         return providers;
@@ -278,22 +280,22 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     }
 
     /** Get the MainActivity associated to the current connection. */
-    public MainActivity getActivity() {
-        return this.activity;
+    public RadarService getRadarService() {
+        return this.radarService;
     }
 
     /**
      * Associate a MainActivity with a new connection.
-     * @throws NullPointerException if given activity is null
+     * @throws NullPointerException if given context is null
      * @throws IllegalStateException if the connection has already been started.
      */
-    public void setActivity(@NonNull MainActivity activity) {
+    public void setRadarService(@NonNull RadarService radarService) {
         if (this.connection != null) {
             throw new IllegalStateException(
-                    "Cannot change the MainActivity after a connection has been started.");
+                    "Cannot change the RadarService after a connection has been started.");
         }
-        Objects.requireNonNull(activity);
-        this.activity = activity;
+        Objects.requireNonNull(radarService);
+        this.radarService = radarService;
     }
 
     /** Get the RadarConfiguration currently set for the service provider. */
@@ -372,5 +374,15 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
 
     public AppSource getSource() {
         return source;
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj != null && obj.getClass() == getClass();
     }
 }
