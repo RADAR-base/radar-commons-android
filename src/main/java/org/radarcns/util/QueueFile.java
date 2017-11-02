@@ -90,7 +90,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
     private final QueueStorage storage;
 
     /**
-     * The number of times this file has been structurally modified — it is incremented during
+     * The number of times this file has been structurally modified - it is incremented during
      * {@link #remove(int)} and {@link #elementOutputStream()}. Used by {@link ElementIterator}
      * to guard against concurrent modification.
      */
