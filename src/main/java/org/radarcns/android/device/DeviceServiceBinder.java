@@ -21,9 +21,10 @@ import android.support.annotation.NonNull;
 import android.util.Pair;
 
 import org.apache.avro.specific.SpecificRecord;
+import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.data.Record;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 
 import java.io.IOException;
@@ -39,7 +40,7 @@ public interface DeviceServiceBinder {
     BaseDeviceState startRecording(@NonNull Set<String> acceptableIds);
     /** Stop scanning and recording */
     void stopRecording();
-    <V extends SpecificRecord> List<Record<MeasurementKey, V>> getRecords(@NonNull AvroTopic<MeasurementKey, V> topic, int limit) throws IOException;
+    <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(@NonNull String topic, int limit) throws IOException;
     /** Get the current device status */
     BaseDeviceState getDeviceStatus();
     /** Get the current device name, or null if unknown. */
@@ -52,6 +53,6 @@ public interface DeviceServiceBinder {
     void updateConfiguration(Bundle bundle);
     /** Number of records in cache [unsent] and [sent] */
     Pair<Long, Long> numberOfRecords();
-    /** Set the user ID used to send data with */
-    void setUserId(String userId);
+
+    void setDataHandler(TableDataHandler dataHandler);
 }

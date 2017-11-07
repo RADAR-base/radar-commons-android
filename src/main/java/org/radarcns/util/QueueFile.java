@@ -27,7 +27,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.ArrayDeque;
 import java.util.NoSuchElementException;
 
 /**
@@ -82,7 +82,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
     private final QueueFileHeader header;
 
     /** Pointer to first (or eldest) element. */
-    private final LinkedList<QueueFileElement> first;
+    private final ArrayDeque<QueueFileElement> first;
 
     /** Pointer to last (or newest) element. */
     private final QueueFileElement last;
@@ -90,7 +90,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
     private final QueueStorage storage;
 
     /**
-     * The number of times this file has been structurally modified — it is incremented during
+     * The number of times this file has been structurally modified - it is incremented during
      * {@link #remove(int)} and {@link #elementOutputStream()}. Used by {@link ElementIterator}
      * to guard against concurrent modification.
      */
@@ -106,7 +106,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
             this.storage.resize(header.getLength());
         }
 
-        first = new LinkedList<>();
+        first = new ArrayDeque<>();
         QueueFileElement newFirst = readElement((int)header.getFirstPosition());
         if (!newFirst.isEmpty()) {
             first.add(newFirst);
@@ -475,6 +475,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
 
             int countAvailable = Math.min(count, totalLength - bytesRead);
             storagePosition = storage.read(storagePosition, bytes, offset, countAvailable);
+
             bytesRead += countAvailable;
             return countAvailable;
         }
@@ -506,6 +507,10 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
 
     public long getMaximumFileSize() {
         return storage.getMaximumLength();
+    }
+
+    public void setMaximumFileSize(long newSize) {
+        storage.setMaximumLength(newSize);
     }
 
     void commitOutputStream(QueueFileElement newFirst, QueueFileElement newLast, int count) throws IOException {

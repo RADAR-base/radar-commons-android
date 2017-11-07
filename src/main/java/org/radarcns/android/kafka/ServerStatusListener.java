@@ -18,7 +18,7 @@ package org.radarcns.android.kafka;
 
 public interface ServerStatusListener {
     enum Status {
-        CONNECTING, CONNECTED, DISCONNECTED, UPLOADING, DISABLED, READY, serverStatus, UPLOADING_FAILED
+        CONNECTING, CONNECTED, DISCONNECTED, UPLOADING, DISABLED, READY, UPLOADING_FAILED, UNAUTHORIZED
     }
 
     void updateServerStatus(Status status);

@@ -16,15 +16,20 @@
 
 package org.radarcns.android.device;
 
+import android.support.annotation.CallSuper;
+import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
-import org.radarcns.android.data.DataCache;
+import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.data.TableDataHandler;
-import org.radarcns.key.MeasurementKey;
+import org.radarcns.kafka.ObservationKey;
 import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Collections;
 
 /**
  * Abstract DeviceManager that handles some common functionality.
@@ -32,7 +37,9 @@ import java.io.IOException;
  * @param <S> service type the manager is started by
  * @param <T> state type that the manager will update.
  */
-public abstract class AbstractDeviceManager<S extends DeviceService, T extends BaseDeviceState> implements DeviceManager {
+@SuppressWarnings({"unused", "WeakerAccess"})
+public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extends BaseDeviceState>
+        implements DeviceManager<T> {
     private static final Logger logger = LoggerFactory.getLogger(AbstractDeviceManager.class);
 
     private final TableDataHandler dataHandler;
@@ -42,22 +49,16 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
     private boolean closed;
 
     /**
-     * Device manager initialization. After initialization, be sure to call
+     * AppSource manager initialization. After initialization, be sure to call
      * {@link #setName(String)}.
      *
      * @param service service that the manager is started by
-     * @param state new empty state variable
-     * @param dataHandler data handler for sending data and getting topics.
-     * @param userId user ID that data should be sent with
-     * @param sourceId initial source ID, override later by calling getId().setSourceId()
      */
-    public AbstractDeviceManager(S service, T state, TableDataHandler dataHandler, String userId, String sourceId) {
-        this.dataHandler = dataHandler;
+    public AbstractDeviceManager(S service) {
         this.service = service;
-        this.deviceStatus = state;
-        this.deviceStatus.getId().setUserId(userId);
-        this.deviceStatus.getId().setSourceId(sourceId);
+        this.dataHandler = service.getDataHandler();
         this.deviceName = android.os.Build.MODEL;
+        this.deviceStatus = service.getState();
         closed = false;
     }
 
@@ -77,22 +78,65 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
      */
     protected void updateStatus(DeviceStatusListener.Status status) {
         this.deviceStatus.setStatus(status);
+        if (status == DeviceStatusListener.Status.READY) {
+            registerDeviceAtReady();
+        }
         this.service.deviceStatusUpdated(this, status);
     }
 
-    /** Send a single record, using the cache to persist the data. */
-    protected <V extends SpecificRecord> void send(DataCache<MeasurementKey, V> table, V value) {
-        dataHandler.addMeasurement(table, deviceStatus.getId(), value);
+    /**
+     * Register the device with the management portal once it is ready. If this is not desired,
+     * override with an empty implementation.
+     */
+    protected void registerDeviceAtReady() {
+        service.registerDevice(deviceName, Collections.<String, String>emptyMap());
     }
 
-    /** Try to send a single record without any caching mechanism. */
-    protected <V extends SpecificRecord> void trySend(AvroTopic<MeasurementKey, V> topic, long offset, V value) {
-        dataHandler.trySend(topic, offset, deviceStatus.getId(), value);
+    /**
+     * Creates and registers an Avro topic
+     * @param name The name of the topic
+     * @param valueClass The value class
+     * @param <V>
+     * @return
+     */
+    protected <V extends SpecificRecord> AvroTopic<ObservationKey, V> createTopic(String name, Class<V> valueClass) {
+        try {
+            Method method = valueClass.getMethod("getClassSchema");
+            Schema valueSchema = (Schema) method.invoke(null);
+            AvroTopic<ObservationKey, V> topic = new AvroTopic<>(
+                    name, ObservationKey.getClassSchema(), valueSchema, ObservationKey.class, valueClass);
+            dataHandler.registerTopic(topic);
+            return topic;
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException | IOException e) {
+            logger.error("Error creating topic " + name, e);
+            throw new RuntimeException(e);
+        }
     }
 
-    /** Get a data cache to send data with at a later time. */
-    protected <V extends SpecificRecord> DataCache<MeasurementKey, V> getCache(AvroTopic<MeasurementKey, V> topic) {
-        return dataHandler.getCache(topic);
+    /**
+     * Send a single record, using the cache to persist the data.
+     * If the current device is not registered when this is called, the data will NOT be sent.
+     */
+    protected <V extends SpecificRecord> void send(AvroTopic<ObservationKey, V> topic, V value) {
+        ObservationKey key = deviceStatus.getId();
+        if (key.getSourceId() != null) {
+            dataHandler.addMeasurement(topic, key, value);
+        } else {
+            logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Try to send a single record without any caching mechanism.
+     * If the current device is not registered when this is called, the data will NOT be sent.
+     */
+    protected <V extends SpecificRecord> void trySend(AvroTopic<ObservationKey, V> topic, long offset, V value) {
+        ObservationKey key = deviceStatus.getId();
+        if (key.getSourceId() != null) {
+            dataHandler.trySend(topic, offset, key, value);
+        } else {
+            logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
+        }
     }
 
     /** Get the service that started this device manager. */
@@ -123,6 +167,12 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
         return deviceName;
     }
 
+    @Override
+    @CallSuper
+    public void didRegister(AppSource source) {
+        deviceName = source.getSourceName();
+    }
+
     /**
      * Close the manager, disconnecting any device if necessary. Override and call super if
      * additional resources should be cleaned up. This implementation calls updateStatus with status
@@ -139,15 +189,13 @@ public abstract class AbstractDeviceManager<S extends DeviceService, T extends B
         return "DeviceManager{name='" + deviceName + "', status=" + deviceStatus + '}';
     }
 
-    /** Tests equality based on the device MeasurementKey. */
+    /** Tests equality based on the device ObservationKey. */
     @Override
     public boolean equals(Object other) {
         if (other == this) {
             return true;
         }
-        if (other == null
-                || !getClass().equals(other.getClass())
-                || deviceStatus.getId().getSourceId() == null) {
+        if (other == null || !getClass().equals(other.getClass())) {
             return false;
         }
 

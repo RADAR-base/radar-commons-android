@@ -47,9 +47,13 @@ public class RadarConfiguration {
 
     public static final String RADAR_PREFIX = "org.radarcns.android.";
 
+    public static final String RADAR_CONFIGURATION_CHANGED = RadarConfiguration.class.getSimpleName() + ".CHANGED";
+
     public static final String KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url";
     public static final String SCHEMA_REGISTRY_URL_KEY = "schema_registry_url";
-    public static final String DEFAULT_GROUP_ID_KEY = "default_group_id";
+    public static final String MANAGEMENT_PORTAL_URL_KEY = "management_portal_url";
+    public static final String PROJECT_ID_KEY = "project_id";
+    public static final String USER_ID_KEY = "user_id";
     public static final String SOURCE_ID_KEY = "source_id";
     public static final String EMPATICA_API_KEY = "empatica_api_key";
     public static final String UI_REFRESH_RATE_KEY = "ui_refresh_rate_millis";
@@ -68,6 +72,10 @@ public class RadarConfiguration {
     public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
     public static final String SEND_WITH_COMPRESSION = "send_with_compression";
     public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
+    public static final String OAUTH2_AUTHORIZE_URL = "oauth2_authorize_url";
+    public static final String OAUTH2_TOKEN_URL = "oauth2_token_url";
+    public static final String OAUTH2_REDIRECT_URL = "oauth2_redirect_url";
+    public static final String OAUTH2_CLIENT_ID = "oauth2_client_id";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
@@ -391,15 +399,35 @@ public class RadarConfiguration {
     }
 
     /**
-     * Get a configured long value. If the configured value is not present or not a valid long,
+     * Get a configured int value. If the configured value is not present or not a valid int,
      * return a default value.
      * @param key key of the value
      * @param defaultValue default value
-     * @return configured long value, or defaultValue if no suitable value was found.
+     * @return configured int value, or defaultValue if no suitable value was found.
      */
     public int getInt(@NonNull String key, int defaultValue) {
         try {
             Integer ret = getRawInteger(key);
+            if (ret != null) {
+                return ret;
+            }
+        } catch (IllegalArgumentException ex) {
+            // return default
+        }
+        return defaultValue;
+    }
+
+
+    /**
+     * Get a configured float value. If the configured value is not present or not a valid float,
+     * return a default value.
+     * @param key key of the value
+     * @param defaultValue default value
+     * @return configured float value, or defaultValue if no suitable value was found.
+     */
+    public float getFloat(@NonNull String key, float defaultValue) {
+        try {
+            Float ret = getRawFloat(key);
             if (ret != null) {
                 return ret;
             }
@@ -501,6 +529,10 @@ public class RadarConfiguration {
                 }
             }
         }
+    }
+
+    public boolean has(String key) {
+        return localConfiguration.containsKey(key) || !config.getString(key).isEmpty();
     }
 
     public static boolean hasExtra(Bundle bundle, String key) {

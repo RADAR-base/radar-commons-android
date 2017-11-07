@@ -1,27 +1,154 @@
+/*
+ * Copyright 2017 The Hyve
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 buildscript {
     repositories {
         jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.2.3'
+        classpath 'com.android.tools.build:gradle:2.3.0'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
+        classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.4.18'
+        classpath 'de.mobilej.unmock:UnMockPlugin:0.6.4'
     }
 }
 
-apply plugin: 'com.android.library'
-apply plugin: 'com.jfrog.bintray'
-apply plugin: 'com.github.dcendents.android-maven'
+allprojects {
+    apply plugin: 'com.android.library'
+    apply plugin: 'com.jfrog.bintray'
+    apply plugin: 'com.github.dcendents.android-maven'
+    apply plugin: 'idea'
+    apply plugin: 'maven-publish'
+    apply plugin: 'com.jfrog.artifactory'
+    apply plugin: 'de.mobilej.unmock'
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+    version = '0.3'
+    ext.versionCode = 5
+    group = 'org.radarcns'
+    ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
+
+    ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
+    ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
+    ext.website = 'http://radar-cns.org'
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+    configurations.compile {
+        resolutionStrategy.cacheChangingModulesFor 0, 'SECONDS'
+    }
+
+    repositories {
+        jcenter()
+        // radar dev branches
+        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+    }
+
+    dependencies {
+        compile 'com.squareup.okhttp3:okhttp:3.8.0'
+        compile 'com.google.firebase:firebase-config:11.0.4'
+
+        compile('org.radarcns:radar-commons:0.6') {
+            exclude group: 'io.confluent', module: 'kafka-avro-serializer'
+            exclude group: 'org.apache.kafka', module: 'kafka-clients'
+            exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
+            exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
+            exclude group: 'org.json', module: 'json'
+        }
+        compile 'org.radarcns:radar-schemas-commons:0.2'
+
+        testCompile 'junit:junit:4.12'
+        testCompile 'org.slf4j:slf4j-simple:1.7.21'
+        testCompile 'org.robolectric:robolectric:3.4.2'
+        testCompile 'com.squareup.okhttp3:mockwebserver:3.8.0'
+
+        unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
+    }
+
+//---------------------------------------------------------------------------//
+// Build system metadata                                                     //
+//---------------------------------------------------------------------------//
+    ext.pomConfig = {
+        licenses {
+            license {
+                name 'The Apache Software License, Version 2.0'
+                url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution 'repo'
+            }
+        }
+        developers {
+            developer {
+                id 'blootsvoets'
+                name 'Joris Borgdorff'
+                email 'joris@thehyve.nl'
+                organization 'The Hyve'
+            }
+            developer {
+                id 'MaximMoinat'
+                name 'Maxim Moinat'
+                email 'maxim@thehyve.nl'
+                organization 'The Hyve'
+            }
+        }
+        issueManagement {
+            system 'GitHub'
+            url githubUrl + '/issues'
+        }
+        organization {
+            name 'RADAR-CNS'
+            url website
+        }
+        scm {
+            connection 'scm:git:' + githubUrl
+            url githubUrl
+        }
+    }
+
+    idea {
+        module {
+            downloadSources = true
+        }
+    }
+
+    tasks.matching { it instanceof Test }.all {
+        testLogging {
+            showExceptions = true
+            showStandardStreams = true
+            showCauses = true
+            showStackTraces = true
+            exceptionFormat "full"
+        }
+    }
+}
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.3"
+    compileSdkVersion 26
+    buildToolsVersion "26.0.1"
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 25
-        versionCode 4
-        versionName '0.2.1'
+        targetSdkVersion 26
+        versionCode versionCode
+        versionName version
     }
     lintOptions {
         abortOnError false
@@ -43,48 +170,38 @@ android {
     }
 }
 
-//---------------------------------------------------------------------------//
-// Configuration                                                             //
-//---------------------------------------------------------------------------//
-
-group = 'org.radarcns'
 ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
-ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
-version = android.defaultConfig.versionName
 
-ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
-ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
-ext.website = 'http://radar-cns.org'
+unMock {
+    keep "android.widget.BaseAdapter"
+    keep "android.widget.ArrayAdapter"
+    keep "android.os.Bundle"
+    keepStartingWith "android.database.MatrixCursor"
+    keep "android.database.AbstractCursor"
+    keep "android.database.CrossProcessCursor"
+    keepStartingWith "android.text.TextUtils"
+    keepStartingWith "android.util."
+    keepStartingWith "android.text."
+    keepStartingWith "android.content.ContentValues"
+    keepStartingWith "android.content.ComponentName"
+    keepStartingWith "android.content.ContentUris"
+    keepStartingWith "android.content.ContentProviderOperation"
+    keepStartingWith "android.content.ContentProviderResult"
+    keepStartingWith "android.content.UriMatcher"
+    keepStartingWith "android.content.Intent"
+    keep "android.location.Location"
+    keepStartingWith "android.content.res.Configuration"
+    keepStartingWith "org."
+    keepStartingWith "libcore."
+    keepStartingWith "com.android.internal.R"
+    keepStartingWith "com.android.internal.util."
+    keep "android.net.Uri"
+    keepStartingWith "org.json."
+    keep 'android.os.SystemClock'
 
-//---------------------------------------------------------------------------//
-// Sources and classpath configurations                                      //
-//---------------------------------------------------------------------------//
-
-repositories {
-    jcenter()
+    keepAndRename "java.nio.charset.Charsets" to "xjava.nio.charset.Charsets"
 }
-
-dependencies {
-    compile 'com.squareup.okhttp3:okhttp:3.6.0'
-    compile 'org.apache.avro:avro:1.8.1'
-    compile 'org.xerial.snappy:snappy-java:1.1.2.6'
-    compile 'com.google.firebase:firebase-config:10.2.6'
-    compile ('org.radarcns:radar-commons:0.4') {
-        exclude group: 'io.confluent', module: 'kafka-avro-serializer'
-        exclude group: 'org.apache.kafka', module: 'kafka-clients'
-        exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
-    }
-    compile 'org.radarcns:radar-schemas-commons:0.1'
-
-    testCompile 'junit:junit:4.12'
-    testCompile 'org.slf4j:slf4j-simple:1.7.21'
-    testCompile 'org.robolectric:robolectric:3.3.2'
-}
-
-//---------------------------------------------------------------------------//
-// Build system metadata                                                     //
-//---------------------------------------------------------------------------//
 
 ext.sharedManifest = manifest {
     attributes("Implementation-Title": moduleName,
@@ -115,55 +232,45 @@ artifacts {
     archives sourcesJar
 }
 
-def pomConfig = {
-    licenses {
-        license {
-            name "The Apache Software License, Version 2.0"
-            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
-            distribution 'repo'
-        }
-    }
-    developers {
-        developer {
-            id 'blootsvoets'
-            name 'Joris Borgdorff'
-            email 'joris@thehyve.nl'
-            organization 'The Hyve'
-        }
-        developer {
-            id 'MaximMoinat'
-            name 'Maxim Moinat'
-            email 'maxim@thehyve.nl'
-            organization 'The Hyve'
-        }
-    }
-    issueManagement {
-        system 'GitHub'
-        url githubUrl + '/issues'
-    }
-    organization {
-        name 'RADAR-CNS'
-        url website
-    }
-    scm {
-        connection 'scm:git:' + githubUrl
-        url githubUrl
-    }
-}
+publishing {
+    publications {
+        RadarCommonsPublication(MavenPublication) {
+            artifact("${buildDir}/outputs/aar/${project.getName()}-${version}.aar")
+            artifact sourcesJar
+            artifact javadocJar
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', description)
+                root.appendNode('name', moduleName)
+                root.appendNode('url', githubUrl)
 
-install {
-    repositories.mavenInstaller {
-        pom.project {
-            groupId project.group
-            artifactId moduleName
-            version project.version
-        }
-        pom.withXml {
-            def root = asNode()
-            root.appendNode('description', description)
-            root.appendNode('name', moduleName)
-            root.appendNode('url', githubUrl)
-            root.children().last() + pomConfig
+                //Creating additional node for dependencies
+                def dependenciesNode = root.appendNode('dependencies')
+
+                //Defining configuration names from which dependencies will be taken (debugCompile or releaseCompile and compile)
+                configurations['compile'].allDependencies.each {
+                    if (it.group != null && it.name != null) {
+                        def dependencyNode = dependenciesNode.appendNode('dependency')
+                        dependencyNode.appendNode('groupId', it.group)
+                        dependencyNode.appendNode('artifactId', it.name)
+                        dependencyNode.appendNode('version', it.version)
+
+                        //If there are any exclusions in dependency
+                        if (it.excludeRules.size() > 0) {
+                            def exclusionsNode = dependencyNode.appendNode('exclusions')
+                            it.excludeRules.each { rule ->
+                                def exclusionNode = exclusionsNode.appendNode('exclusion')
+                                exclusionNode.appendNode('groupId', rule.group)
+                                if (rule.module) {
+                                    exclusionNode.appendNode('artifactId', rule.module)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                root.children().last() + pomConfig
+            }
         }
     }
 }
@@ -172,7 +279,7 @@ bintray {
     user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
     key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
     override = false
-    configurations = ['archives']
+    publications = ['RadarCommonsPublication']
     pkg {
         repo = project.group
         name = moduleName
@@ -196,7 +303,26 @@ bintray {
     }
 }
 
+bintrayUpload.dependsOn 'assembleRelease'
+
+artifactory {
+    contextUrl = 'https://oss.jfrog.org/artifactory'
+    publish {
+        repository {
+            repoKey = 'oss-snapshot-local'
+            username = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
+            password = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+            maven = true
+        }
+    }
+}
+
+artifactoryPublish {
+    publications('RadarCommonsPublication')
+    dependsOn 'assembleRelease'
+}
+
 task wrapper(type: Wrapper) {
-    gradleVersion = '3.4.1'
-    distributionUrl distributionUrl.replace("bin", "all")
+    gradleVersion = '4.1'
+    distributionType 'all'
 }
