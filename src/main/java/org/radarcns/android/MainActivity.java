@@ -19,6 +19,7 @@ package org.radarcns.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.*;
+import android.content.pm.PackageManager;
 import android.os.*;
 import android.os.Process;
 import android.provider.Settings;
@@ -67,7 +68,7 @@ public abstract class MainActivity extends Activity {
 
     private AppAuthState authState;
 
-    private Collection<String> needsPermissions;
+    private Set<String> needsPermissions = Collections.emptySet();
     private boolean requestedBt;
 
     private IRadarService radarService;
@@ -84,14 +85,6 @@ public abstract class MainActivity extends Activity {
             radarService = null;
         }
     };
-
-    public MainActivity() {
-        super();
-
-        needsPermissions = new LinkedHashSet<>();
-    }
-
-
 
     protected abstract Class<? extends LoginActivity> loginActivity();
 
@@ -216,7 +209,7 @@ public abstract class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         if (RadarService.ACTION_CHECK_PERMISSIONS.equals(intent.getAction())) {
             String[] permissions = intent.getStringArrayExtra(RadarService.EXTRA_PERMISSIONS);
-            needsPermissions = Arrays.asList(permissions);
+            needsPermissions = new HashSet<>(Arrays.asList(permissions));
             checkPermissions();
         }
 
@@ -237,18 +230,39 @@ public abstract class MainActivity extends Activity {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent result) {
-        if (requestCode == LOGIN_REQUEST_CODE) {
-            if (resultCode != RESULT_OK) {
-                throw new IllegalStateException("Login should not be cancellable");
+        switch (requestCode) {
+            case LOGIN_REQUEST_CODE: {
+                if (resultCode != RESULT_OK) {
+                    throw new IllegalStateException("Login should not be cancellable");
+                }
+                authState = AppAuthState.Builder.from(result.getExtras()).build();
+                RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
+                RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+                onConfigChanged();
+                break;
             }
-            authState = AppAuthState.Builder.from(result.getExtras()).build();
-            RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-            RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
-            onConfigChanged();
-
-        } else if (requestCode == LOCATION_REQUEST_CODE || requestCode == USAGE_REQUEST_CODE) {
-            checkPermissions();
+            case LOCATION_REQUEST_CODE: {
+                onPermissionRequestResult(LOCATION_SERVICE, resultCode == RESULT_OK);
+                break;
+            }
+            case USAGE_REQUEST_CODE: {
+                onPermissionRequestResult(PACKAGE_USAGE_STATS, resultCode == RESULT_OK);
+                break;
+            }
         }
+    }
+
+    private void onPermissionRequestResult(String permission, boolean granted) {
+        needsPermissions.remove(permission);
+
+        int result = granted ? PackageManager.PERMISSION_GRANTED : PackageManager.PERMISSION_DENIED;
+        LocalBroadcastManager.getInstance(this)
+                .sendBroadcast(new Intent()
+                        .setAction(RadarService.ACTION_PERMISSIONS_GRANTED)
+                        .putExtra(RadarService.EXTRA_PERMISSIONS, new String[]{LOCATION_SERVICE})
+                        .putExtra(RadarService.EXTRA_GRANT_RESULTS, new int[]{result}));
+
+        checkPermissions();
     }
 
     /** Get background handler. */
