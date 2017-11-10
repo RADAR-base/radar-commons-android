@@ -18,7 +18,6 @@ import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.data.TableDataHandler;
-import org.radarcns.android.device.DeviceService;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
@@ -196,22 +195,19 @@ public class RadarService extends Service implements ServerStatusListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null) {
-            mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
-            loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
+        mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
+        loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
 
-            checkPermissions();
+        checkPermissions();
 
-            startForeground(1,
-                    new Notification.Builder(this)
-                            .setContentTitle("RADAR")
-                            .setContentText("Open RADAR app")
-                            .setContentIntent(PendingIntent.getActivity(this, 0, new Intent().setComponent(new ComponentName(this, mainActivityClass)), 0))
-                            .build());
-        } else if (mainActivityClass == null) {
-            throw new RuntimeException("An unexpected error. onStartCommand is called with a null intent");
-        }
-        return START_STICKY;
+        startForeground(1,
+                new Notification.Builder(this)
+                        .setContentTitle("RADAR")
+                        .setContentText("Open RADAR app")
+                        .setContentIntent(PendingIntent.getActivity(this, 0, new Intent().setComponent(new ComponentName(this, mainActivityClass)), 0))
+                        .build());
+
+        return START_REDELIVER_INTENT;
     }
 
     @Override
