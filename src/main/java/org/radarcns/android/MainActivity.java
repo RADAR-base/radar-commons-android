@@ -177,7 +177,7 @@ public abstract class MainActivity extends Activity {
         logger.info("mainActivity onResume");
         super.onResume();
 
-        bindService(new Intent().setComponent(new ComponentName(this, radarService())), radarServiceConnection, 0);
+        bindService(new Intent(this, radarService()), radarServiceConnection, 0);
         getHandler().post(mViewUpdater);
     }
 

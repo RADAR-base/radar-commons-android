@@ -18,7 +18,6 @@ import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.data.TableDataHandler;
-import org.radarcns.android.device.DeviceService;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
@@ -208,7 +207,7 @@ public class RadarService extends Service implements ServerStatusListener {
                         .setContentIntent(PendingIntent.getActivity(this, 0, new Intent().setComponent(new ComponentName(this, mainActivityClass)), 0))
                         .build());
 
-        return START_STICKY;
+        return START_REDELIVER_INTENT;
     }
 
     @Override
