@@ -121,9 +121,7 @@ public abstract class MainActivity extends Activity {
         registerReceiver(configurationBroadcastReceiver,
                 new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
 
-        startService(new Intent(this, radarService())
-                .putExtra(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName())
-                .putExtra(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName()));
+        startService(radarServiceIntent());
 
 
         // Start the UI thread
@@ -145,6 +143,12 @@ public abstract class MainActivity extends Activity {
                 }
             }
         };
+    }
+
+    private Intent radarServiceIntent() {
+        return new Intent(this, radarService())
+                .putExtra(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName())
+                .putExtra(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName());
     }
 
     @Override
@@ -176,16 +180,19 @@ public abstract class MainActivity extends Activity {
     protected void onResume() {
         logger.info("mainActivity onResume");
         super.onResume();
-
-        bindService(new Intent().setComponent(new ComponentName(this, radarService())), radarServiceConnection, 0);
-        getHandler().post(mViewUpdater);
+        if(!isFinishing()) {
+            bindService(radarServiceIntent(), radarServiceConnection, 0);
+            getHandler().post(mViewUpdater);
+        }
     }
 
     @Override
     protected void onPause() {
         logger.info("mainActivity onPause");
         getHandler().removeCallbacks(mViewUpdater);
-        unbindService(radarServiceConnection);
+        if (radarService != null) {
+            unbindService(radarServiceConnection);
+        }
         super.onPause();
     }
 
