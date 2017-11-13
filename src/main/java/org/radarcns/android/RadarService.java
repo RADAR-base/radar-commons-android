@@ -35,6 +35,7 @@ import java.util.*;
 
 import static android.Manifest.permission.*;
 import static org.radarcns.android.RadarConfiguration.*;
+import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 
@@ -332,21 +333,31 @@ public class RadarService extends Service implements ServerStatusListener {
 
         for (DeviceServiceProvider provider : connections) {
             if (!mConnections.contains(provider)) {
-                mConnections.add(provider);
-                DeviceServiceConnection connection = provider.getConnection();
-                mTotalRecordsSent.put(connection, new TimedInt());
-                deviceFilters.put(connection, Collections.<String>emptySet());
+                List<AppSource> sources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
+                if (sources != null) {
+                    for (AppSource source : sources) {
+                        if (provider.matches(source, false)) {
+                            provider.setSource(source);
+                            addProvider(provider);
+                            break;
+                        }
+                    }
+                } else {
+                    addProvider(provider);
+                }
             }
         }
 
         for (DeviceServiceProvider provider : mConnections) {
             provider.updateConfiguration();
         }
+    }
 
-        // TODO: check what sources are available in the authState (if any)
-        // if any sources are available:
-        //   - only start up providers that DeviceServiceProvider#matches one of the sources
-        //   - set that source in the DeviceServiceProvider.
+    private void addProvider(DeviceServiceProvider provider) {
+        mConnections.add(provider);
+        DeviceServiceConnection connection = provider.getConnection();
+        mTotalRecordsSent.put(connection, new TimedInt());
+        deviceFilters.put(connection, Collections.<String>emptySet());
     }
 
     public TableDataHandler getDataHandler() {
