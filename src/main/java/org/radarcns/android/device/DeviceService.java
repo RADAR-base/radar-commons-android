@@ -21,9 +21,18 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
-import android.content.*;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.os.*;
+import android.os.Binder;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Parcel;
+import android.os.RemoteException;
+import android.os.ResultReceiver;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -38,20 +47,24 @@ import org.radarcns.android.auth.ManagementPortalService;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
+import org.radarcns.android.util.BundleSerialization;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
-import org.radarcns.producer.rest.SchemaRetriever;
-import org.radarcns.topic.AvroTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.radarcns.android.RadarConfiguration.*;
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
+import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
@@ -175,12 +188,9 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         synchronized (this) {
             latestStartId = startId;
         }
-        if (intent != null) {
-            onInvocation(intent.getExtras());
-        }
-        // If we get killed, after returning from here, restart
-        // keep all the configuration from the previous iteration
-        return START_REDELIVER_INTENT;
+        onInvocation(BundleSerialization.getPersistentExtras(intent, this));
+
+        return START_STICKY;
     }
 
     @Nullable
@@ -196,13 +206,9 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         logger.info("Received (re)bind in {}", this);
         boolean isNew = numberOfActivitiesBound.getAndIncrement() == 0;
         RadarApplication application = (RadarApplication)getApplicationContext();
-        if (intent != null) {
-            Bundle extras = intent.getExtras();
-            onInvocation(extras);
-            application.onDeviceServiceInvocation(this, extras, isNew);
-        } else {
-            application.onDeviceServiceInvocation(this, null, isNew);
-        }
+        Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
+        onInvocation(extras);
+        application.onDeviceServiceInvocation(this, extras, isNew);
     }
 
     @Override
@@ -498,7 +504,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      * @param bundle intent extras that the activity provided.
      */
     @CallSuper
-    protected void onInvocation(Bundle bundle) {
+    protected void onInvocation(@NonNull Bundle bundle) {
         authState = AppAuthState.Builder.from(bundle).build();
 
         source = bundle.getParcelable(SOURCE_KEY);
