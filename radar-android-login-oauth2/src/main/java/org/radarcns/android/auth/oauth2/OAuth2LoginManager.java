@@ -22,6 +22,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.Jwt;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.auth.LoginListener;
 import org.radarcns.android.auth.LoginManager;
