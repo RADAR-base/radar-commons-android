@@ -1,4 +1,4 @@
-package org.radarcns.android.auth.oauth2;
+package org.radarcns.android.auth;
 
 import android.util.Base64;
 import org.json.JSONException;
@@ -10,8 +10,10 @@ import static android.util.Base64.NO_WRAP;
 public class Jwt {
     private final JSONObject header;
     private final JSONObject body;
+    private final String originalString;
 
-    public Jwt(JSONObject header, JSONObject body) {
+    public Jwt(String originalString, JSONObject header, JSONObject body) {
+        this.originalString = originalString;
         this.header = header;
         this.body = body;
     }
@@ -36,6 +38,10 @@ public class Jwt {
         String bodyString = new String(Base64.decode(parts[1], NO_PADDING | NO_WRAP));
         JSONObject body = new JSONObject(bodyString);
 
-        return new Jwt(header, body);
+        return new Jwt(token, header, body);
+    }
+
+    public String getOriginalString() {
+        return originalString;
     }
 }
