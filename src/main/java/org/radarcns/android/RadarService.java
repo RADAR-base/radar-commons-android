@@ -23,6 +23,7 @@ import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.Boast;
+import org.radarcns.android.util.BundleSerialization;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.TimedInt;
 import org.radarcns.producer.rest.SchemaRetriever;
@@ -196,8 +197,9 @@ public class RadarService extends Service implements ServerStatusListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        mainActivityClass = intent.getStringExtra(EXTRA_MAIN_ACTIVITY);
-        loginActivityClass = intent.getStringExtra(EXTRA_LOGIN_ACTIVITY);
+        Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
+        mainActivityClass = extras.getString(EXTRA_MAIN_ACTIVITY);
+        loginActivityClass = extras.getString(EXTRA_LOGIN_ACTIVITY);
 
         checkPermissions();
 
@@ -208,7 +210,7 @@ public class RadarService extends Service implements ServerStatusListener {
                         .setContentIntent(PendingIntent.getActivity(this, 0, new Intent().setComponent(new ComponentName(this, mainActivityClass)), 0))
                         .build());
 
-        return START_REDELIVER_INTENT;
+        return START_STICKY;
     }
 
     @Override

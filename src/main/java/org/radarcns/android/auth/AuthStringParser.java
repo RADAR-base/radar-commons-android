@@ -24,9 +24,9 @@ public interface AuthStringParser {
     /**
      * Parse an authentication state from a string.
      * @param authString string that contains some form of identification.
-     * @return authentication state.
+     * @return authentication state or {@code null} if the authentication was passed for further
+     *         external processing.
      * @throws IllegalArgumentException if the string is not a valid authentication string
      */
-    @NonNull
     AppAuthState parse(@NonNull String authString);
 }

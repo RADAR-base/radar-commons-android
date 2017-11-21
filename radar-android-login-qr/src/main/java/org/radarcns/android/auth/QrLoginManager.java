@@ -61,7 +61,9 @@ public class QrLoginManager implements LoginManager {
             } else {
                 try {
                     AppAuthState state = processor.parse(result.getContents());
-                    activity.loginSucceeded(this, state);
+                    if (state != null) {
+                        activity.loginSucceeded(this, state);
+                    }
                 } catch (IllegalArgumentException ex) {
                     activity.loginFailed(this, ex);
                 }
