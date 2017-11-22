@@ -41,11 +41,11 @@ public class ManagementPortalLoginManager implements LoginManager {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
+                String body = responseBody(response);
+                if (body == null) {
+                    throw new IOException("Response did not have a body");
+                }
                 try {
-                    String body = responseBody(response);
-                    if (body == null) {
-                        throw new IOException("Response did not have a body");
-                    }
                     JSONObject json = new JSONObject(body);
                     ManagementPortalLoginManager.this.authState = new AppAuthState.Builder()
                             .tokenType(AUTH_TYPE_BEARER)
@@ -58,7 +58,7 @@ public class ManagementPortalLoginManager implements LoginManager {
                 } catch (NullPointerException ex) {
                     throw new IOException("Request failed", ex);
                 } catch (JSONException ex) {
-                    throw new IOException("Failed to parse JSON", ex);
+                    throw new IOException("Failed to parse JSON message " + body, ex);
                 }
             }
         };
