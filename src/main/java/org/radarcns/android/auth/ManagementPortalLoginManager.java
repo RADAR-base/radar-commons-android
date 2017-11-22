@@ -4,23 +4,23 @@ import android.content.Intent;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import okhttp3.ResponseBody;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.config.ServerConfig;
+import org.radarcns.producer.rest.RestClient;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
+
+import static org.radarcns.producer.rest.RestClient.responseBody;
 
 public class ManagementPortalLoginManager implements LoginManager {
 
     private static final String MP_REFRESH_TOKEN = ManagementPortalLoginManager.class.getName() + ".refreshToken";
     private final LoginActivity activity;
-    private final OkHttpClient client;
-    private final ServerConfig managementPortal;
+    private final RestClient client;
     private final Callback callback;
     private String refreshToken;
     private AppAuthState authState;
@@ -30,8 +30,7 @@ public class ManagementPortalLoginManager implements LoginManager {
     public ManagementPortalLoginManager(LoginActivity activity, AppAuthState authState, ServerConfig managementPortal, String clientId, String clientSecret) {
         this.activity = activity;
         this.authState = authState;
-        this.client = new OkHttpClient();
-        this.managementPortal = managementPortal;
+        this.client = new RestClient(managementPortal);
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.callback = new Callback() {
@@ -43,11 +42,11 @@ public class ManagementPortalLoginManager implements LoginManager {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try {
-                    ResponseBody body = response.body();
+                    String body = responseBody(response);
                     if (body == null) {
                         throw new IOException("Response did not have a body");
                     }
-                    JSONObject json = new JSONObject(body.string());
+                    JSONObject json = new JSONObject(body);
                     ManagementPortalLoginManager.this.authState = new AppAuthState.Builder()
                             .tokenType(AUTH_TYPE_BEARER)
                             .token(json.getString("accessToken"))
@@ -81,8 +80,7 @@ public class ManagementPortalLoginManager implements LoginManager {
             return authState;
         } else {
             try {
-                HttpUrl url = HttpUrl.get(managementPortal.getUrl()).newBuilder()
-                        .addPathSegments("oauth/token")
+                HttpUrl url = client.getRelativeUrl("oauth/token").newBuilder()
                         .addQueryParameter("client_id", clientId)
                         .addQueryParameter("client_secret", clientSecret)
                         .addQueryParameter("grant_type", "refresh_token")
@@ -94,7 +92,7 @@ public class ManagementPortalLoginManager implements LoginManager {
                         .url(url)
                         .build();
 
-                client.newCall(request).enqueue(callback);
+                client.request(request, callback);
             } catch (MalformedURLException e) {
                 e.printStackTrace();
             }
@@ -109,7 +107,6 @@ public class ManagementPortalLoginManager implements LoginManager {
 
     @Override
     public void onActivityCreate() {
-
     }
 
     @Override

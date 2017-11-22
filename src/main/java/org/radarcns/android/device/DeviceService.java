@@ -65,6 +65,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
@@ -519,6 +520,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         if (managementPortalString != null) {
             try {
                 managementPortal = new ServerConfig(managementPortalString);
+                managementPortal.setUnsafe(bundle.getBoolean(RADAR_PREFIX + UNSAFE_KAFKA_CONNECTION, false));
             } catch (MalformedURLException ex) {
                 logger.error("ManagementPortal url {} is invalid", managementPortalString, ex);
             }
