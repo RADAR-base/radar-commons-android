@@ -23,6 +23,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
 import org.radarcns.android.R;
+import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.util.Boast;
 import org.radarcns.config.ServerConfig;
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ import java.util.Objects;
 
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
@@ -47,32 +49,34 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private boolean startedFromActivity;
     private boolean refreshOnly;
     private AppAuthState appAuth;
-    protected String managementPortalUrl;
+    protected ServerConfig managementPortal;
     private ManagementPortalClient mpClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
+        RadarConfiguration config = RadarConfiguration.getInstance();
+        String managementPortalUrlString = config.getString(MANAGEMENT_PORTAL_URL_KEY, null);
+
+        if (managementPortalUrlString != null && !managementPortalUrlString.isEmpty()) {
+            try {
+                managementPortal = new ServerConfig(managementPortalUrlString);
+                managementPortal.setUnsafe(config.getBoolean(UNSAFE_KAFKA_CONNECTION, false));
+                mpClient = new ManagementPortalClient(managementPortal);
+            } catch (MalformedURLException e) {
+                logger.error("Cannot create ManagementPortal client from url {}",
+                        managementPortalUrlString);
+            }
+        }
+
         if (savedInstanceBundle != null) {
             refreshOnly = savedInstanceBundle.getBoolean(ACTION_REFRESH);
             startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
-            managementPortalUrl = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
         } else {
             Intent intent = getIntent();
             String action = intent.getAction();
             refreshOnly = Objects.equals(action, ACTION_REFRESH);
             startedFromActivity = Objects.equals(action, ACTION_LOGIN);
-            managementPortalUrl = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
-        }
-
-        if (managementPortalUrl != null && !managementPortalUrl.isEmpty()) {
-            try {
-                mpClient = new ManagementPortalClient(new ServerConfig(managementPortalUrl));
-            } catch (MalformedURLException e) {
-                logger.error("Cannot create ManagementPortal client from url {}",
-                        managementPortalUrl);
-                managementPortalUrl = null;
-            }
         }
 
         if (startedFromActivity) {
@@ -107,7 +111,6 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     public void onSaveInstanceState(Bundle outState) {
         outState.putBoolean(ACTION_REFRESH, refreshOnly);
         outState.putBoolean(ACTION_LOGIN, startedFromActivity);
-        outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortalUrl);
 
         // call superclass to save any view hierarchy
         super.onSaveInstanceState(outState);
