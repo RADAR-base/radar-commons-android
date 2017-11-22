@@ -47,7 +47,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private boolean startedFromActivity;
     private boolean refreshOnly;
     private AppAuthState appAuth;
-    private String managementPortalUrl;
+    protected String managementPortalUrl;
     private ManagementPortalClient mpClient;
 
     @Override
