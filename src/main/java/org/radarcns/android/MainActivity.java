@@ -35,6 +35,9 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
@@ -345,6 +348,11 @@ public abstract class MainActivity extends Activity {
 
     protected void startLogin(boolean forResult) {
         Intent intent = new Intent(this, loginActivity());
+        RadarConfiguration config = RadarConfiguration.getInstance();
+
+        Bundle extras = new Bundle();
+        config.putExtras(extras, MANAGEMENT_PORTAL_URL_KEY, UNSAFE_KAFKA_CONNECTION);
+        intent.putExtras(extras);
 
         if (forResult) {
             intent.setAction(ACTION_LOGIN);

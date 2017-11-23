@@ -239,11 +239,12 @@ public final class AppAuthState {
         @SuppressWarnings("unchecked")
         @NonNull
         public static Builder from(@NonNull Bundle bundle) {
+            bundle.setClassLoader(AppAuthState.class.getClassLoader());
             return new Builder()
                     .projectId(bundle.getString(LOGIN_PROJECT_ID, null))
                     .userId(bundle.getString(LOGIN_USER_ID))
                     .token(bundle.getString(LOGIN_TOKEN))
-                    .properties((HashMap<String, String>)bundle.getSerializable(LOGIN_PROPERTIES))
+                    .properties((HashMap<String, Serializable>)bundle.getSerializable(LOGIN_PROPERTIES))
                     .tokenType(bundle.getInt(LOGIN_TOKEN_TYPE, 0))
                     .expiration(bundle.getLong(LOGIN_EXPIRATION, 0L))
                     .headers((ArrayList<Map.Entry<String, String>>)bundle.getSerializable(LOGIN_HEADERS))

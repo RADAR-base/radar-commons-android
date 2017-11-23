@@ -23,18 +23,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
-
 import org.radarcns.android.RadarService;
-import org.radarcns.android.kafka.ServerStatusListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.radarcns.android.device.DeviceService.DEVICE_SERVICE_CLASS;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_CHANGED;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
-import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMBER;
-import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
-import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
 
 public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServiceConnection<S> {
     private static final Logger logger = LoggerFactory.getLogger(DeviceServiceConnection.class);
@@ -57,25 +52,6 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
         }
     };
 
-    private final BroadcastReceiver serverStatusListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (intentMatches(intent, SERVER_STATUS_CHANGED)) {
-                final ServerStatusListener.Status status = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)];
-                radarService.updateServerStatus(status);
-            } else if (intentMatches(intent, SERVER_RECORDS_SENT_TOPIC)) {
-                String topic = intent.getStringExtra(SERVER_RECORDS_SENT_TOPIC); // topicName that updated
-                int numberOfRecordsSent = intent.getIntExtra(SERVER_RECORDS_SENT_NUMBER, 0);
-                radarService.updateServerRecordsSent(DeviceServiceConnection.this, topic, numberOfRecordsSent);
-            }
-        }
-    };
-
-    private boolean intentMatches(Intent intent, String action) {
-        return intent.getAction().equals(action)
-                && getServiceClassName().equals(intent.getStringExtra(DEVICE_SERVICE_CLASS));
-    }
-
     public DeviceServiceConnection(@NonNull RadarService radarService, String serviceClassName) {
         super(serviceClassName);
         this.radarService = radarService;
@@ -85,11 +61,6 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
     public void onServiceConnected(ComponentName className, IBinder service) {
         radarService.registerReceiver(statusReceiver,
                 new IntentFilter(DEVICE_STATUS_CHANGED));
-
-        IntentFilter serverStatusFilter = new IntentFilter();
-        serverStatusFilter.addAction(SERVER_STATUS_CHANGED);
-        serverStatusFilter.addAction(SERVER_RECORDS_SENT_TOPIC);
-        radarService.registerReceiver(serverStatusListener, serverStatusFilter);
 
         if (!hasService()) {
             super.onServiceConnected(className, service);
@@ -105,7 +76,6 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
 
         if (hadService) {
             radarService.unregisterReceiver(statusReceiver);
-            radarService.unregisterReceiver(serverStatusListener);
             radarService.serviceDisconnected(this);
         }
     }

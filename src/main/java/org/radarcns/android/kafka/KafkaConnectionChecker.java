@@ -136,8 +136,6 @@ class KafkaConnectionChecker implements Runnable {
                 listener.updateServerStatus(ServerStatusListener.Status.UNAUTHORIZED);
             } else {
                 listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED);
-                // try to reconnect immediately
-                check();
             }
         }
     }

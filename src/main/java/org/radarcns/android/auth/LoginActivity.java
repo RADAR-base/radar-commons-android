@@ -35,6 +35,7 @@ import java.util.Objects;
 
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
@@ -47,31 +48,38 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private boolean startedFromActivity;
     private boolean refreshOnly;
     private AppAuthState appAuth;
-    private String managementPortalUrl;
+    protected ServerConfig managementPortal;
     private ManagementPortalClient mpClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
+
+        String managementPortalString;
+        boolean unsafe;
+
         if (savedInstanceBundle != null) {
             refreshOnly = savedInstanceBundle.getBoolean(ACTION_REFRESH);
             startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
-            managementPortalUrl = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
+            managementPortalString = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
+            unsafe = savedInstanceBundle.getBoolean(UNSAFE_KAFKA_CONNECTION);
         } else {
             Intent intent = getIntent();
             String action = intent.getAction();
             refreshOnly = Objects.equals(action, ACTION_REFRESH);
             startedFromActivity = Objects.equals(action, ACTION_LOGIN);
-            managementPortalUrl = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
+            managementPortalString = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
+            unsafe = intent.getBooleanExtra(RADAR_PREFIX + UNSAFE_KAFKA_CONNECTION, false);
         }
 
-        if (managementPortalUrl != null && !managementPortalUrl.isEmpty()) {
+        if (managementPortalString != null && !managementPortalString.isEmpty()) {
             try {
-                mpClient = new ManagementPortalClient(new ServerConfig(managementPortalUrl));
+                managementPortal = new ServerConfig(managementPortalString);
+                managementPortal.setUnsafe(unsafe);
+                mpClient = new ManagementPortalClient(managementPortal);
             } catch (MalformedURLException e) {
                 logger.error("Cannot create ManagementPortal client from url {}",
-                        managementPortalUrl);
-                managementPortalUrl = null;
+                        managementPortalString);
             }
         }
 
@@ -107,7 +115,8 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     public void onSaveInstanceState(Bundle outState) {
         outState.putBoolean(ACTION_REFRESH, refreshOnly);
         outState.putBoolean(ACTION_LOGIN, startedFromActivity);
-        outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortalUrl);
+        outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortal.getUrlString());
+        outState.putBoolean(UNSAFE_KAFKA_CONNECTION, managementPortal.isUnsafe());
 
         // call superclass to save any view hierarchy
         super.onSaveInstanceState(outState);
@@ -135,20 +144,30 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     /** Call when part of the login procedure failed. */
     public void loginFailed(LoginManager manager, Exception ex) {
         logger.error("Failed to log in with {}", manager, ex);
-        Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Boast.makeText(LoginActivity.this, R.string.login_failed, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    protected AppAuthState updateMpInfo(LoginManager manager, AppAuthState appAuthState) throws IOException {
+        if (mpClient == null) {
+            return appAuthState;
+        } else {
+            return mpClient.getSubject(appAuthState);
+        }
     }
 
     /** Call when the entire login procedure succeeded. */
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
-        if (mpClient == null) {
-            this.appAuth = appAuthState;
-        } else {
-            try {
-                this.appAuth = mpClient.getSubject(appAuthState);
-            } catch (IOException ex) {
-                logger.error("Failed to get subject metadata");
-                loginFailed(manager, ex);
-            }
+        try {
+            appAuth = updateMpInfo(manager, appAuthState);
+        } catch (IOException ex) {
+            logger.error("Failed to get subject metadata");
+            loginFailed(manager, ex);
+            return;
         }
         this.appAuth.addToPreferences(this);
 

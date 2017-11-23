@@ -40,8 +40,8 @@ allprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.3.3'
-    ext.versionCode = 9
+    version = '0.3.4'
+    ext.versionCode = 10
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
 
@@ -67,7 +67,7 @@ allprojects {
         compile 'com.squareup.okhttp3:okhttp:3.8.0'
         compile 'com.google.firebase:firebase-config:11.0.4'
 
-        compile('org.radarcns:radar-commons:0.6') {
+        compile('org.radarcns:radar-commons:0.6.1') {
             exclude group: 'io.confluent', module: 'kafka-avro-serializer'
             exclude group: 'org.apache.kafka', module: 'kafka-clients'
             exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'

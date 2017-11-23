@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
@@ -40,6 +41,7 @@ public class ManagementPortalService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
+        logger.info("Handling source registration");
         AppSource source = intent.getParcelableExtra(SOURCE_KEY);
 
         AppSource resultSource = sources.get((int)source.getDeviceTypeId());
@@ -83,8 +85,10 @@ public class ManagementPortalService extends IntentService {
     private void ensureClient(Intent intent) {
         if (client == null) {
             String url = intent.getStringExtra(MANAGEMENT_PORTAL_URL_KEY);
+            boolean unsafe = intent.getBooleanExtra(UNSAFE_KAFKA_CONNECTION, false);
             try {
                 ServerConfig portalConfig = new ServerConfig(url);
+                portalConfig.setUnsafe(unsafe);
                 client = new ManagementPortalClient(portalConfig);
             } catch (MalformedURLException ex) {
                 logger.error("Management portal URL {} is invalid", url, ex);

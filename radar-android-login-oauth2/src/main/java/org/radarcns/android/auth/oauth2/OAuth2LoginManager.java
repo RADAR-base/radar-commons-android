@@ -22,6 +22,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.Jwt;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.auth.LoginListener;
 import org.radarcns.android.auth.LoginManager;
@@ -34,7 +35,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
     private final String projectIdClaim;
     private final String userIdClaim;
     private final LoginActivity activity;
-    private final AppAuthState authState;
+    private AppAuthState authState;
 
     public OAuth2LoginManager(LoginActivity activity, String projectIdClaim, String userIdClaim,
             AppAuthState authState) {
@@ -42,6 +43,10 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         this.projectIdClaim = projectIdClaim;
         this.userIdClaim = userIdClaim;
         this.authState = authState;
+    }
+
+    public void update(AppAuthState state) {
+        this.authState = state;
     }
 
     @Override

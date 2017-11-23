@@ -61,7 +61,6 @@ public class KafkaDataSubmitter<V> implements Closeable {
     private final HandlerThread mHandlerThread;
     private final Handler mHandler;
 
-    private boolean lastUploadFailed = false;
     private Runnable uploadFuture;
     private Runnable uploadIfNeededFuture;
     /** Upload rate in milliseconds. */
@@ -252,9 +251,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
                 connection.didConnect();
             }
         } catch (IOException ex) {
-            if (!lastUploadFailed) {
-                connection.didDisconnect(ex);
-            }
+            connection.didDisconnect(ex);
             sendAgain = false;
         }
         return sendAgain;
@@ -285,9 +282,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
                 connection.didConnect();
             }
         } catch (IOException ex) {
-            if (!lastUploadFailed) {
-                connection.didDisconnect(ex);
-            }
+            connection.didDisconnect(ex);
         }
     }
 
@@ -317,19 +312,15 @@ public class KafkaDataSubmitter<V> implements Closeable {
                 dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING);
             }
 
-            lastUploadFailed = false;
             try {
                 cacheSender.send(measurements);
                 cacheSender.flush();
             } catch (AuthenticationException ex) {
-                // go through didDisconnect
                 dataHandler.updateRecordsSent(topic.getName(), -1);
                 throw ex;
             } catch (IOException ioe) {
-                lastUploadFailed = true;
                 dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING_FAILED);
                 dataHandler.updateRecordsSent(topic.getName(), -1);
-                logger.warn("UPF cacheSender.send failed. {} n_records = {}", topic, numberOfRecords);
                 throw ioe;
             }
 
