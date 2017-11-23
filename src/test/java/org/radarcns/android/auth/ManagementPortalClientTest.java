@@ -103,6 +103,7 @@ public class ManagementPortalClientTest {
         AppSource expected = new AppSource(0, "p", "m", "v", true);
         expected.setSourceId("i");
         expected.setExpectedSourceName("e");
+        expected.setSourceName("s");
         expected.setAttributes(Collections.singletonMap("k", "v"));
 
         assertEquals(Collections.singletonList(expected), sourceList);
@@ -169,6 +170,7 @@ public class ManagementPortalClientTest {
 
                 AppSource expected = new AppSource(0, "p", "m", "v", true);
                 expected.setSourceId("i");
+                expected.setSourceName("s");
                 expected.setExpectedSourceName("e");
                 expected.setAttributes(Collections.singletonMap("k", "v"));
 
