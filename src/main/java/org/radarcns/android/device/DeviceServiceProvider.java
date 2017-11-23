@@ -224,7 +224,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
         String mpUrl = config.getString(MANAGEMENT_PORTAL_URL_KEY, null);
         if (mpUrl != null && !mpUrl.isEmpty()) {
-            config.put(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, mpUrl);
+            bundle.putString(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, mpUrl);
         }
         ((RadarApplication)radarService.getApplicationContext()).configureProvider(config, bundle);
         List<String> permissions = needsPermissions();

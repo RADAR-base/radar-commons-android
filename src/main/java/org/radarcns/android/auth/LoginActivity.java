@@ -144,20 +144,30 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     /** Call when part of the login procedure failed. */
     public void loginFailed(LoginManager manager, Exception ex) {
         logger.error("Failed to log in with {}", manager, ex);
-        Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Boast.makeText(LoginActivity.this, R.string.login_failed, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    protected AppAuthState updateMpInfo(LoginManager manager, AppAuthState appAuthState) throws IOException {
+        if (mpClient == null) {
+            return appAuthState;
+        } else {
+            return mpClient.getSubject(appAuthState);
+        }
     }
 
     /** Call when the entire login procedure succeeded. */
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
-        if (mpClient == null) {
-            this.appAuth = appAuthState;
-        } else {
-            try {
-                this.appAuth = mpClient.getSubject(appAuthState);
-            } catch (IOException ex) {
-                logger.error("Failed to get subject metadata");
-                loginFailed(manager, ex);
-            }
+        try {
+            appAuth = updateMpInfo(manager, appAuthState);
+        } catch (IOException ex) {
+            logger.error("Failed to get subject metadata");
+            loginFailed(manager, ex);
+            return;
         }
         this.appAuth.addToPreferences(this);
 

@@ -12,10 +12,6 @@ import java.util.Set;
 public interface IRadarService {
     ServerStatusListener.Status getServerStatus();
 
-    TimedInt getTopicsSent(DeviceServiceConnection connection);
-
-    String getLatestTopicSent();
-
     TimedInt getLatestNumberOfRecordsSent();
 
     List<DeviceServiceProvider> getConnections();

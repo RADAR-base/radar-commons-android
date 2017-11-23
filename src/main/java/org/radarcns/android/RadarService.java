@@ -38,7 +38,11 @@ import static android.Manifest.permission.*;
 import static org.radarcns.android.RadarConfiguration.*;
 import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
+import static org.radarcns.android.device.DeviceService.DEVICE_SERVICE_CLASS;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
+import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMBER;
+import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
+import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
 
 
 public class RadarService extends Service implements ServerStatusListener {
@@ -112,12 +116,26 @@ public class RadarService extends Service implements ServerStatusListener {
         }
     };
 
+    private final BroadcastReceiver serverStatusReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
+                synchronized (RadarService.this) {
+                    // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
+                    if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
+                        return;
+                    }
+                    authState.invalidate(RadarService.this);
+                }
+                startLogin();
+            }
+        }
+    };
+
     /** Connections. **/
     private final List<DeviceServiceProvider> mConnections = new ArrayList<>();
 
     /** An overview of how many records have been sent throughout the application. */
-    private final Map<DeviceServiceConnection, TimedInt> mTotalRecordsSent = new HashMap<>();
-    private String latestTopicSent;
     private final TimedInt latestNumberOfRecordsSent = new TimedInt();
 
     /** Current server status. */
@@ -139,32 +157,13 @@ public class RadarService extends Service implements ServerStatusListener {
 
         binder = createBinder();
 
-        authState = AppAuthState.Builder.from(this).build();
-
         registerReceiver(permissionsBroadcastReceiver,
                 new IntentFilter(ACTION_PERMISSIONS_GRANTED));
         registerReceiver(loginBroadcastReceiver,
                 new IntentFilter(LoginActivity.ACTION_LOGIN_SUCCESS));
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
-
-        configure();
-
-        new AsyncTask<DeviceServiceProvider, Void, Void>() {
-            @Override
-            protected Void doInBackground(DeviceServiceProvider... params) {
-                for (DeviceServiceProvider provider : params) {
-                    if (!provider.isBound()) {
-                        logger.info("Binding to service: {}", provider);
-                        provider.bind();
-                    } else {
-                        logger.info("Already bound: {}", provider);
-                    }
-                }
-                return null;
-            }
-        }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
-
+        registerReceiver(serverStatusReceiver, new IntentFilter(SERVER_STATUS_CHANGED));
 
         final RadarConfiguration radarConfiguration = RadarConfiguration.getInstance();
         radarConfiguration.onFetchComplete(null, new OnCompleteListener<Void>() {
@@ -201,6 +200,25 @@ public class RadarService extends Service implements ServerStatusListener {
         mainActivityClass = extras.getString(EXTRA_MAIN_ACTIVITY);
         loginActivityClass = extras.getString(EXTRA_LOGIN_ACTIVITY);
 
+        authState = AppAuthState.Builder.from(this).build();
+
+        configure();
+
+        new AsyncTask<DeviceServiceProvider, Void, Void>() {
+            @Override
+            protected Void doInBackground(DeviceServiceProvider... params) {
+                for (DeviceServiceProvider provider : params) {
+                    if (!provider.isBound()) {
+                        logger.info("Binding to service: {}", provider);
+                        provider.bind();
+                    } else {
+                        logger.info("Already bound: {}", provider);
+                    }
+                }
+                return null;
+            }
+        }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
+
         checkPermissions();
 
         startForeground(1,
@@ -219,6 +237,7 @@ public class RadarService extends Service implements ServerStatusListener {
         unregisterReceiver(loginBroadcastReceiver);
         unregisterReceiver(bluetoothReceiver);
         unregisterReceiver(deviceFailedReceiver);
+        unregisterReceiver(serverStatusReceiver);
 
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.isBound()) {
@@ -326,13 +345,18 @@ public class RadarService extends Service implements ServerStatusListener {
 
         List<DeviceServiceProvider> connections = DeviceServiceProvider.loadProviders(this, RadarConfiguration.getInstance());
 
-        for (DeviceServiceProvider provider : new ArrayList<>(mConnections)) {
+        Iterator<DeviceServiceProvider> iter = mConnections.iterator();
+        while (iter.hasNext()) {
+            DeviceServiceProvider provider = iter.next();
             if (!connections.contains(provider)) {
                 provider.unbind();
-                mConnections.remove(provider);
+                iter.remove();
             }
         }
 
+        boolean useMp = configuration.getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
+
+        boolean didAddProvider = false;
         for (DeviceServiceProvider provider : connections) {
             if (!mConnections.contains(provider)) {
                 List<AppSource> sources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
@@ -341,11 +365,13 @@ public class RadarService extends Service implements ServerStatusListener {
                         if (provider.matches(source, false)) {
                             provider.setSource(source);
                             addProvider(provider);
+                            didAddProvider = true;
                             break;
                         }
                     }
-                } else {
+                } else if (!useMp) {
                     addProvider(provider);
+                    didAddProvider = true;
                 }
             }
         }
@@ -353,12 +379,15 @@ public class RadarService extends Service implements ServerStatusListener {
         for (DeviceServiceProvider provider : mConnections) {
             provider.updateConfiguration();
         }
+
+        if (didAddProvider) {
+            checkPermissions();
+        }
     }
 
     private void addProvider(DeviceServiceProvider provider) {
         mConnections.add(provider);
         DeviceServiceConnection connection = provider.getConnection();
-        mTotalRecordsSent.put(connection, new TimedInt());
         deviceFilters.put(connection, Collections.<String>emptySet());
     }
 
@@ -412,6 +441,9 @@ public class RadarService extends Service implements ServerStatusListener {
                 @Override
                 protected Void doInBackground(DeviceServiceConnection... params) {
                     DeviceServiceProvider provider = getConnectionProvider(connection);
+                    if (provider == null) {
+                        return null;
+                    }
                     logger.info("Rebinding {} after disconnect", provider);
                     if (provider.isBound()) {
                         provider.unbind();
@@ -424,22 +456,24 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     public void updateServerStatus(ServerStatusListener.Status serverStatus) {
-        this.serverStatus = serverStatus;
-        if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
-            synchronized (RadarService.this) {
-                // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
-                if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
-                    return;
-                }
-                authState.invalidate(RadarService.this);
-            }
-            startLogin();
+        if (serverStatus == this.serverStatus) {
+            return;
         }
+        this.serverStatus = serverStatus;
+
+        Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
+        statusIntent.putExtra(SERVER_STATUS_CHANGED, serverStatus.ordinal());
+        sendBroadcast(statusIntent);
     }
 
     @Override
     public void updateRecordsSent(String topicName, int numberOfRecords) {
-
+        this.latestNumberOfRecordsSent.set(numberOfRecords);
+        Intent recordsIntent = new Intent(SERVER_RECORDS_SENT_TOPIC);
+        // Signal that a certain topic changed, the key of the map retrieved by getRecordsSent().
+        recordsIntent.putExtra(SERVER_RECORDS_SENT_TOPIC, topicName);
+        recordsIntent.putExtra(SERVER_RECORDS_SENT_NUMBER, numberOfRecords);
+        sendBroadcast(recordsIntent);
     }
 
     public void deviceStatusUpdated(final DeviceServiceConnection<?> connection, final DeviceStatusListener.Status status) {
@@ -472,22 +506,14 @@ public class RadarService extends Service implements ServerStatusListener {
         });
     }
 
-    public void updateServerRecordsSent(DeviceServiceConnection<?> connection, String topic, int numberOfRecords) {
-        if (numberOfRecords >= 0){
-            mTotalRecordsSent.get(connection).add(numberOfRecords);
-        }
-        latestTopicSent = topic;
-        latestNumberOfRecordsSent.set(numberOfRecords);
-    }
-
     protected DeviceServiceProvider getConnectionProvider(DeviceServiceConnection<?> connection) {
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.getConnection().equals(connection)) {
                 return provider;
             }
         }
-        throw new IllegalArgumentException("DeviceServiceConnection "
-                + connection.getServiceClassName() + " not set");
+        logger.info("DeviceServiceConnection no longer enabled");
+        return null;
     }
 
 
@@ -636,16 +662,6 @@ public class RadarService extends Service implements ServerStatusListener {
         @Override
         public ServerStatusListener.Status getServerStatus() {
              return serverStatus;
-        }
-
-        @Override
-        public TimedInt getTopicsSent(DeviceServiceConnection connection) {
-            return mTotalRecordsSent.get(connection);
-        }
-
-        @Override
-        public String getLatestTopicSent() {
-            return latestTopicSent;
         }
 
         @Override

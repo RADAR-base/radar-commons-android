@@ -195,6 +195,7 @@ public class ManagementPortalClient implements Closeable {
             }
             devices.remove(deviceId);
             device.setExpectedSourceName(sourceObj.optString("expectedSourceName"));
+            device.setSourceName(sourceObj.optString("sourceName"));
             device.setSourceId(sourceId);
             device.setAttributes(attributesToMap(sourceObj.optJSONObject("attributes")));
             actualSources.add(device);

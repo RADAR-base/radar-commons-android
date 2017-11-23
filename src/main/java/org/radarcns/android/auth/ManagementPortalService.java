@@ -41,6 +41,7 @@ public class ManagementPortalService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
+        logger.info("Handling source registration");
         AppSource source = intent.getParcelableExtra(SOURCE_KEY);
 
         AppSource resultSource = sources.get((int)source.getDeviceTypeId());

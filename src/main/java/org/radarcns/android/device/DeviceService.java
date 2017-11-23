@@ -76,7 +76,7 @@ import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
  * Specific wearables should extend this class.
  */
 @SuppressWarnings("WeakerAccess")
-public abstract class DeviceService<T extends BaseDeviceState> extends Service implements DeviceStatusListener, ServerStatusListener {
+public abstract class DeviceService<T extends BaseDeviceState> extends Service implements DeviceStatusListener {
     private static final int ONGOING_NOTIFICATION_ID = 11;
     private static final int BLUETOOTH_NOTIFICATION_ID = 12;
     private static final String PREFIX = "org.radarcns.android.";
@@ -333,27 +333,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
     }
 
-    @Override
-    public void updateServerStatus(ServerStatusListener.Status status) {
-        // TODO: if status == UNAUTHORIZED, start login activity
-        // TODO: make sure that the AppAuthState gets propagated back to all services -> perhaps
-        //       with a broadcast instead of going through MainActivity
-        Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
-        statusIntent.putExtra(SERVER_STATUS_CHANGED, status.ordinal());
-        statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-        sendBroadcast(statusIntent);
-    }
-
-    @Override
-    public void updateRecordsSent(String topicName, int numberOfRecords) {
-        Intent recordsIntent = new Intent(SERVER_RECORDS_SENT_TOPIC);
-        // Signal that a certain topic changed, the key of the map retrieved by getRecordsSent().
-        recordsIntent.putExtra(SERVER_RECORDS_SENT_TOPIC, topicName);
-        recordsIntent.putExtra(SERVER_RECORDS_SENT_NUMBER, numberOfRecords);
-        recordsIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-        sendBroadcast(recordsIntent);
-    }
-
     /**
      * New device manager for the current device.
      */
@@ -386,10 +365,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             logger.info("Starting recording");
             synchronized (this) {
                 if (deviceScanner == null) {
-                    if (key.getSourceId() == null) {
-                        key.setSourceId(RadarConfiguration.getOrSetUUID(
-                                getApplicationContext(), SOURCE_ID_KEY));
-                    }
                     deviceScanner = createDeviceManager();
                     deviceScanner.start(acceptableIds);
                 }
@@ -594,7 +569,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     public void registerDevice(String sourceIdHint, String name, Map<String, String> attributes) {
         if (source.getSourceId() != null) {
-            getDeviceManager().didRegister(source);;
+            getDeviceManager().didRegister(source);
+            return;
         }
         source.setSourceName(name);
         source.setAttributes(attributes);
@@ -613,7 +589,10 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
                     AppAuthState auth = AppAuthState.Builder.from(result).build();
                     if (auth.isInvalidated()) {
                         logger.info("New source ID requires new OAuth2 JWT token.");
-                        updateServerStatus(ServerStatusListener.Status.UNAUTHORIZED);
+                        Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
+                        statusIntent.putExtra(SERVER_STATUS_CHANGED, ServerStatusListener.Status.UNAUTHORIZED.ordinal());
+                        statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
+                        sendBroadcast(statusIntent);
                     }
                     key.setProjectId(auth.getProjectId());
                     key.setUserId(auth.getUserId());
