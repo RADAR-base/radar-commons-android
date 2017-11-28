@@ -156,7 +156,7 @@ public class ManagementPortalClient implements Closeable {
     }
 
     static SparseArray<AppSource> parseDeviceTypes(JSONObject project) throws JSONException {
-        JSONArray deviceTypesArr = project.getJSONArray("deviceTypes");
+        JSONArray deviceTypesArr = project.getJSONArray("sourceTypes");
         int numDevices = deviceTypesArr.length();
 
         SparseArray<AppSource> devices = new SparseArray<>(numDevices);
@@ -166,8 +166,8 @@ public class ManagementPortalClient implements Closeable {
 
             AppSource device = new AppSource(
                     deviceTypeId,
-                    deviceTypeObj.getString("deviceProducer"),
-                    deviceTypeObj.getString("deviceModel"),
+                    deviceTypeObj.getString("producer"),
+                    deviceTypeObj.getString("model"),
                     deviceTypeObj.getString("catalogVersion"),
                     deviceTypeObj.getBoolean("canRegisterDynamically"));
             devices.put(deviceTypeId, device);
@@ -187,7 +187,7 @@ public class ManagementPortalClient implements Closeable {
             if (!sourceObj.optBoolean("assigned", true)) {
                 logger.info("Skipping unassigned source {}", sourceId);
             }
-            int deviceId = sourceObj.getInt("deviceTypeId");
+            int deviceId = sourceObj.getInt("sourceTypeId");
             AppSource device = devices.get(deviceId);
             if (device == null) {
                 logger.error("Source {} type {} not recognized", sourceId, deviceId);
