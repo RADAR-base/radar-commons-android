@@ -22,10 +22,12 @@ import android.support.annotation.NonNull;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
+import java.io.IOException;
+
 /**
  * RADAR QR Login Manager.
  * Use it by passing a custom AuthStringParser. That parser should parse the string contained in
- * the QR code and convert it to a valid login.
+ * the QR code and parse it to a valid login.
  */
 public class QrLoginManager implements LoginManager {
     private final LoginActivity activity;
@@ -64,7 +66,7 @@ public class QrLoginManager implements LoginManager {
                     if (state != null) {
                         activity.loginSucceeded(this, state);
                     }
-                } catch (IllegalArgumentException ex) {
+                } catch (IllegalArgumentException | IOException ex) {
                     activity.loginFailed(this, ex);
                 }
             }
