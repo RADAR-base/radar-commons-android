@@ -48,24 +48,20 @@ import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.BundleSerialization;
-import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
-import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.auth.ManagementPortalService.MANAGEMENT_PORTAL_REGISTRATION_FAILED;
 import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
@@ -140,7 +136,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private int latestStartId = -1;
     private boolean needsBluetooth;
     private AppSource source;
-    private ServerConfig managementPortal;
     private AppAuthState authState;
 
     @CallSuper
@@ -491,15 +486,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             key.setSourceId(source.getSourceId());
         }
         key.setUserId(authState.getUserId());
-        String managementPortalString = bundle.getString(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, null);
-        if (managementPortalString != null) {
-            try {
-                managementPortal = new ServerConfig(managementPortalString);
-                managementPortal.setUnsafe(bundle.getBoolean(RADAR_PREFIX + UNSAFE_KAFKA_CONNECTION, false));
-            } catch (MalformedURLException ex) {
-                logger.error("ManagementPortal url {} is invalid", managementPortalString, ex);
-            }
-        }
 
         boolean willNeedBluetooth = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false);
         if (!willNeedBluetooth && needsBluetooth) {
@@ -574,11 +560,15 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
         source.setSourceName(name);
         source.setAttributes(attributes);
-        if (managementPortal != null) {
-            Intent intent = ManagementPortalService.createRequest(this, managementPortal,
-                    source, authState, new ResultReceiver(new Handler(getMainLooper())) {
+        if (ManagementPortalService.isEnabled()) {
+            Intent intent = ManagementPortalService.createRequest(this, source, authState,
+                    new ResultReceiver(new Handler(getMainLooper())) {
                 @Override
                 protected void onReceiveResult(int resultCode, Bundle result) {
+                    if (resultCode == MANAGEMENT_PORTAL_REGISTRATION_FAILED) {
+                        logger.error("Failed to register source");
+                        return;
+                    }
                     AppSource updatedSource = result.getParcelable(SOURCE_KEY);
                     if (updatedSource == null) {
                         // TODO: more error handling?

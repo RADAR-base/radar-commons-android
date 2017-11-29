@@ -17,6 +17,7 @@ import com.google.android.gms.tasks.Task;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.auth.ManagementPortalService;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
@@ -33,10 +34,14 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.Manifest.permission.*;
 import static org.radarcns.android.RadarConfiguration.*;
 import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
+import static org.radarcns.android.auth.ManagementPortalLoginManager.MP_REFRESH_TOKEN;
+import static org.radarcns.android.auth.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
+import static org.radarcns.android.auth.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_SERVICE_CLASS;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
@@ -78,6 +83,7 @@ public class RadarService extends Service implements ServerStatusListener {
     private TableDataHandler dataHandler;
     private String mainActivityClass;
     private String loginActivityClass;
+    private Handler mHandler;
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters = new HashMap<>();
@@ -117,18 +123,61 @@ public class RadarService extends Service implements ServerStatusListener {
     };
 
     private final BroadcastReceiver serverStatusReceiver = new BroadcastReceiver() {
+        AtomicBoolean isMakingRequest = new AtomicBoolean(false);
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
-                synchronized (RadarService.this) {
-                    // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
-                    if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
-                        return;
-                    }
-                    authState.invalidate(RadarService.this);
+            serverStatus = Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, -1)];
+            if (serverStatus == Status.UNAUTHORIZED) {
+                logger.info("Status unauthorized");
+                if (!isMakingRequest.compareAndSet(false, true)) {
+                    return;
                 }
-                startLogin();
+                authState.invalidate(RadarService.this);
+                if (ManagementPortalService.isEnabled() && authState.getProperty(MP_REFRESH_TOKEN) != null) {
+                    logger.info("Creating request to management portal");
+                    Intent mpIntent = ManagementPortalService.createRequest(RadarService.this,
+                            authState, new ResultReceiver(mHandler) {
+                        @Override
+                        protected void onReceiveResult(int resultCode, Bundle result) {
+                            if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
+                                authState = AppAuthState.Builder.from(result).build();
+                                authState.addToPreferences(RadarService.this);
+                                if (dataHandler != null) {
+                                    dataHandler.setAuthState(authState);
+                                }
+                            } else if (resultCode == MANAGEMENT_PORTAL_REFRESH_FAILED && mHandler != null) {
+                                logger.error("Failed to log in to management portal");
+                                final ResultReceiver recv = this;
+                                mHandler.postDelayed(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Intent mpIntent = ManagementPortalService.createRequest(RadarService.this, authState, recv);
+                                        startService(mpIntent);
+                                    }
+                                }, 60_000L);
+                            }
+                            isMakingRequest.set(false);
+                        }
+                    });
+                    startService(mpIntent);
+                } else {
+                    synchronized (RadarService.this) {
+                        // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
+                        if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
+                            return;
+                        }
+                        authState.invalidate(RadarService.this);
+                    }
+                    startLogin();
+                }
             }
+        }
+    };
+
+    private final BroadcastReceiver configChangedReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            configure();
         }
     };
 
@@ -156,6 +205,7 @@ public class RadarService extends Service implements ServerStatusListener {
         super.onCreate();
 
         binder = createBinder();
+        mHandler = new Handler(getMainLooper());
 
         registerReceiver(permissionsBroadcastReceiver,
                 new IntentFilter(ACTION_PERMISSIONS_GRANTED));
@@ -164,30 +214,7 @@ public class RadarService extends Service implements ServerStatusListener {
         registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
         registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
         registerReceiver(serverStatusReceiver, new IntentFilter(SERVER_STATUS_CHANGED));
-
-        final RadarConfiguration radarConfiguration = RadarConfiguration.getInstance();
-        radarConfiguration.onFetchComplete(null, new OnCompleteListener<Void>() {
-            @Override
-            public void onComplete(@NonNull Task<Void> task) {
-                if (task.isSuccessful()) {
-                    // Once the config is successfully fetched it must be
-                    // activated before newly fetched values are returned.
-                    radarConfiguration.activateFetched();
-
-                    logger.info("Remote Config: Activate success.");
-                    // Set global properties.
-                    logger.info("RADAR configuration changed: {}", radarConfiguration);
-                    configure();
-                    sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
-                } else {
-                    Boast.makeText(RadarService.this, "Remote Config: Fetch Failed",
-                            Toast.LENGTH_SHORT).show();
-                    logger.info("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
-                }
-            }
-        });
-
-        radarConfiguration.fetch();
+        registerReceiver(configChangedReceiver, new IntentFilter(RADAR_CONFIGURATION_CHANGED));
     }
 
     protected IBinder createBinder() {
@@ -201,6 +228,7 @@ public class RadarService extends Service implements ServerStatusListener {
         loginActivityClass = extras.getString(EXTRA_LOGIN_ACTIVITY);
 
         authState = AppAuthState.Builder.from(this).build();
+        logger.info("Auth state: {}", authState);
 
         configure();
 
@@ -233,6 +261,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
     @Override
     public void onDestroy() {
+        mHandler = null;
         unregisterReceiver(permissionsBroadcastReceiver);
         unregisterReceiver(loginBroadcastReceiver);
         unregisterReceiver(bluetoothReceiver);

@@ -3,36 +3,30 @@ package org.radarcns.android.auth;
 import android.content.Intent;
 import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.Credentials;
-import okhttp3.FormBody;
-import okhttp3.Request;
-import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.json.JSONException;
-import org.json.JSONObject;
-import org.radarcns.config.ServerConfig;
-import org.radarcns.producer.rest.RestClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.util.concurrent.TimeUnit;
 
-import static org.radarcns.producer.rest.RestClient.responseBody;
+import static org.radarcns.android.auth.ManagementPortalClient.parseAccessToken;
 
 public class ManagementPortalLoginManager implements LoginManager, Callback {
-
-    private static final String MP_REFRESH_TOKEN = ManagementPortalLoginManager.class.getName() + ".refreshToken";
-    private final LoginActivity activity;
-    private final RestClient client;
+    private static final Logger logger = LoggerFactory.getLogger(ManagementPortalLoginManager.class);
+    public static final String MP_REFRESH_TOKEN = ManagementPortalLoginManager.class.getName() + ".refreshToken";
+    private ManagementPortalClient client;
     private String refreshToken;
+    private final LoginListener listener;
     private AppAuthState authState;
-    private final String clientId;
-    private final String clientSecret;
+    private String clientId;
+    private String clientSecret;
 
-    public ManagementPortalLoginManager(LoginActivity activity, AppAuthState authState, ServerConfig managementPortal, String clientId, String clientSecret) {
-        this.activity = activity;
+    public ManagementPortalLoginManager(LoginListener listener, AppAuthState authState, ManagementPortalClient client, String clientId, String clientSecret) {
+        this.listener = listener;
         this.authState = authState;
-        this.client = new RestClient(managementPortal);
+        this.refreshToken = (String) authState.getProperty(MP_REFRESH_TOKEN);
+        this.client = client;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
     }
@@ -42,32 +36,36 @@ public class ManagementPortalLoginManager implements LoginManager, Callback {
         authState = this.authState.newBuilder()
                 .property(MP_REFRESH_TOKEN, refreshToken)
                 .build();
+        refresh();
+    }
+
+    public void setManagementPortal(ManagementPortalClient client, String clientId, String clientSecret) {
+        this.client = client;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+        this.refresh();
     }
 
     @Override
     public AppAuthState refresh() {
-        if (this.refreshToken == null) {
+        if (this.refreshToken == null || client == null) {
+            logger.info("Cannot refresh MP without token or client");
             return null;
         }
         if (authState.isValid()) {
             return authState;
         } else {
             try {
-                RequestBody body = new FormBody.Builder()
-                        .add("grant_type", "refresh_token")
-                        .add("refresh_token", refreshToken)
-                        .build();
-
-                Request request = client.requestBuilder("oauth/token")
-                        .post(body)
-                        .addHeader("Authorization", Credentials.basic(clientId, clientSecret))
-                        .build();
-
-                client.request(request, this);
-            } catch (MalformedURLException e) {
-                e.printStackTrace();
+                logger.info("Refreshing token");
+                client.refreshToken(authState, clientId, clientSecret, this);
+                return null;
+            } catch (IOException ex) {
+                logger.error("Failed to refresh ManagementPortal token", ex);
+                return null;
+            } catch (JSONException ex) {
+                logger.error("Failed to deserialize ManagementPortal token", ex);
+                return null;
             }
-            return null;
         }
     }
 
@@ -82,36 +80,19 @@ public class ManagementPortalLoginManager implements LoginManager, Callback {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
-
     }
 
     @Override
-    public void onFailure(Call call, IOException ex) {
-        activity.loginFailed(this, ex);
+    public void onFailure(Call call, IOException e) {
+        listener.loginFailed(this, new IOException("Cannot reach management portal", e));
     }
 
     @Override
-    public void onResponse(Call call, Response response) throws IOException {
-        String body = responseBody(response);
+    public void onResponse(Call call, Response response) {
         try {
-            if (body == null) {
-                throw new IOException("Response did not have a body");
-            }
-            JSONObject json = new JSONObject(body);
-            String accessToken = json.getString("access_token");
-            refreshToken = json.optString("refresh_token", refreshToken);
-            authState = new AppAuthState.Builder()
-                    .token(accessToken)
-                    .tokenType(AUTH_TYPE_BEARER)
-                    .userId(json.getString("sub"))
-                    .property(MP_REFRESH_TOKEN, refreshToken)
-                    .header("Authorization", "Bearer " + accessToken)
-                    .expiration(TimeUnit.SECONDS.toMillis(json.getLong("expires_in")
-                            + System.currentTimeMillis()))
-                    .build();
-            activity.loginSucceeded(this, authState);
-        } catch (IOException | NullPointerException | JSONException ex) {
-            activity.loginFailed(this, new IOException("Failed to process response " + body, ex));
+            listener.loginSucceeded(this, parseAccessToken(authState, response));
+        } catch (IOException ex) {
+            onFailure(call, ex);
         }
     }
 }

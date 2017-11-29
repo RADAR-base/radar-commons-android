@@ -18,6 +18,7 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
@@ -29,6 +30,8 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,11 +41,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import static java.util.regex.Pattern.CASE_INSENSITIVE;
 
 public class RadarConfiguration {
+    private static final Logger logger = LoggerFactory.getLogger(RadarConfiguration.class);
     private static final Object SYNC_PREFS_OBJECT = new Object();
 
     public static final String RADAR_PREFIX = "org.radarcns.android.";
@@ -76,6 +81,7 @@ public class RadarConfiguration {
     public static final String OAUTH2_TOKEN_URL = "oauth2_token_url";
     public static final String OAUTH2_REDIRECT_URL = "oauth2_redirect_url";
     public static final String OAUTH2_CLIENT_ID = "oauth2_client_id";
+    public static final String OAUTH2_CLIENT_SECRET = "oauth2_client_secret";
 
     public static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
@@ -112,7 +118,6 @@ public class RadarConfiguration {
 
     public static final long FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12*60*60 * 1000L;
     private final Handler handler;
-    private Activity onFetchActivity;
     private OnCompleteListener<Void> onFetchCompleteHandler;
     private final Map<String, Object> localConfiguration;
 
@@ -157,17 +162,35 @@ public class RadarConfiguration {
         }
     }
 
-    public static RadarConfiguration configure(@NonNull Context context, boolean inDevelopmentMode, int defaultSettings) {
+    public static RadarConfiguration configure(@NonNull final Context context, boolean inDevelopmentMode, int defaultSettings) {
         synchronized (syncObject) {
             if (instance == null) {
                 FirebaseRemoteConfigSettings configSettings = new FirebaseRemoteConfigSettings.Builder()
                         .setDeveloperModeEnabled(inDevelopmentMode)
                         .build();
-                FirebaseRemoteConfig config = FirebaseRemoteConfig.getInstance();
+                final FirebaseRemoteConfig config = FirebaseRemoteConfig.getInstance();
                 config.setConfigSettings(configSettings);
                 config.setDefaults(defaultSettings);
 
                 instance = new RadarConfiguration(context, config);
+                instance.onFetchCompleteHandler = new OnCompleteListener<Void>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Void> task) {
+                        if (task.isSuccessful()) {
+                            // Once the config is successfully fetched it must be
+                            // activated before newly fetched values are returned.
+                            instance.activateFetched();
+
+                            logger.info("Remote Config: Activate success.");
+                            // Set global properties.
+                            logger.info("RADAR configuration changed: {}", instance);
+                            context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+                        } else {
+                            logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
+                        }
+                    }
+                };
+                instance.fetch();
             }
             return instance;
         }
@@ -225,11 +248,7 @@ public class RadarConfiguration {
                 }
             });
             if (onFetchCompleteHandler != null) {
-                if (onFetchActivity != null) {
-                    task.addOnCompleteListener(onFetchActivity, onFetchCompleteHandler);
-                } else {
-                    task.addOnCompleteListener(onFetchCompleteHandler);
-                }
+                task.addOnCompleteListener(onFetchCompleteHandler);
             }
         }
         return task;
@@ -237,11 +256,6 @@ public class RadarConfiguration {
 
     public Task<Void> forceFetch() {
         return fetch(0L);
-    }
-
-    public synchronized void onFetchComplete(Activity activity, OnCompleteListener<Void> completeListener) {
-        onFetchActivity = activity;
-        onFetchCompleteHandler = completeListener;
     }
 
     public boolean activateFetched() {

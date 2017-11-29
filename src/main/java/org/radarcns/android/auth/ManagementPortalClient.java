@@ -2,6 +2,9 @@ package org.radarcns.android.auth;
 
 import android.support.annotation.NonNull;
 import android.util.SparseArray;
+import okhttp3.Callback;
+import okhttp3.Credentials;
+import okhttp3.FormBody;
 import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -18,10 +21,15 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_BEARER;
+import static org.radarcns.android.auth.ManagementPortalLoginManager.MP_REFRESH_TOKEN;
 
 public class ManagementPortalClient implements Closeable {
     public static final String SOURCES_PROPERTY =
@@ -40,7 +48,7 @@ public class ManagementPortalClient implements Closeable {
 
     /**
      * Get subject information from the Management portal. This includes project ID, available
-     * device types and assigned sources.
+     * source types and assigned sources.
      * @param state current authentication state
      * @return updated authentication state including sources and a project ID
      * @throws IOException if the management portal could not be reached or it gave an erroneous
@@ -59,10 +67,10 @@ public class ManagementPortalClient implements Closeable {
             JSONObject project = object.getJSONObject("project");
             JSONArray sources = object.getJSONArray("sources");
 
-            SparseArray<AppSource> deviceTypes = parseDeviceTypes(project);
+            SparseArray<AppSource> sourceTypes = parseSourceTypes(project);
 
             return state.newBuilder()
-                    .property(SOURCES_PROPERTY, parseSources(deviceTypes, sources))
+                    .property(SOURCES_PROPERTY, parseSources(sourceTypes, sources))
                     .userId(parseUserId(object))
                     .projectId(parseProjectId(project))
                     .build();
@@ -87,9 +95,9 @@ public class ManagementPortalClient implements Closeable {
                 .build();
 
         try (Response response = client.request(request)) {
-            ResponseBody responseBody = response.body();
+            String responseBody = RestClient.responseBody(response);
             if (response.code() == 409) {
-                throw new IOException("Device type is already registered with the ManagementPortal");
+                throw new IOException("Source type is already registered with the ManagementPortal");
             } else if (response.code() == 404) {
                 throw new IOException("User " + auth.getUserId() + " is no longer registered with the ManagementPortal.");
             } else if (response.code() == 400) {
@@ -99,15 +107,15 @@ public class ManagementPortalClient implements Closeable {
             } else if (!response.isSuccessful()) {
                 if (responseBody != null) {
                     throw new IOException(
-                            "Cannot complete device registration with the ManagementPortal: "
-                                    + responseBody.string());
+                            "Cannot complete source registration with the ManagementPortal: "
+                                    + responseBody);
                 } else {
-                    throw new IOException("Cannot complete device registration with the ManagementPortal.");
+                    throw new IOException("Cannot complete source registration with the ManagementPortal.");
                 }
-            } else if (responseBody == null) {
-                throw new IOException("Device registration with the ManagementPortal did not yield result.");
+            } else if (responseBody == null || responseBody.isEmpty()) {
+                throw new IOException("Source registration with the ManagementPortal did not yield result.");
             } else {
-                parseSourceRegistration(responseBody.string(), source);
+                parseSourceRegistration(responseBody, source);
                 return source;
             }
         }
@@ -115,10 +123,11 @@ public class ManagementPortalClient implements Closeable {
 
     static JSONObject sourceRegistrationBody(AppSource source) throws JSONException {
         JSONObject requestBody = new JSONObject();
-        if (source.getSourceName() != null) {
-            requestBody.put("sourceName", source.getSourceName());
-        }
-        requestBody.put("deviceTypeId", source.getDeviceTypeId());
+        // TODO: in a regression from MP 0.2.0 -> 0.2.1 this was removed
+//        if (source.getSourceName() != null) {
+//            requestBody.put("sourceName", source.getSourceName());
+//        }
+        requestBody.put("sourceTypeId", source.getSourceTypeId());
         Map<String, String> sourceAttributes = source.getAttributes();
         if (!sourceAttributes.isEmpty()) {
             JSONObject attrs = new JSONObject();
@@ -155,30 +164,29 @@ public class ManagementPortalClient implements Closeable {
         return object.getString("login");
     }
 
-    static SparseArray<AppSource> parseDeviceTypes(JSONObject project) throws JSONException {
-        JSONArray deviceTypesArr = project.getJSONArray("sourceTypes");
-        int numDevices = deviceTypesArr.length();
+    static SparseArray<AppSource> parseSourceTypes(JSONObject project) throws JSONException {
+        JSONArray sourceTypesArr = project.getJSONArray("sourceTypes");
+        int numSources = sourceTypesArr.length();
 
-        SparseArray<AppSource> devices = new SparseArray<>(numDevices);
-        for (int i = 0; i < numDevices; i++) {
-            JSONObject deviceTypeObj = deviceTypesArr.getJSONObject(i);
-            int deviceTypeId = deviceTypeObj.getInt("id");
+        SparseArray<AppSource> sources = new SparseArray<>(numSources);
+        for (int i = 0; i < numSources; i++) {
+            JSONObject sourceTypeObj = sourceTypesArr.getJSONObject(i);
+            int sourceTypeId = sourceTypeObj.getInt("id");
 
-            AppSource device = new AppSource(
-                    deviceTypeId,
-                    deviceTypeObj.getString("producer"),
-                    deviceTypeObj.getString("model"),
-                    deviceTypeObj.getString("catalogVersion"),
-                    deviceTypeObj.getBoolean("canRegisterDynamically"));
-            devices.put(deviceTypeId, device);
+            sources.put(sourceTypeId, new AppSource(
+                    sourceTypeId,
+                    sourceTypeObj.getString("producer"),
+                    sourceTypeObj.getString("model"),
+                    sourceTypeObj.getString("catalogVersion"),
+                    sourceTypeObj.getBoolean("canRegisterDynamically")));
         }
-        return devices;
+        return sources;
     }
 
-    static ArrayList<AppSource> parseSources(SparseArray<AppSource> devices, JSONArray sources)
+    static ArrayList<AppSource> parseSources(SparseArray<AppSource> sourceTypes, JSONArray sources)
             throws JSONException {
 
-        ArrayList<AppSource> actualSources = new ArrayList<>(devices.size());
+        ArrayList<AppSource> actualSources = new ArrayList<>(sourceTypes.size());
 
         int numSources = sources.length();
         for (int i = 0; i < numSources; i++) {
@@ -187,28 +195,29 @@ public class ManagementPortalClient implements Closeable {
             if (!sourceObj.optBoolean("assigned", true)) {
                 logger.info("Skipping unassigned source {}", sourceId);
             }
-            int deviceId = sourceObj.getInt("sourceTypeId");
-            AppSource device = devices.get(deviceId);
-            if (device == null) {
-                logger.error("Source {} type {} not recognized", sourceId, deviceId);
+            int sourceTypeId = sourceObj.getInt("sourceTypeId");
+            AppSource source = sourceTypes.get(sourceTypeId);
+            if (source == null) {
+                logger.error("Source {} type {} not recognized", sourceId, sourceTypeId);
                 continue;
             }
-            devices.remove(deviceId);
-            device.setExpectedSourceName(sourceObj.optString("expectedSourceName"));
-            device.setSourceName(sourceObj.optString("sourceName"));
-            device.setSourceId(sourceId);
-            device.setAttributes(attributesToMap(sourceObj.optJSONObject("attributes")));
-            actualSources.add(device);
+            sourceTypes.remove(sourceTypeId);
+            source.setExpectedSourceName(sourceObj.optString("expectedSourceName"));
+            source.setSourceName(sourceObj.optString("sourceName"));
+            source.setSourceId(sourceId);
+            source.setAttributes(attributesToMap(sourceObj.optJSONObject("attributes")));
+            actualSources.add(source);
 
         }
 
-        for (int i = 0; i < devices.size(); i++) {
-            AppSource device = devices.valueAt(i);
-            if (device.hasDynamicRegistration()) {
-                actualSources.add(device);
+        for (int i = 0; i < sourceTypes.size(); i++) {
+            AppSource source = sourceTypes.valueAt(i);
+            if (source.hasDynamicRegistration()) {
+                actualSources.add(source);
             }
         }
 
+        logger.info("Sources from Management Portal: {}", actualSources);
         return actualSources;
     }
 
@@ -231,5 +240,56 @@ public class ManagementPortalClient implements Closeable {
     @Override
     public void close() {
         client.close();
+    }
+
+    public void refreshToken(AppAuthState authState, String clientId, String clientSecret, Callback callback) throws IOException, JSONException {
+        try {
+            String refreshToken = (String)authState.getProperty(MP_REFRESH_TOKEN);
+            if (refreshToken == null) {
+                throw new IllegalArgumentException("No refresh token found");
+            }
+
+            RequestBody body = new FormBody.Builder()
+                    .add("grant_type", "refresh_token")
+                    .add("refresh_token", authState.getProperty(MP_REFRESH_TOKEN).toString())
+                    .build();
+
+            Request request = client.requestBuilder("oauth/token")
+                    .post(body)
+                    .addHeader("Authorization", Credentials.basic(clientId, clientSecret))
+                    .build();
+
+            client.request(request, callback);
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException("Failed to create request from ManagementPortal url", e);
+        }
+    }
+
+    public static AppAuthState parseAccessToken(AppAuthState state, Response response) throws IOException {
+        String responseBody = RestClient.responseBody(response);
+        if (!response.isSuccessful()) {
+            throw new IOException("ManagementPortal returned error code " + response.code() + " with body " + responseBody);
+        }
+        if (responseBody == null) {
+            throw new IOException("ManagementPortal did not return response");
+        }
+
+        String refreshToken = (String) state.getProperty(MP_REFRESH_TOKEN);
+        try {
+            JSONObject json = new JSONObject(responseBody);
+            String accessToken = json.getString("access_token");
+            refreshToken = json.optString("refresh_token", refreshToken);
+            return state.newBuilder()
+                    .token(accessToken)
+                    .tokenType(AUTH_TYPE_BEARER)
+                    .userId(json.getString("sub"))
+                    .property(MP_REFRESH_TOKEN, refreshToken)
+                    .setHeader("Authorization", "Bearer " + accessToken)
+                    .expiration(TimeUnit.SECONDS.toMillis(json.getLong("expires_in")
+                            + System.currentTimeMillis()))
+                    .build();
+        } catch (JSONException ex) {
+            throw new IOException("Failed to parse json string " + responseBody, ex);
+        }
     }
 }

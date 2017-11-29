@@ -352,11 +352,11 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * @param checkVersion whether to do a strict version check
      */
     public boolean matches(AppSource source, boolean checkVersion) {
-        return source.getDeviceProducer().equalsIgnoreCase(getDeviceProducer())
-                && source.getDeviceModel().equalsIgnoreCase(getDeviceModel())
+        return source.getSourceTypeProducer().equalsIgnoreCase(getDeviceProducer())
+                && source.getSourceTypeModel().equalsIgnoreCase(getDeviceModel())
                 && !checkVersion
-                || source.getCatalogVersion() == null
-                || source.getCatalogVersion().equalsIgnoreCase(getVersion());
+                || source.getSourceTypeCatalogVersion() == null
+                || source.getSourceTypeCatalogVersion().equalsIgnoreCase(getVersion());
     }
 
     public void setSource(AppSource source) {

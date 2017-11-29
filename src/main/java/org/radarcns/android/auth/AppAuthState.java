@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -313,6 +314,16 @@ public final class AppAuthState {
             return this;
         }
 
+        public Builder setHeader(@NonNull String name, @NonNull String value) {
+            Iterator<Map.Entry<String, String>> iterator = this.headers.iterator();
+            while (iterator.hasNext()) {
+                if (iterator.next().getKey().equals(name)) {
+                    iterator.remove();
+                }
+            }
+            return header(name, value);
+        }
+
         public Builder header(@NonNull String name, @NonNull String value) {
             this.headers.add(new AbstractMap.SimpleImmutableEntry<>(name, value));
             return this;
@@ -340,5 +351,20 @@ public final class AppAuthState {
                     Collections.unmodifiableMap(properties), tokenType, expiration,
                     Collections.unmodifiableList(headers), lastUpdate);
         }
+    }
+
+    @Override
+    public String toString() {
+        final StringBuffer sb = new StringBuffer("AppAuthState{");
+        sb.append("projectId='").append(projectId).append('\'');
+        sb.append(", \nuserId='").append(userId).append('\'');
+        sb.append(", \ntoken='").append(token).append('\'');
+        sb.append(", \ntokenType=").append(tokenType);
+        sb.append(", \nexpiration=").append(expiration);
+        sb.append(", \nlastUpdate=").append(lastUpdate);
+        sb.append(", \nproperties=").append(properties);
+        sb.append(", \nheaders=").append(headers);
+        sb.append("\n");
+        return sb.toString();
     }
 }

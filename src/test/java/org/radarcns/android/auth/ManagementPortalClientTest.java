@@ -97,7 +97,7 @@ public class ManagementPortalClientTest {
         JSONObject project = object.getJSONObject("project");
         JSONArray sources = object.getJSONArray("sources");
 
-        SparseArray<AppSource> deviceTypes = ManagementPortalClient.parseDeviceTypes(project);
+        SparseArray<AppSource> deviceTypes = ManagementPortalClient.parseSourceTypes(project);
         ArrayList<AppSource> sourceList = ManagementPortalClient.parseSources(deviceTypes, sources);
 
         AppSource expected = new AppSource(0, "p", "m", "v", true);
@@ -114,7 +114,7 @@ public class ManagementPortalClientTest {
         JSONObject object = new JSONObject(EXAMPLE_REQUEST);
         JSONObject project = object.getJSONObject("project");
 
-        SparseArray<AppSource> deviceTypes = ManagementPortalClient.parseDeviceTypes(project);
+        SparseArray<AppSource> deviceTypes = ManagementPortalClient.parseSourceTypes(project);
 
         JSONArray sources = new JSONArray();
         ArrayList<AppSource> sourceList = ManagementPortalClient.parseSources(deviceTypes, sources);

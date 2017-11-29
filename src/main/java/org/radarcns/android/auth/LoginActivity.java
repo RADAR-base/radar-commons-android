@@ -49,7 +49,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private boolean refreshOnly;
     private AppAuthState appAuth;
     protected ServerConfig managementPortal;
-    private ManagementPortalClient mpClient;
+    protected ManagementPortalClient mpClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
@@ -61,8 +61,8 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         if (savedInstanceBundle != null) {
             refreshOnly = savedInstanceBundle.getBoolean(ACTION_REFRESH);
             startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
-            managementPortalString = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY);
-            unsafe = savedInstanceBundle.getBoolean(UNSAFE_KAFKA_CONNECTION);
+            managementPortalString = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY, null);
+            unsafe = savedInstanceBundle.getBoolean(UNSAFE_KAFKA_CONNECTION, false);
         } else {
             Intent intent = getIntent();
             String action = intent.getAction();
@@ -88,26 +88,21 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         }
 
         appAuth = AppAuthState.Builder.from(this).build();
+        loginManagers = createLoginManagers(appAuth);
 
-        if (appAuth.isValid()) {
-            loginSucceeded(null, appAuth);
-        } else {
-            loginManagers = createLoginManagers(appAuth);
+        if (loginManagers.isEmpty()) {
+            throw new IllegalStateException("Cannot use login managers, none are configured.");
+        }
+        for (LoginManager manager : loginManagers) {
+            AppAuthState localState = manager.refresh();
+            if (localState != null && localState.isValid()) {
+                loginSucceeded(manager, localState);
+                return;
+            }
+        }
 
-            if (loginManagers.isEmpty()) {
-                throw new IllegalStateException("Cannot use login managers, none are configured.");
-            }
-            for (LoginManager manager : loginManagers) {
-                AppAuthState localState = manager.refresh();
-                if (localState != null && localState.isValid()) {
-                    loginSucceeded(manager, localState);
-                    return;
-                }
-            }
-
-            for (LoginManager manager : loginManagers) {
-                manager.onActivityCreate();
-            }
+        for (LoginManager manager : loginManagers) {
+            manager.onActivityCreate();
         }
     }
 
@@ -115,8 +110,10 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     public void onSaveInstanceState(Bundle outState) {
         outState.putBoolean(ACTION_REFRESH, refreshOnly);
         outState.putBoolean(ACTION_LOGIN, startedFromActivity);
-        outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortal.getUrlString());
-        outState.putBoolean(UNSAFE_KAFKA_CONNECTION, managementPortal.isUnsafe());
+        if (managementPortal != null) {
+            outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortal.getUrlString());
+            outState.putBoolean(UNSAFE_KAFKA_CONNECTION, managementPortal.isUnsafe());
+        }
 
         // call superclass to save any view hierarchy
         super.onSaveInstanceState(outState);
@@ -162,6 +159,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
     /** Call when the entire login procedure succeeded. */
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
+        logger.info("Login succeeded");
         try {
             appAuth = updateMpInfo(manager, appAuthState);
         } catch (IOException ex) {
@@ -174,8 +172,10 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         LocalBroadcastManager.getInstance(this).sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
 
         if (startedFromActivity) {
+            logger.info("Start next activity with result");
             setResult(RESULT_OK, this.appAuth.toIntent());
         } else if (!refreshOnly) {
+            logger.info("Start next activity without result");
             Intent next = new Intent(this, nextActivity());
             startActivity(next);
         }
