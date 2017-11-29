@@ -37,7 +37,7 @@ public class BackedObjectQueue<T> implements Closeable {
     /**
      * Creates a new object queue from given file.
      * @param queueFile file to write objects to
-     * @param converter way to convert from and to given objects
+     * @param converter way to parse from and to given objects
      */
     public BackedObjectQueue(QueueFile queueFile, Converter<T> converter) {
         this.queueFile = queueFile;

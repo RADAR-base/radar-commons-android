@@ -12,12 +12,10 @@ import android.os.*;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.widget.Toast;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
-import org.radarcns.android.auth.ManagementPortalService;
+import org.radarcns.android.auth.portal.ManagementPortalService;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
@@ -38,12 +36,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.Manifest.permission.*;
 import static org.radarcns.android.RadarConfiguration.*;
-import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
-import static org.radarcns.android.auth.ManagementPortalLoginManager.MP_REFRESH_TOKEN;
-import static org.radarcns.android.auth.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
-import static org.radarcns.android.auth.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH_FAILED;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
+import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
+import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
-import static org.radarcns.android.device.DeviceService.DEVICE_SERVICE_CLASS;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
@@ -133,33 +130,33 @@ public class RadarService extends Service implements ServerStatusListener {
                     return;
                 }
                 authState.invalidate(RadarService.this);
-                if (ManagementPortalService.isEnabled() && authState.getProperty(MP_REFRESH_TOKEN) != null) {
+                final String refreshToken = (String) authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
+                if (ManagementPortalService.isEnabled() && refreshToken != null) {
                     logger.info("Creating request to management portal");
-                    Intent mpIntent = ManagementPortalService.createRequest(RadarService.this,
-                            authState, new ResultReceiver(mHandler) {
+                    ManagementPortalService.requestAccessToken(RadarService.this,
+                            refreshToken, false, new ResultReceiver(mHandler) {
                         @Override
                         protected void onReceiveResult(int resultCode, Bundle result) {
                             if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
                                 authState = AppAuthState.Builder.from(result).build();
-                                authState.addToPreferences(RadarService.this);
                                 if (dataHandler != null) {
                                     dataHandler.setAuthState(authState);
                                 }
+                                isMakingRequest.set(false);
                             } else if (resultCode == MANAGEMENT_PORTAL_REFRESH_FAILED && mHandler != null) {
                                 logger.error("Failed to log in to management portal");
                                 final ResultReceiver recv = this;
                                 mHandler.postDelayed(new Runnable() {
                                     @Override
                                     public void run() {
-                                        Intent mpIntent = ManagementPortalService.createRequest(RadarService.this, authState, recv);
-                                        startService(mpIntent);
+                                        ManagementPortalService.requestAccessToken(RadarService.this, refreshToken, false, recv);
                                     }
                                 }, 60_000L);
+                            } else {
+                                isMakingRequest.set(false);
                             }
-                            isMakingRequest.set(false);
                         }
                     });
-                    startService(mpIntent);
                 } else {
                     synchronized (RadarService.this) {
                         // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)

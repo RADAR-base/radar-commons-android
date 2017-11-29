@@ -18,9 +18,18 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.*;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
-import android.os.*;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.IBinder;
 import android.os.Process;
 import android.provider.Settings;
 import android.support.annotation.CallSuper;
@@ -29,14 +38,17 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.util.BundleSerialization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
 
@@ -95,7 +107,14 @@ public abstract class MainActivity extends Activity {
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        authState = AppAuthState.Builder.from(this).build();
+        Bundle extras;
+        if (savedInstanceState != null) {
+            extras = savedInstanceState;
+        } else {
+            extras = BundleSerialization.getPersistentExtras(getIntent(), this);
+        }
+        authState = AppAuthState.Builder.from(extras).build();
+
         if (!authState.isValid()) {
             startLogin(false);
             return;
@@ -124,10 +143,11 @@ public abstract class MainActivity extends Activity {
         registerReceiver(configurationBroadcastReceiver,
                 new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
 
-        startService(new Intent(this, radarService())
-                .putExtra(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName())
-                .putExtra(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName()));
-
+        Bundle extras = new Bundle();
+        authState.addToBundle(extras);
+        extras.putString(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName());
+        extras.putString(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName());
+        startService(new Intent(this, radarService()).putExtras(extras));
 
         // Start the UI thread
         uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
@@ -253,6 +273,14 @@ public abstract class MainActivity extends Activity {
                 break;
             }
         }
+    }
+
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        authState.addToBundle(outState);
+        // call superclass to save any view hierarchy
+        super.onSaveInstanceState(outState);
     }
 
     private void onPermissionRequestResult(String permission, boolean granted) {

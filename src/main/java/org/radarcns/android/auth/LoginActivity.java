@@ -23,6 +23,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
 import org.radarcns.android.R;
+import org.radarcns.android.auth.portal.ManagementPortalClient;
 import org.radarcns.android.util.Boast;
 import org.radarcns.config.ServerConfig;
 import org.slf4j.Logger;
@@ -48,39 +49,19 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private boolean startedFromActivity;
     private boolean refreshOnly;
     private AppAuthState appAuth;
-    protected ServerConfig managementPortal;
-    protected ManagementPortalClient mpClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
         super.onCreate(savedInstanceBundle);
 
-        String managementPortalString;
-        boolean unsafe;
-
         if (savedInstanceBundle != null) {
             refreshOnly = savedInstanceBundle.getBoolean(ACTION_REFRESH);
             startedFromActivity = savedInstanceBundle.getBoolean(ACTION_LOGIN);
-            managementPortalString = savedInstanceBundle.getString(MANAGEMENT_PORTAL_URL_KEY, null);
-            unsafe = savedInstanceBundle.getBoolean(UNSAFE_KAFKA_CONNECTION, false);
         } else {
             Intent intent = getIntent();
             String action = intent.getAction();
             refreshOnly = Objects.equals(action, ACTION_REFRESH);
             startedFromActivity = Objects.equals(action, ACTION_LOGIN);
-            managementPortalString = intent.getStringExtra(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY);
-            unsafe = intent.getBooleanExtra(RADAR_PREFIX + UNSAFE_KAFKA_CONNECTION, false);
-        }
-
-        if (managementPortalString != null && !managementPortalString.isEmpty()) {
-            try {
-                managementPortal = new ServerConfig(managementPortalString);
-                managementPortal.setUnsafe(unsafe);
-                mpClient = new ManagementPortalClient(managementPortal);
-            } catch (MalformedURLException e) {
-                logger.error("Cannot create ManagementPortal client from url {}",
-                        managementPortalString);
-            }
         }
 
         if (startedFromActivity) {
@@ -92,6 +73,10 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
         if (loginManagers.isEmpty()) {
             throw new IllegalStateException("Cannot use login managers, none are configured.");
+        }
+        if (appAuth.isValid()) {
+            loginSucceeded(null, appAuth);
+            return;
         }
         for (LoginManager manager : loginManagers) {
             AppAuthState localState = manager.refresh();
@@ -110,10 +95,6 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     public void onSaveInstanceState(Bundle outState) {
         outState.putBoolean(ACTION_REFRESH, refreshOnly);
         outState.putBoolean(ACTION_LOGIN, startedFromActivity);
-        if (managementPortal != null) {
-            outState.putString(MANAGEMENT_PORTAL_URL_KEY, managementPortal.getUrlString());
-            outState.putBoolean(UNSAFE_KAFKA_CONNECTION, managementPortal.isUnsafe());
-        }
 
         // call superclass to save any view hierarchy
         super.onSaveInstanceState(outState);
@@ -149,24 +130,9 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         });
     }
 
-    protected AppAuthState updateMpInfo(LoginManager manager, AppAuthState appAuthState) throws IOException {
-        if (mpClient == null) {
-            return appAuthState;
-        } else {
-            return mpClient.getSubject(appAuthState);
-        }
-    }
-
     /** Call when the entire login procedure succeeded. */
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         logger.info("Login succeeded");
-        try {
-            appAuth = updateMpInfo(manager, appAuthState);
-        } catch (IOException ex) {
-            logger.error("Failed to get subject metadata");
-            loginFailed(manager, ex);
-            return;
-        }
         this.appAuth.addToPreferences(this);
 
         LocalBroadcastManager.getInstance(this).sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
@@ -177,20 +143,16 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         } else if (!refreshOnly) {
             logger.info("Start next activity without result");
             Intent next = new Intent(this, nextActivity());
+            Bundle extras = new Bundle();
+            this.appAuth.addToBundle(extras);
+            next.putExtras(extras);
             startActivity(next);
         }
         finish();
     }
 
-    public AppAuthState getAuthState() {
-        return appAuth;
-    }
-
     @Override
     protected void onDestroy() {
-        if (mpClient != null) {
-            mpClient.close();
-        }
         super.onDestroy();
     }
 }

@@ -1,4 +1,4 @@
-package org.radarcns.android.auth;
+package org.radarcns.android.auth.portal;
 
 import android.util.SparseArray;
 import okhttp3.mockwebserver.MockResponse;
@@ -7,6 +7,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
+import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.AppSource;
+import org.radarcns.android.util.SynchronousCallback;
 import org.radarcns.config.ServerConfig;
 
 import java.io.IOException;
@@ -14,7 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
-import static org.radarcns.android.auth.ManagementPortalClient.SOURCES_PROPERTY;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 
 public class ManagementPortalClientTest {
     private static final String EXAMPLE_REQUEST = "{\n"
@@ -97,8 +100,8 @@ public class ManagementPortalClientTest {
         JSONObject project = object.getJSONObject("project");
         JSONArray sources = object.getJSONArray("sources");
 
-        SparseArray<AppSource> deviceTypes = ManagementPortalClient.parseSourceTypes(project);
-        ArrayList<AppSource> sourceList = ManagementPortalClient.parseSources(deviceTypes, sources);
+        SparseArray<AppSource> deviceTypes = GetSubjectParser.parseSourceTypes(project);
+        ArrayList<AppSource> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
 
         AppSource expected = new AppSource(0, "p", "m", "v", true);
         expected.setSourceId("i");
@@ -114,10 +117,10 @@ public class ManagementPortalClientTest {
         JSONObject object = new JSONObject(EXAMPLE_REQUEST);
         JSONObject project = object.getJSONObject("project");
 
-        SparseArray<AppSource> deviceTypes = ManagementPortalClient.parseSourceTypes(project);
+        SparseArray<AppSource> deviceTypes = GetSubjectParser.parseSourceTypes(project);
 
         JSONArray sources = new JSONArray();
-        ArrayList<AppSource> sourceList = ManagementPortalClient.parseSources(deviceTypes, sources);
+        ArrayList<AppSource> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
 
         AppSource expected = new AppSource(0, "p", "m", "v", true);
 
@@ -132,7 +135,7 @@ public class ManagementPortalClientTest {
                 new AppSource(0, "p", "m", "v", false));
 
         JSONArray sources = new JSONArray();
-        ArrayList<AppSource> sourceList = ManagementPortalClient.parseSources(deviceTypes, sources);
+        ArrayList<AppSource> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
 
         assertEquals(Collections.emptyList(), sourceList);
     }
@@ -141,17 +144,17 @@ public class ManagementPortalClientTest {
     public void parseProjectId() throws Exception {
         JSONObject object = new JSONObject(EXAMPLE_REQUEST);
         JSONObject project = object.getJSONObject("project");
-        assertEquals("proj-name", ManagementPortalClient.parseProjectId(project));
+        assertEquals("proj-name", GetSubjectParser.parseProjectId(project));
     }
 
     @Test
     public void parseUserId() throws Exception {
         JSONObject object = new JSONObject(EXAMPLE_REQUEST);
-        assertEquals("sub-1", ManagementPortalClient.parseUserId(object));
+        assertEquals("sub-1", GetSubjectParser.parseUserId(object));
     }
 
     @Test
-    public void requestSubject() throws IOException {
+    public void requestSubject() throws IOException, InterruptedException {
         try (MockWebServer server = new MockWebServer()) {
 
             // Schedule some responses.
@@ -166,7 +169,9 @@ public class ManagementPortalClientTest {
 
             try (ManagementPortalClient client = new ManagementPortalClient(serverConfig)) {
                 AppAuthState authState = new AppAuthState.Builder().build();
-                AppAuthState retAuthState = client.getSubject(authState);
+                SynchronousCallback<AppAuthState> callback = new SynchronousCallback<>(new GetSubjectParser(authState));
+                client.getSubject(authState, callback);
+                AppAuthState retAuthState = callback.get();
 
                 AppSource expected = new AppSource(0, "p", "m", "v", true);
                 expected.setSourceId("i");
@@ -189,10 +194,11 @@ public class ManagementPortalClientTest {
 
         String body = ManagementPortalClient.sourceRegistrationBody(source).toString();
         JSONObject object = new JSONObject(body);
-        assertEquals("something", object.getString("sourceName"));
-        assertEquals(0, object.getInt("deviceTypeId"));
+//        TODO: fix when managementportal accepts different source names
+//        assertEquals("something", object.getString("sourceName"));
+        assertEquals(0, object.getInt("sourceTypeId"));
         JSONObject attr = object.getJSONObject("attributes");
-        assertEquals(3, object.names().length());
+        assertEquals(2, object.names().length());
         assertEquals("0.11", attr.getString("firmware"));
         assertEquals(1, attr.names().length());
     }
