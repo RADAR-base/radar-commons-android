@@ -74,7 +74,7 @@ allprojects {
             exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
             exclude group: 'org.json', module: 'json'
         }
-        compile 'org.radarcns:radar-schemas-commons:0.2.1'
+        compile 'org.radarcns:radar-schemas-commons:0.2.2'
 
         testCompile 'junit:junit:4.12'
         testCompile 'org.slf4j:slf4j-simple:1.7.21'
