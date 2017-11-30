@@ -67,7 +67,7 @@ allprojects {
         compile 'com.squareup.okhttp3:okhttp:3.8.0'
         compile 'com.google.firebase:firebase-config:11.0.4'
 
-        compile('org.radarcns:radar-commons:0.6.2-SNAPSHOT') {
+        compile('org.radarcns:radar-commons:0.6.2') {
             exclude group: 'io.confluent', module: 'kafka-avro-serializer'
             exclude group: 'org.apache.kafka', module: 'kafka-clients'
             exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
