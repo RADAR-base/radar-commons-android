@@ -386,4 +386,12 @@ public abstract class MainActivity extends Activity {
     public IRadarService getRadarService() {
         return radarService;
     }
+
+    public String getUserId() {
+        return RadarConfiguration.getInstance().getString(RadarConfiguration.USER_ID_KEY, null);
+    }
+
+    public String getProjectId() {
+        return RadarConfiguration.getInstance().getString(RadarConfiguration.PROJECT_ID_KEY, null);
+    }
 }
