@@ -15,10 +15,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 
-class GetSubjectParser implements AuthStringParser {
+public class GetSubjectParser implements AuthStringParser {
     private static final Logger logger = LoggerFactory.getLogger(GetSubjectParser.class);
+    private static final String MP_ATTRIBUTES = GetSubjectParser.class.getName() + ".attributes";
     private final AppAuthState state;
 
     public GetSubjectParser(AppAuthState state) {
@@ -34,11 +34,32 @@ class GetSubjectParser implements AuthStringParser {
 
             SparseArray<AppSource> sourceTypes = parseSourceTypes(project);
 
-            return state.newBuilder()
+            AppAuthState.Builder builder = state.newBuilder()
                     .property(ManagementPortalClient.SOURCES_PROPERTY, parseSources(sourceTypes, sources))
                     .userId(parseUserId(object))
-                    .projectId(parseProjectId(project))
-                    .build();
+                    .projectId(parseProjectId(project));
+
+            Object attrObjects = object.opt("attributes");
+            if (attrObjects != null) {
+                if (attrObjects instanceof JSONArray) {
+                    JSONArray attrObjectArray = (JSONArray) attrObjects;
+                    if (attrObjectArray.length() > 0) {
+                        HashMap<String, String> attributes = new HashMap<>();
+                        for (int i = 0; i < attrObjectArray.length(); i++) {
+                            JSONObject attrObject = attrObjectArray.getJSONObject(i);
+                            attributes.put(attrObject.getString("key"),
+                                    attrObject.getString("value"));
+                        }
+                        builder.property(MP_ATTRIBUTES, attributes);
+                    }
+                } else {
+                    HashMap<String, String> attributes = attributesToMap((JSONObject) attrObjects);
+                    if (attributes != null) {
+                        builder.property(MP_ATTRIBUTES, attributes);
+                    }
+                }
+            }
+            return builder.build();
         } catch (JSONException e) {
             throw new IOException(
                     "ManagementPortal did not give a valid response: " + bodyString, e);
@@ -103,11 +124,11 @@ class GetSubjectParser implements AuthStringParser {
         return actualSources;
     }
 
-    static Map<String, String> attributesToMap(JSONObject attrObj) throws JSONException {
-        if (attrObj == null) {
+    static HashMap<String, String> attributesToMap(JSONObject attrObj) throws JSONException {
+        if (attrObj == null || attrObj.length() == 0) {
             return null;
         }
-        Map<String, String> attrs = new HashMap<>();
+        HashMap<String, String> attrs = new HashMap<>();
         for (Iterator<String> it = attrObj.keys(); it.hasNext(); ) {
             String key = it.next();
             attrs.put(key, attrObj.getString(key));
@@ -127,5 +148,17 @@ class GetSubjectParser implements AuthStringParser {
      */
     static String parseUserId(JSONObject object) throws JSONException {
         return object.getString("login");
+    }
+
+    public static String getHumanReadableUserId(AppAuthState state) {
+        @SuppressWarnings("unchecked")
+        HashMap<String, String> attr = (HashMap<String, String>) state.getProperty(MP_ATTRIBUTES);
+        if (attr != null) {
+            String humanReadable = attr.get("Human-Readable-Identifier");
+            if (humanReadable != null && !humanReadable.isEmpty()) {
+                return humanReadable;
+            }
+        }
+        return state.getUserId();
     }
 }

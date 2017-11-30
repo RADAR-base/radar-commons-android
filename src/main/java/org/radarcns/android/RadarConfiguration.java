@@ -118,15 +118,34 @@ public class RadarConfiguration {
 
     public static final long FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12*60*60 * 1000L;
     private final Handler handler;
-    private OnCompleteListener<Void> onFetchCompleteHandler;
+    private final OnCompleteListener<Void> onFetchCompleteHandler;
     private final Map<String, Object> localConfiguration;
 
-    private RadarConfiguration(@NonNull Context context, @NonNull FirebaseRemoteConfig config) {
+    private RadarConfiguration(@NonNull final Context context, @NonNull FirebaseRemoteConfig config) {
         this.config = config;
-        this.onFetchCompleteHandler = null;
 
         this.localConfiguration = new ConcurrentHashMap<>();
         this.handler = new Handler();
+
+        this.onFetchCompleteHandler = new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                if (task.isSuccessful()) {
+                    status = FirebaseStatus.FETCHED;
+                    // Once the config is successfully fetched it must be
+                    // activated before newly fetched values are returned.
+                    activateFetched();
+
+                    logger.info("Remote Config: Activate success.");
+                    // Set global properties.
+                    logger.info("RADAR configuration changed: {}", RadarConfiguration.this);
+                    context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+                } else {
+                    status = FirebaseStatus.ERROR;
+                    logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
+                }
+            }
+        };
 
         GoogleApiAvailability googleApi = GoogleApiAvailability.getInstance();
         if (googleApi.isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS) {
@@ -173,23 +192,6 @@ public class RadarConfiguration {
                 config.setDefaults(defaultSettings);
 
                 instance = new RadarConfiguration(context, config);
-                instance.onFetchCompleteHandler = new OnCompleteListener<Void>() {
-                    @Override
-                    public void onComplete(@NonNull Task<Void> task) {
-                        if (task.isSuccessful()) {
-                            // Once the config is successfully fetched it must be
-                            // activated before newly fetched values are returned.
-                            instance.activateFetched();
-
-                            logger.info("Remote Config: Activate success.");
-                            // Set global properties.
-                            logger.info("RADAR configuration changed: {}", instance);
-                            context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
-                        } else {
-                            logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
-                        }
-                    }
-                };
                 instance.fetch();
             }
             return instance;
@@ -247,9 +249,7 @@ public class RadarConfiguration {
                     }
                 }
             });
-            if (onFetchCompleteHandler != null) {
-                task.addOnCompleteListener(onFetchCompleteHandler);
-            }
+            task.addOnCompleteListener(onFetchCompleteHandler);
         }
         return task;
     }

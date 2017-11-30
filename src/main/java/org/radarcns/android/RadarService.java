@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.Manifest.permission.*;
 import static org.radarcns.android.RadarConfiguration.*;
+import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
@@ -84,8 +85,6 @@ public class RadarService extends Service implements ServerStatusListener {
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters = new HashMap<>();
-
-    private boolean isForcedDisconnected; // TODO: Make working or remove
 
     /** Defines callbacks for service binding, passed to bindService() */
     private final BroadcastReceiver  bluetoothReceiver = new BroadcastReceiver() {
@@ -224,7 +223,11 @@ public class RadarService extends Service implements ServerStatusListener {
         mainActivityClass = extras.getString(EXTRA_MAIN_ACTIVITY);
         loginActivityClass = extras.getString(EXTRA_LOGIN_ACTIVITY);
 
-        authState = AppAuthState.Builder.from(this).build();
+        if (intent == null) {
+            authState = AppAuthState.Builder.from(this).build();
+        } else {
+            authState = AppAuthState.Builder.from(extras).build();
+        }
         logger.info("Auth state: {}", authState);
 
         configure();
@@ -252,6 +255,19 @@ public class RadarService extends Service implements ServerStatusListener {
                         .setContentText("Open RADAR app")
                         .setContentIntent(PendingIntent.getActivity(this, 0, new Intent().setComponent(new ComponentName(this, mainActivityClass)), 0))
                         .build());
+
+        if (authState.getProperty(SOURCES_PROPERTY) == null && ManagementPortalService.isEnabled()) {
+            ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
+                @Override
+                protected void onReceiveResult(int resultCode, Bundle resultData) {
+                    super.onReceiveResult(resultCode, resultData);
+                    if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
+                        authState = AppAuthState.Builder.from(resultData).build();
+                        configure();
+                    }
+                }
+            });
+        }
 
         return START_STICKY;
     }
@@ -451,7 +467,7 @@ public class RadarService extends Service implements ServerStatusListener {
     protected void updateAuthState(AppAuthState authState) {
         this.authState = authState;
         RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-        RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+        RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
         configure();
     }
 
@@ -544,9 +560,6 @@ public class RadarService extends Service implements ServerStatusListener {
 
 
     protected void startScanning() {
-        if (isForcedDisconnected) {
-            return;
-        }
         requestedBt = false;
         for (DeviceServiceProvider<?> provider : mConnections) {
             DeviceServiceConnection connection = provider.getConnection();

@@ -93,7 +93,9 @@ public class AppSource implements Parcelable, Serializable {
 
     public void setAttributes(Map<? extends String, ? extends String> attributes) {
         this.attributes.clear();
-        this.attributes.putAll(attributes);
+        if (attributes != null) {
+            this.attributes.putAll(attributes);
+        }
     }
 
     @Override

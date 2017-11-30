@@ -38,7 +38,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
-import org.radarcns.android.util.BundleSerialization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +50,7 @@ import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
+import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
@@ -108,12 +108,11 @@ public abstract class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         Bundle extras;
-        if (savedInstanceState != null) {
-            extras = savedInstanceState;
+        if (getIntent() == null || getIntent().getExtras() == null) {
+            authState = AppAuthState.Builder.from(this).build();
         } else {
-            extras = BundleSerialization.getPersistentExtras(getIntent(), this);
+            authState = AppAuthState.Builder.from(getIntent().getExtras()).build();
         }
-        authState = AppAuthState.Builder.from(extras).build();
 
         if (!authState.isValid()) {
             startLogin(false);
@@ -130,7 +129,8 @@ public abstract class MainActivity extends Activity {
         if (authState.getProjectId() != null) {
             radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
         }
-        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
+
         logger.info("RADAR configuration at create: {}", radarConfiguration);
         onConfigChanged();
 
@@ -260,7 +260,7 @@ public abstract class MainActivity extends Activity {
                 }
                 authState = AppAuthState.Builder.from(result.getExtras()).build();
                 RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-                RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+                RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
                 onConfigChanged();
                 break;
             }
@@ -273,14 +273,6 @@ public abstract class MainActivity extends Activity {
                 break;
             }
         }
-    }
-
-
-    @Override
-    public void onSaveInstanceState(Bundle outState) {
-        authState.addToBundle(outState);
-        // call superclass to save any view hierarchy
-        super.onSaveInstanceState(outState);
     }
 
     private void onPermissionRequestResult(String permission, boolean granted) {

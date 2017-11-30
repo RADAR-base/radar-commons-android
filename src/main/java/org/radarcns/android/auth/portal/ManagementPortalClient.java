@@ -12,6 +12,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
+import org.radarcns.android.auth.AuthStringParser;
+import org.radarcns.android.util.ResponseHandler;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.rest.RestClient;
@@ -43,14 +45,13 @@ public class ManagementPortalClient implements Closeable {
      * @throws IOException if the management portal could not be reached or it gave an erroneous
      *                     response.
      */
-    public void getSubject(AppAuthState state, Callback callback) throws IOException {
+    public AppAuthState getSubject(AppAuthState state, AuthStringParser parser) throws IOException {
         Request request = client.requestBuilder("api/subjects/" + state.getUserId())
                 .headers(state.getOkHttpHeaders())
                 .header("Accept", APPLICATION_JSON)
                 .build();
 
-
-        client.request(request, callback);
+        return ResponseHandler.handle(client.request(request), parser);
     }
 
     /** Register a source with the Management Portal. */
@@ -132,7 +133,7 @@ public class ManagementPortalClient implements Closeable {
         client.close();
     }
 
-    public void refreshToken(AppAuthState authState, String clientId, String clientSecret, Callback callback) throws IOException, JSONException {
+    public AppAuthState refreshToken(AppAuthState authState, String clientId, String clientSecret, AuthStringParser parser) throws IOException, JSONException {
         try {
             String refreshToken = (String)authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
             if (refreshToken == null) {
@@ -149,7 +150,7 @@ public class ManagementPortalClient implements Closeable {
                     .addHeader("Authorization", Credentials.basic(clientId, clientSecret))
                     .build();
 
-            client.request(request, callback);
+            return ResponseHandler.handle(client.request(request), parser);
         } catch (MalformedURLException e) {
             throw new IllegalStateException("Failed to create request from ManagementPortal url", e);
         }

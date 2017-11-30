@@ -11,7 +11,6 @@ import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
-import org.radarcns.android.util.SynchronousCallback;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.slf4j.Logger;
@@ -71,36 +70,42 @@ public class ManagementPortalService extends IntentService {
     protected void onHandleIntent(Intent intent) {
         ensureClient();
 
+        boolean isSuccessful;
         switch (intent.getAction()) {
             case REGISTER_SOURCE_ACTION:
-                registerSource(intent);
+                isSuccessful = registerSource(intent);
                 break;
             case REFRESH_TOKEN_ACTION:
-                refreshToken(intent);
+                isSuccessful = refreshToken(intent);
                 break;
             case GET_STATE_ACTION:
-                getState(intent);
+                isSuccessful = getState(intent);
                 break;
             default:
-                // do nothing
+                logger.warn("Cannot complete action {}: action unknown", intent.getAction());
+                isSuccessful = false;
                 break;
+        }
+        if (isSuccessful) {
+            authState.addToPreferences(this);
         }
     }
 
-    private void getState(Intent intent) {
+    private boolean getState(Intent intent) {
         ResultReceiver receiver = intent.getParcelableExtra(RESULT_RECEIVER_PROPERTY);
         Bundle result = new Bundle();
         authState.addToBundle(result);
         receiver.send(MANAGEMENT_PORTAL_REFRESH, result);
+        return true;
     }
 
-    private void refreshToken(Intent intent) {
+    private boolean refreshToken(Intent intent) {
         logger.info("Refreshing JWT");
         ResultReceiver receiver = intent.getParcelableExtra(RESULT_RECEIVER_PROPERTY);
         try {
             String refreshToken = intent.getStringExtra(REFRESH_TOKEN_KEY);
             if (refreshToken != null) {
-                authState.newBuilder()
+                authState = authState.newBuilder()
                         .property(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
                         .build();
             }
@@ -110,19 +115,19 @@ public class ManagementPortalService extends IntentService {
             } else {
                 parser = new AccessTokenParser(authState);
             }
-            SynchronousCallback<AppAuthState> callback = new SynchronousCallback<>(parser);
-            client.refreshToken(authState, clientId, clientSecret, callback);
-            authState = callback.get();
+            authState = client.refreshToken(authState, clientId, clientSecret, parser);
 
             Bundle result = new Bundle();
             authState.addToBundle(result);
             receiver.send(MANAGEMENT_PORTAL_REFRESH, result);
-        } catch (JSONException | IOException | InterruptedException e) {
+            return true;
+        } catch (JSONException | IOException e) {
             receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
+            return false;
         }
     }
 
-    private void registerSource(Intent intent) {
+    private boolean registerSource(Intent intent) {
         logger.info("Handling source registration");
         AppSource source = intent.getParcelableExtra(SOURCE_KEY);
 
@@ -159,20 +164,27 @@ public class ManagementPortalService extends IntentService {
                 if (!containsSource) {
                     authState.invalidate(getApplicationContext());
                 }
-
-                Bundle result = new Bundle();
-                authState.addToBundle(result);
-                result.putParcelable(SOURCE_KEY, resultSource);
-                receiver.send(MANAGEMENT_PORTAL_REGISTRATION, result);
             } catch (AuthenticationException ex) {
-                authState.invalidate(getApplicationContext());
+                authState.invalidate(this);
+                logger.error("Authentication error; failed to register source {} of type {} {}",
+                        source.getSourceName(), source.getSourceTypeProducer(),
+                        source.getSourceTypeModel(), ex);
+                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                return false;
             } catch (IOException | JSONException ex) {
                 logger.error("Failed to register source {} of type {} {}",
                         source.getSourceName(), source.getSourceTypeProducer(),
                         source.getSourceTypeModel(), ex);
                 receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                return false;
             }
         }
+
+        Bundle result = new Bundle();
+        authState.addToBundle(result);
+        result.putParcelable(SOURCE_KEY, resultSource);
+        receiver.send(MANAGEMENT_PORTAL_REGISTRATION, result);
+        return true;
     }
 
     private void ensureClient() {
@@ -188,7 +200,7 @@ public class ManagementPortalService extends IntentService {
                 portalConfig.setUnsafe(unsafe);
                 client = new ManagementPortalClient(portalConfig);
             } catch (MalformedURLException ex) {
-                logger.error("Management portal URL {} is invalid", url, ex);
+                throw new IllegalStateException("Management portal URL " + url + " is invalid", ex);
             }
             clientId = config.getString(OAUTH2_CLIENT_ID);
             clientSecret = config.getString(OAUTH2_CLIENT_SECRET);

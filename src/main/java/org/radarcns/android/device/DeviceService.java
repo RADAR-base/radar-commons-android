@@ -543,6 +543,13 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     public void registerDevice(String sourceIdHint, String name, Map<String, String> attributes) {
         logger.info("Registering source {} with attributes {}", source, attributes);
+        if (source.getSourceId() != null) {
+            DeviceManager<T> localManager = getDeviceManager();
+            if (localManager != null) {
+                localManager.didRegister(source);
+            }
+            return;
+        }
         source.setSourceName(name);
         source.setAttributes(attributes);
         // not yet registered

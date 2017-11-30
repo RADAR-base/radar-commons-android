@@ -11,6 +11,7 @@ import org.radarcns.android.auth.LoginListener;
 import org.radarcns.android.auth.LoginManager;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
@@ -18,6 +19,7 @@ import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMEN
 public class ManagementPortalLoginManager implements LoginManager {
     private String refreshToken;
     private final LoginListener listener;
+    private final AtomicBoolean isRefreshing = new AtomicBoolean(false);
 
     public ManagementPortalLoginManager(LoginListener listener, AppAuthState state) {
         this.listener = listener;
@@ -31,7 +33,7 @@ public class ManagementPortalLoginManager implements LoginManager {
 
     @Override
     public AppAuthState refresh() {
-        if (refreshToken != null && ManagementPortalService.isEnabled()) {
+        if (refreshToken != null && ManagementPortalService.isEnabled() && isRefreshing.compareAndSet(false, true)) {
             ManagementPortalService.requestAccessToken((Context)listener, refreshToken, true, new ResultReceiver(new Handler(Looper.getMainLooper())) {
                 @Override
                 protected void onReceiveResult(int resultCode, Bundle resultData) {
@@ -41,6 +43,7 @@ public class ManagementPortalLoginManager implements LoginManager {
                     } else {
                         listener.loginFailed(ManagementPortalLoginManager.this, new IOException("Cannot reach management portal"));
                     }
+                    isRefreshing.set(false);
                 }
             });
         }

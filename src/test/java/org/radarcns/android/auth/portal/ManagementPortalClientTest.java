@@ -9,7 +9,6 @@ import org.json.JSONObject;
 import org.junit.Test;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
-import org.radarcns.android.util.SynchronousCallback;
 import org.radarcns.config.ServerConfig;
 
 import java.io.IOException;
@@ -169,9 +168,7 @@ public class ManagementPortalClientTest {
 
             try (ManagementPortalClient client = new ManagementPortalClient(serverConfig)) {
                 AppAuthState authState = new AppAuthState.Builder().build();
-                SynchronousCallback<AppAuthState> callback = new SynchronousCallback<>(new GetSubjectParser(authState));
-                client.getSubject(authState, callback);
-                AppAuthState retAuthState = callback.get();
+                AppAuthState retAuthState = client.getSubject(authState, new GetSubjectParser(authState));
 
                 AppSource expected = new AppSource(0, "p", "m", "v", true);
                 expected.setSourceId("i");

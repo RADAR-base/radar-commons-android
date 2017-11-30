@@ -42,6 +42,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_UNKNOWN;
 
@@ -127,6 +128,10 @@ public final class AppAuthState {
 
     public boolean isValid() {
         return expiration > System.currentTimeMillis();
+    }
+
+    public boolean isValidFor(long time, TimeUnit unit) {
+        return expiration - unit.toMillis(time) > System.currentTimeMillis();
     }
 
     public boolean isInvalidated() { return expiration == 0L; }
@@ -355,16 +360,14 @@ public final class AppAuthState {
 
     @Override
     public String toString() {
-        final StringBuffer sb = new StringBuffer("AppAuthState{");
-        sb.append("projectId='").append(projectId).append('\'');
-        sb.append(", \nuserId='").append(userId).append('\'');
-        sb.append(", \ntoken='").append(token).append('\'');
-        sb.append(", \ntokenType=").append(tokenType);
-        sb.append(", \nexpiration=").append(expiration);
-        sb.append(", \nlastUpdate=").append(lastUpdate);
-        sb.append(", \nproperties=").append(properties);
-        sb.append(", \nheaders=").append(headers);
-        sb.append("\n");
-        return sb.toString();
+        return "AppAuthState{" + "projectId='" + projectId + '\'' +
+                ", \nuserId='" + userId + '\'' +
+                ", \ntoken='" + token + '\'' +
+                ", \ntokenType=" + tokenType +
+                ", \nexpiration=" + expiration +
+                ", \nlastUpdate=" + lastUpdate +
+                ", \nproperties=" + properties +
+                ", \nheaders=" + headers +
+                "\n";
     }
 }
