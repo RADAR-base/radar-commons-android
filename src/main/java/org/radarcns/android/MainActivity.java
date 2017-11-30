@@ -18,9 +18,18 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.*;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
-import android.os.*;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.IBinder;
 import android.os.Process;
 import android.provider.Settings;
 import android.support.annotation.CallSuper;
@@ -32,13 +41,16 @@ import org.radarcns.android.auth.LoginActivity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
+import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
@@ -95,7 +107,13 @@ public abstract class MainActivity extends Activity {
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        authState = AppAuthState.Builder.from(this).build();
+        Bundle extras;
+        if (getIntent() == null || getIntent().getExtras() == null) {
+            authState = AppAuthState.Builder.from(this).build();
+        } else {
+            authState = AppAuthState.Builder.from(getIntent().getExtras()).build();
+        }
+
         if (!authState.isValid()) {
             startLogin(false);
             return;
@@ -111,7 +129,8 @@ public abstract class MainActivity extends Activity {
         if (authState.getProjectId() != null) {
             radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
         }
-        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
+
         logger.info("RADAR configuration at create: {}", radarConfiguration);
         onConfigChanged();
 
@@ -124,10 +143,11 @@ public abstract class MainActivity extends Activity {
         registerReceiver(configurationBroadcastReceiver,
                 new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
 
-        startService(new Intent(this, radarService())
-                .putExtra(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName())
-                .putExtra(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName()));
-
+        Bundle extras = new Bundle();
+        authState.addToBundle(extras);
+        extras.putString(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName());
+        extras.putString(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName());
+        startService(new Intent(this, radarService()).putExtras(extras));
 
         // Start the UI thread
         uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
@@ -240,7 +260,7 @@ public abstract class MainActivity extends Activity {
                 }
                 authState = AppAuthState.Builder.from(result.getExtras()).build();
                 RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-                RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, authState.getUserId());
+                RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
                 onConfigChanged();
                 break;
             }
@@ -365,5 +385,13 @@ public abstract class MainActivity extends Activity {
 
     public IRadarService getRadarService() {
         return radarService;
+    }
+
+    public String getUserId() {
+        return RadarConfiguration.getInstance().getString(RadarConfiguration.USER_ID_KEY, null);
+    }
+
+    public String getProjectId() {
+        return RadarConfiguration.getInstance().getString(RadarConfiguration.PROJECT_ID_KEY, null);
     }
 }

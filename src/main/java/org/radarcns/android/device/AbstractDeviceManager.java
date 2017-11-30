@@ -47,6 +47,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     private String deviceName;
     private final S service;
     private boolean closed;
+    private boolean didWarn;
 
     /**
      * AppSource manager initialization. After initialization, be sure to call
@@ -60,6 +61,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
         this.deviceName = android.os.Build.MODEL;
         this.deviceStatus = service.getState();
         closed = false;
+        didWarn = false;
     }
 
     /**
@@ -121,8 +123,9 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
         ObservationKey key = deviceStatus.getId();
         if (key.getSourceId() != null) {
             dataHandler.addMeasurement(topic, key, value);
-        } else {
+        } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
+            didWarn = true;
         }
     }
 
@@ -134,8 +137,9 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
         ObservationKey key = deviceStatus.getId();
         if (key.getSourceId() != null) {
             dataHandler.trySend(topic, offset, key, value);
-        } else {
+        } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
+            didWarn = true;
         }
     }
 
@@ -171,6 +175,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     @CallSuper
     public void didRegister(AppSource source) {
         deviceName = source.getSourceName();
+        getState().getId().setSourceId(source.getSourceId());
     }
 
     /**

@@ -43,29 +43,25 @@ import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
-import org.radarcns.android.auth.ManagementPortalService;
+import org.radarcns.android.auth.portal.ManagementPortalService;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.BundleSerialization;
-import org.radarcns.config.ServerConfig;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
-import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REGISTRATION_FAILED;
 import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
@@ -140,8 +136,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private int latestStartId = -1;
     private boolean needsBluetooth;
     private AppSource source;
-    private ServerConfig managementPortal;
-    private AppAuthState authState;
 
     @CallSuper
     @Override
@@ -481,8 +475,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     @CallSuper
     protected void onInvocation(@NonNull Bundle bundle) {
-        authState = AppAuthState.Builder.from(bundle).build();
-
         source = bundle.getParcelable(SOURCE_KEY);
         if (source == null) {
             source = new AppSource(-1L, null, null, null, true);
@@ -490,27 +482,9 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         if (source.getSourceId() != null) {
             key.setSourceId(source.getSourceId());
         }
+        AppAuthState authState = AppAuthState.Builder.from(bundle).build();
+        key.setProjectId(authState.getProjectId());
         key.setUserId(authState.getUserId());
-        String managementPortalString = bundle.getString(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, null);
-        if (managementPortalString != null) {
-            try {
-                managementPortal = new ServerConfig(managementPortalString);
-                managementPortal.setUnsafe(bundle.getBoolean(RADAR_PREFIX + UNSAFE_KAFKA_CONNECTION, false));
-            } catch (MalformedURLException ex) {
-                logger.error("ManagementPortal url {} is invalid", managementPortalString, ex);
-            }
-        }
-
-        boolean willNeedBluetooth = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false);
-        if (!willNeedBluetooth && needsBluetooth) {
-            unregisterReceiver(mBluetoothReceiver);
-            needsBluetooth = false;
-        } else if (willNeedBluetooth && !needsBluetooth) {
-            // Register for broadcasts on BluetoothAdapter state change
-            IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
-            registerReceiver(mBluetoothReceiver, filter);
-            needsBluetooth = true;
-        }
 
         setHasBluetoothPermission(bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false));
     }
@@ -568,53 +542,70 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     public void registerDevice(String sourceIdHint, String name, Map<String, String> attributes) {
+        logger.info("Registering source {} with attributes {}", source, attributes);
         if (source.getSourceId() != null) {
-            getDeviceManager().didRegister(source);
+            DeviceManager<T> localManager = getDeviceManager();
+            if (localManager != null) {
+                localManager.didRegister(source);
+            }
             return;
         }
         source.setSourceName(name);
         source.setAttributes(attributes);
-        if (managementPortal != null) {
-            Intent intent = ManagementPortalService.createRequest(this, managementPortal,
-                    source, authState, new ResultReceiver(new Handler(getMainLooper())) {
-                @Override
-                protected void onReceiveResult(int resultCode, Bundle result) {
-                    AppSource updatedSource = result.getParcelable(SOURCE_KEY);
-                    if (updatedSource == null) {
-                        // TODO: more error handling?
-                        logger.error("Failed to register source {}", source);
-                        stopDeviceManager(unsetDeviceManager());
-                        return;
+        // not yet registered
+        if (source.getSourceId() == null) {
+            if (ManagementPortalService.isEnabled()) {
+                // do registration with management portal
+                ManagementPortalService.registerSource(this, source,
+                        new ResultReceiver(new Handler(getMainLooper())) {
+                    @Override
+                    protected void onReceiveResult(int resultCode, Bundle result) {
+                        if (resultCode == MANAGEMENT_PORTAL_REGISTRATION_FAILED) {
+                            logger.error("Failed to register source");
+                            stopDeviceManager(unsetDeviceManager());
+                            return;
+                        }
+                        AppSource updatedSource = result.getParcelable(SOURCE_KEY);
+                        if (updatedSource == null) {
+                            // TODO: more error handling?
+                            logger.error("Failed to register source {}", source);
+                            stopDeviceManager(unsetDeviceManager());
+                            return;
+                        }
+                        AppAuthState auth = AppAuthState.Builder.from(result).build();
+                        if (auth.isInvalidated()) {
+                            logger.info("New source ID requires new OAuth2 JWT token.");
+                            Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
+                            statusIntent.putExtra(SERVER_STATUS_CHANGED, ServerStatusListener.Status.UNAUTHORIZED.ordinal());
+                            statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
+                            sendBroadcast(statusIntent);
+                        }
+                        key.setProjectId(auth.getProjectId());
+                        key.setUserId(auth.getUserId());
+                        key.setSourceId(updatedSource.getSourceId());
+                        source.setSourceId(updatedSource.getSourceId());
+                        source.setSourceName(updatedSource.getSourceName());
+                        source.setExpectedSourceName(updatedSource.getExpectedSourceName());
+                        DeviceManager<T> localManager = getDeviceManager();
+                        if (localManager != null) {
+                            localManager.didRegister(source);
+                        }
                     }
-                    AppAuthState auth = AppAuthState.Builder.from(result).build();
-                    if (auth.isInvalidated()) {
-                        logger.info("New source ID requires new OAuth2 JWT token.");
-                        Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
-                        statusIntent.putExtra(SERVER_STATUS_CHANGED, ServerStatusListener.Status.UNAUTHORIZED.ordinal());
-                        statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-                        sendBroadcast(statusIntent);
-                    }
-                    key.setProjectId(auth.getProjectId());
-                    key.setUserId(auth.getUserId());
-                    key.setSourceId(updatedSource.getSourceId());
-                    source.setSourceId(updatedSource.getSourceId());
-                    source.setSourceName(updatedSource.getSourceName());
-                    source.setExpectedSourceName(updatedSource.getExpectedSourceName());
-                    DeviceManager<T> localManager = getDeviceManager();
-                    if (localManager != null) {
-                        localManager.didRegister(source);
-                    }
-                }
-            });
-            startService(intent);
-        } else {
-            if (sourceIdHint == null) {
-                source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
+                });
+                return;
             } else {
-                source.setSourceId(sourceIdHint);
+                // self-register
+                if (sourceIdHint == null) {
+                    source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
+                } else {
+                    source.setSourceId(sourceIdHint);
+                }
+                key.setSourceId(source.getSourceId());
             }
-            key.setSourceId(source.getSourceId());
-            getDeviceManager().didRegister(source);
+        }
+        DeviceManager<T> localManager = getDeviceManager();
+        if (localManager != null) {
+            localManager.didRegister(source);
         }
     }
 

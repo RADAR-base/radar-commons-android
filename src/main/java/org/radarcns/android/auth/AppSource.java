@@ -11,10 +11,10 @@ import java.util.Map;
 import java.util.Objects;
 
 public class AppSource implements Parcelable, Serializable {
-    private final long deviceTypeId;
-    private final String deviceProducer;
-    private final String deviceModel;
-    private final String catalogVersion;
+    private final long sourceTypeId;
+    private final String sourceTypeProducer;
+    private final String sourceTypeModel;
+    private final String sourceTypeCatalogVersion;
     private final boolean dynamicRegistration;
     private String sourceId;
     private String sourceName;
@@ -46,24 +46,24 @@ public class AppSource implements Parcelable, Serializable {
 
     public AppSource(long deviceTypeId, String deviceProducer, String deviceModel, String catalogVersion,
             boolean dynamicRegistration) {
-        this.deviceTypeId = deviceTypeId;
-        this.deviceProducer = deviceProducer;
-        this.deviceModel = deviceModel;
-        this.catalogVersion = catalogVersion;
+        this.sourceTypeId = deviceTypeId;
+        this.sourceTypeProducer = deviceProducer;
+        this.sourceTypeModel = deviceModel;
+        this.sourceTypeCatalogVersion = catalogVersion;
         this.dynamicRegistration = dynamicRegistration;
         this.attributes = new HashMap<>();
     }
 
-    public String getDeviceProducer() {
-        return deviceProducer;
+    public String getSourceTypeProducer() {
+        return sourceTypeProducer;
     }
 
-    public String getDeviceModel() {
-        return deviceModel;
+    public String getSourceTypeModel() {
+        return sourceTypeModel;
     }
 
-    public String getCatalogVersion() {
-        return catalogVersion;
+    public String getSourceTypeCatalogVersion() {
+        return sourceTypeCatalogVersion;
     }
 
     public boolean hasDynamicRegistration() {
@@ -93,7 +93,9 @@ public class AppSource implements Parcelable, Serializable {
 
     public void setAttributes(Map<? extends String, ? extends String> attributes) {
         this.attributes.clear();
-        this.attributes.putAll(attributes);
+        if (attributes != null) {
+            this.attributes.putAll(attributes);
+        }
     }
 
     @Override
@@ -105,11 +107,11 @@ public class AppSource implements Parcelable, Serializable {
             return false;
         }
         AppSource appSource = (AppSource) o;
-        return deviceTypeId == appSource.deviceTypeId
+        return sourceTypeId == appSource.sourceTypeId
                 && dynamicRegistration == appSource.dynamicRegistration
-                && Objects.equals(deviceProducer, appSource.deviceProducer)
-                && Objects.equals(deviceModel, appSource.deviceModel)
-                && Objects.equals(catalogVersion, appSource.catalogVersion)
+                && Objects.equals(sourceTypeProducer, appSource.sourceTypeProducer)
+                && Objects.equals(sourceTypeModel, appSource.sourceTypeModel)
+                && Objects.equals(sourceTypeCatalogVersion, appSource.sourceTypeCatalogVersion)
                 && Objects.equals(sourceId, appSource.sourceId)
                 && Objects.equals(sourceName, appSource.sourceName)
                 && Objects.equals(expectedSourceName, appSource.expectedSourceName)
@@ -118,17 +120,17 @@ public class AppSource implements Parcelable, Serializable {
 
     @Override
     public int hashCode() {
-        return Objects.hash(deviceTypeId, deviceProducer, deviceModel, catalogVersion,
+        return Objects.hash(sourceTypeId, sourceTypeProducer, sourceTypeModel, sourceTypeCatalogVersion,
                 dynamicRegistration, sourceId, sourceName, expectedSourceName, attributes);
     }
 
     @Override
     public String toString() {
         return "AppSource{"
-                + "deviceTypeId='" + deviceTypeId + '\''
-                + ", deviceProducer='" + deviceProducer + '\''
-                + ", deviceModel='" + deviceModel + '\''
-                + ", catalogVersion='" + catalogVersion + '\''
+                + "sourceTypeId='" + sourceTypeId + '\''
+                + ", sourceTypeProducer='" + sourceTypeProducer + '\''
+                + ", sourceTypeModel='" + sourceTypeModel + '\''
+                + ", sourceTypeCatalogVersion='" + sourceTypeCatalogVersion + '\''
                 + ", dynamicRegistration=" + dynamicRegistration
                 + ", sourceId='" + sourceId + '\''
                 + ", sourceName='" + sourceName + '\''
@@ -144,10 +146,10 @@ public class AppSource implements Parcelable, Serializable {
 
     @Override
     public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeLong(deviceTypeId);
-        parcel.writeString(deviceProducer);
-        parcel.writeString(deviceModel);
-        parcel.writeString(catalogVersion);
+        parcel.writeLong(sourceTypeId);
+        parcel.writeString(sourceTypeProducer);
+        parcel.writeString(sourceTypeModel);
+        parcel.writeString(sourceTypeCatalogVersion);
         parcel.writeByte(dynamicRegistration ? (byte)1 : (byte)0);
         parcel.writeString(sourceId);
         parcel.writeString(sourceName);
@@ -167,7 +169,7 @@ public class AppSource implements Parcelable, Serializable {
         this.sourceName = sourceName;
     }
 
-    public long getDeviceTypeId() {
-        return deviceTypeId;
+    public long getSourceTypeId() {
+        return sourceTypeId;
     }
 }

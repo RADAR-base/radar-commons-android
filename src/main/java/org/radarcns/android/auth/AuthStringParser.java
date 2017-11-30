@@ -17,10 +17,13 @@
 package org.radarcns.android.auth;
 
 import android.support.annotation.NonNull;
+import org.radarcns.android.util.Parser;
 
-/** AuthStringProcessor to parse a string with some form of authentication and convert it to a
+import java.io.IOException;
+
+/** AuthStringProcessor to parse a string with some form of authentication and parse it to a
  * proper state. */
-public interface AuthStringParser {
+public interface AuthStringParser extends Parser<String, AppAuthState> {
     /**
      * Parse an authentication state from a string.
      * @param authString string that contains some form of identification.
@@ -28,5 +31,6 @@ public interface AuthStringParser {
      *         external processing.
      * @throws IllegalArgumentException if the string is not a valid authentication string
      */
-    AppAuthState parse(@NonNull String authString);
+    @Override
+    AppAuthState parse(@NonNull String authString) throws IOException;
 }
