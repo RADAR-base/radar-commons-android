@@ -68,18 +68,19 @@ public class ManagementPortalService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
-        ensureClient();
-
         boolean isSuccessful;
+        Bundle extras = intent.getExtras();
+        extras.setClassLoader(ManagementPortalService.class.getClassLoader());
+
         switch (intent.getAction()) {
             case REGISTER_SOURCE_ACTION:
-                isSuccessful = registerSource(intent);
+                isSuccessful = registerSource(extras);
                 break;
             case REFRESH_TOKEN_ACTION:
-                isSuccessful = refreshToken(intent);
+                isSuccessful = refreshToken(extras);
                 break;
             case GET_STATE_ACTION:
-                isSuccessful = getState(intent);
+                isSuccessful = getState(extras);
                 break;
             default:
                 logger.warn("Cannot complete action {}: action unknown", intent.getAction());
@@ -91,26 +92,28 @@ public class ManagementPortalService extends IntentService {
         }
     }
 
-    private boolean getState(Intent intent) {
-        ResultReceiver receiver = intent.getParcelableExtra(RESULT_RECEIVER_PROPERTY);
+    private boolean getState(Bundle extras) {
+        ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         Bundle result = new Bundle();
         authState.addToBundle(result);
         receiver.send(MANAGEMENT_PORTAL_REFRESH, result);
         return true;
     }
 
-    private boolean refreshToken(Intent intent) {
+    private boolean refreshToken(Bundle extras) {
         logger.info("Refreshing JWT");
-        ResultReceiver receiver = intent.getParcelableExtra(RESULT_RECEIVER_PROPERTY);
+        ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         try {
-            String refreshToken = intent.getStringExtra(REFRESH_TOKEN_KEY);
+            ensureClient();
+
+            String refreshToken = extras.getString(REFRESH_TOKEN_KEY);
             if (refreshToken != null) {
                 authState = authState.newBuilder()
                         .property(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
                         .build();
             }
             AuthStringParser parser;
-            if (intent.getBooleanExtra(UPDATE_SUBJECT_KEY, false)) {
+            if (extras.getBoolean(UPDATE_SUBJECT_KEY, false)) {
                 parser = new SubjectTokenParser(client, authState);
             } else {
                 parser = new AccessTokenParser(authState);
@@ -124,18 +127,26 @@ public class ManagementPortalService extends IntentService {
         } catch (JSONException | IOException e) {
             receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
             return false;
+        } catch (IllegalArgumentException ex) {
+            authState.invalidate(this);
+            logger.error("ManagementPortal error; firebase settings incomplete", ex);
+            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
+            return false;
         }
+
     }
 
-    private boolean registerSource(Intent intent) {
+    private boolean registerSource(Bundle extras) {
         logger.info("Handling source registration");
-        AppSource source = intent.getParcelableExtra(SOURCE_KEY);
+        AppSource source = extras.getParcelable(SOURCE_KEY);
 
         AppSource resultSource = sources.get((int)source.getSourceTypeId());
-        ResultReceiver receiver = intent.getParcelableExtra(RESULT_RECEIVER_PROPERTY);
+        ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
 
         if (resultSource == null) {
             try {
+                ensureClient();
+
                 resultSource = client.registerSource(authState, source);
                 sources.put((int) resultSource.getSourceTypeId(), resultSource);
                 @SuppressWarnings("unchecked")
@@ -164,6 +175,11 @@ public class ManagementPortalService extends IntentService {
                 if (!containsSource) {
                     authState.invalidate(getApplicationContext());
                 }
+            } catch (IllegalArgumentException ex) {
+                authState.invalidate(this);
+                logger.error("ManagementPortal error; firebase settings incomplete", ex);
+                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                return false;
             } catch (AuthenticationException ex) {
                 authState.invalidate(this);
                 logger.error("Authentication error; failed to register source {} of type {} {}",
@@ -190,17 +206,14 @@ public class ManagementPortalService extends IntentService {
     private void ensureClient() {
         if (client == null) {
             RadarConfiguration config = RadarConfiguration.getInstance();
-            String url = config.getString(MANAGEMENT_PORTAL_URL_KEY, null);
-            if (url == null) {
-                throw new IllegalStateException("Management Portal URL is not given");
-            }
+            String url = config.getString(MANAGEMENT_PORTAL_URL_KEY);
             boolean unsafe = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false);
             try {
                 ServerConfig portalConfig = new ServerConfig(url);
                 portalConfig.setUnsafe(unsafe);
                 client = new ManagementPortalClient(portalConfig);
             } catch (MalformedURLException ex) {
-                throw new IllegalStateException("Management portal URL " + url + " is invalid", ex);
+                throw new IllegalArgumentException("Management portal URL " + url + " is invalid", ex);
             }
             clientId = config.getString(OAUTH2_CLIENT_ID);
             clientSecret = config.getString(OAUTH2_CLIENT_SECRET);

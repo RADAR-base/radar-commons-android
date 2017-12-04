@@ -33,8 +33,6 @@ import org.slf4j.LoggerFactory;
 
 /** Provides the name and some metadata of the main activity */
 public abstract class RadarApplication extends Application {
-    private static final Logger logger = LoggerFactory.getLogger(RadarApplication.class);
-
     public Notification.Builder updateNotificationAppSettings(Notification.Builder builder) {
         return builder
                 .setWhen(System.currentTimeMillis())

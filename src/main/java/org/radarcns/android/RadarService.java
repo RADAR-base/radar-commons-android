@@ -72,7 +72,9 @@ public class RadarService extends Service implements ServerStatusListener {
     private final BroadcastReceiver loginBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            updateAuthState(AppAuthState.Builder.from(intent.getExtras()).build());
+            Bundle bundle = intent.getExtras();
+            bundle.setClassLoader(RadarService.class.getClassLoader());
+            updateAuthState(AppAuthState.Builder.from(bundle).build());
         }
     };
 
@@ -220,6 +222,7 @@ public class RadarService extends Service implements ServerStatusListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
+        extras.setClassLoader(RadarService.class.getClassLoader());
         mainActivityClass = extras.getString(EXTRA_MAIN_ACTIVITY);
         loginActivityClass = extras.getString(EXTRA_LOGIN_ACTIVITY);
 

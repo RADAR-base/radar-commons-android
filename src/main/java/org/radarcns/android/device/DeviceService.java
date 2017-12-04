@@ -41,6 +41,7 @@ import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
+import org.radarcns.android.RadarService;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.portal.ManagementPortalService;
@@ -475,6 +476,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     @CallSuper
     protected void onInvocation(@NonNull Bundle bundle) {
+        bundle.setClassLoader(RadarService.class.getClassLoader());
         source = bundle.getParcelable(SOURCE_KEY);
         if (source == null) {
             source = new AppSource(-1L, null, null, null, true);
