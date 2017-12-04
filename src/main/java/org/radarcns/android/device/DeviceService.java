@@ -184,7 +184,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         synchronized (this) {
             latestStartId = startId;
         }
-        onInvocation(BundleSerialization.getPersistentExtras(intent, this));
+        Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
+        onInvocation(extras);
 
         return START_STICKY;
     }
@@ -471,12 +472,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     /**
      * Override this function to get any parameters from the given intent.
+     * Bundle classloader needs to be set correctly for this to work.
      *
      * @param bundle intent extras that the activity provided.
      */
     @CallSuper
     protected void onInvocation(@NonNull Bundle bundle) {
-        bundle.setClassLoader(RadarService.class.getClassLoader());
         source = bundle.getParcelable(SOURCE_KEY);
         if (source == null) {
             source = new AppSource(-1L, null, null, null, true);
