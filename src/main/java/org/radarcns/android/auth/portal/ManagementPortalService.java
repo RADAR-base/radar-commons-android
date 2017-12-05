@@ -119,6 +119,7 @@ public class ManagementPortalService extends IntentService {
                 parser = new AccessTokenParser(authState);
             }
             authState = client.refreshToken(authState, clientId, clientSecret, parser);
+            logger.info("Refreshed JWT");
 
             Bundle result = new Bundle();
             authState.addToBundle(result);

@@ -19,7 +19,7 @@ buildscript {
         jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.3.0'
+        classpath 'com.android.tools.build:gradle:2.3.3'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
         classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.4.18'
@@ -60,14 +60,15 @@ allprojects {
     repositories {
         jcenter()
         // radar dev branches
+        maven { url 'https://maven.google.com' }
         maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
     }
 
     dependencies {
         compile 'com.squareup.okhttp3:okhttp:3.8.0'
-        compile 'com.google.firebase:firebase-config:11.0.4'
+        compile 'com.google.firebase:firebase-config:11.6.2'
 
-        compile('org.radarcns:radar-commons:0.6.3-SNAPSHOT') {
+        compile('org.radarcns:radar-commons:0.6.3') {
             exclude group: 'io.confluent', module: 'kafka-avro-serializer'
             exclude group: 'org.apache.kafka', module: 'kafka-clients'
             exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
@@ -141,12 +142,12 @@ allprojects {
 }
 
 android {
-    compileSdkVersion 26
-    buildToolsVersion "26.0.1"
+    compileSdkVersion 27
+    buildToolsVersion "27.0.1"
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 26
+        targetSdkVersion 27
         versionCode versionCode
         versionName version
     }

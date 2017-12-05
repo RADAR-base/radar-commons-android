@@ -144,6 +144,7 @@ public class RadarService extends Service implements ServerStatusListener {
                                     dataHandler.setAuthState(authState);
                                 }
                                 isMakingRequest.set(false);
+                                dataHandler.checkConnection();
                             } else if (resultCode == MANAGEMENT_PORTAL_REFRESH_FAILED && mHandler != null) {
                                 logger.error("Failed to log in to management portal");
                                 final ResultReceiver recv = this;
