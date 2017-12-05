@@ -41,6 +41,7 @@ import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
+import org.radarcns.android.RadarService;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.portal.ManagementPortalService;
@@ -183,7 +184,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         synchronized (this) {
             latestStartId = startId;
         }
-        onInvocation(BundleSerialization.getPersistentExtras(intent, this));
+        Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
+        onInvocation(extras);
 
         return START_STICKY;
     }
@@ -470,6 +472,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     /**
      * Override this function to get any parameters from the given intent.
+     * Bundle classloader needs to be set correctly for this to work.
      *
      * @param bundle intent extras that the activity provided.
      */

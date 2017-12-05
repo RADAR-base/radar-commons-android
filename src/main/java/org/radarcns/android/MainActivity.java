@@ -107,11 +107,12 @@ public abstract class MainActivity extends Activity {
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Bundle extras;
         if (getIntent() == null || getIntent().getExtras() == null) {
             authState = AppAuthState.Builder.from(this).build();
         } else {
-            authState = AppAuthState.Builder.from(getIntent().getExtras()).build();
+            Bundle extras = getIntent().getExtras();
+            extras.setClassLoader(MainActivity.class.getClassLoader());
+            authState = AppAuthState.Builder.from(extras).build();
         }
 
         if (!authState.isValid()) {
@@ -258,7 +259,9 @@ public abstract class MainActivity extends Activity {
                 if (resultCode != RESULT_OK) {
                     throw new IllegalStateException("Login should not be cancellable");
                 }
-                authState = AppAuthState.Builder.from(result.getExtras()).build();
+                Bundle extras = result.getExtras();
+                extras.setClassLoader(MainActivity.class.getClassLoader());
+                authState = AppAuthState.Builder.from(extras).build();
                 RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
                 RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
                 onConfigChanged();

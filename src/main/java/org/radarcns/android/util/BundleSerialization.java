@@ -63,6 +63,7 @@ public final class BundleSerialization {
             }
             saveToPreferences(prefs, bundle);
         }
+        bundle.setClassLoader(BundleSerialization.class.getClassLoader());
         return bundle;
     }
 
