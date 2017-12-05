@@ -32,8 +32,8 @@ public class AccessTokenParser implements AuthStringParser {
                     .userId(json.getString("sub"))
                     .property(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
                     .setHeader("Authorization", "Bearer " + accessToken)
-                    .expiration(TimeUnit.SECONDS.toMillis(json.getLong("expires_in")
-                            + System.currentTimeMillis()))
+                    .expiration(TimeUnit.SECONDS.toMillis(json.getLong("expires_in"))
+                            + System.currentTimeMillis())
                     .build();
         } catch (JSONException ex) {
             throw new IOException("Failed to parse json string " + body, ex);

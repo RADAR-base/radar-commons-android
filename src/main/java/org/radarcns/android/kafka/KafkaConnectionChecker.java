@@ -70,22 +70,26 @@ class KafkaConnectionChecker implements Runnable {
         synchronized (this) {
             isPosted = false;
         }
-        if (!isConnected.get()) {
-            if (sender.isConnected() || sender.resetConnection()) {
-                didConnect();
-                listener.updateServerStatus(ServerStatusListener.Status.CONNECTED);
-                logger.info("Sender reconnected");
+        try {
+            if (!isConnected.get()) {
+                if (sender.isConnected() || sender.resetConnection()) {
+                    didConnect();
+                    listener.updateServerStatus(ServerStatusListener.Status.CONNECTED);
+                    logger.info("Sender reconnected");
+                } else {
+                    retry();
+                }
+            } else if (System.currentTimeMillis() - lastConnection > 15_000L) {
+                if (sender.isConnected()) {
+                    didConnect();
+                } else {
+                    didDisconnect(null);
+                }
             } else {
-                retry();
+                post(heartbeatInterval);
             }
-        } else if (System.currentTimeMillis() - lastConnection > 15_000L) {
-            if (sender.isConnected()) {
-                didConnect();
-            } else {
-                didDisconnect(null);
-            }
-        } else {
-            post(heartbeatInterval);
+        } catch (AuthenticationException ex) {
+            didDisconnect(ex);
         }
     }
 

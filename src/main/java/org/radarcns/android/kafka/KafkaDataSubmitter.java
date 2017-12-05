@@ -88,12 +88,16 @@ public class KafkaDataSubmitter<V> implements Closeable {
         mHandler.post(new Runnable() {
             @Override
             public void run() {
-                if (KafkaDataSubmitter.this.sender.isConnected()) {
-                    KafkaDataSubmitter.this.dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED);
-                    connection.didConnect();
-                } else {
-                    KafkaDataSubmitter.this.dataHandler.updateServerStatus(ServerStatusListener.Status.DISCONNECTED);
-                    connection.didDisconnect(null);
+                try {
+                    if (KafkaDataSubmitter.this.sender.isConnected()) {
+                        KafkaDataSubmitter.this.dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED);
+                        connection.didConnect();
+                    } else {
+                        KafkaDataSubmitter.this.dataHandler.updateServerStatus(ServerStatusListener.Status.DISCONNECTED);
+                        connection.didDisconnect(null);
+                    }
+                } catch (AuthenticationException ex) {
+                    connection.didDisconnect(ex);
                 }
             }
         });
