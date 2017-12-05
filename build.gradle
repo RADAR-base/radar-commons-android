@@ -40,8 +40,8 @@ allprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.4.1-SNAPSHOT'
-    ext.versionCode = 10
+    version = '0.4.1'
+    ext.versionCode = 11
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
 
