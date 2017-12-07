@@ -28,8 +28,10 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import org.radarcns.android.device.DeviceService;
 import org.radarcns.android.util.Boast;
+import org.radarcns.android.util.CrashlyticsLoggerHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pl.brightinventions.slf4android.LoggerConfiguration;
 
 /** Provides the name and some metadata of the main activity */
 public abstract class RadarApplication extends Application {
@@ -54,6 +56,13 @@ public abstract class RadarApplication extends Application {
     public void onCreate() {
         super.onCreate();
         createConfiguration();
+        setupLogging();
+    }
+
+    protected void setupLogging() {
+        LoggerConfiguration.configuration()
+                .removeRootLogcatHandler()
+                .addHandlerToRootLogger(new CrashlyticsLoggerHandler());
     }
 
     /**

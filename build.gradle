@@ -62,6 +62,7 @@ allprojects {
         // radar dev branches
         maven { url 'https://maven.google.com' }
         maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+        maven { url 'https://jitpack.io' }
     }
 
     dependencies {
@@ -78,6 +79,9 @@ allprojects {
         compile 'org.radarcns:radar-schemas-commons:0.2.2'
 
         compile('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
+            transitive = true
+        }
+        compile ('com.github.bright:slf4android:0.1.4') {
             transitive = true
         }
 

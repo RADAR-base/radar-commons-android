@@ -56,8 +56,12 @@ public class AppAuthStateTest {
     }
 
     private void testProperties(AppAuthState state) {
+        testProperties(state, "efgh");
+    }
+
+    private void testProperties(AppAuthState state, String refreshToken) {
         assertEquals("abcd", state.getToken());
-        assertEquals("efgh", state.getProperty(MP_REFRESH_TOKEN_PROPERTY));
+        assertEquals(refreshToken, state.getProperty(MP_REFRESH_TOKEN_PROPERTY));
         assertEquals("p", state.getProjectId());
         assertEquals("u", state.getUserId());
         assertTrue(state.isValidFor(9, TimeUnit.SECONDS));
@@ -74,5 +78,15 @@ public class AppAuthStateTest {
 
         AppAuthState readState = AppAuthState.Builder.from(bundle).build();
         testProperties(readState);
+    }
+
+    @Test
+    public void newBuilder() {
+        AppAuthState builtState = state.newBuilder()
+                .property(MP_REFRESH_TOKEN_PROPERTY, "else")
+                .build();
+
+        testProperties(builtState, "else");
+        testProperties(state);
     }
 }
