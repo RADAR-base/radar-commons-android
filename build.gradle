@@ -77,6 +77,10 @@ allprojects {
         }
         compile 'org.radarcns:radar-schemas-commons:0.2.2'
 
+        compile('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
+            transitive = true
+        }
+
         testCompile 'junit:junit:4.12'
         testCompile 'org.slf4j:slf4j-simple:1.7.21'
         testCompile 'org.robolectric:robolectric:3.4.2'
