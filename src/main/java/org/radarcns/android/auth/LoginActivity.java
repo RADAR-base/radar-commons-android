@@ -133,6 +133,10 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     /** Call when the entire login procedure succeeded. */
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         logger.info("Login succeeded");
+
+        if (!this.appAuth.isValid() && appAuthState.isValid()) {
+            this.appAuth = appAuthState;
+        }
         this.appAuth.addToPreferences(this);
 
         LocalBroadcastManager.getInstance(this).sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));

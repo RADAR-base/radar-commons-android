@@ -84,7 +84,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public static final String CACHE_RECORDS_SENT_NUMBER = PREFIX + "DataCache.numberOfRecords.second";
     public static final String DEVICE_SERVICE_CLASS = PREFIX + "DeviceService.getClass";
     public static final String DEVICE_STATUS_CHANGED = PREFIX + "DeviceStatusListener.Status";
-    public static final String DEVICE_STATUS_NAME = PREFIX + "Devicemanager.getName";
+    public static final String DEVICE_STATUS_NAME = PREFIX + "DeviceManager.getName";
     public static final String DEVICE_CONNECT_FAILED = PREFIX + "DeviceStatusListener.deviceFailedToConnect";
     private final ObservationKey key = new ObservationKey();
 
