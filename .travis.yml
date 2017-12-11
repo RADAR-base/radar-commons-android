@@ -22,7 +22,11 @@ android:
     - extra-google-google_play_services
     - extra-google-m2repository
 
-script: TERM=dumb ./gradlew check assembleDebug
+# bug https://github.com/travis-ci/travis-ci/issues/8874
+before_install:
+  - yes | sdkmanager "platforms;android-27"
+
+script: ./gradlew check assembleDebug
 
 deploy:
   - provider: releases
