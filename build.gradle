@@ -29,12 +29,12 @@ buildscript {
 
 allprojects {
     apply plugin: 'com.android.library'
+    apply plugin: 'de.mobilej.unmock'
     apply plugin: 'com.jfrog.bintray'
     apply plugin: 'com.github.dcendents.android-maven'
     apply plugin: 'idea'
     apply plugin: 'maven-publish'
     apply plugin: 'com.jfrog.artifactory'
-    apply plugin: 'de.mobilej.unmock'
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
@@ -62,7 +62,6 @@ allprojects {
         // radar dev branches
         maven { url 'https://maven.google.com' }
         maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
-        maven { url 'https://jitpack.io' }
     }
 
     dependencies {
@@ -78,15 +77,12 @@ allprojects {
         }
         compile 'org.radarcns:radar-schemas-commons:0.2.2'
 
-        compile('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
+        compile ('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
             transitive = true
         }
-        compile ('com.github.bright:slf4android:0.1.4') {
-            transitive = true
-        }
+        compile 'sk.baka.slf4j:slf4j-handroid:1.7.26'
 
         testCompile 'junit:junit:4.12'
-        testCompile 'org.slf4j:slf4j-simple:1.7.21'
         testCompile 'org.robolectric:robolectric:3.4.2'
         testCompile 'com.squareup.okhttp3:mockwebserver:3.8.0'
 
@@ -186,12 +182,21 @@ unMock {
     keep "android.widget.BaseAdapter"
     keep "android.widget.ArrayAdapter"
     keep "android.os.Bundle"
+    keep "android.os.Parcelable"
     keepStartingWith "android.database.MatrixCursor"
     keep "android.database.AbstractCursor"
     keep "android.database.CrossProcessCursor"
     keepStartingWith "android.text.TextUtils"
     keepStartingWith "android.util."
     keepStartingWith "android.text."
+    keep "android.app.Application"
+    keep "android.content.Context"
+    keep "android.app.ContextImpl"
+    keep "android.os.UserHandle"
+    keep "android.R"
+    keepStartingWith "android.os.Build"
+    keepStartingWith "android.content.ComponentCallbacks"
+    keep "android.content.ContextWrapper"
     keepStartingWith "android.content.ContentValues"
     keepStartingWith "android.content.ComponentName"
     keepStartingWith "android.content.ContentUris"
@@ -208,6 +213,7 @@ unMock {
     keep "android.net.Uri"
     keepStartingWith "org.json."
     keep 'android.os.SystemClock'
+    keep 'android.os.RemoteException'
 
     keepAndRename "java.nio.charset.Charsets" to "xjava.nio.charset.Charsets"
 }
