@@ -41,7 +41,6 @@ import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
-import org.radarcns.android.RadarService;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.portal.ManagementPortalService;
@@ -59,10 +58,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
-import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REGISTRATION_FAILED;
+import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REGISTRATION;
 import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
@@ -85,7 +85,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public static final String CACHE_RECORDS_SENT_NUMBER = PREFIX + "DataCache.numberOfRecords.second";
     public static final String DEVICE_SERVICE_CLASS = PREFIX + "DeviceService.getClass";
     public static final String DEVICE_STATUS_CHANGED = PREFIX + "DeviceStatusListener.Status";
-    public static final String DEVICE_STATUS_NAME = PREFIX + "Devicemanager.getName";
+    public static final String DEVICE_STATUS_NAME = PREFIX + "DeviceManager.getName";
     public static final String DEVICE_CONNECT_FAILED = PREFIX + "DeviceStatusListener.deviceFailedToConnect";
     private final ObservationKey key = new ObservationKey();
 
@@ -559,20 +559,23 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         if (source.getSourceId() == null) {
             if (ManagementPortalService.isEnabled()) {
                 // do registration with management portal
+                final Handler handler = new Handler(getMainLooper());
                 ManagementPortalService.registerSource(this, source,
-                        new ResultReceiver(new Handler(getMainLooper())) {
+                        new ResultReceiver(handler) {
                     @Override
                     protected void onReceiveResult(int resultCode, Bundle result) {
-                        if (resultCode == MANAGEMENT_PORTAL_REGISTRATION_FAILED) {
-                            logger.error("Failed to register source");
-                            stopDeviceManager(unsetDeviceManager());
-                            return;
+                        AppSource updatedSource = null;
+                        if (resultCode == MANAGEMENT_PORTAL_REGISTRATION && result != null && result.containsKey(SOURCE_KEY)) {
+                            updatedSource = result.getParcelable(SOURCE_KEY);
                         }
-                        AppSource updatedSource = result.getParcelable(SOURCE_KEY);
                         if (updatedSource == null) {
-                            // TODO: more error handling?
-                            logger.error("Failed to register source {}", source);
-                            stopDeviceManager(unsetDeviceManager());
+                            // try again in a minute
+                            handler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    stopDeviceManager(unsetDeviceManager());
+                                }
+                            }, ThreadLocalRandom.current().nextLong(1_000L, 120_000L));
                             return;
                         }
                         AppAuthState auth = AppAuthState.Builder.from(result).build();

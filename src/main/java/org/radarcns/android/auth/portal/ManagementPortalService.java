@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.ResultReceiver;
 import android.util.SparseArray;
+import com.crashlytics.android.Crashlytics;
 import org.json.JSONException;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
@@ -130,7 +131,8 @@ public class ManagementPortalService extends IntentService {
             return false;
         } catch (IllegalArgumentException ex) {
             authState.invalidate(this);
-            logger.error("ManagementPortal error; firebase settings incomplete", ex);
+            logger.error("ManagementPortal error; Firebase settings incomplete", ex);
+            Crashlytics.logException(ex);
             receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
             return false;
         }

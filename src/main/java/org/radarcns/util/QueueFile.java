@@ -432,7 +432,6 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         private int bytesRead;
 
         public QueueFileInputStream(QueueFileElement element) {
-            logger.trace("QueueFileInputStream for element {}", element);
             this.storagePosition = header.wrapPosition(element.dataPosition());
             this.totalLength = element.getLength();
             this.expectedModCount = modCount;

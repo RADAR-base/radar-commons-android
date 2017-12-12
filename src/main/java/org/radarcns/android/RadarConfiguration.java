@@ -16,7 +16,6 @@
 
 package org.radarcns.android;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -30,6 +29,7 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import static java.util.regex.Pattern.CASE_INSENSITIVE;
@@ -131,7 +130,7 @@ public class RadarConfiguration {
             @Override
             public void onComplete(@NonNull Task<Void> task) {
                 if (task.isSuccessful()) {
-                    status = FirebaseStatus.FETCHED;
+                    setStatus(FirebaseStatus.FETCHED);
                     // Once the config is successfully fetched it must be
                     // activated before newly fetched values are returned.
                     activateFetched();
@@ -141,7 +140,7 @@ public class RadarConfiguration {
                     logger.info("RADAR configuration changed: {}", RadarConfiguration.this);
                     context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
                 } else {
-                    status = FirebaseStatus.ERROR;
+                    setStatus(status);
                     logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
                 }
             }
@@ -169,6 +168,10 @@ public class RadarConfiguration {
 
     public boolean isInDevelopmentMode() {
         return config.getInfo().getConfigSettings().isDeveloperModeEnabled();
+    }
+
+    private synchronized void setStatus(FirebaseStatus status) {
+        this.status = status;
     }
 
     public static RadarConfiguration getInstance() {
@@ -237,18 +240,6 @@ public class RadarConfiguration {
         Task<Void> task = config.fetch(delay);
         synchronized (this) {
             status = FirebaseStatus.FETCHING;
-            task.addOnCompleteListener(new OnCompleteListener<Void>() {
-                @Override
-                public void onComplete(@NonNull Task<Void> task) {
-                    synchronized (RadarConfiguration.this) {
-                        if (task.isSuccessful()) {
-                            status = FirebaseStatus.FETCHED;
-                        } else {
-                            status = FirebaseStatus.ERROR;
-                        }
-                    }
-                }
-            });
             task.addOnCompleteListener(onFetchCompleteHandler);
         }
         return task;

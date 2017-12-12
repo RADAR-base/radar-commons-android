@@ -23,6 +23,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.Config;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -40,6 +41,7 @@ import static org.junit.Assert.assertFalse;
  * Also test that all hashes are unique for different keys but with the same values.
  */
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE)
 public class HashGeneratorTest {
 
     @Test

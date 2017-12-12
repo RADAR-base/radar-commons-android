@@ -33,7 +33,9 @@ public class ManagementPortalLoginManager implements LoginManager {
 
     @Override
     public AppAuthState refresh() {
-        if (refreshToken != null && ManagementPortalService.isEnabled() && isRefreshing.compareAndSet(false, true)) {
+        if (refreshToken != null
+                && ManagementPortalService.isEnabled()
+                && isRefreshing.compareAndSet(false, true)) {
             ManagementPortalService.requestAccessToken((Context)listener, refreshToken, true, new ResultReceiver(new Handler(Looper.getMainLooper())) {
                 @Override
                 protected void onReceiveResult(int resultCode, Bundle resultData) {
