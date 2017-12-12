@@ -1,10 +1,10 @@
 android {
-    compileSdkVersion 26
-    buildToolsVersion "26.0.1"
+    compileSdkVersion 27
+    buildToolsVersion '27.0.1'
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 26
+        targetSdkVersion 27
         versionCode versionCode
         versionName version
     }
@@ -15,14 +15,14 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-
-            libraryVariants.all { variant ->
-                variant.outputs.each { output ->
-                    if (output.outputFile != null && output.outputFile.name.endsWith('.aar')) {
-                        output.outputFile = new File(output.outputFile.parent,
-                                "${archivesBaseName}-${android.defaultConfig.versionName}.aar")
-                    }
-                }
+        }
+    }
+    libraryVariants.all { variant ->
+        variant.outputs.all {
+            if (variant.name == 'release') {
+                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}.aar"
+            } else {
+                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}-${variant.name}.aar"
             }
         }
     }
@@ -32,8 +32,8 @@ ext.moduleName = 'radar-android-login-qr'
 ext.description = 'RADAR Android QR LoginManager.'
 
 dependencies {
-    compile project(":")
-    compile 'com.journeyapps:zxing-android-embedded:3.5.0'
+    api project(":")
+    implementation 'com.journeyapps:zxing-android-embedded:3.5.0'
 }
 
 
@@ -65,6 +65,8 @@ artifacts {
     archives javadocJar
     archives sourcesJar
 }
+
+apply plugin: 'maven-publish'
 
 publishing {
     publications {
