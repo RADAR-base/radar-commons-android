@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.Manifest.permission.*;
@@ -153,7 +154,7 @@ public class RadarService extends Service implements ServerStatusListener {
                                     public void run() {
                                         ManagementPortalService.requestAccessToken(RadarService.this, refreshToken, false, recv);
                                     }
-                                }, 60_000L);
+                                }, ThreadLocalRandom.current().nextLong(1_000L, 120_000L));
                             } else {
                                 isMakingRequest.set(false);
                             }
