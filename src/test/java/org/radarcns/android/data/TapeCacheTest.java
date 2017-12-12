@@ -17,21 +17,22 @@
 package org.radarcns.android.data;
 
 import android.util.Pair;
-
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
-import org.radarcns.monitor.application.ApplicationUptime;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
+import org.radarcns.monitor.application.ApplicationUptime;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.ActiveAudioRecording;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.slf4j.impl.HandroidLoggerAdapter;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -50,8 +51,17 @@ public class TapeCacheTest {
     private ObservationKey key;
     private ApplicationUptime value;
 
+    @BeforeClass
+    public static void setUpClass() {
+        System.err.println("Setting up TapeCacheTest tests");
+        HandroidLoggerAdapter.APP_NAME = "Test";
+        HandroidLoggerAdapter.LOG_TO_CRASHLYTICS = false;
+    }
+
     @Before
     public void setUp() throws IOException {
+        System.err.println("log to crashlytics " + HandroidLoggerAdapter.LOG_TO_CRASHLYTICS);
+
         AvroTopic<ObservationKey, ApplicationUptime> topic = new AvroTopic<>("test",
                 ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
                 ObservationKey.class, ApplicationUptime.class);

@@ -1,10 +1,10 @@
 android {
-    compileSdkVersion 26
-    buildToolsVersion "26.0.1"
+    compileSdkVersion 27
+    buildToolsVersion '27.0.1'
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 26
+        targetSdkVersion 27
         versionCode versionCode
         versionName version
         manifestPlaceholders = ['appAuthRedirectScheme': 'org.radarcns.android']
@@ -16,14 +16,14 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-
-            libraryVariants.all { variant ->
-                variant.outputs.each { output ->
-                    if (output.outputFile != null && output.outputFile.name.endsWith('.aar')) {
-                        output.outputFile = new File(output.outputFile.parent,
-                                "${archivesBaseName}-${android.defaultConfig.versionName}.aar")
-                    }
-                }
+        }
+    }
+    libraryVariants.all { variant ->
+        variant.outputs.all {
+            if (variant.name == 'release') {
+                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}.aar"
+            } else {
+                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}-${variant.name}.aar"
             }
         }
     }
@@ -33,8 +33,8 @@ ext.moduleName = 'radar-android-login-oauth2'
 ext.description = 'RADAR Android OAuth2 LoginManager.'
 
 dependencies {
-    compile project(':')
-    compile 'net.openid:appauth:0.6.1'
+    api project(':')
+    api 'net.openid:appauth:0.6.1'
 }
 
 
@@ -51,8 +51,16 @@ task sourcesJar(type: Jar) {
 
 task javadoc(type: Javadoc) {
     source = android.sourceSets.main.java.srcDirs
-    classpath += configurations.compile
+    // this is new
+    android.libraryVariants.all { variant ->
+        if (variant.name == 'release') {
+            owner.classpath += variant.javaCompiler.classpath
+        }
+    }
+    // end of new
     classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+    exclude '**/BuildConfig.java'
+    exclude '**/R.java'
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
@@ -66,6 +74,9 @@ artifacts {
     archives javadocJar
     archives sourcesJar
 }
+
+
+apply plugin: 'maven-publish'
 
 publishing {
     publications {

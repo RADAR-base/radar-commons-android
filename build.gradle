@@ -17,9 +17,10 @@
 buildscript {
     repositories {
         jcenter()
+        google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.3.3'
+        classpath 'com.android.tools.build:gradle:3.0.1'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
         classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.4.18'
@@ -29,12 +30,11 @@ buildscript {
 
 allprojects {
     apply plugin: 'com.android.library'
+    apply plugin: 'de.mobilej.unmock'
     apply plugin: 'com.jfrog.bintray'
     apply plugin: 'com.github.dcendents.android-maven'
-    apply plugin: 'idea'
-    apply plugin: 'maven-publish'
     apply plugin: 'com.jfrog.artifactory'
-    apply plugin: 'de.mobilej.unmock'
+    apply plugin: 'idea'
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
@@ -53,42 +53,43 @@ allprojects {
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
-    configurations.compile {
-        resolutionStrategy.cacheChangingModulesFor 0, 'SECONDS'
+    configurations {
+        compile {
+            resolutionStrategy.cacheChangingModulesFor 0, 'SECONDS'
+        }
+        javadocDeps
     }
 
     repositories {
         jcenter()
         // radar dev branches
-        maven { url 'https://maven.google.com' }
+        google()
         maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
-        maven { url 'https://jitpack.io' }
     }
 
     dependencies {
-        compile 'com.squareup.okhttp3:okhttp:3.8.0'
-        compile 'com.google.firebase:firebase-config:11.6.2'
+        api 'com.squareup.okhttp3:okhttp:3.8.0'
 
-        compile('org.radarcns:radar-commons:0.6.3') {
+        api('org.radarcns:radar-commons:0.6.3') {
             exclude group: 'io.confluent', module: 'kafka-avro-serializer'
             exclude group: 'org.apache.kafka', module: 'kafka-clients'
             exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
             exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
             exclude group: 'org.json', module: 'json'
         }
-        compile 'org.radarcns:radar-schemas-commons:0.2.2'
+        api 'org.radarcns:radar-schemas-commons:0.2.3'
 
-        compile('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
+        javadocDeps 'com.android.support:support-annotations:27.0.2'
+
+        implementation 'com.google.firebase:firebase-config:11.6.2'
+        implementation('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
             transitive = true
         }
-        compile ('com.github.bright:slf4android:0.1.4') {
-            transitive = true
-        }
+        implementation 'sk.baka.slf4j:slf4j-handroid:1.7.26'
 
-        testCompile 'junit:junit:4.12'
-        testCompile 'org.slf4j:slf4j-simple:1.7.21'
-        testCompile 'org.robolectric:robolectric:3.4.2'
-        testCompile 'com.squareup.okhttp3:mockwebserver:3.8.0'
+        testImplementation 'junit:junit:4.12'
+        testImplementation 'org.robolectric:robolectric:3.4.2'
+        testImplementation 'com.squareup.okhttp3:mockwebserver:3.8.0'
 
         unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
     }
@@ -151,7 +152,7 @@ allprojects {
 
 android {
     compileSdkVersion 27
-    buildToolsVersion "27.0.1"
+    buildToolsVersion '27.0.1'
 
     defaultConfig {
         minSdkVersion 21
@@ -166,14 +167,14 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-
-            libraryVariants.all { variant ->
-                variant.outputs.each { output ->
-                    if (output.outputFile != null && output.outputFile.name.endsWith('.aar')) {
-                        output.outputFile = new File(output.outputFile.parent,
-                                "${archivesBaseName}-${android.defaultConfig.versionName}.aar")
-                    }
-                }
+        }
+    }
+    libraryVariants.all { variant ->
+        variant.outputs.all {
+            if (variant.name == 'release') {
+                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}.aar"
+            } else {
+                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}-${variant.name}.aar"
             }
         }
     }
@@ -186,12 +187,21 @@ unMock {
     keep "android.widget.BaseAdapter"
     keep "android.widget.ArrayAdapter"
     keep "android.os.Bundle"
+    keep "android.os.Parcelable"
     keepStartingWith "android.database.MatrixCursor"
     keep "android.database.AbstractCursor"
     keep "android.database.CrossProcessCursor"
     keepStartingWith "android.text.TextUtils"
     keepStartingWith "android.util."
     keepStartingWith "android.text."
+    keep "android.app.Application"
+    keep "android.content.Context"
+    keep "android.app.ContextImpl"
+    keep "android.os.UserHandle"
+    keep "android.R"
+    keepStartingWith "android.os.Build"
+    keepStartingWith "android.content.ComponentCallbacks"
+    keep "android.content.ContextWrapper"
     keepStartingWith "android.content.ContentValues"
     keepStartingWith "android.content.ComponentName"
     keepStartingWith "android.content.ContentUris"
@@ -208,6 +218,7 @@ unMock {
     keep "android.net.Uri"
     keepStartingWith "org.json."
     keep 'android.os.SystemClock'
+    keep 'android.os.RemoteException'
 
     keepAndRename "java.nio.charset.Charsets" to "xjava.nio.charset.Charsets"
 }
@@ -223,10 +234,19 @@ task sourcesJar(type: Jar) {
     manifest.from sharedManifest
 }
 
+
 task javadoc(type: Javadoc) {
     source = android.sourceSets.main.java.srcDirs
-    classpath += configurations.compile
+    // this is new
+    android.libraryVariants.all { variant ->
+        if (variant.name == 'release') {
+            owner.classpath += variant.javaCompiler.classpath
+        }
+    }
+    // end of new
     classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+    exclude '**/BuildConfig.java'
+    exclude '**/R.java'
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
@@ -240,6 +260,8 @@ artifacts {
     archives javadocJar
     archives sourcesJar
 }
+
+apply plugin: 'maven-publish'
 
 publishing {
     publications {
@@ -327,11 +349,11 @@ artifactory {
 }
 
 artifactoryPublish {
-    publications('RadarCommonsPublication')
+    publications 'RadarCommonsPublication'
     dependsOn 'assembleRelease'
 }
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '4.1'
+    gradleVersion = '4.4'
     distributionType 'all'
 }
