@@ -58,6 +58,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
@@ -574,7 +575,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
                                 public void run() {
                                     stopDeviceManager(unsetDeviceManager());
                                 }
-                            }, 60_000L);
+                            }, ThreadLocalRandom.current().nextLong(1_000L, 120_000L));
                             return;
                         }
                         AppAuthState auth = AppAuthState.Builder.from(result).build();
