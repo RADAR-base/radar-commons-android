@@ -46,8 +46,8 @@ public abstract class RadarApplication extends Application {
     @CallSuper
     public void onCreate() {
         super.onCreate();
-        createConfiguration();
         setupLogging();
+        createConfiguration();
     }
 
     protected void setupLogging() {
