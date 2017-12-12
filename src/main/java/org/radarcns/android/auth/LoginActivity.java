@@ -134,7 +134,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         logger.info("Login succeeded");
 
-        if (!this.appAuth.isValid() && appAuthState.isValid()) {
+        if (appAuthState.isValid()) {
             this.appAuth = appAuthState;
         }
         this.appAuth.addToPreferences(this);
