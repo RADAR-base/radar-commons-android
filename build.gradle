@@ -21,9 +21,9 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.0.1'
-        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.0'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
-        classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.4.18'
+        classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.5.4'
         classpath 'de.mobilej.unmock:UnMockPlugin:0.6.4'
     }
 }
@@ -156,8 +156,6 @@ ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api 'com.squareup.okhttp3:okhttp:3.8.0'
-
     api('org.radarcns:radar-commons:0.6.3') {
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
@@ -175,7 +173,7 @@ dependencies {
 
     testImplementation 'junit:junit:4.12'
     testImplementation 'org.robolectric:robolectric:3.4.2'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:3.8.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:3.9.1'
 
     unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
 }
