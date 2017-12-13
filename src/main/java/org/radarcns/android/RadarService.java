@@ -727,8 +727,12 @@ public class RadarService extends Service implements ServerStatusListener {
         public void setAllowedDeviceIds(final DeviceServiceConnection connection, Set<String> allowedIds) {
             deviceFilters.put(connection, allowedIds);
 
-            // Do NOT disconnect if input has not changed, is empty or equals the connected device.
-            if (connection.hasService() && !connection.isAllowedDevice(allowedIds)) {
+            DeviceStatusListener.Status status = connection.getDeviceStatus();
+
+            if (status == DeviceStatusListener.Status.READY
+                    || status == DeviceStatusListener.Status.CONNECTING
+                    || (status == DeviceStatusListener.Status.CONNECTED
+                    && !connection.isAllowedDevice(allowedIds))) {
                 new Handler(Looper.getMainLooper()).post(new Runnable() {
                     @Override
                     public void run() {
