@@ -30,6 +30,8 @@ import java.util.Iterator;
 import java.util.ArrayDeque;
 import java.util.NoSuchElementException;
 
+import static org.radarcns.util.Serialization.bytesToInt;
+
 /**
  * An efficient, file-based, FIFO queue. Additions and removals are O(1). Writes are
  * synchronous; data will be written to disk before an operation returns.
@@ -62,10 +64,10 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
      * copied).
      * <pre>
      * Format:
-     *   36 bytes      Header
+     *   36 bytes         Header
      *   ...              Data
      *
-     * Header (32 bytes):
+     * Header:
      *   4 bytes          Version
      *   8 bytes          File length
      *   4 bytes          Element count
@@ -75,7 +77,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
      *
      * Element:
      *   4 bytes          Data length `n`
-     *   4 bytes          Element header checksum
+     *   1 byte           Element header length checksum
      *   `n` bytes          Data
      * </pre>
      */
@@ -94,7 +96,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
      * {@link #remove(int)} and {@link #elementOutputStream()}. Used by {@link ElementIterator}
      * to guard against concurrent modification.
      */
-    private int modCount = 0;
+    private volatile int modCount = 0;
 
     private final byte[] elementHeaderBuffer = new byte[QueueFileElement.HEADER_LENGTH];
 
@@ -222,7 +224,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
          * The {@link #modCount} value that the iterator believes that the backing QueueFile should
          * have. If this expectation is violated, the iterator has detected concurrent modification.
          */
-        private int expectedModCount;
+        private final int expectedModCount;
 
         private Iterator<QueueFileElement> cacheIterator;
         private QueueFileElement previousCached;
@@ -236,7 +238,9 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         }
 
         private void checkForComodification() {
-            if (modCount != expectedModCount) throw new ConcurrentModificationException();
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
         }
 
         @Override
@@ -563,41 +567,5 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         }
 
         header.write();
-    }
-
-    public static long bytesToLong(byte[] b, int startIndex) {
-        long result = 0;
-        for (int i = 0; i < 8; i++) {
-            result <<= 8;
-            result |= b[i + startIndex] & 0xFF;
-        }
-        return result;
-    }
-
-    public static void longToBytes(long value, byte[] b, int startIndex) {
-        b[startIndex] = (byte)((value >> 56) & 0xFF);
-        b[startIndex + 1] = (byte)((value >> 48) & 0xFF);
-        b[startIndex + 2] = (byte)((value >> 40) & 0xFF);
-        b[startIndex + 3] = (byte)((value >> 32) & 0xFF);
-        b[startIndex + 4] = (byte)((value >> 24) & 0xFF);
-        b[startIndex + 5] = (byte)((value >> 16) & 0xFF);
-        b[startIndex + 6] = (byte)((value >> 8) & 0xFF);
-        b[startIndex + 7] = (byte)(value & 0xFF);
-    }
-
-    public static void intToBytes(int value, byte[] b, int startIndex) {
-        b[startIndex] = (byte)((value >> 24) & 0xFF);
-        b[startIndex + 1] = (byte)((value >> 16) & 0xFF);
-        b[startIndex + 2] = (byte)((value >> 8) & 0xFF);
-        b[startIndex + 3] = (byte)(value & 0xFF);
-    }
-
-    public static int bytesToInt(byte[] b, int startIndex) {
-        int result = 0;
-        for (int i = 0; i < 4; i++) {
-            result <<= 8;
-            result |= b[i + startIndex] & 0xFF;
-        }
-        return result;
     }
 }

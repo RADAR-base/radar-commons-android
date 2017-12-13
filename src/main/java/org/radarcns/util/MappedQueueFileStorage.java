@@ -61,7 +61,8 @@ public class MappedQueueFileStorage implements QueueStorage {
      * @throws IOException if the file could not be accessed or was smaller than
      *                     {@code QueueFileHeader.HEADER_LENGTH}
      */
-    public MappedQueueFileStorage(File file, int initialLength, int maximumLength) throws IOException {
+    public MappedQueueFileStorage(File file, int initialLength, int maximumLength)
+            throws IOException {
         this.fileName = file.getName();
         if (initialLength < MINIMUM_LENGTH) {
             throw new IllegalArgumentException("Initial length " + initialLength

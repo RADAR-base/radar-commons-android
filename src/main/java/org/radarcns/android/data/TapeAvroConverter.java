@@ -26,11 +26,13 @@ import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.data.Record;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.BackedObjectQueue;
-import org.radarcns.util.QueueFile;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+
+import static org.radarcns.util.Serialization.bytesToLong;
+import static org.radarcns.util.Serialization.longToBytes;
 
 /**
  * Converts records from an AvroTopic for Tape
@@ -65,7 +67,7 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
         } while (numRead < 8);
         decoder = decoderFactory.binaryDecoder(in, decoder);
 
-        long kafkaOffset = QueueFile.bytesToLong(headerBuffer, 0);
+        long kafkaOffset = bytesToLong(headerBuffer, 0);
         try {
             K key = keyReader.read(null, decoder);
             V value = valueReader.read(null, decoder);
@@ -76,7 +78,7 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
     }
 
     public void serialize(Record<K, V> o, OutputStream out) throws IOException {
-        QueueFile.longToBytes(o.offset, headerBuffer, 0);
+        longToBytes(o.offset, headerBuffer, 0);
         out.write(headerBuffer, 0, 8);
         encoder = encoderFactory.binaryEncoder(out, encoder);
         keyWriter.write(o.key, encoder);
