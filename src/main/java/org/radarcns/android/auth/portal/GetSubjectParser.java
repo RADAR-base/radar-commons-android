@@ -154,9 +154,10 @@ public class GetSubjectParser implements AuthStringParser {
         @SuppressWarnings("unchecked")
         HashMap<String, String> attr = (HashMap<String, String>) state.getProperty(MP_ATTRIBUTES);
         if (attr != null) {
-            String humanReadable = attr.get("Human-Readable-Identifier");
-            if (humanReadable != null && !humanReadable.isEmpty()) {
-                return humanReadable;
+            for (String attrName : attr.keySet()) {
+                if (attrName.equalsIgnoreCase("Human-readable-identifier")) {
+                    return attr.get(attrName);
+                }
             }
         }
         return state.getUserId();

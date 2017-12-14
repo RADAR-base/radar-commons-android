@@ -56,6 +56,9 @@ public class ManagementPortalClient implements Closeable {
                 .header("Accept", APPLICATION_JSON)
                 .build();
 
+        logger.info("Requesting subject {} with headers {}", state.getUserId(),
+                state.getOkHttpHeaders());
+
         return ResponseHandler.handle(client.request(request), parser);
     }
 
@@ -149,7 +152,6 @@ public class ManagementPortalClient implements Closeable {
             RequestBody body = new FormBody.Builder()
                     .add("grant_type", "refresh_token")
                     .add("refresh_token", refreshToken)
-                    .add("scope", "MEASUREMENT.CREATE")
                     .build();
 
             Request request = client.requestBuilder("oauth/token")

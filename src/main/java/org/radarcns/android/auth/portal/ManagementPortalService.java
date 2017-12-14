@@ -159,6 +159,7 @@ public class ManagementPortalService extends IntentService {
             receiver.send(MANAGEMENT_PORTAL_REFRESH, result);
             return true;
         } catch (JSONException | IOException e) {
+            logger.error("Failed to get access token", e);
             receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
             return false;
         } catch (IllegalArgumentException ex) {
