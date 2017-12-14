@@ -1,13 +1,7 @@
 package org.radarcns.android.auth.portal;
 
 import android.support.annotation.NonNull;
-import okhttp3.Callback;
-import okhttp3.Credentials;
-import okhttp3.FormBody;
-import okhttp3.MediaType;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
@@ -17,13 +11,24 @@ import org.radarcns.android.util.ResponseHandler;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.rest.RestClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.Map;
 
+import okhttp3.Credentials;
+import okhttp3.FormBody;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public class ManagementPortalClient implements Closeable {
+    private static final Logger logger = LoggerFactory.getLogger(ManagementPortalClient.class);
+
     public static final String SOURCES_PROPERTY =
             ManagementPortalClient.class.getName() + ".sources";
     public static final String MP_REFRESH_TOKEN_PROPERTY = ManagementPortalClient.class.getName() + ".refreshToken";
@@ -69,16 +74,17 @@ public class ManagementPortalClient implements Closeable {
                 .build();
 
         try (Response response = client.request(request)) {
-            String responseBody = RestClient.responseBody(response);
             if (response.code() == 409) {
-                throw new IOException("Source type is already registered with the ManagementPortal");
+                throw new ConflictException();
             } else if (response.code() == 404) {
                 throw new IOException("User " + auth.getUserId() + " is no longer registered with the ManagementPortal.");
-            } else if (response.code() == 400) {
-                throw new IOException("Bad request to request credentials with the ManagementPortal.");
             } else if (response.code() == 401) {
                 throw new AuthenticationException("Authentication failure with the ManagementPortal.");
-            } else if (!response.isSuccessful()) {
+            }
+
+            String responseBody = RestClient.responseBody(response);
+
+            if (!response.isSuccessful()) {
                 if (responseBody != null) {
                     throw new IOException(
                             "Cannot complete source registration with the ManagementPortal: "
