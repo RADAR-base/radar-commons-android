@@ -108,6 +108,8 @@ public class ManagementPortalService extends IntentService {
             }
             if (isSuccessful) {
                 authState.addToPreferences(this);
+            } else {
+                logger.error("Failed to interact with ManagementPortal with {}", authState);
             }
         } catch (IllegalArgumentException ex) {
             Crashlytics.logException(ex);
