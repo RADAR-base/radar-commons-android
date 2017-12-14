@@ -53,12 +53,6 @@ allprojects {
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
-    configurations {
-        compile {
-            resolutionStrategy.cacheChangingModulesFor 0, 'SECONDS'
-        }
-    }
-
     repositories {
         jcenter()
         // radar dev branches
@@ -117,7 +111,7 @@ ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api('org.radarcns:radar-commons:0.6.3') {
+    api('org.radarcns:radar-commons:0.7-SNAPSHOT') {
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'

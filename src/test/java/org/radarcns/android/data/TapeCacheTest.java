@@ -106,7 +106,7 @@ public class TapeCacheTest {
         Record<ObservationKey, ApplicationUptime> record = unsent.get(0);
         assertEquals(key, record.key);
         assertEquals(value, record.value);
-        tapeCache.markSent(record.offset);
+        tapeCache.remove(1);
         assertEquals(Collections.emptyList(), tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 

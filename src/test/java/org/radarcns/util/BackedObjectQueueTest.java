@@ -56,7 +56,7 @@ public class BackedObjectQueueTest {
 
             ByteBuffer buffer = ByteBuffer.wrap(data);
             Record<ObservationKey, ActiveAudioRecording> record = new Record<>(
-                    0L, new ObservationKey("test", "a", "b"), new ActiveAudioRecording(buffer));
+                    new ObservationKey("test", "a", "b"), new ActiveAudioRecording(buffer));
 
             queue.add(record);
         }
@@ -82,7 +82,7 @@ public class BackedObjectQueueTest {
                 QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic));
 
         Record<ObservationKey, ObservationKey> record = new Record<>(
-                0L, new ObservationKey("test", "a", "b"),
+                new ObservationKey("test", "a", "b"),
                 new ObservationKey("test", "c", "d"));
 
         queue.add(record);

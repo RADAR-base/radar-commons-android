@@ -148,7 +148,8 @@ public class ManagementPortalClient implements Closeable {
 
             RequestBody body = new FormBody.Builder()
                     .add("grant_type", "refresh_token")
-                    .add("refresh_token", authState.getProperty(MP_REFRESH_TOKEN_PROPERTY).toString())
+                    .add("refresh_token", refreshToken)
+                    .add("scope", "MEASUREMENT.CREATE")
                     .build();
 
             Request request = client.requestBuilder("oauth/token")

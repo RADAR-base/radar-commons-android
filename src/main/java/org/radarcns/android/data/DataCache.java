@@ -48,11 +48,11 @@ public interface DataCache<K, V> extends Flushable, Closeable {
     Pair<Long, Long> numberOfRecords();
 
     /**
-     * Remove all records before a given offset.
-     * @param offset offset (inclusive) to remove.
+     * Remove oldest records.
+     * @param number number of records (inclusive) to remove.
      * @return number of rows removed
      */
-    int markSent(long offset) throws IOException;
+    int remove(int number) throws IOException;
 
     /** Add a new measurement to the cache. */
     void addMeasurement(K key, V value);

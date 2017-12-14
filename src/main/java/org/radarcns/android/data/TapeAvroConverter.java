@@ -31,21 +31,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import static org.radarcns.util.Serialization.bytesToLong;
-import static org.radarcns.util.Serialization.longToBytes;
-
 /**
  * Converts records from an AvroTopic for Tape
  */
 public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecord>
         implements BackedObjectQueue.Converter<Record<K, V>> {
+    private static final byte[] EMPTY_HEADER = {0, 0, 0, 0, 0, 0, 0, 0};
     private final EncoderFactory encoderFactory;
     private final DecoderFactory decoderFactory;
     private final SpecificDatumWriter<K> keyWriter;
     private final SpecificDatumWriter<V> valueWriter;
     private final SpecificDatumReader<K> keyReader;
     private final SpecificDatumReader<V> valueReader;
-    private final byte[] headerBuffer = new byte[8];
     private BinaryEncoder encoder;
     private BinaryDecoder decoder;
 
@@ -61,25 +58,26 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
     }
 
     public Record<K, V> deserialize(InputStream in) throws IOException {
+        // for backwards compatibility
         int numRead = 0;
         do {
-            numRead += in.read(headerBuffer, numRead, 8 - numRead);
+            numRead += in.skip(8 - numRead);
         } while (numRead < 8);
+
         decoder = decoderFactory.binaryDecoder(in, decoder);
 
-        long kafkaOffset = bytesToLong(headerBuffer, 0);
         try {
             K key = keyReader.read(null, decoder);
             V value = valueReader.read(null, decoder);
-            return new Record<>(kafkaOffset, key, value);
+            return new Record<>(key, value);
         } catch (RuntimeException ex) {
             throw new IOException("Failed to deserialize object", ex);
         }
     }
 
     public void serialize(Record<K, V> o, OutputStream out) throws IOException {
-        longToBytes(o.offset, headerBuffer, 0);
-        out.write(headerBuffer, 0, 8);
+        // for backwards compatibility
+        out.write(EMPTY_HEADER, 0, 8);
         encoder = encoderFactory.binaryEncoder(out, encoder);
         keyWriter.write(o.key, encoder);
         valueWriter.write(o.value, encoder);

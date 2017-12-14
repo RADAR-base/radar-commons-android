@@ -64,7 +64,6 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     private final AvroTopic<K, V> topic;
     private final ScheduledExecutorService executor;
-    private final AtomicLong nextOffset;
     private final List<Record<K, V>> measurementsToAdd;
     private final File outputFile;
     private final BackedObjectQueue.Converter<Record<K, V>> converter;
@@ -74,7 +73,6 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     private BackedObjectQueue<Record<K, V>> queue;
     private Future<?> addMeasurementFuture;
-    private long lastOffsetSent;
     private long timeWindowMillis;
 
     private final AtomicLong queueSize;
@@ -129,20 +127,6 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                 doFlush();
             }
         };
-
-        long firstInQueue;
-        if (queue.isEmpty()) {
-            firstInQueue = 0L;
-        } else {
-            try {
-                firstInQueue = queue.peek().offset;
-            } catch (IOException ex) {
-                fixCorruptQueue();
-                firstInQueue = 0L;
-            }
-        }
-        lastOffsetSent = firstInQueue - 1L;
-        nextOffset = new AtomicLong(firstInQueue + queue.size());
     }
 
     @Override
@@ -205,30 +189,19 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     }
 
     @Override
-    public int markSent(final long offset) throws IOException {
+    public int remove(final int number) throws IOException {
         try {
             return executor.submit(new Callable<Integer>() {
                 @Override
                 public Integer call() throws Exception {
-                    logger.debug("marking offset {} sent for topic {}, with last offset in data being {}",
-                            offset, topic, lastOffsetSent);
-                    if (offset <= lastOffsetSent) {
+                    int actualNumber = Math.min(number, queue.size());
+                    if (actualNumber == 0) {
                         return 0;
                     }
-                    lastOffsetSent = offset;
-
-                    if (queue.isEmpty()) {
-                        return 0;
-                    } else {
-                        int toRemove = (int) (offset - queue.peek().offset + 1);
-                        logger.info("Removing data from topic {} at offset {} onwards ({} records)",
-                                topic, offset, toRemove);
-                        queue.remove(toRemove);
-                        queueSize.addAndGet(-toRemove);
-                        logger.info("Removed data from topic {} at offset {} onwards ({} records)",
-                                topic, offset, toRemove);
-                        return toRemove;
-                    }
+                    logger.info("Removing {} records from topic {}", actualNumber, topic);
+                    queue.remove(actualNumber);
+                    queueSize.addAndGet(-actualNumber);
+                    return actualNumber;
                 }
             }).get();
         } catch (InterruptedException ex) {
@@ -250,7 +223,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     @Override
     public synchronized void addMeasurement(final K key, final V value) {
-        measurementsToAdd.add(new Record<>(nextOffset.getAndIncrement(), key, value));
+        measurementsToAdd.add(new Record<>(key, value));
 
         if (addMeasurementFuture == null) {
             addMeasurementFuture = executor.schedule(flusher,
@@ -277,7 +250,6 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
         dest.writeInt(records.size());
         for (Record<K, V> record : records) {
-            dest.writeLong(record.offset);
             dest.writeByteArray(keyWriter.encode(record.key));
             dest.writeByteArray(valueWriter.encode(record.value));
         }
