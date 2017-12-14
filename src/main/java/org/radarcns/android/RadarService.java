@@ -1,3 +1,19 @@
+/*
+ * Copyright 2017 The Hyve
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.radarcns.android;
 
 import android.app.AppOpsManager;
@@ -48,7 +64,7 @@ import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMB
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
 import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
 
-
+@SuppressWarnings("unused")
 public class RadarService extends Service implements ServerStatusListener {
     private static final Logger logger = LoggerFactory.getLogger(RadarService.class);
 
@@ -74,6 +90,9 @@ public class RadarService extends Service implements ServerStatusListener {
         @Override
         public void onReceive(Context context, Intent intent) {
             Bundle bundle = intent.getExtras();
+            if (bundle == null) {
+                return;
+            }
             bundle.setClassLoader(RadarService.class.getClassLoader());
             updateAuthState(AppAuthState.Builder.from(bundle).build());
         }
@@ -95,7 +114,7 @@ public class RadarService extends Service implements ServerStatusListener {
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
 
-            if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+            if (Objects.equals(action, BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 logger.info("Bluetooth state {}", state);
                 // Upon state change, restart ui handler and restart Scanning.
@@ -113,7 +132,7 @@ public class RadarService extends Service implements ServerStatusListener {
     private final BroadcastReceiver deviceFailedReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, final Intent intent) {
-            if (intent.getAction().equals(DEVICE_CONNECT_FAILED)) {
+            if (Objects.equals(intent.getAction(), DEVICE_CONNECT_FAILED)) {
                 Boast.makeText(RadarService.this,
                         "Cannot connect to device " + intent.getStringExtra(DEVICE_STATUS_NAME),
                         Toast.LENGTH_SHORT).show();
@@ -237,20 +256,8 @@ public class RadarService extends Service implements ServerStatusListener {
 
         configure();
 
-        new AsyncTask<DeviceServiceProvider, Void, Void>() {
-            @Override
-            protected Void doInBackground(DeviceServiceProvider... params) {
-                for (DeviceServiceProvider provider : params) {
-                    if (!provider.isBound()) {
-                        logger.info("Binding to service: {}", provider);
-                        provider.bind();
-                    } else {
-                        logger.info("Already bound: {}", provider);
-                    }
-                }
-                return null;
-            }
-        }.execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
+        new AsyncBindServices(false)
+                .execute(mConnections.toArray(new DeviceServiceProvider[mConnections.size()]));
 
         checkPermissions();
 
@@ -406,6 +413,7 @@ public class RadarService extends Service implements ServerStatusListener {
         boolean didAddProvider = false;
         for (DeviceServiceProvider provider : connections) {
             if (!mConnections.contains(provider)) {
+                @SuppressWarnings("unchecked")
                 List<AppSource> sources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
                 if (sources != null) {
                     for (AppSource source : sources) {
@@ -484,22 +492,8 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     public void serviceDisconnected(final DeviceServiceConnection<?> connection) {
-            new AsyncTask<DeviceServiceConnection, Void, Void>() {
-                @Override
-                protected Void doInBackground(DeviceServiceConnection... params) {
-                    DeviceServiceProvider provider = getConnectionProvider(connection);
-                    if (provider == null) {
-                        return null;
-                    }
-                    logger.info("Rebinding {} after disconnect", provider);
-                    if (provider.isBound()) {
-                        provider.unbind();
-                    }
-                    provider.bind();
-
-                    return null;
-                }
-            }.execute();
+        new AsyncBindServices(true)
+                .execute(getConnectionProvider(connection));
     }
 
     public void updateServerStatus(ServerStatusListener.Status serverStatus) {
@@ -596,23 +590,27 @@ public class RadarService extends Service implements ServerStatusListener {
         for (String permission : permissions) {
             if (permission.equals(ACCESS_FINE_LOCATION) || permission.equals(ACCESS_COARSE_LOCATION)) {
                 LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                boolean isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-                boolean isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+                if (locationManager != null) {
+                    boolean isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+                    boolean isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
 
-                //Start your Activity if location was enabled:
-                if (!isGpsEnabled && !isNetworkEnabled) {
-                    needsPermissions.add(LOCATION_SERVICE);
-                    needsPermissions.add(permission);
+                    //Start your Activity if location was enabled:
+                    if (!isGpsEnabled && !isNetworkEnabled) {
+                        needsPermissions.add(LOCATION_SERVICE);
+                        needsPermissions.add(permission);
+                    }
                 }
             }
 
             if (permission.equals(PACKAGE_USAGE_STATS)) {
                 AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
-                int mode = appOps.checkOpNoThrow(
-                        "android:get_usage_stats", android.os.Process.myUid(), getPackageName());
+                if (appOps != null) {
+                    int mode = appOps.checkOpNoThrow(
+                            "android:get_usage_stats", android.os.Process.myUid(), getPackageName());
 
-                if (mode != AppOpsManager.MODE_ALLOWED) {
-                    needsPermissions.add(permission);
+                    if (mode != AppOpsManager.MODE_ALLOWED) {
+                        needsPermissions.add(permission);
+                    }
                 }
             } else if (ContextCompat.checkSelfPermission(this, permission) != PackageManager
                     .PERMISSION_GRANTED) {
@@ -743,6 +741,36 @@ public class RadarService extends Service implements ServerStatusListener {
                     }
                 });
             }
+        }
+    }
+
+    private static class AsyncBindServices extends AsyncTask<DeviceServiceProvider, Void, Void> {
+        private final boolean unbindFirst;
+
+        AsyncBindServices(boolean unbindFirst) {
+            this.unbindFirst = unbindFirst;
+        }
+
+        @Override
+        protected Void doInBackground(DeviceServiceProvider... params) {
+            for (DeviceServiceProvider provider : params) {
+                if (provider == null) {
+                    continue;
+                }
+                if (unbindFirst) {
+                    logger.info("Rebinding {} after disconnect", provider);
+                    if (provider.isBound()) {
+                        provider.unbind();
+                    }
+                }
+                if (!provider.isBound()) {
+                    logger.info("Binding to service: {}", provider);
+                    provider.bind();
+                } else {
+                    logger.info("Already bound: {}", provider);
+                }
+            }
+            return null;
         }
     }
 }

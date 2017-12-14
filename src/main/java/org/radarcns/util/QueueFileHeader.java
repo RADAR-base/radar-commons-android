@@ -18,6 +18,11 @@ package org.radarcns.util;
 
 import java.io.IOException;
 
+import static org.radarcns.util.Serialization.bytesToInt;
+import static org.radarcns.util.Serialization.bytesToLong;
+import static org.radarcns.util.Serialization.intToBytes;
+import static org.radarcns.util.Serialization.longToBytes;
+
 /**
  * Header for a {@link QueueFile}.
  *
@@ -80,18 +85,18 @@ public class QueueFileHeader {
     private void read() throws IOException {
         storage.read(0L, headerBuffer, 0, HEADER_LENGTH);
 
-        int version = QueueFile.bytesToInt(headerBuffer, 0);
+        int version = bytesToInt(headerBuffer, 0);
         if (version != VERSIONED_HEADER) {
             throw new IOException("Storage " + storage + " is not recognized as a queue file.");
         }
-        length = QueueFile.bytesToLong(headerBuffer, 4);
+        length = bytesToLong(headerBuffer, 4);
         if (length > storage.length()) {
             throw new IOException("File is truncated. Expected length: " + length
                     + ", Actual length: " + storage.length());
         }
-        count = QueueFile.bytesToInt(headerBuffer, 12);
-        firstPosition = QueueFile.bytesToLong(headerBuffer, 16);
-        lastPosition = QueueFile.bytesToLong(headerBuffer, 24);
+        count = bytesToInt(headerBuffer, 12);
+        firstPosition = bytesToLong(headerBuffer, 16);
+        lastPosition = bytesToLong(headerBuffer, 24);
 
         if (length < HEADER_LENGTH) {
             throw new IOException("File length in " + storage + " header too small");
@@ -103,7 +108,7 @@ public class QueueFileHeader {
         if (count < 0 || (count > 0 && (firstPosition == 0 || lastPosition == 0))) {
             throw new IOException("Number of elements not correct in storage " + storage);
         }
-        int crc = QueueFile.bytesToInt(headerBuffer, 32);
+        int crc = bytesToInt(headerBuffer, 32);
         if (crc != hashCode()) {
             throw new IOException("Queue storage " + storage + " was corrupted.");
         }
@@ -115,12 +120,12 @@ public class QueueFileHeader {
      */
     public void write() throws IOException {
         // first write all variables to a single byte buffer
-        QueueFile.intToBytes(VERSIONED_HEADER, headerBuffer, 0);
-        QueueFile.longToBytes(length, headerBuffer, 4);
-        QueueFile.intToBytes(count, headerBuffer, 12);
-        QueueFile.longToBytes(firstPosition, headerBuffer, 16);
-        QueueFile.longToBytes(lastPosition, headerBuffer, 24);
-        QueueFile.intToBytes(hashCode(), headerBuffer, 32);
+        intToBytes(VERSIONED_HEADER, headerBuffer, 0);
+        longToBytes(length, headerBuffer, 4);
+        intToBytes(count, headerBuffer, 12);
+        longToBytes(firstPosition, headerBuffer, 16);
+        longToBytes(lastPosition, headerBuffer, 24);
+        intToBytes(hashCode(), headerBuffer, 32);
 
         // then write the byte buffer out in one go
         storage.write(0L, headerBuffer, 0, HEADER_LENGTH);

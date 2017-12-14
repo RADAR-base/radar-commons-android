@@ -132,11 +132,22 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     /**
      * Try to send a single record without any caching mechanism.
      * If the current device is not registered when this is called, the data will NOT be sent.
+     *
+     * @deprecated use {@link #trySend(AvroTopic, SpecificRecord)} instead.
      */
+    @Deprecated
     protected <V extends SpecificRecord> void trySend(AvroTopic<ObservationKey, V> topic, long offset, V value) {
+        trySend(topic, value);
+    }
+
+    /**
+     * Try to send a single record without any caching mechanism.
+     * If the current device is not registered when this is called, the data will NOT be sent.
+     */
+    protected <V extends SpecificRecord> void trySend(AvroTopic<ObservationKey, V> topic, V value) {
         ObservationKey key = deviceStatus.getId();
         if (key.getSourceId() != null) {
-            dataHandler.trySend(topic, offset, key, value);
+            dataHandler.trySend(topic, key, value);
         } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
             didWarn = true;

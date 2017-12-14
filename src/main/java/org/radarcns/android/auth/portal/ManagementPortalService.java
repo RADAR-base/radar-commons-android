@@ -6,7 +6,9 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.ResultReceiver;
 import android.util.SparseArray;
+
 import com.crashlytics.android.Crashlytics;
+
 import org.json.JSONException;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
@@ -18,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.ref.SoftReference;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +53,7 @@ public class ManagementPortalService extends IntentService {
     private static final String REFRESH_TOKEN_ACTION = "org.radarcns.android.auth.ManagementPortalService.refreshTokenAction";
     private static final String REFRESH_TOKEN_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshToken";
     private static final String UPDATE_SUBJECT_KEY = "org.radarcns.android.auth.ManagementPortalService.updateSubject";
+    private static SoftReference<SparseArray<AppSource>> staticSources = new SoftReference<>(null);
     private ManagementPortalClient client;
     private SparseArray<AppSource> sources;
     private String clientSecret;
@@ -58,43 +62,65 @@ public class ManagementPortalService extends IntentService {
 
     public ManagementPortalService() {
         super(ManagementPortalService.class.getName());
-        sources = new SparseArray<>();
+        // try to avoid losing already-registered sources
+        sources = staticSources.get();
+        if (sources == null) {
+            sources = new SparseArray<>();
+            staticSources = new SoftReference<>(sources);
+        }
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
         authState = AppAuthState.Builder.from(this).build();
+        updateSources();
     }
 
     @Override
     protected void onHandleIntent(Intent intent) {
         boolean isSuccessful;
-        Bundle extras = intent.getExtras();
-        extras.setClassLoader(ManagementPortalService.class.getClassLoader());
+        try {
+            Bundle extras = intent.getExtras();
+            if (extras == null) {
+                throw new IllegalArgumentException("No intent extras provided to ManagementPortalService");
+            }
+            extras.setClassLoader(ManagementPortalService.class.getClassLoader());
 
-        switch (intent.getAction()) {
-            case REGISTER_SOURCE_ACTION:
-                isSuccessful = registerSource(extras);
-                break;
-            case REFRESH_TOKEN_ACTION:
-                isSuccessful = refreshToken(extras);
-                break;
-            case GET_STATE_ACTION:
-                isSuccessful = getState(extras);
-                break;
-            default:
-                logger.warn("Cannot complete action {}: action unknown", intent.getAction());
-                isSuccessful = false;
-                break;
-        }
-        if (isSuccessful) {
-            authState.addToPreferences(this);
+            String action = intent.getAction();
+            if (action == null) {
+                throw new IllegalArgumentException("No intent extras provided to ManagementPortalService");
+            }
+            switch (action) {
+                case REGISTER_SOURCE_ACTION:
+                    isSuccessful = registerSource(extras);
+                    break;
+                case REFRESH_TOKEN_ACTION:
+                    isSuccessful = refreshToken(extras);
+                    break;
+                case GET_STATE_ACTION:
+                    isSuccessful = getState(extras);
+                    break;
+                default:
+                    logger.warn("Cannot complete action {}: action unknown", intent.getAction());
+                    isSuccessful = false;
+                    break;
+            }
+            if (isSuccessful) {
+                authState.addToPreferences(this);
+            } else {
+                logger.error("Failed to interact with ManagementPortal with {}", authState);
+            }
+        } catch (IllegalArgumentException ex) {
+            Crashlytics.logException(ex);
         }
     }
 
     private boolean getState(Bundle extras) {
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
+        if (receiver == null) {
+            throw new IllegalArgumentException("ResultReceiver not set");
+        }
         Bundle result = new Bundle();
         authState.addToBundle(result);
         receiver.send(MANAGEMENT_PORTAL_REFRESH, result);
@@ -104,6 +130,9 @@ public class ManagementPortalService extends IntentService {
     private boolean refreshToken(Bundle extras) {
         logger.info("Refreshing JWT");
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
+        if (receiver == null) {
+            throw new IllegalArgumentException("ResultReceiver not set");
+        }
         try {
             ensureClient();
 
@@ -122,11 +151,15 @@ public class ManagementPortalService extends IntentService {
             authState = client.refreshToken(authState, clientId, clientSecret, parser);
             logger.info("Refreshed JWT");
 
+            if (extras.getBoolean(UPDATE_SUBJECT_KEY, false)) {
+                updateSources();
+            }
             Bundle result = new Bundle();
             authState.addToBundle(result);
             receiver.send(MANAGEMENT_PORTAL_REFRESH, result);
             return true;
         } catch (JSONException | IOException e) {
+            logger.error("Failed to get access token", e);
             receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
             return false;
         } catch (IllegalArgumentException ex) {
@@ -139,50 +172,87 @@ public class ManagementPortalService extends IntentService {
 
     }
 
+    private void updateSources() {
+        @SuppressWarnings("unchecked")
+        List<AppSource> existingSources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
+        if (existingSources != null) {
+            for (AppSource source : existingSources) {
+                if (source.getSourceId() != null) {
+                    sources.put((int) source.getSourceTypeId(), source);
+                }
+            }
+        }
+    }
+
+    private void addSource(AppSource source) {
+        sources.put((int) source.getSourceTypeId(), source);
+        @SuppressWarnings("unchecked")
+        List<AppSource> existingSources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
+
+        boolean containsSource = false;
+        ArrayList<AppSource> updatedSources;
+        if (existingSources != null) {
+            updatedSources = new ArrayList<>(existingSources.size());
+            updatedSources.add(source);
+            for (AppSource existingSource : existingSources) {
+                if (existingSource.getSourceTypeId() != source.getSourceTypeId()) {
+                    updatedSources.add(existingSource);
+                } else if (Objects.equals(source.getSourceId(), existingSource.getSourceId())) {
+                    containsSource = true;
+                }
+            }
+        } else {
+            updatedSources = new ArrayList<>(1);
+            updatedSources.add(source);
+        }
+        authState = authState.newBuilder()
+                .property(SOURCES_PROPERTY, updatedSources)
+                .build();
+
+        if (!containsSource) {
+            authState.invalidate(getApplicationContext());
+        }
+    }
+
     private boolean registerSource(Bundle extras) {
         logger.info("Handling source registration");
         AppSource source = extras.getParcelable(SOURCE_KEY);
+        if (source == null) {
+            throw new IllegalArgumentException("AppSource not set");
+        }
 
         AppSource resultSource = sources.get((int)source.getSourceTypeId());
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
+        if (receiver == null) {
+            throw new IllegalArgumentException("ResultReceiver not set");
+        }
 
         if (resultSource == null) {
             try {
                 ensureClient();
-
                 resultSource = client.registerSource(authState, source);
-                sources.put((int) resultSource.getSourceTypeId(), resultSource);
-                @SuppressWarnings("unchecked")
-                List<AppSource> existingSources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
-
-                boolean containsSource = false;
-                ArrayList<AppSource> updatedSources;
-                if (existingSources != null) {
-                    updatedSources = new ArrayList<>(existingSources.size());
-                    updatedSources.add(resultSource);
-                    for (AppSource existingSource : existingSources) {
-                        if (existingSource.getSourceTypeId() != resultSource.getSourceTypeId()) {
-                            updatedSources.add(existingSource);
-                        } else if (Objects.equals(resultSource.getSourceId(), existingSource.getSourceId())) {
-                            containsSource = true;
-                        }
-                    }
-                } else {
-                    updatedSources = new ArrayList<>(1);
-                    updatedSources.add(resultSource);
-                }
-                authState = authState.newBuilder()
-                        .property(SOURCES_PROPERTY, updatedSources)
-                        .build();
-
-                if (!containsSource) {
-                    authState.invalidate(getApplicationContext());
-                }
+                addSource(resultSource);
             } catch (IllegalArgumentException ex) {
                 authState.invalidate(this);
                 logger.error("ManagementPortal error; firebase settings incomplete", ex);
                 receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
                 return false;
+            } catch (ConflictException ex) {
+                try {
+                    authState = client.getSubject(authState, new GetSubjectParser(authState));
+                    updateSources();
+                    resultSource = sources.get((int) source.getSourceTypeId());
+                    if (resultSource == null) {
+                        logger.error("Source was not added to ManagementPortal, even though conflict was reported.");
+                        return false;
+                    }
+                } catch (IOException ioex) {
+                    logger.error("Failed to register source {} of type {} {}: already registered",
+                            source.getSourceName(), source.getSourceTypeProducer(),
+                            source.getSourceTypeModel(), ex);
+                    receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                    return false;
+                }
             } catch (AuthenticationException ex) {
                 authState.invalidate(this);
                 logger.error("Authentication error; failed to register source {} of type {} {}",

@@ -40,8 +40,8 @@ allprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.5.2'
-    ext.versionCode = 13
+    version = '0.6'
+    ext.versionCode = 14
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
 
@@ -52,12 +52,6 @@ allprojects {
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
-
-    configurations {
-        compile {
-            resolutionStrategy.cacheChangingModulesFor 0, 'SECONDS'
-        }
-    }
 
     repositories {
         jcenter()
@@ -117,7 +111,7 @@ ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api('org.radarcns:radar-commons:0.6.3') {
+    api('org.radarcns:radar-commons:0.7') {
         exclude group: 'io.confluent', module: 'kafka-avro-serializer'
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
@@ -132,8 +126,8 @@ dependencies {
     }
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.26'
 
-    testImplementation 'junit:junit:4.12'
-    testImplementation 'org.robolectric:robolectric:3.4.2'
+    testApi 'junit:junit:4.12'
+    testApi 'org.robolectric:robolectric:3.4.2'
     testImplementation 'com.squareup.okhttp3:mockwebserver:3.9.1'
 
     unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'

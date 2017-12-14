@@ -19,14 +19,18 @@ package org.radarcns.android.data;
 import android.content.Context;
 import android.os.Process;
 import android.support.annotation.NonNull;
-import okhttp3.Headers;
+
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.android.util.*;
+import org.radarcns.android.util.AndroidThreadFactory;
+import org.radarcns.android.util.AtomicFloat;
+import org.radarcns.android.util.BatteryLevelReceiver;
+import org.radarcns.android.util.NetworkConnectedReceiver;
+import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
+import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.config.ServerConfig;
-import org.radarcns.data.SpecificRecordEncoder;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.RestSender;
 import org.radarcns.producer.rest.SchemaRetriever;
@@ -35,7 +39,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -74,7 +82,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
     private KafkaDataSubmitter<SpecificRecord> submitter;
-    private RestSender<ObservationKey, SpecificRecord> sender;
+    private RestSender sender;
     private final AtomicFloat minimumBatteryLevel;
     private boolean useCompression;
 
@@ -145,10 +153,9 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         }
 
         updateServerStatus(Status.CONNECTING);
-        this.sender = new RestSender.Builder<ObservationKey, SpecificRecord>()
+        this.sender = new RestSender.Builder()
                 .server(kafkaConfig)
                 .schemaRetriever(schemaRetriever)
-                .encoders(new SpecificRecordEncoder(false), new SpecificRecordEncoder(false))
                 .connectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS)
                 .useCompression(useCompression)
                 .headers(authState.getOkHttpHeaders())
@@ -238,9 +245,9 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Try to submit given data. This will only send data if the submitter is active and there is
      * a connection with the server. Otherwise, the data is discarded.
      */
-    public synchronized boolean trySend(AvroTopic topic, long offset, ObservationKey deviceId,
+    public synchronized boolean trySend(AvroTopic topic, ObservationKey deviceId,
                                         SpecificRecord record) {
-        return submitter != null && submitter.trySend(topic, offset, deviceId, record);
+        return submitter != null && submitter.trySend(topic, deviceId, record);
     }
 
     /**
@@ -269,6 +276,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         return (DataCache<ObservationKey, V>)this.tables.get(topic);
     }
 
+    @SuppressWarnings("unchecked")
     public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(String topic) {
         return (DataCache<ObservationKey, V>) tablesByName.get(topic);
     }

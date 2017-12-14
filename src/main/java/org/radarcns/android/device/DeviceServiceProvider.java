@@ -23,6 +23,8 @@ import android.os.Parcelable;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 
+import com.crashlytics.android.Crashlytics;
+
 import org.radarcns.android.MainActivity;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
@@ -261,19 +263,14 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
             if (className.charAt(0) == '.') {
                 className = "org.radarcns" + className;
             }
-            Class<?> providerClass;
             try {
-                providerClass = Class.forName(className);
-            } catch (ClassNotFoundException ex) {
-                throw new IllegalArgumentException("Class " + className + " not found in classpath", ex);
-            }
-            try {
-                DeviceServiceProvider serviceProvider = (DeviceServiceProvider)providerClass.newInstance();
+                Class<?> providerClass = Class.forName(className);
+                DeviceServiceProvider serviceProvider = (DeviceServiceProvider) providerClass.newInstance();
                 providers.add(serviceProvider);
-            } catch (InstantiationException | IllegalAccessException ex) {
-                throw new IllegalArgumentException("Class " + className + " cannot be instantiated", ex);
-            } catch (ClassCastException ex) {
-                throw new IllegalArgumentException("Class " + className + " is not a " + DeviceServiceProvider.class.getSimpleName());
+            } catch (ClassNotFoundException | ClassCastException | InstantiationException
+                    | IllegalAccessException ex) {
+                logger.warn("Provider {} is not a legal DeviceServiceProvider", className, ex);
+                Crashlytics.logException(ex);
             }
         }
         return providers;

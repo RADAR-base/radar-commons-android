@@ -260,6 +260,7 @@ public abstract class MainActivity extends Activity {
                     throw new IllegalStateException("Login should not be cancellable");
                 }
                 Bundle extras = result.getExtras();
+                assert extras != null;
                 extras.setClassLoader(MainActivity.class.getClassLoader());
                 authState = AppAuthState.Builder.from(extras).build();
                 RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());

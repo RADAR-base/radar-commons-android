@@ -21,6 +21,7 @@ import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.DataHandler;
+import org.radarcns.data.AvroRecordData;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.AuthenticationException;
@@ -51,7 +52,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(KafkaDataSubmitter.class);
 
     private final DataHandler<ObservationKey, V> dataHandler;
-    private final KafkaSender<ObservationKey, V> sender;
+    private final KafkaSender sender;
     private final ConcurrentMap<AvroTopic<ObservationKey, V>, Queue<Record<ObservationKey, V>>> trySendCache;
     private final Map<AvroTopic<ObservationKey, V>, Runnable> trySendFuture;
     private final Map<AvroTopic<ObservationKey, V>, KafkaTopicSender<ObservationKey, V>> topicSenders;
@@ -68,7 +69,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
     private String userId;
 
     public KafkaDataSubmitter(@NonNull DataHandler<ObservationKey, V> dataHandler, @NonNull
-            KafkaSender<ObservationKey, V> sender, int sendLimit, long uploadRate, String userId) {
+            KafkaSender sender, int sendLimit, long uploadRate, String userId) {
         this.dataHandler = dataHandler;
         this.sender = sender;
         this.userId = userId;
@@ -309,49 +310,35 @@ public class KafkaDataSubmitter<V> implements Closeable {
         int numberOfRecords = measurements.size();
         int totalSize = unfilteredMeasurements.size();
 
-        if (numberOfRecords > 0) {
-            KafkaTopicSender<ObservationKey, V> cacheSender = sender(topic);
+        try {
+            if (numberOfRecords > 0) {
+                KafkaTopicSender<ObservationKey, V> cacheSender = sender(topic);
 
-            if (!uploadingNotified) {
-                dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING);
-            }
-
-            try {
-                cacheSender.send(measurements);
-                cacheSender.flush();
-            } catch (AuthenticationException ex) {
-                dataHandler.updateRecordsSent(topic.getName(), -1);
-                throw ex;
-            } catch (IOException ioe) {
-                dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING_FAILED);
-                dataHandler.updateRecordsSent(topic.getName(), -1);
-                throw ioe;
-            }
-
-            long lastOffsetSent = cacheSender.getLastSentOffset();
-            cache.markSent(lastOffsetSent);
-
-            dataHandler.updateRecordsSent(topic.getName(), numberOfRecords);
-
-            logger.debug("uploaded {} {} records", numberOfRecords, topic.getName());
-
-            long lastOffsetPut = measurements.get(numberOfRecords - 1).offset;
-            if (lastOffsetSent == lastOffsetPut) {
-                if (totalSize > numberOfRecords) {
-                    long offsetGot = unfilteredMeasurements.get(totalSize - 1).offset;
-                    if (offsetGot > lastOffsetPut) {
-                        cache.markSent(offsetGot);
-                    }
+                if (!uploadingNotified) {
+                    dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING);
                 }
-                listPool.add(measurements);
+
+                try {
+                    cacheSender.send(new AvroRecordData<>(topic, measurements));
+                    cacheSender.flush();
+                } catch (AuthenticationException ex) {
+                    dataHandler.updateRecordsSent(topic.getName(), -1);
+                    throw ex;
+                } catch (IOException ioe) {
+                    dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING_FAILED);
+                    dataHandler.updateRecordsSent(topic.getName(), -1);
+                    throw ioe;
+                }
+
+                dataHandler.updateRecordsSent(topic.getName(), numberOfRecords);
+
+                logger.debug("uploaded {} {} records", numberOfRecords, topic.getName());
             }
-        } else if (totalSize > 0) {
-            cache.markSent(unfilteredMeasurements.get(totalSize - 1).offset);
+            cache.remove(totalSize);
+        } finally {
             listPool.add(measurements);
-        } else {
-            listPool.add(measurements);
+            cache.returnList(unfilteredMeasurements);
         }
-        cache.returnList(unfilteredMeasurements);
 
         return totalSize;
     }
@@ -361,7 +348,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
      * messages to be lost. If the sender is disconnected, messages are immediately discarded.
      * @return whether the message was queued for sending.
      */
-    public <W extends V> boolean trySend(final AvroTopic<ObservationKey, W> topic, final long offset,
+    public <W extends V> boolean trySend(final AvroTopic<ObservationKey, W> topic,
                                          final ObservationKey deviceId, final W record) {
         if (!connection.isConnected()) {
             return false;
@@ -374,7 +361,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
             //noinspection unchecked
             trySendCache.put((AvroTopic<ObservationKey, V>)topic, records);
         }
-        records.add(new Record<>(offset, deviceId, (V)record));
+        records.add(new Record<>(deviceId, (V)record));
 
         long period = getUploadRate();
 
@@ -401,6 +388,8 @@ public class KafkaDataSubmitter<V> implements Closeable {
                         } catch (IOException e) {
                             dataHandler.updateRecordsSent(topic.getName(), -1);
                             connection.didDisconnect(e);
+                        } finally {
+                            listPool.add(localRecords);
                         }
                     }
                 };
@@ -412,15 +401,12 @@ public class KafkaDataSubmitter<V> implements Closeable {
     }
 
     /** Immediately send given records, without any error recovery. */
-    private void doImmediateSend(AvroTopic<ObservationKey, V> topic, List<Record<ObservationKey, V>> records)
+    private void doImmediateSend(AvroTopic<ObservationKey, V> topic,
+                                 List<Record<ObservationKey, V>> records)
             throws IOException {
         KafkaTopicSender<ObservationKey, V> localSender = sender(topic);
-        localSender.send(records);
+        localSender.send(new AvroRecordData<>(topic, records));
         dataHandler.updateRecordsSent(topic.getName(), records.size());
-        long lastOffset = records.get(records.size() - 1).offset;
-        if (localSender.getLastSentOffset() == lastOffset) {
-            listPool.add(records);
-        }
     }
 
     public void setUserId(String userId) {
