@@ -22,21 +22,14 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
+
 import org.radarcns.android.R;
-import org.radarcns.android.auth.portal.ManagementPortalClient;
 import org.radarcns.android.util.Boast;
-import org.radarcns.config.ServerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.List;
 import java.util.Objects;
-
-import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
-import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
@@ -139,7 +132,8 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         }
         this.appAuth.addToPreferences(this);
 
-        LocalBroadcastManager.getInstance(this).sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
+        LocalBroadcastManager.getInstance(this)
+                .sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
 
         if (startedFromActivity) {
             logger.info("Start next activity with result");

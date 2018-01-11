@@ -150,9 +150,9 @@ public class RadarService extends Service implements ServerStatusListener {
                 if (!isMakingRequest.compareAndSet(false, true)) {
                     return;
                 }
-                authState.invalidate(RadarService.this);
                 final String refreshToken = (String) authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
                 if (ManagementPortalService.isEnabled() && refreshToken != null) {
+                    authState.invalidate(RadarService.this);
                     logger.info("Creating request to management portal");
                     ManagementPortalService.requestAccessToken(RadarService.this,
                             refreshToken, false, new ResultReceiver(mHandler) {
