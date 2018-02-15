@@ -55,12 +55,12 @@ import java.util.concurrent.atomic.AtomicLong;
 public class TableDataHandler implements DataHandler<ObservationKey, SpecificRecord>, BatteryLevelReceiver.BatteryLevelListener, NetworkConnectedReceiver.NetworkConnectedListener {
     private static final Logger logger = LoggerFactory.getLogger(TableDataHandler.class);
 
-    public static final long DATA_RETENTION_DEFAULT = 86400000L;
-    public static final int SEND_LIMIT_DEFAULT = 1000;
-    public static final long UPLOAD_RATE_DEFAULT = 10L;
-    public static final long SENDER_CONNECTION_TIMEOUT_DEFAULT = 10L;
-    public static final float MINIMUM_BATTERY_LEVEL = 0.1f;
-    public static final float REDUCED_BATTERY_LEVEL = 0.2f;
+    private static final long DATA_RETENTION_DEFAULT = 86400000L;
+    private static final int SEND_LIMIT_DEFAULT = 1000;
+    private static final long UPLOAD_RATE_DEFAULT = 10L;
+    private static final long SENDER_CONNECTION_TIMEOUT_DEFAULT = 10L;
+    private static final float MINIMUM_BATTERY_LEVEL = 0.1f;
+    private static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
     private final Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> tables = new ConcurrentHashMap<>();
     private final Map<String, DataCache<ObservationKey, ? extends SpecificRecord>> tablesByName = new ConcurrentHashMap<>();
