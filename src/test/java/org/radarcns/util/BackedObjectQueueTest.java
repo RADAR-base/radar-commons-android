@@ -16,9 +16,12 @@
 
 package org.radarcns.util;
 
+import org.apache.avro.specific.SpecificData;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.android.data.CacheStore;
 import org.radarcns.android.data.TapeAvroConverter;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
@@ -41,6 +44,11 @@ public class BackedObjectQueueTest {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
+    @Rule
+    public ExpectedException exception = ExpectedException.none();
+
+    private static final SpecificData specificData = CacheStore.getInstance().getSpecificData();
+
     @Test
     public void testBinaryObject() throws IOException {
         File file = folder.newFile();
@@ -53,7 +61,7 @@ public class BackedObjectQueueTest {
                 ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
                 ObservationKey.class, ActiveAudioRecording.class);
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic))) {
+                QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic, specificData))) {
 
             ByteBuffer buffer = ByteBuffer.wrap(data);
             Record<ObservationKey, ActiveAudioRecording> record = new Record<>(
@@ -63,7 +71,7 @@ public class BackedObjectQueueTest {
         }
 
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic))) {
+                QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic, specificData))) {
             Record<ObservationKey, ActiveAudioRecording> result = queue.peek();
 
             assertArrayEquals(data, result.value.getData().array());
@@ -80,7 +88,7 @@ public class BackedObjectQueueTest {
 
         BackedObjectQueue<Record<ObservationKey, ObservationKey>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic));
+                QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic, specificData));
 
         Record<ObservationKey, ObservationKey> record = new Record<>(
                 new ObservationKey("test", "a", "b"),
@@ -90,7 +98,7 @@ public class BackedObjectQueueTest {
         queue.peek();
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testFloatObject() throws IOException {
         File file = folder.newFile();
         assertTrue(file.delete());
@@ -100,7 +108,7 @@ public class BackedObjectQueueTest {
 
         BackedObjectQueue<Record<ObservationKey, PhoneLight>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic));
+                QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic, specificData));
 
         double now = System.currentTimeMillis() / 1000d;
         Record<ObservationKey, PhoneLight> record = new Record<>(
@@ -108,5 +116,7 @@ public class BackedObjectQueueTest {
                 new PhoneLight(now, now, Float.NaN));
 
         queue.add(record);
+        exception.expect(IllegalArgumentException.class);
+        queue.peek();
     }
 }

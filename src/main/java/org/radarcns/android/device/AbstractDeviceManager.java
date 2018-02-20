@@ -122,7 +122,11 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     protected <V extends SpecificRecord> void send(AvroTopic<ObservationKey, V> topic, V value) {
         ObservationKey key = deviceStatus.getId();
         if (key.getSourceId() != null) {
-            dataHandler.addMeasurement(topic, key, value);
+            try {
+                dataHandler.addMeasurement(topic, key, value);
+            } catch (IllegalArgumentException ex) {
+                logger.error("Cannot send to topic {}: {}", topic, ex.getMessage());
+            }
         } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
             didWarn = true;
@@ -147,7 +151,11 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     protected <V extends SpecificRecord> void trySend(AvroTopic<ObservationKey, V> topic, V value) {
         ObservationKey key = deviceStatus.getId();
         if (key.getSourceId() != null) {
-            dataHandler.trySend(topic, key, value);
+            try {
+                dataHandler.trySend(topic, key, value);
+            } catch (IllegalArgumentException ex) {
+                logger.warn("Cannot try to send to topic {}: {}", topic, ex.getMessage());
+            }
         } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID from {}", getClass().getSimpleName());
             didWarn = true;

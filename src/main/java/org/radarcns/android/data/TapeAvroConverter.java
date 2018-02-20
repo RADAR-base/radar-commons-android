@@ -76,18 +76,21 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
 
         decoder = decoderFactory.binaryDecoder(in, decoder);
 
+        K key;
+        V value;
         try {
-            K key = keyReader.read(null, decoder);
-            V value = valueReader.read(null, decoder);
-            if (!specificData.validate(keySchema, key)
-                    || !specificData.validate(valueSchema, value)) {
-                throw new IllegalArgumentException("Failed to validate given record in topic "
-                        + topicName + "\n\tkey: " + key + "\n\tvalue: " + value);
-            }
-            return new Record<>(key, value);
+            key = keyReader.read(null, decoder);
+            value = valueReader.read(null, decoder);
         } catch (RuntimeException ex) {
             throw new IOException("Failed to deserialize object", ex);
         }
+
+        if (!specificData.validate(keySchema, key)
+                || !specificData.validate(valueSchema, value)) {
+            throw new IllegalArgumentException("Failed to validate given record in topic "
+                    + topicName + "\n\tkey: " + key + "\n\tvalue: " + value);
+        }
+        return new Record<>(key, value);
     }
 
     public void serialize(Record<K, V> o, OutputStream out) throws IOException {
