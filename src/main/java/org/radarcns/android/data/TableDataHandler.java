@@ -20,6 +20,7 @@ import android.content.Context;
 import android.os.Process;
 import android.support.annotation.NonNull;
 
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
@@ -70,6 +71,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private final NetworkConnectedReceiver networkConnectedReceiver;
     private final AtomicBoolean sendOnlyWithWifi;
     private final Context context;
+    private final SpecificData specificData;
     private int maxBytes;
     private AppAuthState authState;
     private ServerConfig kafkaConfig;
@@ -107,6 +109,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
         this.useCompression = false;
         this.authState = authState;
+        this.specificData = CacheStore.getInstance().getSpecificData();
 
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
@@ -245,9 +248,16 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Try to submit given data. This will only send data if the submitter is active and there is
      * a connection with the server. Otherwise, the data is discarded.
      */
-    public synchronized boolean trySend(AvroTopic topic, ObservationKey deviceId,
-                                        SpecificRecord record) {
-        return submitter != null && submitter.trySend(topic, deviceId, record);
+    @SuppressWarnings("UnusedReturnValue")
+    public boolean trySend(AvroTopic topic, ObservationKey key, SpecificRecord value) {
+        if (!specificData.validate(topic.getKeySchema(), key)
+                || !specificData.validate(topic.getValueSchema(), value)) {
+            throw new IllegalArgumentException("Cannot send invalid record {key: "
+                    + key + ", value: " + value + "}");
+        }
+        synchronized (this) {
+            return submitter != null && submitter.trySend(topic, key, value);
+        }
     }
 
     /**
@@ -283,6 +293,11 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     @Override
     public <W extends SpecificRecord> void addMeasurement(AvroTopic<ObservationKey, W> topic, ObservationKey key, W value) {
+        if (!specificData.validate(topic.getKeySchema(), key)
+                || !specificData.validate(topic.getValueSchema(), value)) {
+            throw new IllegalArgumentException("Cannot send invalid record {key: "
+                    + key + ", value: " + value + "}");
+        }
         getCache(topic).addMeasurement(key, value);
     }
 

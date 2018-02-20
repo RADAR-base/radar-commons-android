@@ -22,6 +22,7 @@ import org.junit.rules.TemporaryFolder;
 import org.radarcns.android.data.TapeAvroConverter;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
+import org.radarcns.passive.phone.PhoneLight;
 import org.radarcns.topic.AvroTopic;
 
 import java.io.File;
@@ -89,14 +90,23 @@ public class BackedObjectQueueTest {
         queue.peek();
     }
 
-    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
-    public static String bytesToHex(byte[] bytes, int offset, int count) {
-        char[] hexChars = new char[count * 2];
-        for ( int j = 0; j < count; j++ ) {
-            int v = bytes[j + offset] & 0xFF;
-            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
-            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
-        }
-        return new String(hexChars);
+    @Test(expected = IllegalArgumentException.class)
+    public void testFloatObject() throws IOException {
+        File file = folder.newFile();
+        assertTrue(file.delete());
+        AvroTopic<ObservationKey, PhoneLight> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), PhoneLight.getClassSchema(),
+                ObservationKey.class, PhoneLight.class);
+
+        BackedObjectQueue<Record<ObservationKey, PhoneLight>> queue;
+        queue = new BackedObjectQueue<>(
+                QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic));
+
+        double now = System.currentTimeMillis() / 1000d;
+        Record<ObservationKey, PhoneLight> record = new Record<>(
+                new ObservationKey("test", "a", "b"),
+                new PhoneLight(now, now, Float.NaN));
+
+        queue.add(record);
     }
 }

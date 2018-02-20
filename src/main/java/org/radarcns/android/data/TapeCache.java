@@ -23,6 +23,7 @@ import android.util.Pair;
 
 import com.crashlytics.android.Crashlytics;
 
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.data.AvroEncoder;
@@ -88,7 +89,8 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
      * @throws IOException if a BackedObjectQueue cannot be created.
      */
     public TapeCache(final Context context, AvroTopic<K, V> topic,
-                     SingleThreadExecutorFactory executorFactory) throws IOException {
+                     SingleThreadExecutorFactory executorFactory, SpecificData specificData)
+            throws IOException {
         this.topic = topic;
         this.timeWindowMillis = 10_000L;
         this.maxBytes = 450_000_000;
@@ -121,7 +123,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
         this.measurementsToAdd = new ArrayList<>();
 
-        this.converter = new TapeAvroConverter<>(topic);
+        this.converter = new TapeAvroConverter<>(topic, specificData);
         this.queue = new BackedObjectQueue<>(queueFile, converter);
         this.flusher = new Runnable() {
             @Override

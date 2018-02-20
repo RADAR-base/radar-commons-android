@@ -52,8 +52,8 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
     private BinaryEncoder encoder;
     private BinaryDecoder decoder;
 
-    public TapeAvroConverter(AvroTopic<K, V> topic) throws IOException {
-        specificData = new SpecificData(TapeAvroConverter.class.getClassLoader());
+    public TapeAvroConverter(AvroTopic<K, V> topic, SpecificData specificData) throws IOException {
+        this.specificData = specificData;
         topicName = topic.getName();
         encoderFactory = EncoderFactory.get();
         decoderFactory = DecoderFactory.get();
@@ -81,7 +81,7 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
             V value = valueReader.read(null, decoder);
             if (!specificData.validate(keySchema, key)
                     || !specificData.validate(valueSchema, value)) {
-                throw new IllegalStateException("Failed to validate deserialized record in topic "
+                throw new IllegalArgumentException("Failed to validate given record in topic "
                         + topicName + "\n\tkey: " + key + "\n\tvalue: " + value);
             }
             return new Record<>(key, value);
@@ -91,11 +91,6 @@ public class TapeAvroConverter<K extends SpecificRecord, V extends SpecificRecor
     }
 
     public void serialize(Record<K, V> o, OutputStream out) throws IOException {
-        if (!specificData.validate(keySchema, o.key)
-                || !specificData.validate(valueSchema, o.value)) {
-            throw new IllegalArgumentException("Failed to validate given record in topic "
-                    + topicName + "\n\tkey: " + o.key + "\n\tvalue: " + o.value);
-        }
         // for backwards compatibility
         out.write(EMPTY_HEADER, 0, 8);
         encoder = encoderFactory.binaryEncoder(out, encoder);
