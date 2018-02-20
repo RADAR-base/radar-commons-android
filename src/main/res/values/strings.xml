@@ -23,4 +23,6 @@
         an internet connection to upload the data and/or move unnecessary photos and multimedia from
         your device.
     </string>
+    <string name="enable_bluetooth_title">Enable Bluetooth for RADAR</string>
+    <string name="enable_bluetooth_text">Bluetooth is needed for data collection. Please enable it as soon as possible.</string>
 </resources>

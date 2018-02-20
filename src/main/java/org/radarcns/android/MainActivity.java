@@ -18,6 +18,7 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -44,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
@@ -88,11 +90,48 @@ public abstract class MainActivity extends Activity {
 
     private IRadarService radarService;
 
+    /** Defines callbacks for service binding, passed to bindService() */
+    private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+
+            if (Objects.equals(action, BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                logger.info("Bluetooth state {}", state);
+                // Upon state change, restart ui handler and restart Scanning.
+                if (state == BluetoothAdapter.STATE_OFF) {
+                    logger.warn("Bluetooth is off");
+                    requestEnableBt();
+                }
+            }
+        }
+    };
+
+    private boolean bluetoothReceiverIsEnabled = false;
+
+    /**
+     * Sends an intent to request bluetooth to be turned on.
+     * @return whether a request was sent
+     */
+    protected boolean requestEnableBt() {
+        BluetoothAdapter btAdaptor = BluetoothAdapter.getDefaultAdapter();
+        if (!btAdaptor.isEnabled()) {
+            Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            btIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getApplicationContext().startActivity(btIntent);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     private final ServiceConnection radarServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             radarService = (IRadarService) service;
             mView = createView();
+            testBindBluetooth();
         }
 
         @Override
@@ -100,6 +139,14 @@ public abstract class MainActivity extends Activity {
             radarService = null;
         }
     };
+
+    private void testBindBluetooth() {
+        if (radarService != null && !bluetoothReceiverIsEnabled) {
+            registerReceiver(bluetoothReceiver,
+                    new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+            bluetoothReceiverIsEnabled = true;
+        }
+    }
 
     protected abstract Class<? extends LoginActivity> loginActivity();
 
@@ -200,8 +247,6 @@ public abstract class MainActivity extends Activity {
     protected void onResume() {
         logger.info("mainActivity onResume");
         super.onResume();
-
-        bindService(new Intent(this, radarService()), radarServiceConnection, 0);
         getHandler().post(mViewUpdater);
     }
 
@@ -209,7 +254,6 @@ public abstract class MainActivity extends Activity {
     protected void onPause() {
         logger.info("mainActivity onPause");
         getHandler().removeCallbacks(mViewUpdater);
-        unbindService(radarServiceConnection);
         super.onPause();
     }
 
@@ -227,6 +271,8 @@ public abstract class MainActivity extends Activity {
         synchronized (this) {
             mHandler = localHandler;
         }
+        bindService(new Intent(this, radarService()), radarServiceConnection, 0);
+        testBindBluetooth();
     }
 
     @Override
@@ -245,11 +291,16 @@ public abstract class MainActivity extends Activity {
         logger.info("mainActivity onStop");
         super.onStop();
 
+        unbindService(radarServiceConnection);
+
         synchronized (this) {
             mHandler = null;
         }
         mHandlerThread.quitSafely();
         mView = null;
+        if (bluetoothReceiverIsEnabled) {
+            unregisterReceiver(bluetoothReceiver);
+        }
     }
 
     @Override
@@ -257,7 +308,8 @@ public abstract class MainActivity extends Activity {
         switch (requestCode) {
             case LOGIN_REQUEST_CODE: {
                 if (resultCode != RESULT_OK) {
-                    throw new IllegalStateException("Login should not be cancellable");
+                    logger.error("Login should not be cancellable. Opening login again");
+                    startLogin(true);
                 }
                 Bundle extras = result.getExtras();
                 assert extras != null;

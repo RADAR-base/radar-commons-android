@@ -64,8 +64,10 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
 
         if (!hasService()) {
             super.onServiceConnected(className, service);
-            getServiceBinder().setDataHandler(radarService.getDataHandler());
-            radarService.serviceConnected(this);
+            if (hasService()) {
+                getServiceBinder().setDataHandler(radarService.getDataHandler());
+                radarService.serviceConnected(this);
+            }
         }
     }
 

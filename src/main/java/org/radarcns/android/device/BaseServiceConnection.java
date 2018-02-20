@@ -23,17 +23,24 @@ import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.util.Pair;
 
+import com.crashlytics.android.Crashlytics;
+
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
-import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @SuppressWarnings({"unused", "WeakerAccess"})
@@ -59,11 +66,10 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
                 synchronized (this) {
                     serviceBinder = (DeviceServiceBinder) service;
                 }
+                deviceStatus = getDeviceData().getStatus();
             } catch (ClassCastException ex) {
-                throw new IllegalStateException("Cannot process remote device services.");
+                Crashlytics.logException(new IllegalStateException("Cannot process remote device services.", ex));
             }
-
-            deviceStatus = getDeviceData().getStatus();
         } else {
             logger.info("Trying to re-bind service, from {} to {}", serviceBinder, service);
         }
@@ -78,10 +84,13 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
     /**
      * Start looking for devices to record.
      * @param acceptableIds case insensitive parts of device ID's that are allowed to connect.
-     * @throws IllegalStateException if the user ID was not set yet
      */
     public void startRecording(@NonNull Set<String> acceptableIds) {
-        deviceStatus = serviceBinder.startRecording(acceptableIds).getStatus();
+        try {
+            deviceStatus = serviceBinder.startRecording(acceptableIds).getStatus();
+        } catch (IllegalStateException ex) {
+            logger.error("Cannot start service {}: {}", this, ex.getMessage());
+        }
     }
 
     public void stopRecording() {

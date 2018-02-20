@@ -18,6 +18,7 @@ package org.radarcns.android;
 
 import android.app.AppOpsManager;
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
@@ -52,6 +53,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.Manifest.permission.*;
+import static android.app.Notification.DEFAULT_VIBRATE;
 import static org.radarcns.android.RadarConfiguration.*;
 import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
@@ -78,6 +80,8 @@ public class RadarService extends Service implements ServerStatusListener {
 
     public static String ACTION_PERMISSIONS_GRANTED = RADAR_PACKAGE + ".ACTION_PERMISSIONS_GRANTED";
     public static String EXTRA_GRANT_RESULTS = RADAR_PACKAGE + ".EXTRA_GRANT_RESULTS";
+
+    private static final int BLUETOOTH_NOTIFICATION = 521290;
 
     private final BroadcastReceiver permissionsBroadcastReceiver = new BroadcastReceiver() {
         @Override
@@ -109,7 +113,7 @@ public class RadarService extends Service implements ServerStatusListener {
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters = new HashMap<>();
 
     /** Defines callbacks for service binding, passed to bindService() */
-    private final BroadcastReceiver  bluetoothReceiver = new BroadcastReceiver() {
+    private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
@@ -120,14 +124,37 @@ public class RadarService extends Service implements ServerStatusListener {
                 // Upon state change, restart ui handler and restart Scanning.
                 if (state == BluetoothAdapter.STATE_ON) {
                     logger.info("Bluetooth is on");
+                    removeBluetoothNotification();
                     startScanning();
                 } else if (state == BluetoothAdapter.STATE_OFF) {
                     logger.warn("Bluetooth is off");
-                    startScanning();
+                    createBluetoothNotification();
                 }
             }
         }
     };
+
+    private void removeBluetoothNotification() {
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) {
+            return;
+        }
+        manager.cancel(BLUETOOTH_NOTIFICATION);
+    }
+
+    private void createBluetoothNotification() {
+        Notification notification = notificationBuilder()
+                .setContentTitle(getString(R.string.enable_bluetooth_title))
+                .setContentText(getString(R.string.enable_bluetooth_text))
+                .setDefaults(DEFAULT_VIBRATE)
+                .build();
+
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) {
+            return;
+        }
+        manager.notify(BLUETOOTH_NOTIFICATION, notification);
+    }
 
     private final BroadcastReceiver deviceFailedReceiver = new BroadcastReceiver() {
         @Override
@@ -261,11 +288,14 @@ public class RadarService extends Service implements ServerStatusListener {
 
         checkPermissions();
 
+        Intent mainClass = new Intent().setComponent(new ComponentName(this, mainActivityClass));
+
+        RadarApplication application = (RadarApplication) getApplicationContext();
+
         startForeground(1,
-                new Notification.Builder(this)
-                        .setContentTitle("RADAR")
-                        .setContentText("Open RADAR app")
-                        .setContentIntent(PendingIntent.getActivity(this, 0, new Intent().setComponent(new ComponentName(this, mainActivityClass)), 0))
+                notificationBuilder()
+                        .setContentTitle(getString(R.string.service_notification_title))
+                        .setContentText(getString(R.string.service_notification_text))
                         .build());
 
         if (authState.getProperty(SOURCES_PROPERTY) == null && ManagementPortalService.isEnabled()) {
@@ -282,6 +312,14 @@ public class RadarService extends Service implements ServerStatusListener {
         }
 
         return START_STICKY;
+    }
+
+    private Notification.Builder notificationBuilder() {
+        RadarApplication application = (RadarApplication) getApplicationContext();
+        Intent mainClass = new Intent().setComponent(new ComponentName(this, mainActivityClass));
+        return ((RadarApplication) getApplicationContext())
+                .updateNotificationAppSettings(new Notification.Builder(this))
+                .setContentIntent(PendingIntent.getActivity(this, 0, mainClass, 0));
     }
 
     @Override
@@ -632,14 +670,6 @@ public class RadarService extends Service implements ServerStatusListener {
     protected boolean checkPermissions(DeviceServiceProvider<?> provider) {
         List<String> providerPermissions = provider.needsPermissions();
 
-        if (providerPermissions.contains(BLUETOOTH)) {
-            if (requestedBt || requestEnableBt()) {
-                logger.info("Cannot start scanning on service {} until bluetooth is turned on.",
-                        provider.getConnection());
-                requestedBt = true;
-                return false;
-            }
-        }
         for (String permission : providerPermissions) {
             if (needsPermissions.contains(permission)) {
                 // cannot start
@@ -647,22 +677,6 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }
         return true;
-    }
-
-    /**
-     * Sends an intent to request bluetooth to be turned on.
-     * @return whether a request was sent
-     */
-    protected boolean requestEnableBt() {
-        BluetoothAdapter btAdaptor = BluetoothAdapter.getDefaultAdapter();
-        if (!btAdaptor.isEnabled()) {
-            Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            btIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getApplicationContext().startActivity(btIntent);
-            return true;
-        } else {
-            return false;
-        }
     }
 
     /** Disconnect from all services. */
@@ -742,12 +756,17 @@ public class RadarService extends Service implements ServerStatusListener {
                 });
             }
         }
+
+        @Override
+        public boolean needsBluetooth() {
+            return false;
+        }
     }
 
     private static class AsyncBindServices extends AsyncTask<DeviceServiceProvider, Void, Void> {
         private final boolean unbindFirst;
 
-        AsyncBindServices(boolean unbindFirst) {
+         AsyncBindServices(boolean unbindFirst) {
             this.unbindFirst = unbindFirst;
         }
 
