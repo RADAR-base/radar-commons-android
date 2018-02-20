@@ -17,6 +17,9 @@
 package org.radarcns.android.device;
 
 import android.support.annotation.CallSuper;
+
+import com.crashlytics.android.Crashlytics;
+
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppSource;
@@ -125,6 +128,8 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
             try {
                 dataHandler.addMeasurement(topic, key, value);
             } catch (IllegalArgumentException ex) {
+                Crashlytics.log("Cannot send measurement for " + getState().getId());
+                Crashlytics.logException(ex);
                 logger.error("Cannot send to topic {}: {}", topic, ex.getMessage());
             }
         } else if (!didWarn) {
@@ -154,6 +159,8 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
             try {
                 dataHandler.trySend(topic, key, value);
             } catch (IllegalArgumentException ex) {
+                Crashlytics.log("Cannot send measurement for " + getState().getId());
+                Crashlytics.logException(ex);
                 logger.warn("Cannot try to send to topic {}: {}", topic, ex.getMessage());
             }
         } else if (!didWarn) {

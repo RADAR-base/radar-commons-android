@@ -250,11 +250,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      */
     @SuppressWarnings("UnusedReturnValue")
     public boolean trySend(AvroTopic topic, ObservationKey key, SpecificRecord value) {
-        if (!specificData.validate(topic.getKeySchema(), key)
-                || !specificData.validate(topic.getValueSchema(), value)) {
-            throw new IllegalArgumentException("Cannot send invalid record {key: "
-                    + key + ", value: " + value + "}");
-        }
+        checkRecord(topic, key, value);
         synchronized (this) {
             return submitter != null && submitter.trySend(topic, key, value);
         }
@@ -293,12 +289,16 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     @Override
     public <W extends SpecificRecord> void addMeasurement(AvroTopic<ObservationKey, W> topic, ObservationKey key, W value) {
+        checkRecord(topic, key, value);
+        getCache(topic).addMeasurement(key, value);
+    }
+
+    private void checkRecord(AvroTopic topic, ObservationKey key, SpecificRecord value) {
         if (!specificData.validate(topic.getKeySchema(), key)
                 || !specificData.validate(topic.getValueSchema(), value)) {
-            throw new IllegalArgumentException("Cannot send invalid record {key: "
-                    + key + ", value: " + value + "}");
+            throw new IllegalArgumentException("Cannot send invalid record to topic " + topic
+                    + " with {key: " + key + ", value: " + value + "}");
         }
-        getCache(topic).addMeasurement(key, value);
     }
 
     @Override
