@@ -32,6 +32,7 @@ import android.os.ResultReceiver;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
 
 import org.apache.avro.specific.SpecificRecord;
@@ -83,6 +84,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public static final String DEVICE_STATUS_CHANGED = PREFIX + "DeviceStatusListener.Status";
     public static final String DEVICE_STATUS_NAME = PREFIX + "DeviceManager.getName";
     public static final String DEVICE_CONNECT_FAILED = PREFIX + "DeviceStatusListener.deviceFailedToConnect";
+
     private final ObservationKey key = new ObservationKey();
 
     /** Stops the device when bluetooth is disabled. */
@@ -111,7 +113,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private TableDataHandler dataHandler;
     private DeviceManager<T> deviceScanner;
     private DeviceBinder mBinder;
-    private boolean needsBluetooth;
+    private boolean hasBluetoothPermission;
     private AppSource source;
 
     @CallSuper
@@ -184,7 +186,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         Intent statusChanged = new Intent(DEVICE_CONNECT_FAILED);
         statusChanged.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
         statusChanged.putExtra(DEVICE_STATUS_NAME, deviceName);
-        sendBroadcast(statusChanged);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged);
     }
 
 
@@ -195,7 +197,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         if (name != null) {
             statusChanged.putExtra(DEVICE_STATUS_NAME, name);
         }
-        sendBroadcast(statusChanged);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged);
     }
 
     @Override
@@ -366,6 +368,11 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
+        public boolean needsBluetooth() {
+            return isBluetoothConnectionRequired();
+        }
+
+        @Override
         public void setDataHandler(TableDataHandler dataHandler) {
             DeviceService.this.setDataHandler(dataHandler);
         }
@@ -418,7 +425,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     protected void setHasBluetoothPermission(boolean isRequired) {
         boolean oldBluetoothNeeded = isBluetoothConnectionRequired();
-        needsBluetooth = isRequired;
+        hasBluetoothPermission = isRequired;
         boolean newBluetoothNeeded = isBluetoothConnectionRequired();
 
         if (oldBluetoothNeeded && !newBluetoothNeeded) {
@@ -431,7 +438,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     protected boolean hasBluetoothPermission() {
-        return needsBluetooth;
+        return hasBluetoothPermission;
     }
 
     protected boolean isBluetoothConnectionRequired() {

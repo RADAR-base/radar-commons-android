@@ -16,6 +16,7 @@
 
 package org.radarcns.android.util;
 
+import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -124,8 +125,12 @@ public class OfflineProcessor implements Closeable {
         processorThread.start();
     }
 
+    @SuppressLint("WakelockTimeout")
     private static PowerManager.WakeLock acquireWakeLock(Context context, String requestName) {
         PowerManager powerManager = (PowerManager) context.getSystemService(POWER_SERVICE);
+        if (powerManager == null) {
+            return null;
+        }
         PowerManager.WakeLock wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK, requestName);
         wakeLock.acquire();

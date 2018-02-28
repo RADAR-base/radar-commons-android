@@ -37,6 +37,7 @@ import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
+
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
 import org.slf4j.Logger;
@@ -51,6 +52,7 @@ import java.util.Set;
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
 import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 
@@ -94,9 +96,7 @@ public abstract class MainActivity extends Activity {
     private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            final String action = intent.getAction();
-
-            if (Objects.equals(action, BluetoothAdapter.ACTION_STATE_CHANGED)) {
+            if (Objects.equals(intent.getAction(), BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 logger.info("Bluetooth state {}", state);
                 // Upon state change, restart ui handler and restart Scanning.
@@ -108,22 +108,29 @@ public abstract class MainActivity extends Activity {
         }
     };
 
+    private final BroadcastReceiver bluetoothNeededReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Objects.equals(intent.getAction(), ACTION_BLUETOOTH_NEEDED_CHANGED)) {
+                testBindBluetooth();
+            }
+        }
+    };
+
     private boolean bluetoothReceiverIsEnabled = false;
 
     /**
      * Sends an intent to request bluetooth to be turned on.
-     * @return whether a request was sent
      */
-    protected boolean requestEnableBt() {
+    protected void requestEnableBt() {
         BluetoothAdapter btAdaptor = BluetoothAdapter.getDefaultAdapter();
-        if (!btAdaptor.isEnabled()) {
-            Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            btIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getApplicationContext().startActivity(btIntent);
-            return true;
-        } else {
-            return false;
+        if (btAdaptor.isEnabled()) {
+            return;
         }
+
+        Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+        btIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getApplicationContext().startActivity(btIntent);
     }
 
     private final ServiceConnection radarServiceConnection = new ServiceConnection() {
@@ -141,10 +148,16 @@ public abstract class MainActivity extends Activity {
     };
 
     private void testBindBluetooth() {
-        if (radarService != null && !bluetoothReceiverIsEnabled) {
+        boolean needsBluetooth = radarService != null && radarService.needsBluetooth();
+
+        if (needsBluetooth && !bluetoothReceiverIsEnabled) {
             registerReceiver(bluetoothReceiver,
                     new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
             bluetoothReceiverIsEnabled = true;
+            requestEnableBt();
+        } else if (bluetoothReceiverIsEnabled && !needsBluetooth) {
+            unregisterReceiver(bluetoothReceiver);
+            bluetoothReceiverIsEnabled = false;
         }
     }
 
@@ -188,7 +201,7 @@ public abstract class MainActivity extends Activity {
                 onConfigChanged();
             }
         };
-        registerReceiver(configurationBroadcastReceiver,
+        LocalBroadcastManager.getInstance(this).registerReceiver(configurationBroadcastReceiver,
                 new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
 
         Bundle extras = new Bundle();
@@ -223,7 +236,8 @@ public abstract class MainActivity extends Activity {
         super.onDestroy();
 
         if (configurationBroadcastReceiver != null) {
-            unregisterReceiver(configurationBroadcastReceiver);
+            LocalBroadcastManager.getInstance(this)
+                    .unregisterReceiver(configurationBroadcastReceiver);
         }
     }
 
@@ -273,6 +287,9 @@ public abstract class MainActivity extends Activity {
         }
         bindService(new Intent(this, radarService()), radarServiceConnection, 0);
         testBindBluetooth();
+        LocalBroadcastManager.getInstance(this)
+                .registerReceiver(bluetoothNeededReceiver,
+                        new IntentFilter(ACTION_BLUETOOTH_NEEDED_CHANGED));
     }
 
     @Override
@@ -298,6 +315,7 @@ public abstract class MainActivity extends Activity {
         }
         mHandlerThread.quitSafely();
         mView = null;
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(bluetoothNeededReceiver);
         if (bluetoothReceiverIsEnabled) {
             unregisterReceiver(bluetoothReceiver);
         }

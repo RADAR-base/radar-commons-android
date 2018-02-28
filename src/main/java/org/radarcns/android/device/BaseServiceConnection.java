@@ -181,6 +181,10 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
         return serviceClassName;
     }
 
+    public boolean needsBluetooth() {
+        return serviceBinder != null && serviceBinder.needsBluetooth();
+    }
+
     @Override
     public boolean equals(Object other) {
         if (other == this) {
