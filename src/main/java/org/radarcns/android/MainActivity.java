@@ -117,7 +117,7 @@ public abstract class MainActivity extends Activity {
         }
     };
 
-    private boolean bluetoothReceiverIsEnabled = false;
+    private volatile boolean bluetoothReceiverIsEnabled = false;
 
     /**
      * Sends an intent to request bluetooth to be turned on.
@@ -156,8 +156,8 @@ public abstract class MainActivity extends Activity {
             bluetoothReceiverIsEnabled = true;
             requestEnableBt();
         } else if (bluetoothReceiverIsEnabled && !needsBluetooth) {
-            unregisterReceiver(bluetoothReceiver);
             bluetoothReceiverIsEnabled = false;
+            unregisterReceiver(bluetoothReceiver);
         }
     }
 

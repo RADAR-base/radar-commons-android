@@ -241,15 +241,16 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     protected T getState() {
         DeviceManager<T> localManager = getDeviceManager();
-        if (localManager == null) {
-            T state = getDefaultState();
-            ObservationKey stateKey = state.getId();
-            stateKey.setProjectId(key.getProjectId());
-            stateKey.setUserId(key.getUserId());
-            stateKey.setSourceId(key.getSourceId());
-            return state;
+        if (localManager != null) {
+            return localManager.getState();
         }
-        return localManager.getState();
+
+        T state = getDefaultState();
+        ObservationKey stateKey = state.getId();
+        stateKey.setProjectId(key.getProjectId());
+        stateKey.setUserId(key.getUserId());
+        stateKey.setSourceId(key.getSourceId());
+        return state;
     }
 
     /**
@@ -257,7 +258,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     protected abstract T getDefaultState();
 
-    public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
+    public T startRecording(@NonNull Set<String> acceptableIds) {
         DeviceManager localManager = getDeviceManager();
         if (key.getUserId() == null) {
             throw new IllegalStateException("Cannot start recording: user ID is not set.");
@@ -294,7 +295,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public BaseDeviceState getDeviceStatus() {
+        public T getDeviceStatus() {
             return getState();
         }
 
@@ -308,7 +309,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
+        public T startRecording(@NonNull Set<String> acceptableIds) {
             return DeviceService.this.startRecording(acceptableIds);
         }
 
