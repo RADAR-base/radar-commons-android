@@ -117,7 +117,7 @@ dependencies {
         exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
         exclude group: 'org.json', module: 'json'
     }
-    api 'org.radarcns:radar-schemas-commons:0.3.1'
+    api 'org.radarcns:radar-schemas-commons:0.3.2'
 
     implementation 'com.google.firebase:firebase-config:11.8.0'
     implementation('com.crashlytics.sdk.android:crashlytics:2.9.0@aar') {
