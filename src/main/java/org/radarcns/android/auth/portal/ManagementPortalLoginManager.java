@@ -6,15 +6,25 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ResultReceiver;
+
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigException;
+
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginListener;
 import org.radarcns.android.auth.LoginManager;
+import org.radarcns.producer.AuthenticationException;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
+import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON;
+import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_CONFIGURATION;
+import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_DISCONNECTED;
+import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_IO;
+import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_UNAUTHORIZED;
 
 public class ManagementPortalLoginManager implements LoginManager {
     private String refreshToken;
@@ -43,7 +53,23 @@ public class ManagementPortalLoginManager implements LoginManager {
                         AppAuthState state = AppAuthState.Builder.from(resultData).build();
                         listener.loginSucceeded(ManagementPortalLoginManager.this, state);
                     } else {
-                        listener.loginFailed(ManagementPortalLoginManager.this, new IOException("Cannot reach management portal"));
+                        int reason = resultData.getInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_IO);
+                        Exception ex;
+                        switch (reason) {
+                            case REQUEST_FAILED_REASON_UNAUTHORIZED:
+                                ex = new AuthenticationException("Cannot authenticate");
+                                break;
+                            case REQUEST_FAILED_REASON_CONFIGURATION:
+                                ex = new FirebaseRemoteConfigException();
+                                break;
+                            case REQUEST_FAILED_REASON_DISCONNECTED:
+                                ex = new ConnectException();
+                                break;
+                            default:
+                                ex = new IOException("Cannot reach management portal");
+                                break;
+                        }
+                        listener.loginFailed(ManagementPortalLoginManager.this, ex);
                     }
                     isRefreshing.set(false);
                 }
