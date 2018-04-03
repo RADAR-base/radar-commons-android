@@ -1,9 +1,11 @@
 package org.radarcns.android.util;
 
-import okhttp3.Response;
+import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.rest.RestClient;
 
 import java.io.IOException;
+
+import okhttp3.Response;
 
 public final class ResponseHandler {
     private ResponseHandler() {
@@ -14,7 +16,9 @@ public final class ResponseHandler {
         try {
             String body = RestClient.responseBody(response);
 
-            if (!response.isSuccessful()) {
+            if (response.code() == 401) {
+                throw new AuthenticationException("QR code is invalid: " + body);
+            } else if (!response.isSuccessful()) {
                 throw new IOException("Failed to make request; response " + body);
             } else if (body == null || body.isEmpty()) {
                 throw new IOException("Response body expected but not found");

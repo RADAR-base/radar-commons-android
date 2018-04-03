@@ -26,6 +26,19 @@ import android.support.annotation.Nullable;
 public interface LoginListener {
     /** Callback for when a login succeeds. */
     void loginSucceeded(@Nullable LoginManager manager, @NonNull AppAuthState state);
-    /** Callback for when a login fails. */
+
+    /**
+     * Callback for when a login fails. Expected exceptions are
+     * <ul>
+     * <li>{@link org.radarcns.producer.AuthenticationException} if a login attempt was made but not
+     * accepted by the server,</li>
+     * <li>{@link com.google.firebase.remoteconfig.FirebaseRemoteConfigException} if the
+     * configuration was incorrect,</li>
+     * <li>{@link java.net.ConnectException} if no network connection was available, or</li>
+     * <li>{@link java.io.IOException} if a generic I/O exception occurred.</li>
+     * </ul>
+     *
+     * It my also be {@code null}.
+     */
     void loginFailed(@Nullable LoginManager manager, @Nullable Exception ex);
 }
