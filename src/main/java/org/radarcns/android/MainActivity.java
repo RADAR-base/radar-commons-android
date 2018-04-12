@@ -26,6 +26,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -38,6 +40,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,6 +104,19 @@ public abstract class MainActivity extends Activity {
         }
     };
 
+    private final BroadcastReceiver networkStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            NetworkInfo networkInfo = intent.getParcelableExtra("networkInfo");
+            if (networkInfo == null)
+                return;
+
+            if (networkInfo.isConnected() && !authState.isValid()) {
+                startLogin(false);
+            }
+        }
+    };
+
     protected abstract Class<? extends LoginActivity> loginActivity();
 
     @Override
@@ -120,6 +136,7 @@ public abstract class MainActivity extends Activity {
             return;
         }
 
+        registerReceiver(networkStateReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
         create();
     }
 
