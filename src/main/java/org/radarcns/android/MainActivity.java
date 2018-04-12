@@ -195,6 +195,7 @@ public abstract class MainActivity extends Activity {
         if (configurationBroadcastReceiver != null) {
             unregisterReceiver(configurationBroadcastReceiver);
         }
+        unregisterReceiver(networkStateReceiver);
     }
 
     protected Class<? extends RadarService> radarService() {
