@@ -17,6 +17,7 @@
 package org.radarcns.android;
 
 import android.app.Application;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.support.annotation.CallSuper;
@@ -27,10 +28,6 @@ import org.slf4j.impl.HandroidLoggerAdapter;
 
 /** Provides the name and some metadata of the main activity */
 public abstract class RadarApplication extends Application {
-    public static final String NOTIFICATION_CHANNEL_INFO = "RadarApplication.INFO";
-    public static final String NOTIFICATION_CHANNEL_NOTIFY = "RadarApplication.NOTIFY";
-    public static final String NOTIFICATION_CHANNEL_ALERT = "RadarApplication.ALERT";
-    public static final String NOTIFICATION_CHANNEL_FINAL_ALERT = "RadarApplication.FINAL_ALERT";
     private NotificationHandler notificationHandler;
 
     /** Large icon bitmap. */
@@ -51,8 +48,14 @@ public abstract class RadarApplication extends Application {
         notificationHandler = new NotificationHandler(this);
     }
 
-    public NotificationHandler getNotificationHandler() {
-        return notificationHandler;
+    /** Get a notification handler. */
+    public static NotificationHandler getNotificationHandler(Context context) {
+        Context applicationContext = context.getApplicationContext();
+        if (applicationContext instanceof RadarApplication) {
+            return ((RadarApplication) applicationContext).notificationHandler;
+        } else {
+            return new NotificationHandler(applicationContext);
+        }
     }
 
     protected void setupLogging() {

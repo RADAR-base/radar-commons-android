@@ -188,7 +188,7 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     private void createBluetoothNotification() {
-        Notification notification = ((RadarApplication)getApplicationContext()).getNotificationHandler()
+        Notification notification = RadarApplication.getNotificationHandler(this)
                 .builder(NotificationHandler.NOTIFICATION_CHANNEL_ALERT)
                 .setContentTitle(getString(R.string.notification_bluetooth_needed_title))
                 .setContentText(getString(R.string.notification_bluetooth_needed_text))
@@ -359,7 +359,7 @@ public class RadarService extends Service implements ServerStatusListener {
     protected Notification createForegroundNotification() {
         RadarApplication app = (RadarApplication) getApplication();
         Intent mainIntent = new Intent().setComponent(new ComponentName(this, mainActivityClass));
-        return app.getNotificationHandler().builder(NOTIFICATION_CHANNEL_NOTIFY)
+        return RadarApplication.getNotificationHandler(this).builder(NOTIFICATION_CHANNEL_NOTIFY)
                 .setContentText(getText(R.string.service_notification_text))
                 .setContentTitle(getText(R.string.service_notification_title))
                 .setContentIntent(PendingIntent.getActivity(this, 0,mainIntent, 0))

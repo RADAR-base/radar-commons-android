@@ -1,8 +1,7 @@
 package org.radarcns.android.auth.portal;
 
 import android.util.SparseArray;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -14,6 +13,9 @@ import org.radarcns.config.ServerConfig;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
 
 import static org.junit.Assert.assertEquals;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
@@ -192,10 +194,10 @@ public class ManagementPortalClientTest {
         String body = ManagementPortalClient.sourceRegistrationBody(source).toString();
         JSONObject object = new JSONObject(body);
 //        TODO: fix when managementportal accepts different source names
-//        assertEquals("something", object.getString("sourceName"));
+        assertEquals("something", object.getString("sourceName"));
         assertEquals(0, object.getInt("sourceTypeId"));
         JSONObject attr = object.getJSONObject("attributes");
-        assertEquals(2, object.names().length());
+        assertEquals(3, object.names().length());
         assertEquals("0.11", attr.getString("firmware"));
         assertEquals(1, attr.names().length());
     }
