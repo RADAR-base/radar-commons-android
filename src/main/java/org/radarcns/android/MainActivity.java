@@ -38,6 +38,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,7 @@ import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadable
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
 @SuppressWarnings({"unused", "WeakerAccess"})
-public abstract class MainActivity extends Activity {
+public abstract class MainActivity extends Activity implements NetworkConnectedReceiver.NetworkConnectedListener {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
@@ -87,6 +88,8 @@ public abstract class MainActivity extends Activity {
     private boolean requestedBt;
 
     private IRadarService radarService;
+
+    private NetworkConnectedReceiver networkReceiver;
 
     private final ServiceConnection radarServiceConnection = new ServiceConnection() {
         @Override
@@ -120,6 +123,7 @@ public abstract class MainActivity extends Activity {
             return;
         }
 
+        networkReceiver = new NetworkConnectedReceiver(this, this);
         create();
     }
 
@@ -143,6 +147,7 @@ public abstract class MainActivity extends Activity {
         };
         registerReceiver(configurationBroadcastReceiver,
                 new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+        networkReceiver.register();
 
         Bundle extras = new Bundle();
         authState.addToBundle(extras);
@@ -178,6 +183,7 @@ public abstract class MainActivity extends Activity {
         if (configurationBroadcastReceiver != null) {
             unregisterReceiver(configurationBroadcastReceiver);
         }
+        networkReceiver.unregister();
     }
 
     protected Class<? extends RadarService> radarService() {
@@ -238,6 +244,13 @@ public abstract class MainActivity extends Activity {
         }
 
         super.onNewIntent(intent);
+    }
+
+    @Override
+    public void onNetworkConnectionChanged(boolean isConnected, boolean isWifiOrEthernet) {
+        if (isConnected && !authState.isValid()) {
+            startLogin(false);
+        }
     }
 
     @Override
