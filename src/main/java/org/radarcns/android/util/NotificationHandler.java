@@ -3,7 +3,9 @@ package org.radarcns.android.util;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.net.Uri;
@@ -91,7 +93,7 @@ public class NotificationHandler {
         return mChannel;
     }
 
-    public Notification.Builder builder(String channel) {
+    public Notification.Builder builder(String channel, boolean includeIntent) {
         Notification.Builder builder;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             builder = new Notification.Builder(context, channel);
@@ -124,15 +126,21 @@ public class NotificationHandler {
                         .setPriority(Notification.PRIORITY_HIGH);
             }
         }
-        return updateNotificationAppSettings(builder);
+        return updateNotificationAppSettings(builder, includeIntent);
     }
 
-    public Notification.Builder updateNotificationAppSettings(Notification.Builder builder) {
+    public Notification.Builder updateNotificationAppSettings(Notification.Builder builder, boolean includeIntent) {
         Context applicationContext = context.getApplicationContext();
         if (applicationContext instanceof RadarApplication) {
             RadarApplication app = (RadarApplication) applicationContext;
             builder.setLargeIcon(app.getLargeIcon())
                     .setSmallIcon(app.getSmallIcon());
+        }
+
+        if (includeIntent) {
+            Intent intent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+            PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, 0);
+            builder.setContentIntent(pendingIntent);
         }
 
         return builder.setWhen(System.currentTimeMillis());
