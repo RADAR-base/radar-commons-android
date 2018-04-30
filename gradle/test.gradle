@@ -1,8 +1,8 @@
 apply plugin: 'de.mobilej.unmock'
 
 dependencies {
-    testApi 'junit:junit:4.12'
-    testApi 'org.robolectric:robolectric:3.4.2'
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.robolectric:robolectric:3.4.2'
     testImplementation 'com.squareup.okhttp3:mockwebserver:3.9.1'
 
     unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'

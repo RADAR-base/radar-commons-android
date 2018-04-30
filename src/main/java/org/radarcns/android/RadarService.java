@@ -52,6 +52,7 @@ import org.radarcns.android.device.DeviceStatusListener;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.Boast;
 import org.radarcns.android.util.BundleSerialization;
+import org.radarcns.android.util.NotificationHandler;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.TimedInt;
 import org.radarcns.producer.rest.SchemaRetriever;
@@ -104,6 +105,7 @@ import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
 import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
+import static org.radarcns.android.util.NotificationHandler.NOTIFICATION_CHANNEL_NOTIFY;
 
 @SuppressWarnings("unused")
 public class RadarService extends Service implements ServerStatusListener {
@@ -186,9 +188,10 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     private void createBluetoothNotification() {
-        Notification notification = notificationBuilder()
-                .setContentTitle(getString(R.string.enable_bluetooth_title))
-                .setContentText(getString(R.string.enable_bluetooth_text))
+        Notification notification = ((RadarApplication)getApplicationContext()).getNotificationHandler()
+                .builder(NotificationHandler.NOTIFICATION_CHANNEL_ALERT)
+                .setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                .setContentText(getString(R.string.notification_bluetooth_needed_text))
                 .setDefaults(DEFAULT_VIBRATE)
                 .build();
 
@@ -335,15 +338,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
         checkPermissions();
 
-        Intent mainClass = new Intent().setComponent(new ComponentName(this, mainActivityClass));
-
-        RadarApplication application = (RadarApplication) getApplicationContext();
-
-        startForeground(1,
-                notificationBuilder()
-                        .setContentTitle(getString(R.string.service_notification_title))
-                        .setContentText(getString(R.string.service_notification_text))
-                        .build());
+        startForeground(1, createForegroundNotification());
 
         if (authState.getProperty(SOURCES_PROPERTY) == null && ManagementPortalService.isEnabled()) {
             ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
@@ -361,12 +356,14 @@ public class RadarService extends Service implements ServerStatusListener {
         return START_STICKY;
     }
 
-    private Notification.Builder notificationBuilder() {
-        RadarApplication application = (RadarApplication) getApplicationContext();
-        Intent mainClass = new Intent().setComponent(new ComponentName(this, mainActivityClass));
-        return ((RadarApplication) getApplicationContext())
-                .updateNotificationAppSettings(new Notification.Builder(this))
-                .setContentIntent(PendingIntent.getActivity(this, 0, mainClass, 0));
+    protected Notification createForegroundNotification() {
+        RadarApplication app = (RadarApplication) getApplication();
+        Intent mainIntent = new Intent().setComponent(new ComponentName(this, mainActivityClass));
+        return app.getNotificationHandler().builder(NOTIFICATION_CHANNEL_NOTIFY)
+                .setContentText(getText(R.string.service_notification_text))
+                .setContentTitle(getText(R.string.service_notification_title))
+                .setContentIntent(PendingIntent.getActivity(this, 0,mainIntent, 0))
+                .build();
     }
 
     @Override

@@ -3,6 +3,8 @@ package org.radarcns.android.auth.portal;
 import android.app.IntentService;
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.ResultReceiver;
 import android.util.SparseArray;
@@ -53,6 +55,13 @@ public class ManagementPortalService extends IntentService {
     private static final String REFRESH_TOKEN_ACTION = "org.radarcns.android.auth.ManagementPortalService.refreshTokenAction";
     private static final String REFRESH_TOKEN_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshToken";
     private static final String UPDATE_SUBJECT_KEY = "org.radarcns.android.auth.ManagementPortalService.updateSubject";
+    public static final String REQUEST_FAILED_REASON = "org.radarcns.android.auth.ManagementPortalService.refreshFailedReason";
+    public static final int REQUEST_FAILED_REASON_IO = 1;
+    public static final int REQUEST_FAILED_REASON_UNAUTHORIZED = 2;
+    public static final int REQUEST_FAILED_REASON_CONFIGURATION = 3;
+    public static final int REQUEST_FAILED_REASON_CONFLICT = 4;
+    public static final int REQUEST_FAILED_REASON_DISCONNECTED = 5;
+
     private static SoftReference<SparseArray<AppSource>> staticSources = new SoftReference<>(null);
     private ManagementPortalClient client;
     private SparseArray<AppSource> sources;
@@ -133,6 +142,17 @@ public class ManagementPortalService extends IntentService {
         if (receiver == null) {
             throw new IllegalArgumentException("ResultReceiver not set");
         }
+        Bundle result = new Bundle();
+
+        ConnectivityManager connManager =
+                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
+        if (networkInfo == null || !networkInfo.isConnected()) {
+            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
+            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
+            return false;
+        }
+
         try {
             ensureClient();
 
@@ -154,19 +174,25 @@ public class ManagementPortalService extends IntentService {
             if (extras.getBoolean(UPDATE_SUBJECT_KEY, false)) {
                 updateSources();
             }
-            Bundle result = new Bundle();
             authState.addToBundle(result);
             receiver.send(MANAGEMENT_PORTAL_REFRESH, result);
             return true;
+        } catch (AuthenticationException ex) {
+            logger.error("Failed to get access token", ex);
+            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_UNAUTHORIZED);
+            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
+            return false;
         } catch (JSONException | IOException e) {
             logger.error("Failed to get access token", e);
-            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
+            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_IO);
+            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
             return false;
         } catch (IllegalArgumentException ex) {
             authState.invalidate(this);
             logger.error("ManagementPortal error; Firebase settings incomplete", ex);
             Crashlytics.logException(ex);
-            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, null);
+            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_CONFIGURATION);
+            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
             return false;
         }
 
@@ -227,7 +253,19 @@ public class ManagementPortalService extends IntentService {
             throw new IllegalArgumentException("ResultReceiver not set");
         }
 
+        Bundle result = new Bundle();
+
         if (resultSource == null) {
+
+            ConnectivityManager connManager =
+                    (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
+            if (networkInfo == null || !networkInfo.isConnected()) {
+                result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
+                receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
+                return false;
+            }
+
             try {
                 ensureClient();
                 resultSource = client.registerSource(authState, source);
@@ -235,7 +273,8 @@ public class ManagementPortalService extends IntentService {
             } catch (IllegalArgumentException ex) {
                 authState.invalidate(this);
                 logger.error("ManagementPortal error; firebase settings incomplete", ex);
-                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_CONFIGURATION);
+                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, result);
                 return false;
             } catch (ConflictException ex) {
                 try {
@@ -250,7 +289,8 @@ public class ManagementPortalService extends IntentService {
                     logger.error("Failed to register source {} of type {} {}: already registered",
                             source.getSourceName(), source.getSourceTypeProducer(),
                             source.getSourceTypeModel(), ex);
-                    receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                    result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_CONFLICT);
+                    receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, result);
                     return false;
                 }
             } catch (AuthenticationException ex) {
@@ -258,18 +298,19 @@ public class ManagementPortalService extends IntentService {
                 logger.error("Authentication error; failed to register source {} of type {} {}",
                         source.getSourceName(), source.getSourceTypeProducer(),
                         source.getSourceTypeModel(), ex);
-                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_UNAUTHORIZED);
+                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, result);
                 return false;
             } catch (IOException | JSONException ex) {
                 logger.error("Failed to register source {} of type {} {}",
                         source.getSourceName(), source.getSourceTypeProducer(),
                         source.getSourceTypeModel(), ex);
-                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, null);
+                result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_IO);
+                receiver.send(MANAGEMENT_PORTAL_REGISTRATION_FAILED, result);
                 return false;
             }
         }
 
-        Bundle result = new Bundle();
         authState.addToBundle(result);
         result.putParcelable(SOURCE_KEY, resultSource);
         receiver.send(MANAGEMENT_PORTAL_REGISTRATION, result);

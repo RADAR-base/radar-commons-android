@@ -71,8 +71,6 @@ import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
  */
 @SuppressWarnings("WeakerAccess")
 public abstract class DeviceService<T extends BaseDeviceState> extends Service implements DeviceStatusListener {
-    private static final int ONGOING_NOTIFICATION_ID = 11;
-    private static final int BLUETOOTH_NOTIFICATION_ID = 12;
     private static final String PREFIX = "org.radarcns.android.";
     public static final String SERVER_STATUS_CHANGED = PREFIX + "ServerStatusListener.Status";
     public static final String SERVER_RECORDS_SENT_TOPIC = PREFIX + "ServerStatusListener.topic";

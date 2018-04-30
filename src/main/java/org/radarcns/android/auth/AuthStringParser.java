@@ -17,6 +17,8 @@
 package org.radarcns.android.auth;
 
 import android.support.annotation.NonNull;
+
+import org.json.JSONException;
 import org.radarcns.android.util.Parser;
 
 import java.io.IOException;
@@ -32,5 +34,5 @@ public interface AuthStringParser extends Parser<String, AppAuthState> {
      * @throws IllegalArgumentException if the string is not a valid authentication string
      */
     @Override
-    AppAuthState parse(@NonNull String authString) throws IOException;
+    AppAuthState parse(@NonNull String authString) throws IOException, JSONException;
 }
