@@ -45,7 +45,6 @@ import org.radarcns.producer.rest.SchemaRetriever;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -341,15 +340,10 @@ public class RadarService extends Service implements ServerStatusListener {
         boolean newlyCreated;
         synchronized (this) {
             if (dataHandler == null) {
-                try {
-                    dataHandler = new TableDataHandler(
-                            this, kafkaConfig, remoteSchemaRetriever, maxBytes,
-                            sendOnlyWithWifi, authState);
-                    newlyCreated = true;
-                } catch (IOException ex) {
-                    logger.error("Failed to instantiate Data Handler", ex);
-                    throw new IllegalStateException(ex);
-                }
+                dataHandler = new TableDataHandler(
+                        this, kafkaConfig, remoteSchemaRetriever, maxBytes,
+                        sendOnlyWithWifi, authState);
+                newlyCreated = true;
             } else {
                 newlyCreated = false;
             }
