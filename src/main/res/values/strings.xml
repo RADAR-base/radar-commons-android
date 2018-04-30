@@ -23,4 +23,15 @@
         an internet connection to upload the data and/or move unnecessary photos and multimedia from
         your device.
     </string>
+
+    <string name="channel_info_name">Information</string>
+    <string name="channel_info_description">Informs about the app status.</string>
+    <string name="channel_notify_name">Tasks</string>
+    <string name="channel_notify_description">Notifies about recurring tasks and anomalous behaviour.</string>
+    <string name="channel_alert_name">Missed tasks</string>
+    <string name="channel_alert_description">Alerts about missed tasks or continuing anomalous behaviour.</string>
+    <string name="channel_final_alert_name">Final warning for missed tasks</string>
+    <string name="channel_final_alert_description">Final warning about missed tasks or continuing anomalous behaviour.</string>
+    <string name="notification_bluetooth_needed_text">Need bluetooth for data collection.</string>
+    <string name="notification_bluetooth_needed_title">Bluetooth needed</string>
 </resources>

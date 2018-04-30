@@ -261,12 +261,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
         checkPermissions();
 
-        startForeground(1,
-                new Notification.Builder(this)
-                        .setContentTitle("RADAR")
-                        .setContentText("Open RADAR app")
-                        .setContentIntent(PendingIntent.getActivity(this, 0, new Intent().setComponent(new ComponentName(this, mainActivityClass)), 0))
-                        .build());
+        startForeground(1, createForegroundNotification());
 
         if (authState.getProperty(SOURCES_PROPERTY) == null && ManagementPortalService.isEnabled()) {
             ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
@@ -282,6 +277,16 @@ public class RadarService extends Service implements ServerStatusListener {
         }
 
         return START_STICKY;
+    }
+
+    protected Notification createForegroundNotification() {
+        RadarApplication app = (RadarApplication) getApplication();
+        Intent mainIntent = new Intent().setComponent(new ComponentName(this, mainActivityClass));
+        return app.getAppNotificationBuilder(RadarApplication.NOTIFICATION_CHANNEL_NOTIFY)
+                .setContentText(getText(R.string.service_notification_text))
+                .setContentTitle(getText(R.string.service_notification_title))
+                .setContentIntent(PendingIntent.getActivity(this, 0,mainIntent, 0))
+                .build();
     }
 
     @Override

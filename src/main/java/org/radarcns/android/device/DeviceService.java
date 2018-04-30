@@ -57,6 +57,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,27 +96,30 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
 
-            if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+            if (Objects.equals(action, BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 final int state = intent.getIntExtra(
                         BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 switch (state) {
                     case BluetoothAdapter.STATE_TURNING_OFF: case BluetoothAdapter.STATE_OFF:
                         logger.warn("Bluetooth is off");
+
                         RadarApplication app = (RadarApplication) context.getApplicationContext();
-
-                        PackageManager pm = context.getPackageManager();
-
-                        Intent launchIntent = pm.getLaunchIntentForPackage(context.getPackageName());
-                        PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, launchIntent, 0);
-
-                        Notification notification = app.updateNotificationAppSettings(new Notification.Builder(app))
-                                .setContentIntent(pendingIntent)
-                                .setContentText("Need bluetooth for data collection.")
-                                .setContentTitle("Bluetooth needed")
-                                .build();
-
                         NotificationManager manager = (NotificationManager) app.getSystemService(NOTIFICATION_SERVICE);
-                        manager.notify(BLUETOOTH_NOTIFICATION_ID, notification);
+
+                        if (manager != null) {
+                            PackageManager pm = context.getPackageManager();
+
+                            Intent launchIntent = pm.getLaunchIntentForPackage(context.getPackageName());
+                            PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, launchIntent, 0);
+
+                            Notification notification = app.getAppNotificationBuilder(RadarApplication.NOTIFICATION_CHANNEL_ALERT)
+                                    .setContentIntent(pendingIntent)
+                                    .setContentText(getString(R.string.notification_bluetooth_needed_text))
+                                    .setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                                    .build();
+
+                            manager.notify(BLUETOOTH_NOTIFICATION_ID, notification);
+                        }
 
                         stopDeviceManager(unsetDeviceManager());
                         break;
@@ -291,9 +295,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     protected Notification createBackgroundNotification(PendingIntent intent) {
         RadarApplication app = (RadarApplication) getApplicationContext();
-        return app.updateNotificationAppSettings(new Notification.Builder(app))
+        return app.getAppNotificationBuilder(RadarApplication.NOTIFICATION_CHANNEL_NOTIFY)
                 .setContentIntent(intent)
-                .setTicker(getText(R.string.service_notification_ticker))
                 .setContentText(getText(R.string.service_notification_text))
                 .setContentTitle(getText(R.string.service_notification_title))
                 .build();
