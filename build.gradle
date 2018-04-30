@@ -20,7 +20,7 @@ buildscript {
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.0.1'
+        classpath 'com.android.tools.build:gradle:3.1.2'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.0'
         classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.5.4'
         classpath 'de.mobilej.unmock:UnMockPlugin:0.6.4'
@@ -79,7 +79,7 @@ allprojects {
 
 android {
     compileSdkVersion 27
-    buildToolsVersion '27.0.1'
+    buildToolsVersion '27.0.3'
 
     defaultConfig {
         minSdkVersion 21
@@ -118,16 +118,14 @@ dependencies {
         exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
         exclude group: 'org.json', module: 'json'
     }
-    api 'org.radarcns:radar-schemas-commons:0.2.3'
+    api 'org.radarcns:radar-schemas-commons:0.3.2'
 
-    implementation 'com.google.firebase:firebase-config:11.6.2'
-    implementation('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
-        transitive = true
-    }
+    implementation 'com.google.firebase:firebase-config:15.0.0'
+    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.1'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.26'
 
-    testApi 'junit:junit:4.12'
-    testApi 'org.robolectric:robolectric:3.4.2'
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.robolectric:robolectric:3.4.2'
     testImplementation 'com.squareup.okhttp3:mockwebserver:3.9.1'
 
     unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
@@ -261,5 +259,4 @@ artifactoryPublish {
 
 task wrapper(type: Wrapper) {
     gradleVersion = '4.4'
-    distributionType 'all'
 }
