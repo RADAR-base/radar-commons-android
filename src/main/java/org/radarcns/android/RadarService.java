@@ -18,16 +18,29 @@ package org.radarcns.android;
 
 import android.app.AppOpsManager;
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
-import android.content.*;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
-import android.os.*;
+import android.os.AsyncTask;
+import android.os.Binder;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.ResultReceiver;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
+
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
@@ -39,6 +52,7 @@ import org.radarcns.android.device.DeviceStatusListener;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.Boast;
 import org.radarcns.android.util.BundleSerialization;
+import org.radarcns.android.util.NotificationHandler;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.data.TimedInt;
 import org.radarcns.producer.rest.SchemaRetriever;
@@ -46,12 +60,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static android.Manifest.permission.*;
-import static org.radarcns.android.RadarConfiguration.*;
+import static android.Manifest.permission.ACCESS_COARSE_LOCATION;
+import static android.Manifest.permission.ACCESS_FINE_LOCATION;
+import static android.Manifest.permission.ACCESS_NETWORK_STATE;
+import static android.Manifest.permission.INTERNET;
+import static android.Manifest.permission.PACKAGE_USAGE_STATS;
+import static android.app.Notification.DEFAULT_VIBRATE;
+import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
+import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
+import static org.radarcns.android.RadarConfiguration.RADAR_CONFIGURATION_CHANGED;
+import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
+import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
+import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
+import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
@@ -62,21 +104,27 @@ import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
 import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
+import static org.radarcns.android.util.NotificationHandler.NOTIFICATION_CHANNEL_NOTIFY;
 
 @SuppressWarnings("unused")
 public class RadarService extends Service implements ServerStatusListener {
     private static final Logger logger = LoggerFactory.getLogger(RadarService.class);
 
-    public static String RADAR_PACKAGE = RadarService.class.getPackage().getName();
+    public static String RADAR_PACKAGE = "org.radarcns.android.";
 
-    public static String EXTRA_MAIN_ACTIVITY = RADAR_PACKAGE + ".EXTRA_MAIN_ACTIVITY";
-    public static String EXTRA_LOGIN_ACTIVITY = RADAR_PACKAGE + ".EXTRA_LOGIN_ACTIVITY";
+    public static final String ACTION_BLUETOOTH_NEEDED_CHANGED = RADAR_PACKAGE + "BLUETOOTH_NEEDED_CHANGED";
+    public static final int BLUETOOTH_NEEDED = 1;
+    public static final int BLUETOOTH_NOT_NEEDED = 2;
+    public static String EXTRA_MAIN_ACTIVITY = RADAR_PACKAGE + "EXTRA_MAIN_ACTIVITY";
+    public static String EXTRA_LOGIN_ACTIVITY = RADAR_PACKAGE + "EXTRA_LOGIN_ACTIVITY";
 
-    public static String ACTION_CHECK_PERMISSIONS = RADAR_PACKAGE + ".ACTION_CHECK_PERMISSIONS";
-    public static String EXTRA_PERMISSIONS = RADAR_PACKAGE + ".EXTRA_PERMISSIONS";
+    public static String ACTION_CHECK_PERMISSIONS = RADAR_PACKAGE + "ACTION_CHECK_PERMISSIONS";
+    public static String EXTRA_PERMISSIONS = RADAR_PACKAGE + "EXTRA_PERMISSIONS";
 
-    public static String ACTION_PERMISSIONS_GRANTED = RADAR_PACKAGE + ".ACTION_PERMISSIONS_GRANTED";
-    public static String EXTRA_GRANT_RESULTS = RADAR_PACKAGE + ".EXTRA_GRANT_RESULTS";
+    public static String ACTION_PERMISSIONS_GRANTED = RADAR_PACKAGE + "ACTION_PERMISSIONS_GRANTED";
+    public static String EXTRA_GRANT_RESULTS = RADAR_PACKAGE + "EXTRA_GRANT_RESULTS";
+
+    private static final int BLUETOOTH_NOTIFICATION = 521290;
 
     private final BroadcastReceiver permissionsBroadcastReceiver = new BroadcastReceiver() {
         @Override
@@ -103,12 +151,13 @@ public class RadarService extends Service implements ServerStatusListener {
     private String mainActivityClass;
     private String loginActivityClass;
     private Handler mHandler;
+    private boolean needsBluetooth;
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters = new HashMap<>();
 
     /** Defines callbacks for service binding, passed to bindService() */
-    private final BroadcastReceiver  bluetoothReceiver = new BroadcastReceiver() {
+    private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
@@ -119,14 +168,38 @@ public class RadarService extends Service implements ServerStatusListener {
                 // Upon state change, restart ui handler and restart Scanning.
                 if (state == BluetoothAdapter.STATE_ON) {
                     logger.info("Bluetooth is on");
+                    removeBluetoothNotification();
                     startScanning();
                 } else if (state == BluetoothAdapter.STATE_OFF) {
                     logger.warn("Bluetooth is off");
-                    startScanning();
+                    createBluetoothNotification();
                 }
             }
         }
     };
+
+    private void removeBluetoothNotification() {
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) {
+            return;
+        }
+        manager.cancel(BLUETOOTH_NOTIFICATION);
+    }
+
+    private void createBluetoothNotification() {
+        Notification notification = RadarApplication.getNotificationHandler(this)
+                .builder(NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false)
+                .setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                .setContentText(getString(R.string.notification_bluetooth_needed_text))
+                .setDefaults(DEFAULT_VIBRATE)
+                .build();
+
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) {
+            return;
+        }
+        manager.notify(BLUETOOTH_NOTIFICATION, notification);
+    }
 
     private final BroadcastReceiver deviceFailedReceiver = new BroadcastReceiver() {
         @Override
@@ -210,7 +283,6 @@ public class RadarService extends Service implements ServerStatusListener {
     private AppAuthState authState;
 
     private final LinkedHashSet<String> needsPermissions = new LinkedHashSet<>();
-    private boolean requestedBt;
 
 
     @Override
@@ -224,15 +296,20 @@ public class RadarService extends Service implements ServerStatusListener {
 
         binder = createBinder();
         mHandler = new Handler(getMainLooper());
+        needsBluetooth = false;
 
-        registerReceiver(permissionsBroadcastReceiver,
+        LocalBroadcastManager broadcastManager = LocalBroadcastManager.getInstance(this);
+
+        broadcastManager.registerReceiver(permissionsBroadcastReceiver,
                 new IntentFilter(ACTION_PERMISSIONS_GRANTED));
-        registerReceiver(loginBroadcastReceiver,
+        broadcastManager.registerReceiver(loginBroadcastReceiver,
                 new IntentFilter(LoginActivity.ACTION_LOGIN_SUCCESS));
-        registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
-        registerReceiver(deviceFailedReceiver, new IntentFilter(DEVICE_CONNECT_FAILED));
-        registerReceiver(serverStatusReceiver, new IntentFilter(SERVER_STATUS_CHANGED));
-        registerReceiver(configChangedReceiver, new IntentFilter(RADAR_CONFIGURATION_CHANGED));
+        broadcastManager.registerReceiver(deviceFailedReceiver,
+                new IntentFilter(DEVICE_CONNECT_FAILED));
+        broadcastManager.registerReceiver(serverStatusReceiver,
+                new IntentFilter(SERVER_STATUS_CHANGED));
+        broadcastManager.registerReceiver(configChangedReceiver,
+                new IntentFilter(RADAR_CONFIGURATION_CHANGED));
     }
 
     protected IBinder createBinder() {
@@ -281,7 +358,8 @@ public class RadarService extends Service implements ServerStatusListener {
     protected Notification createForegroundNotification() {
         RadarApplication app = (RadarApplication) getApplication();
         Intent mainIntent = new Intent().setComponent(new ComponentName(this, mainActivityClass));
-        return app.getAppNotificationBuilder(RadarApplication.NOTIFICATION_CHANNEL_NOTIFY)
+        return RadarApplication.getNotificationHandler(this)
+                .builder(NOTIFICATION_CHANNEL_NOTIFY, true)
                 .setContentText(getText(R.string.service_notification_text))
                 .setContentTitle(getText(R.string.service_notification_title))
                 .setContentIntent(PendingIntent.getActivity(this, 0,mainIntent, 0))
@@ -291,11 +369,15 @@ public class RadarService extends Service implements ServerStatusListener {
     @Override
     public void onDestroy() {
         mHandler = null;
-        unregisterReceiver(permissionsBroadcastReceiver);
-        unregisterReceiver(loginBroadcastReceiver);
-        unregisterReceiver(bluetoothReceiver);
-        unregisterReceiver(deviceFailedReceiver);
-        unregisterReceiver(serverStatusReceiver);
+        LocalBroadcastManager broadcastManager = LocalBroadcastManager.getInstance(this);
+        broadcastManager.unregisterReceiver(permissionsBroadcastReceiver);
+        broadcastManager.unregisterReceiver(loginBroadcastReceiver);
+        if (needsBluetooth) {
+            unregisterReceiver(bluetoothReceiver);
+        }
+        broadcastManager.unregisterReceiver(deviceFailedReceiver);
+        broadcastManager.unregisterReceiver(serverStatusReceiver);
+        broadcastManager.unregisterReceiver(configChangedReceiver);
 
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.isBound()) {
@@ -398,16 +480,36 @@ public class RadarService extends Service implements ServerStatusListener {
 
         List<DeviceServiceProvider> connections = DeviceServiceProvider.loadProviders(this, RadarConfiguration.getInstance());
 
+        boolean anyNeedsBluetooth = false;
         Iterator<DeviceServiceProvider> iter = mConnections.iterator();
         while (iter.hasNext()) {
             DeviceServiceProvider provider = iter.next();
             if (!connections.contains(provider)) {
                 provider.unbind();
                 iter.remove();
+            } else if (!anyNeedsBluetooth
+                    && provider.hasConnection()
+                    && provider.getConnection().needsBluetooth()) {
+                anyNeedsBluetooth = true;
             }
         }
 
+        if (!anyNeedsBluetooth && needsBluetooth) {
+            unregisterReceiver(bluetoothReceiver);
+            needsBluetooth = false;
+
+            Intent intent = new Intent(ACTION_BLUETOOTH_NEEDED_CHANGED);
+            intent.putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NOT_NEEDED);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        }
+
+
         boolean useMp = configuration.getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
+
+        // Do not add providers without an auth state.
+        if (authState == null) {
+            return;
+        }
 
         boolean didAddProvider = false;
         for (DeviceServiceProvider provider : connections) {
@@ -487,6 +589,14 @@ public class RadarService extends Service implements ServerStatusListener {
         ServerStatusListener.Status status = connection.getServerStatus();
         logger.info("Initial server status: {}", status);
         updateServerStatus(status);
+        if (!needsBluetooth && connection.needsBluetooth()) {
+            needsBluetooth = true;
+            registerReceiver(bluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+
+            Intent intent = new Intent(ACTION_BLUETOOTH_NEEDED_CHANGED);
+            intent.putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NEEDED);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        }
         startScanning();
     }
 
@@ -558,7 +668,6 @@ public class RadarService extends Service implements ServerStatusListener {
 
 
     protected void startScanning() {
-        requestedBt = false;
         for (DeviceServiceProvider<?> provider : mConnections) {
             DeviceServiceConnection connection = provider.getConnection();
             if (!connection.hasService() || connection.isRecording() || !checkPermissions(provider)) {
@@ -631,14 +740,6 @@ public class RadarService extends Service implements ServerStatusListener {
     protected boolean checkPermissions(DeviceServiceProvider<?> provider) {
         List<String> providerPermissions = provider.needsPermissions();
 
-        if (providerPermissions.contains(BLUETOOTH)) {
-            if (requestedBt || requestEnableBt()) {
-                logger.info("Cannot start scanning on service {} until bluetooth is turned on.",
-                        provider.getConnection());
-                requestedBt = true;
-                return false;
-            }
-        }
         for (String permission : providerPermissions) {
             if (needsPermissions.contains(permission)) {
                 // cannot start
@@ -646,22 +747,6 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }
         return true;
-    }
-
-    /**
-     * Sends an intent to request bluetooth to be turned on.
-     * @return whether a request was sent
-     */
-    protected boolean requestEnableBt() {
-        BluetoothAdapter btAdaptor = BluetoothAdapter.getDefaultAdapter();
-        if (!btAdaptor.isEnabled()) {
-            Intent btIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            btIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getApplicationContext().startActivity(btIntent);
-            return true;
-        } else {
-            return false;
-        }
     }
 
     /** Disconnect from all services. */
@@ -741,12 +826,17 @@ public class RadarService extends Service implements ServerStatusListener {
                 });
             }
         }
+
+        @Override
+        public boolean needsBluetooth() {
+            return needsBluetooth;
+        }
     }
 
     private static class AsyncBindServices extends AsyncTask<DeviceServiceProvider, Void, Void> {
         private final boolean unbindFirst;
 
-        AsyncBindServices(boolean unbindFirst) {
+         AsyncBindServices(boolean unbindFirst) {
             this.unbindFirst = unbindFirst;
         }
 

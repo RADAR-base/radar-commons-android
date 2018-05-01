@@ -7,7 +7,7 @@ import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
-import org.radarcns.android.util.ResponseHandler;
+import org.radarcns.android.util.Parser;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.rest.RestClient;
@@ -59,7 +59,7 @@ public class ManagementPortalClient implements Closeable {
         logger.info("Requesting subject {} with headers {}", state.getUserId(),
                 state.getOkHttpHeaders());
 
-        return ResponseHandler.handle(client.request(request), parser);
+        return handleRequest(request, parser);
     }
 
     /** Register a source with the Management Portal. */
@@ -106,10 +106,9 @@ public class ManagementPortalClient implements Closeable {
 
     static JSONObject sourceRegistrationBody(AppSource source) throws JSONException {
         JSONObject requestBody = new JSONObject();
-        // TODO: in a regression from MP 0.2.0 -> 0.2.1 this was removed
-//        if (source.getSourceName() != null) {
-//            requestBody.put("sourceName", source.getSourceName());
-//        }
+        if (source.getSourceName() != null) {
+            requestBody.put("sourceName", source.getSourceName());
+        }
         requestBody.put("sourceTypeId", source.getSourceTypeId());
         Map<String, String> sourceAttributes = source.getAttributes();
         if (!sourceAttributes.isEmpty()) {
@@ -142,7 +141,8 @@ public class ManagementPortalClient implements Closeable {
         client.close();
     }
 
-    public AppAuthState refreshToken(AppAuthState authState, String clientId, String clientSecret, AuthStringParser parser) throws IOException, JSONException {
+    public AppAuthState refreshToken(AppAuthState authState, String clientId, String clientSecret,
+            AuthStringParser parser) throws IOException {
         try {
             String refreshToken = (String)authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
             if (refreshToken == null) {
@@ -159,10 +159,26 @@ public class ManagementPortalClient implements Closeable {
                     .addHeader("Authorization", Credentials.basic(clientId, clientSecret))
                     .build();
 
-            return ResponseHandler.handle(client.request(request), parser);
+            return handleRequest(request, parser);
         } catch (MalformedURLException e) {
             throw new IllegalStateException("Failed to create request from ManagementPortal url", e);
         }
     }
 
+    private <T> T handleRequest(Request request, Parser<String, T> parser)
+            throws IOException {
+        try (Response response = client.request(request)) {
+            String body = RestClient.responseBody(response);
+
+            if (response.code() == 401) {
+                throw new AuthenticationException("QR code is invalid: " + body);
+            } else if (!response.isSuccessful()) {
+                throw new IOException("Failed to make request; response " + body);
+            } else if (body == null || body.isEmpty()) {
+                throw new IOException("Response body expected but not found");
+            } else {
+                return parser.parse(body);
+            }
+        }
+    }
 }

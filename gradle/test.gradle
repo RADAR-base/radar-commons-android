@@ -1,0 +1,49 @@
+apply plugin: 'de.mobilej.unmock'
+
+dependencies {
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.robolectric:robolectric:3.4.2'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:3.9.1'
+
+    unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
+}
+
+unMock {
+    keep "android.widget.BaseAdapter"
+    keep "android.widget.ArrayAdapter"
+    keep "android.os.Bundle"
+    keep "android.os.Parcelable"
+    keepStartingWith "android.database.MatrixCursor"
+    keep "android.database.AbstractCursor"
+    keep "android.database.CrossProcessCursor"
+    keepStartingWith "android.text.TextUtils"
+    keepStartingWith "android.util."
+    keepStartingWith "android.text."
+    keep "android.app.Application"
+    keep "android.content.Context"
+    keep "android.app.ContextImpl"
+    keep "android.os.UserHandle"
+    keep "android.R"
+    keepStartingWith "android.os.Build"
+    keepStartingWith "android.content.ComponentCallbacks"
+    keep "android.content.ContextWrapper"
+    keepStartingWith "android.content.ContentValues"
+    keepStartingWith "android.content.ComponentName"
+    keepStartingWith "android.content.ContentUris"
+    keepStartingWith "android.content.ContentProviderOperation"
+    keepStartingWith "android.content.ContentProviderResult"
+    keepStartingWith "android.content.UriMatcher"
+    keepStartingWith "android.content.Intent"
+    keep "android.location.Location"
+    keepStartingWith "android.content.res.Configuration"
+    keepStartingWith "org."
+    keepStartingWith "libcore."
+    keepStartingWith "com.android.internal.R"
+    keepStartingWith "com.android.internal.util."
+    keep "android.net.Uri"
+    keepStartingWith "org.json."
+    keep 'android.os.SystemClock'
+    keep 'android.os.RemoteException'
+
+    keepAndRename "java.nio.charset.Charsets" to "xjava.nio.charset.Charsets"
+}

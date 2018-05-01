@@ -35,4 +35,6 @@ public interface IRadarService {
     AppAuthState getAuthState();
 
     void setAllowedDeviceIds(DeviceServiceConnection connection, Set<String> allowedIds);
+
+    boolean needsBluetooth();
 }
