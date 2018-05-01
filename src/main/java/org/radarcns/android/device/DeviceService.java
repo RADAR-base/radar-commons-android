@@ -16,16 +16,12 @@
 
 package org.radarcns.android.device;
 
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
@@ -36,9 +32,10 @@ import android.os.ResultReceiver;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
+
 import org.apache.avro.specific.SpecificRecord;
-import org.radarcns.android.R;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
@@ -60,7 +57,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REGISTRATION;
@@ -75,8 +71,6 @@ import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
  */
 @SuppressWarnings("WeakerAccess")
 public abstract class DeviceService<T extends BaseDeviceState> extends Service implements DeviceStatusListener {
-    private static final int ONGOING_NOTIFICATION_ID = 11;
-    private static final int BLUETOOTH_NOTIFICATION_ID = 12;
     private static final String PREFIX = "org.radarcns.android.";
     public static final String SERVER_STATUS_CHANGED = PREFIX + "ServerStatusListener.Status";
     public static final String SERVER_RECORDS_SENT_TOPIC = PREFIX + "ServerStatusListener.topic";
@@ -88,6 +82,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public static final String DEVICE_STATUS_CHANGED = PREFIX + "DeviceStatusListener.Status";
     public static final String DEVICE_STATUS_NAME = PREFIX + "DeviceManager.getName";
     public static final String DEVICE_CONNECT_FAILED = PREFIX + "DeviceStatusListener.deviceFailedToConnect";
+
     private final ObservationKey key = new ObservationKey();
 
     /** Stops the device when bluetooth is disabled. */
@@ -102,25 +97,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
                 switch (state) {
                     case BluetoothAdapter.STATE_TURNING_OFF: case BluetoothAdapter.STATE_OFF:
                         logger.warn("Bluetooth is off");
-
-                        RadarApplication app = (RadarApplication) context.getApplicationContext();
-                        NotificationManager manager = (NotificationManager) app.getSystemService(NOTIFICATION_SERVICE);
-
-                        if (manager != null) {
-                            PackageManager pm = context.getPackageManager();
-
-                            Intent launchIntent = pm.getLaunchIntentForPackage(context.getPackageName());
-                            PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, launchIntent, 0);
-
-                            Notification notification = app.getAppNotificationBuilder(RadarApplication.NOTIFICATION_CHANNEL_ALERT)
-                                    .setContentIntent(pendingIntent)
-                                    .setContentText(getString(R.string.notification_bluetooth_needed_text))
-                                    .setContentTitle(getString(R.string.notification_bluetooth_needed_title))
-                                    .build();
-
-                            manager.notify(BLUETOOTH_NOTIFICATION_ID, notification);
-                        }
-
                         stopDeviceManager(unsetDeviceManager());
                         break;
                     default:
@@ -135,11 +111,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private TableDataHandler dataHandler;
     private DeviceManager<T> deviceScanner;
     private DeviceBinder mBinder;
-    private final AtomicInteger numberOfActivitiesBound = new AtomicInteger(0);
-    private boolean isInForeground;
-    private boolean isConnected;
-    private int latestStartId = -1;
-    private boolean needsBluetooth;
+    private boolean hasBluetoothPermission;
     private AppSource source;
 
     @CallSuper
@@ -155,8 +127,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         synchronized (this) {
-            numberOfActivitiesBound.set(0);
-            isInForeground = false;
             deviceScanner = null;
         }
     }
@@ -181,41 +151,31 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
     }
 
-    @CallSuper
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        logger.info("Starting DeviceService {}", this);
-        synchronized (this) {
-            latestStartId = startId;
-        }
-        Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
-        onInvocation(extras);
-
-        return START_STICKY;
-    }
-
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        onRebind(intent);
+        doBind(intent, true);
         return mBinder;
     }
 
     @CallSuper
     @Override
     public void onRebind(Intent intent) {
+        doBind(intent, false);
+    }
+
+    private void doBind(Intent intent, boolean firstBind) {
         logger.info("Received (re)bind in {}", this);
-        boolean isNew = numberOfActivitiesBound.getAndIncrement() == 0;
-        RadarApplication application = (RadarApplication)getApplicationContext();
         Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
         onInvocation(extras);
-        application.onDeviceServiceInvocation(this, extras, isNew);
+
+        RadarApplication application = (RadarApplication)getApplicationContext();
+        application.onDeviceServiceInvocation(this, extras, firstBind);
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
         logger.info("Received unbind in {}", this);
-        stopSelfIfUnconnected();
         return true;
     }
 
@@ -224,7 +184,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         Intent statusChanged = new Intent(DEVICE_CONNECT_FAILED);
         statusChanged.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
         statusChanged.putExtra(DEVICE_STATUS_NAME, deviceName);
-        sendBroadcast(statusChanged);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged);
     }
 
 
@@ -235,83 +195,23 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         if (name != null) {
             statusChanged.putExtra(DEVICE_STATUS_NAME, name);
         }
-        sendBroadcast(statusChanged);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged);
     }
 
     @Override
     public void deviceStatusUpdated(DeviceManager deviceManager, DeviceStatusListener.Status status) {
         switch (status) {
-            case CONNECTED:
-                synchronized (this) {
-                    isConnected = true;
-                }
-                startBackgroundListener();
-                break;
             case DISCONNECTED:
-                stopBackgroundListener();
                 stopDeviceManager(deviceManager);
                 synchronized (this) {
                     deviceScanner = null;
-                    isConnected = false;
                 }
-                stopSelfIfUnconnected();
                 break;
             default:
                 // do nothing
                 break;
         }
         broadcastDeviceStatus(deviceManager.getName(), status);
-    }
-
-    /** Stop service if no devices or activities are connected to it. */
-    protected void stopSelfIfUnconnected() {
-        int startId;
-        synchronized (this) {
-            if (numberOfActivitiesBound.get() > 0 || isConnected) {
-                return;
-            }
-            startId = latestStartId;
-        }
-        logger.info("Stopping self if latest start ID was {}", startId);
-        stopSelf(startId);
-    }
-
-    /** Maintain current service in the background. */
-    public void startBackgroundListener() {
-        logger.info("Preventing {} to get stopped.", this);
-        synchronized (this) {
-            if (isInForeground) {
-                return;
-            }
-            isInForeground = true;
-        }
-
-        PackageManager pm = getPackageManager();
-        Intent intent = pm.getLaunchIntentForPackage(getPackageName());
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
-
-        startForeground(ONGOING_NOTIFICATION_ID, createBackgroundNotification(pendingIntent));
-    }
-
-    protected Notification createBackgroundNotification(PendingIntent intent) {
-        RadarApplication app = (RadarApplication) getApplicationContext();
-        return app.getAppNotificationBuilder(RadarApplication.NOTIFICATION_CHANNEL_NOTIFY)
-                .setContentIntent(intent)
-                .setContentText(getText(R.string.service_notification_text))
-                .setContentTitle(getText(R.string.service_notification_title))
-                .build();
-    }
-
-    /** Service no longer needs to be maintained in the background. */
-    public void stopBackgroundListener() {
-        logger.info("{} may be stopped.", this);
-        synchronized (this) {
-            if (!isInForeground) {
-                return;
-            }
-            isInForeground = false;
-        }
-        stopForeground(true);
     }
 
     private synchronized DeviceManager unsetDeviceManager() {
@@ -339,15 +239,16 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     protected T getState() {
         DeviceManager<T> localManager = getDeviceManager();
-        if (localManager == null) {
-            T state = getDefaultState();
-            ObservationKey stateKey = state.getId();
-            stateKey.setProjectId(key.getProjectId());
-            stateKey.setUserId(key.getUserId());
-            stateKey.setSourceId(key.getSourceId());
-            return state;
+        if (localManager != null) {
+            return localManager.getState();
         }
-        return localManager.getState();
+
+        T state = getDefaultState();
+        ObservationKey stateKey = state.getId();
+        stateKey.setProjectId(key.getProjectId());
+        stateKey.setUserId(key.getUserId());
+        stateKey.setSourceId(key.getSourceId());
+        return state;
     }
 
     /**
@@ -355,12 +256,15 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     protected abstract T getDefaultState();
 
-    public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
+    public T startRecording(@NonNull Set<String> acceptableIds) {
         DeviceManager localManager = getDeviceManager();
         if (key.getUserId() == null) {
             throw new IllegalStateException("Cannot start recording: user ID is not set.");
         }
         if (localManager == null) {
+            if (isBluetoothConnectionRequired() && BluetoothAdapter.getDefaultAdapter() != null && !BluetoothAdapter.getDefaultAdapter().isEnabled()) {
+                throw new IllegalStateException("Cannot start recording without Bluetooth");
+            }
             logger.info("Starting recording");
             synchronized (this) {
                 if (deviceScanner == null) {
@@ -389,7 +293,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public BaseDeviceState getDeviceStatus() {
+        public T getDeviceStatus() {
             return getState();
         }
 
@@ -403,7 +307,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public BaseDeviceState startRecording(@NonNull Set<String> acceptableIds) {
+        public T startRecording(@NonNull Set<String> acceptableIds) {
             return DeviceService.this.startRecording(acceptableIds);
         }
 
@@ -463,6 +367,11 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
+        public boolean needsBluetooth() {
+            return isBluetoothConnectionRequired();
+        }
+
+        @Override
         public void setDataHandler(TableDataHandler dataHandler) {
             DeviceService.this.setDataHandler(dataHandler);
         }
@@ -515,7 +424,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     protected void setHasBluetoothPermission(boolean isRequired) {
         boolean oldBluetoothNeeded = isBluetoothConnectionRequired();
-        needsBluetooth = isRequired;
+        hasBluetoothPermission = isRequired;
         boolean newBluetoothNeeded = isBluetoothConnectionRequired();
 
         if (oldBluetoothNeeded && !newBluetoothNeeded) {
@@ -528,7 +437,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     protected boolean hasBluetoothPermission() {
-        return needsBluetooth;
+        return hasBluetoothPermission;
     }
 
     protected boolean isBluetoothConnectionRequired() {
@@ -567,38 +476,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
                         new ResultReceiver(handler) {
                     @Override
                     protected void onReceiveResult(int resultCode, Bundle result) {
-                        AppSource updatedSource = null;
-                        if (resultCode == MANAGEMENT_PORTAL_REGISTRATION && result != null && result.containsKey(SOURCE_KEY)) {
-                            updatedSource = result.getParcelable(SOURCE_KEY);
-                        }
-                        if (updatedSource == null) {
-                            // try again in a minute
-                            handler.postDelayed(new Runnable() {
-                                @Override
-                                public void run() {
-                                    stopDeviceManager(unsetDeviceManager());
-                                }
-                            }, ThreadLocalRandom.current().nextLong(1_000L, 120_000L));
-                            return;
-                        }
-                        AppAuthState auth = AppAuthState.Builder.from(result).build();
-                        if (auth.isInvalidated()) {
-                            logger.info("New source ID requires new OAuth2 JWT token.");
-                            Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
-                            statusIntent.putExtra(SERVER_STATUS_CHANGED, ServerStatusListener.Status.UNAUTHORIZED.ordinal());
-                            statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-                            sendBroadcast(statusIntent);
-                        }
-                        key.setProjectId(auth.getProjectId());
-                        key.setUserId(auth.getUserId());
-                        key.setSourceId(updatedSource.getSourceId());
-                        source.setSourceId(updatedSource.getSourceId());
-                        source.setSourceName(updatedSource.getSourceName());
-                        source.setExpectedSourceName(updatedSource.getExpectedSourceName());
-                        DeviceManager<T> localManager = getDeviceManager();
-                        if (localManager != null) {
-                            localManager.didRegister(source);
-                        }
+                        updateRegistration(resultCode, result, handler);
                     }
                 });
                 return;
@@ -612,6 +490,41 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
                 key.setSourceId(source.getSourceId());
             }
         }
+        DeviceManager<T> localManager = getDeviceManager();
+        if (localManager != null) {
+            localManager.didRegister(source);
+        }
+    }
+
+    private void updateRegistration(int resultCode, Bundle result, Handler handler) {
+        AppSource updatedSource = null;
+        if (resultCode == MANAGEMENT_PORTAL_REGISTRATION && result != null && result.containsKey(SOURCE_KEY)) {
+            updatedSource = result.getParcelable(SOURCE_KEY);
+        }
+        if (updatedSource == null) {
+            // try again in a minute
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    stopDeviceManager(unsetDeviceManager());
+                }
+            }, ThreadLocalRandom.current().nextLong(1_000L, 120_000L));
+            return;
+        }
+        AppAuthState auth = AppAuthState.Builder.from(result).build();
+        if (auth.isInvalidated()) {
+            logger.info("New source ID requires new OAuth2 JWT token.");
+            Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
+            statusIntent.putExtra(SERVER_STATUS_CHANGED, ServerStatusListener.Status.UNAUTHORIZED.ordinal());
+            statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
+            sendBroadcast(statusIntent);
+        }
+        key.setProjectId(auth.getProjectId());
+        key.setUserId(auth.getUserId());
+        key.setSourceId(updatedSource.getSourceId());
+        source.setSourceId(updatedSource.getSourceId());
+        source.setSourceName(updatedSource.getSourceName());
+        source.setExpectedSourceName(updatedSource.getExpectedSourceName());
         DeviceManager<T> localManager = getDeviceManager();
         if (localManager != null) {
             localManager.didRegister(source);

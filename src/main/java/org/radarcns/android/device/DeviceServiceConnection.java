@@ -23,9 +23,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
+import android.support.v4.content.LocalBroadcastManager;
+
 import org.radarcns.android.RadarService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Objects;
 
 import static org.radarcns.android.device.DeviceService.DEVICE_SERVICE_CLASS;
 import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_CHANGED;
@@ -38,7 +42,7 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction().equals(DEVICE_STATUS_CHANGED)) {
+            if (Objects.equals(intent.getAction(), DEVICE_STATUS_CHANGED)) {
                 if (getServiceClassName().equals(intent.getStringExtra(DEVICE_SERVICE_CLASS))) {
                     if (intent.hasExtra(DEVICE_STATUS_NAME)) {
                         deviceName = intent.getStringExtra(DEVICE_STATUS_NAME);
@@ -59,13 +63,15 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
 
     @Override
     public void onServiceConnected(ComponentName className, IBinder service) {
-        radarService.registerReceiver(statusReceiver,
-                new IntentFilter(DEVICE_STATUS_CHANGED));
+        LocalBroadcastManager.getInstance(radarService)
+                .registerReceiver(statusReceiver, new IntentFilter(DEVICE_STATUS_CHANGED));
 
         if (!hasService()) {
             super.onServiceConnected(className, service);
-            getServiceBinder().setDataHandler(radarService.getDataHandler());
-            radarService.serviceConnected(this);
+            if (hasService()) {
+                getServiceBinder().setDataHandler(radarService.getDataHandler());
+                radarService.serviceConnected(this);
+            }
         }
     }
 
@@ -75,7 +81,7 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
         super.onServiceDisconnected(className);
 
         if (hadService) {
-            radarService.unregisterReceiver(statusReceiver);
+            LocalBroadcastManager.getInstance(radarService).unregisterReceiver(statusReceiver);
             radarService.serviceDisconnected(this);
         }
     }

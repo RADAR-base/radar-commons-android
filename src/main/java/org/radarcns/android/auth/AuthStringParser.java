@@ -17,6 +17,7 @@
 package org.radarcns.android.auth;
 
 import android.support.annotation.NonNull;
+
 import org.radarcns.android.util.Parser;
 
 import java.io.IOException;
