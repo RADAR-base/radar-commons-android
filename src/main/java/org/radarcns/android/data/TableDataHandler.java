@@ -92,8 +92,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            int maxBytes, boolean sendOnlyWithWifi, AppAuthState authState)
-            throws IOException {
+                            int maxBytes, boolean sendOnlyWithWifi, AppAuthState authState) {
         this.context =  context;
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
@@ -149,6 +148,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      */
     public synchronized void start() {
         if (isStarted()
+                || authState == null
                 || status == Status.DISABLED
                 || !networkConnectedReceiver.hasConnection(sendOnlyWithWifi.get())
                 || !batteryLevelReceiver.hasMinimumLevel(minimumBatteryLevel.get())) {
@@ -388,6 +388,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     public synchronized void setAuthState(AppAuthState state) {
+        boolean authStateWasNull = this.authState == null;
         this.authState = state;
         logger.info("Updating data handler auth state to {}", authState.getOkHttpHeaders());
         if (sender != null) {
@@ -395,6 +396,9 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         }
         if (submitter != null) {
             submitter.setUserId(authState.getUserId());
+        }
+        if (authStateWasNull) {
+            start();
         }
     }
 
