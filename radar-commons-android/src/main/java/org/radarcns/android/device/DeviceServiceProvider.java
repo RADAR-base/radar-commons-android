@@ -41,20 +41,20 @@ import java.util.Scanner;
 
 import static android.Manifest.permission.BLUETOOTH;
 import static android.Manifest.permission.BLUETOOTH_ADMIN;
-import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.PROJECT_ID_KEY;
-import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
-import static org.radarcns.android.RadarConfiguration.USER_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_CLEAN_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
+import static org.radarcns.android.RadarConfiguration.PROJECT_ID_KEY;
+import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
 import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.RadarConfiguration.USER_ID_KEY;
 
 /**
  * RADAR service provider, to bind and configure to a service. It is not thread-safe.

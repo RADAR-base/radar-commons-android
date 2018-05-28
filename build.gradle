@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 buildscript {
     repositories {
         jcenter()
@@ -29,6 +28,15 @@ buildscript {
 }
 
 allprojects {
+    repositories {
+        jcenter()
+        // radar dev branches
+        google()
+        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+    }
+}
+
+subprojects {
     apply plugin: 'com.android.library'
     apply plugin: 'com.jfrog.bintray'
     apply plugin: 'com.github.dcendents.android-maven'
@@ -52,13 +60,6 @@ allprojects {
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
-    repositories {
-        jcenter()
-        // radar dev branches
-        google()
-        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
-    }
-
     idea {
         module {
             downloadSources = true
@@ -71,62 +72,11 @@ allprojects {
             showStandardStreams = true
             showCauses = true
             showStackTraces = true
-            exceptionFormat "full"
+            exceptionFormat 'full'
         }
     }
-}
-
-android {
-    compileSdkVersion 27
-    buildToolsVersion '27.0.3'
-
-    defaultConfig {
-        minSdkVersion 21
-        targetSdkVersion 27
-        versionCode versionCode
-        versionName version
-    }
-    lintOptions {
-        abortOnError false
-    }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    libraryVariants.all { variant ->
-        variant.outputs.all {
-            if (variant.name == 'release') {
-                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}.aar"
-            } else {
-                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}-${variant.name}.aar"
-            }
-        }
-    }
-}
-
-ext.moduleName = 'radar-commons-android'
-ext.description = 'Kafka backend for processing device data.'
-
-dependencies {
-    api('org.radarcns:radar-commons:0.8.1') {
-        exclude group: 'io.confluent', module: 'kafka-avro-serializer'
-        exclude group: 'org.apache.kafka', module: 'kafka-clients'
-        exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml'
-        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
-        exclude group: 'org.json', module: 'json'
-    }
-    api 'org.radarcns:radar-schemas-commons:0.3.2'
-
-    implementation 'com.google.firebase:firebase-config:15.0.0'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.1'
-    implementation 'sk.baka.slf4j:slf4j-handroid:1.7.26'
 }
 
 task wrapper(type: Wrapper) {
     gradleVersion '4.4'
 }
-
-apply from: 'gradle/test.gradle'
-apply from: 'gradle/publishing.gradle'
