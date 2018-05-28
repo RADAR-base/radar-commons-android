@@ -15,8 +15,8 @@
  */
 buildscript {
     repositories {
-        jcenter()
         google()
+        jcenter()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.1.2'
@@ -29,9 +29,9 @@ buildscript {
 
 allprojects {
     repositories {
+        google()
         jcenter()
         // radar dev branches
-        google()
         maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
     }
 }

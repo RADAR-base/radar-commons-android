@@ -33,7 +33,7 @@ ext.moduleName = 'radar-android-login-oauth2'
 ext.description = 'RADAR Android OAuth2 LoginManager.'
 
 dependencies {
-    api project(path: ':radar-commons-android', configuration: 'default')
+    api project(':radar-commons-android')
     api 'net.openid:appauth:0.6.1'
 }
 
