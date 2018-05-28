@@ -57,6 +57,9 @@ dependencies {
     }
     api 'org.radarcns:radar-schemas-commons:0.3.2'
 
+    api 'com.android.support:appcompat-v7:27.1.1'
+    implementation 'com.android.support:support-v4:27.1.1'
+
     implementation 'com.google.firebase:firebase-config:16.0.0'
     implementation 'com.crashlytics.sdk.android:crashlytics:2.9.3'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.26'
