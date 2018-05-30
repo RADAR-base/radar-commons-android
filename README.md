@@ -27,11 +27,23 @@ This library takes the following firebase parameters:
 
 ## Usage
 
+Include this repository by adding the following snippet to your Android `build.gradle` file:
+```gradle
+repositories {
+    jcenter()
+}
+dependencies {
+    api 'org.radarcns:radar-commons-android:0.6.1'
+}
+```
+
 ### Creating a plugin
 
 To add device types to the passive remote monitoring Android app, create a plugin using the following steps (see the [RADAR-Android-Pebble repository](https://github.com/RADAR-CNS/RADAR-Android-Pebble.git) as an example):
 
-1. Add the schemas of the data you intend to send to the [RADAR-CNS Schemas repository](https://github.com/RADAR-CNS/RADAR-Schemas). Your record keys should be `org.radarcns.kafka.ObservationKey`. Be sure to set the `namespace` property to `org.radarcns.mydevicetype` so that generated classes will be put in the right package. All values should have `time` and `timeReceived` fields, with type `double`. These represent the time in seconds since the Unix Epoch (1 January 1970, 00:00:00 UTC). Subsecond precision is possible by using floating point decimals. Until those schemas are published, generate them using Avro tools. Find `avro-tools-1.8.1.jar` by going to <http://www.apache.org/dyn/closer.cgi/avro/>, choosing a mirror, and then downloading `avro-1.8.1/java/avro-tools-1.8.1.jar`. You can now generate source code for a schema `myschema.avsc` with the following command:
+First, create an Android Library project. Include RADAR Commons Android as a module in `build.gradle`.
+
+1. Add the schemas of the data you intend to send to the [RADAR-CNS Schemas repository](https://github.com/RADAR-CNS/RADAR-Schemas). Your record keys should be `org.radarcns.kafka.ObservationKey`. Be sure to set the `namespace` property to `org.radarcns.mydevicetype` so that generated classes will be put in the right package. All values should have `time` and `timeReceived` fields, with type `double`. These represent the time in seconds since the Unix Epoch (1 January 1970, 00:00:00 UTC). Subsecond precision is possible by using floating point decimals. Until those schemas are published, generate them using Avro tools. Find `avro-tools-1.8.2.jar` by going to <http://www.apache.org/dyn/closer.cgi/avro/>, choosing a mirror, and then downloading `avro-1.8.2/java/avro-tools-1.8.2.jar`. You can now generate source code for a schema `myschema.avsc` with the following command:
     ```shell
     java -jar avro-tools-1.8.2.jar compile -string schema path/to/myschema.avsc path/to/plugin/src/main/java
     ```
@@ -50,11 +62,13 @@ Make a pull request once the code is working.
 
 To create an Android App, follow the following steps:
 
+
 1. Include this module in the Gradle dependencies, and also all plugins that you would like to use
 2. Update your code with
      - A main activity that extends `org.radarcns.android.MainActivity`.
      - A main activity view that extends `org.radarcns.android.MainActivityView`. This should reference a layout and update its values based on the services that are connected to the main activity.
      - An application class that extends `org.radarcns.android.RadarApplication`.
+     - A login activity that extends `org.radarcns.android.auth.LoginActivity`. Implement any `org.radarncs.android.auth.LoginManager` classes to be able to log in.
      - If wanted, create a `BroadcastListener` that listens to the `ACTION_BOOT_COMPLETED` event and starts your `MainActivity` subclass. Configure it with the `MainActivity.configureRunAtBoot(Class)` method.
 3. In `AndroidManifest.xml`, add your application and service. If wanted add your boot-listener to listen to `ACTION_BOOT_COMPLETED` events and set `enabled` to `false`.
 4. Copy `src/main/res/xml/remote_config_defaults_template.xml` to `app/src/main/res/xml/remote_config_defaults.xml` and insert all needed values there.
