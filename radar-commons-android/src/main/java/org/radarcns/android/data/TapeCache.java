@@ -110,42 +110,31 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         this.executor = executorFactory.getScheduledExecutorService();
 
         // TODO: move to kafka data sender
-        this.executor.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                Intent numberCached = new Intent(CACHE_TOPIC);
-                numberCached.putExtra(CACHE_TOPIC, getTopic().getName());
-                numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, 0L);
-                numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, queueSize.get());
-                context.sendBroadcast(numberCached);
-            }
+        this.executor.scheduleAtFixedRate(() -> {
+            Intent numberCached = new Intent(CACHE_TOPIC);
+            numberCached.putExtra(CACHE_TOPIC, getTopic().getName());
+            numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, 0L);
+            numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, queueSize.get());
+            context.sendBroadcast(numberCached);
         }, 10L, 10L, TimeUnit.SECONDS);
 
         this.measurementsToAdd = new ArrayList<>();
 
         this.converter = new TapeAvroConverter<>(topic, specificData);
         this.queue = new BackedObjectQueue<>(queueFile, converter);
-        this.flusher = new Runnable() {
-            @Override
-            public void run() {
-                doFlush();
-            }
-        };
+        this.flusher = this::doFlush;
     }
 
     @Override
     public List<Record<K, V>> unsentRecords(final int limit) throws IOException {
         logger.info("Trying to retrieve records from topic {}", topic);
         try {
-            return listPool.get(executor.submit(new Callable<List<Record<K, V>>>() {
-                @Override
-                public List<Record<K, V>> call() throws Exception {
-                    try {
-                        return queue.peek(limit);
-                    } catch (IOException | IllegalStateException ex) {
-                        fixCorruptQueue();
-                        return Collections.emptyList();
-                    }
+            return listPool.get(executor.submit((Callable<List<Record<K, V>>>) () -> {
+                try {
+                    return queue.peek(limit);
+                } catch (IOException | IllegalStateException ex) {
+                    fixCorruptQueue();
+                    return Collections.emptyList();
                 }
             }).get());
         } catch (InterruptedException ex) {
