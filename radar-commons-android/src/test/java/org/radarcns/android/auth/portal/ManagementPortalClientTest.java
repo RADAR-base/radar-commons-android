@@ -194,10 +194,10 @@ public class ManagementPortalClientTest {
         String body = ManagementPortalClient.sourceRegistrationBody(source).toString();
         JSONObject object = new JSONObject(body);
 //        TODO: fix when managementportal accepts different source names
-        assertEquals("something", object.getString("sourceName"));
+//        assertEquals("something", object.getString("sourceName"));
         assertEquals(0, object.getInt("sourceTypeId"));
         JSONObject attr = object.getJSONObject("attributes");
-        assertEquals(3, object.names().length());
+        assertEquals(2, object.names().length());
         assertEquals("0.11", attr.getString("firmware"));
         assertEquals(1, attr.names().length());
     }

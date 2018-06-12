@@ -510,11 +510,12 @@ public class RadarConfiguration {
     }
 
     public String toString() {
-        Set<String> keys = config.getKeysByPrefix(null);
+        Set<String> keys = new HashSet<>(config.getKeysByPrefix(null));
+        keys.addAll(localConfiguration.keySet());
         StringBuilder builder = new StringBuilder(keys.size() * 40 + 20);
         builder.append("RadarConfiguration:\n");
         for (String key : keys) {
-            builder.append("  ").append(key).append(": ").append(config.getValue(key).asString()).append('\n');
+            builder.append("  ").append(key).append(": ").append(getString(key)).append('\n');
         }
         return builder.toString();
     }
