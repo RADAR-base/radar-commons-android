@@ -106,9 +106,11 @@ public class ManagementPortalClient implements Closeable {
 
     static JSONObject sourceRegistrationBody(AppSource source) throws JSONException {
         JSONObject requestBody = new JSONObject();
-        if (source.getSourceName() != null) {
-            requestBody.put("sourceName", source.getSourceName());
-        }
+
+        // Source name registration with custom source name still does not work.
+        // if (source.getSourceName() != null) {
+        //     requestBody.put("sourceName", source.getSourceName());
+        // }
         requestBody.put("sourceTypeId", source.getSourceTypeId());
         Map<String, String> sourceAttributes = source.getAttributes();
         if (!sourceAttributes.isEmpty()) {
