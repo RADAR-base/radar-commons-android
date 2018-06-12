@@ -57,6 +57,8 @@ public class RadarConfiguration {
     public static final String PROJECT_ID_KEY = "project_id";
     public static final String USER_ID_KEY = "user_id";
     public static final String SOURCE_ID_KEY = "source_id";
+    public static final String SEND_OVER_DATA_HIGH_PRIORITY = "send_over_data_high_priority_only";
+    public static final String TOPICS_HIGH_PRIORITY = "topics_high_priority";
     public static final String UI_REFRESH_RATE_KEY = "ui_refresh_rate_millis";
     public static final String KAFKA_UPLOAD_RATE_KEY = "kafka_upload_rate";
     public static final String DATABASE_COMMIT_RATE_KEY = "database_commit_rate";
@@ -77,6 +79,9 @@ public class RadarConfiguration {
     public static final String OAUTH2_REDIRECT_URL = "oauth2_redirect_url";
     public static final String OAUTH2_CLIENT_ID = "oauth2_client_id";
     public static final String OAUTH2_CLIENT_SECRET = "oauth2_client_secret";
+
+    public static final boolean SEND_ONLY_WITH_WIFI_DEFAULT = true;
+    public static final boolean SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true;
 
     private static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);

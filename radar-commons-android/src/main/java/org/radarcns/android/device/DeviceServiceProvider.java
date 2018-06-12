@@ -47,11 +47,13 @@ import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
+import static org.radarcns.android.RadarConfiguration.TOPICS_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.PROJECT_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
+import static org.radarcns.android.RadarConfiguration.SEND_OVER_DATA_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarConfiguration.USER_ID_KEY;
@@ -223,7 +225,8 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 KAFKA_REST_PROXY_URL_KEY, SCHEMA_REGISTRY_URL_KEY, PROJECT_ID_KEY, USER_ID_KEY,
                 KAFKA_UPLOAD_RATE_KEY, KAFKA_CLEAN_RATE_KEY, KAFKA_RECORDS_SEND_LIMIT_KEY,
                 SENDER_CONNECTION_TIMEOUT_KEY, MAX_CACHE_SIZE, SEND_ONLY_WITH_WIFI,
-                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION);
+                SEND_WITH_COMPRESSION, UNSAFE_KAFKA_CONNECTION, SEND_OVER_DATA_HIGH_PRIORITY,
+                TOPICS_HIGH_PRIORITY);
         String mpUrl = config.getString(MANAGEMENT_PORTAL_URL_KEY, null);
         if (mpUrl != null && !mpUrl.isEmpty()) {
             bundle.putString(RADAR_PREFIX + MANAGEMENT_PORTAL_URL_KEY, mpUrl);
