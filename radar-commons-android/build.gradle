@@ -42,6 +42,10 @@ android {
             }
         }
     }
+    compileOptions {
+        sourceCompatibility '1.8'
+        targetCompatibility '1.8'
+    }
 }
 
 ext.moduleName = 'radar-commons-android'

@@ -115,12 +115,8 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     /** Call when part of the login procedure failed. */
     public void loginFailed(LoginManager manager, Exception ex) {
         logger.error("Failed to log in with {}", manager, ex);
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                Boast.makeText(LoginActivity.this, R.string.login_failed, Toast.LENGTH_LONG).show();
-            }
-        });
+        runOnUiThread(() -> Boast.makeText(
+                LoginActivity.this, R.string.login_failed, Toast.LENGTH_LONG).show());
     }
 
     /** Call when the entire login procedure succeeded. */
