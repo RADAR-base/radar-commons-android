@@ -200,6 +200,16 @@ public class RadarConfiguration {
         }
     }
 
+    /**
+     * Adds a new or updated setting to the local configuration. This will be persisted to
+     * SharedPreferences. Using this will override Firebase settings. Setting it to {@code null}
+     * means that the default value in code will be used, not the Firebase setting. Use
+     * {@link #reset(String...)} to completely unset any local configuration.
+     *
+     * @param key configuration name
+     * @param value configuration value
+     * @return previous local value for given name, if any
+     */
     public String put(String key, Object value) {
         if (!(value == null
                 || value instanceof String
@@ -216,8 +226,19 @@ public class RadarConfiguration {
         return oldValue;
     }
 
-    public void reset() {
-        localConfiguration.clear();
+    /**
+     * Reset configuration to Firebase Remote Config values. If no keys are given, all local
+     * settings are reset, otherwise only the given keys are reset.
+     * @param keys configuration names
+     */
+    public void reset(String... keys) {
+        if (keys == null || keys.length == 0) {
+            localConfiguration.clear();
+        } else {
+            for (String key : keys) {
+                localConfiguration.remove(key);
+            }
+        }
         persistChanges.run();
     }
 
