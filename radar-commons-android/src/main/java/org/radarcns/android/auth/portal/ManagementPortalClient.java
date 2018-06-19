@@ -1,7 +1,12 @@
 package org.radarcns.android.auth.portal;
 
 import android.support.annotation.NonNull;
-
+import okhttp3.Credentials;
+import okhttp3.FormBody;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
@@ -18,13 +23,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.Map;
-
-import okhttp3.Credentials;
-import okhttp3.FormBody;
-import okhttp3.MediaType;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 public class ManagementPortalClient implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalClient.class);
@@ -107,10 +105,11 @@ public class ManagementPortalClient implements Closeable {
     static JSONObject sourceRegistrationBody(AppSource source) throws JSONException {
         JSONObject requestBody = new JSONObject();
 
-        // Source name registration with custom source name still does not work.
-        // if (source.getSourceName() != null) {
-        //     requestBody.put("sourceName", source.getSourceName());
-        // }
+        if (source.getSourceName() != null) {
+            String sourceName = source.getSourceName().replaceAll("[^_'.@A-Za-z0-9- ]+", "-");
+            requestBody.put("sourceName", sourceName);
+            logger.info("Add {} as sourceName" , sourceName);
+        }
         requestBody.put("sourceTypeId", source.getSourceTypeId());
         Map<String, String> sourceAttributes = source.getAttributes();
         if (!sourceAttributes.isEmpty()) {
