@@ -106,7 +106,9 @@ public class ManagementPortalClient implements Closeable {
         JSONObject requestBody = new JSONObject();
 
         if (source.getSourceName() != null) {
-            requestBody.put("sourceName", source.getSourceName().replaceAll("[^_'.@A-Za-z0-9- ]+", "-"));
+            String sourceName = source.getSourceName().replaceAll("[^_'.@A-Za-z0-9- ]+", "-");
+            requestBody.put("sourceName", sourceName);
+            logger.info("Add {} as sourceName" , sourceName);
         }
         requestBody.put("sourceTypeId", source.getSourceTypeId());
         Map<String, String> sourceAttributes = source.getAttributes();
