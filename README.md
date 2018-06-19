@@ -1,8 +1,8 @@
 # RADAR-Commons-Android
 
-[![Build Status](https://travis-ci.org/RADAR-CNS/radar-commons-android.svg?branch=master)](https://travis-ci.org/RADAR-CNS/radar-commons-android)
+[![Build Status](https://travis-ci.org/RADAR-base/radar-commons-android.svg?branch=master)](https://travis-ci.org/RADAR-base/radar-commons-android)
 
-Base module for the RADAR passive remote monitoring app. Plugins for that app should implement the API from this base library. Also user interfaces should use this as a base. Currently, the main user interface is [RADAR-AndroidApplication](https://github.com/RADAR-CNS/RADAR-AndroidApplication.git).
+Base module for the RADAR passive remote monitoring app. Plugins for that app should implement the API from this base library. Also user interfaces should use this as a base. Currently, the main user interface is [RADAR-AndroidApplication](https://github.com/RADAR-base/radar-prmt-android.git).
 
 ## Configuration
 
@@ -22,10 +22,10 @@ This library takes the following firebase parameters:
 | `kafka_upload_minimum_battery_level` | int (s) | 0.1 (= 10%) | Battery level percentage below which to stop sending data. Data will still be collected. |
 | `max_cache_size_bytes` | long (byte) | 450000000 | Maximum number of bytes per topic to store. |
 | `send_only_with_wifi` | boolean | `true` | Whether to send only when WiFi is connected. If false, for example LTE would also be used. |
-| `send_with_compression` | boolean | `true` | Send data with GZIP compression. This requires RADAR-Gateway to be installed in front of the Kafka REST Proxy. |
-| `firebase_fetch_timeout_ms` | long (ms) | 43200000 (= 12 hours) | Interval for fetching new Firebase configuration if the app is not active. |
 | `send_over_data_high_priority_only` | boolean | `true` | Only the data of high priority topics will be sent over LTE. Only used if `send_only_with_wifi` is set to `true`. High priority topics are determined by the `topics_high_priority` property. |
 | `topics_high_priority` | string | <empty> | A comma separated list of topics that should be considered high priority. |
+| `send_with_compression` | boolean | `true` | Send data with GZIP compression. This requires RADAR-Gateway to be installed in front of the Kafka REST Proxy. |
+| `firebase_fetch_timeout_ms` | long (ms) | 43200000 (= 12 hours) | Interval for fetching new Firebase configuration if the app is not active. |
 
 ## Usage
 
@@ -41,11 +41,11 @@ dependencies {
 
 ### Creating a plugin
 
-To add device types to the passive remote monitoring Android app, create a plugin using the following steps (see the [RADAR-Android-Pebble repository](https://github.com/RADAR-CNS/RADAR-Android-Pebble.git) as an example):
+To add device types to the passive remote monitoring Android app, create a plugin using the following steps (see the [RADAR-Android-Pebble repository](https://github.com/RADAR-base/RADAR-Android-Pebble.git) as an example):
 
 First, create an Android Library project. Include RADAR Commons Android as a module in `build.gradle`.
 
-1. Add the schemas of the data you intend to send to the [RADAR-CNS Schemas repository](https://github.com/RADAR-CNS/RADAR-Schemas). Your record keys should be `org.radarcns.kafka.ObservationKey`. Be sure to set the `namespace` property to `org.radarcns.mydevicetype` so that generated classes will be put in the right package. All values should have `time` and `timeReceived` fields, with type `double`. These represent the time in seconds since the Unix Epoch (1 January 1970, 00:00:00 UTC). Subsecond precision is possible by using floating point decimals. Until those schemas are published, generate them using Avro tools. Find `avro-tools-1.8.2.jar` by going to <http://www.apache.org/dyn/closer.cgi/avro/>, choosing a mirror, and then downloading `avro-1.8.2/java/avro-tools-1.8.2.jar`. You can now generate source code for a schema `myschema.avsc` with the following command:
+1. Add the schemas of the data you intend to send to the [RADAR-CNS Schemas repository](https://github.com/RADAR-base/RADAR-Schemas). Your record keys should be `org.radarcns.kafka.ObservationKey`. Be sure to set the `namespace` property to `org.radarcns.mydevicetype` so that generated classes will be put in the right package. All values should have `time` and `timeReceived` fields, with type `double`. These represent the time in seconds since the Unix Epoch (1 January 1970, 00:00:00 UTC). Subsecond precision is possible by using floating point decimals. Until those schemas are published, generate them using Avro tools. Find `avro-tools-1.8.2.jar` by going to <http://www.apache.org/dyn/closer.cgi/avro/>, choosing a mirror, and then downloading `avro-1.8.2/java/avro-tools-1.8.2.jar`. You can now generate source code for a schema `myschema.avsc` with the following command:
     ```shell
     java -jar avro-tools-1.8.2.jar compile -string schema path/to/myschema.avsc path/to/plugin/src/main/java
     ```
@@ -79,4 +79,4 @@ To create an Android App, follow the following steps:
 
 For latest code use `dev` branch. Code should be formatted using the [Google Java Code Style Guide](https://google.github.io/styleguide/javaguide.html), except using 4 spaces as indentation.
 
-If you want to contribute a feature or fix browse our [issues](https://github.com/RADAR-CNS/RADAR-Commons-Android/issues), and please make a pull request.
+If you want to contribute a feature or fix browse our [issues](https://github.com/RADAR-base/radar-commons-android/issues), and please make a pull request.
