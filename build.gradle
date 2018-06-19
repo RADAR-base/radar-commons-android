@@ -47,7 +47,7 @@ subprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.6.2-SNAPSHOT'
+    version = '0.6.2'
     ext.versionCode = 16
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
