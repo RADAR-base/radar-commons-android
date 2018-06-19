@@ -40,6 +40,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -76,6 +78,8 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private AppAuthState authState;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
+    private final AtomicBoolean sendOverDataHighPriority;
+    private final Set<String> highPriorityTopics;
     private int kafkaRecordsSendLimit;
     private final AtomicLong dataRetention;
     private long kafkaUploadRate;
@@ -92,10 +96,14 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            int maxBytes, boolean sendOnlyWithWifi, AppAuthState authState) {
+                            int maxBytes, boolean sendOnlyWithWifi,
+                            boolean sendOverDataHighPriority, Set<String> highPriorityTopics,
+                            AppAuthState authState) {
         this.context =  context;
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
+        this.sendOverDataHighPriority = new AtomicBoolean(sendOverDataHighPriority);
+        this.highPriorityTopics = new HashSet<>(highPriorityTopics);
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
@@ -249,10 +257,10 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * a connection with the server. Otherwise, the data is discarded.
      */
     @SuppressWarnings("UnusedReturnValue")
-    public boolean trySend(AvroTopic topic, ObservationKey key, SpecificRecord value) {
+    public <V extends SpecificRecord> boolean trySend(AvroTopic<ObservationKey, V> topic, ObservationKey key, V value) {
         checkRecord(topic, key, value);
         synchronized (this) {
-            return submitter != null && submitter.trySend(topic, key, value);
+            return isTopicActive(topic) && submitter.trySend(topic, key, value);
         }
     }
 
@@ -311,6 +319,29 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     public Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> getCaches() {
         return tables;
+    }
+
+    public Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> getActiveCaches() {
+        if (submitter == null) {
+            return Collections.emptyMap();
+        } else if (networkConnectedReceiver.hasWifiOrEthernet() || !sendOverDataHighPriority.get()) {
+            return tables;
+        } else {
+            Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> filteredMap = new HashMap<>();
+            for (Map.Entry<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> entry : tables.entrySet()) {
+                if (highPriorityTopics.contains(entry.getKey().getName())) {
+                    filteredMap.put(entry.getKey(), entry.getValue());
+                }
+            }
+            return filteredMap;
+        }
+    }
+
+    private boolean isTopicActive(AvroTopic<?, ?> topic) {
+        return submitter != null
+                && (networkConnectedReceiver.hasWifiOrEthernet()
+                || !sendOverDataHighPriority.get()
+                || highPriorityTopics.contains(topic.getName()));
     }
 
     /** Add a listener for ServerStatus updates. */
@@ -490,5 +521,16 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         cache.setMaximumSize(maxBytes);
         tables.put(topic, cache);
         tablesByName.put(topic.getName(), cache);
+    }
+
+    public synchronized void setTopicsHighPriority(Set<String> topicsHighPriority) {
+        if (!topicsHighPriority.equals(this.highPriorityTopics)) {
+            this.highPriorityTopics.clear();
+            this.highPriorityTopics.addAll(topicsHighPriority);
+        }
+    }
+
+    public void setSendOverDataHighPriority(boolean sendOverDataHighPriority) {
+        this.sendOverDataHighPriority.set(sendOverDataHighPriority);
     }
 }

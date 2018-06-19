@@ -130,7 +130,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
             public void run() {
                 if (connection.isConnected()) {
                     if (topicsToSend.isEmpty()) {
-                        topicsToSend = new HashSet<>(KafkaDataSubmitter.this.dataHandler.getCaches().keySet());
+                        topicsToSend = new HashSet<>(KafkaDataSubmitter.this.dataHandler.getActiveCaches().keySet());
                     }
                     uploadCaches(topicsToSend);
                     // still more data to send, do that immediately
@@ -236,7 +236,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
 
         try {
             for (Map.Entry<AvroTopic<ObservationKey, ? extends V>, ? extends DataCache<ObservationKey, ? extends V>> entry
-                    : dataHandler.getCaches().entrySet()) {
+                    : dataHandler.getActiveCaches().entrySet()) {
                 long unsent = entry.getValue().numberOfRecords().first;
                 if (unsent > currentSendLimit) {
                     //noinspection unchecked
@@ -269,7 +269,7 @@ public class KafkaDataSubmitter<V> implements Closeable {
         boolean uploadingNotified = false;
         int currentSendLimit = sendLimit.get();
         try {
-            for (Map.Entry<AvroTopic<ObservationKey, ? extends V>, ? extends DataCache<ObservationKey, ? extends V>> entry : dataHandler.getCaches().entrySet()) {
+            for (Map.Entry<AvroTopic<ObservationKey, ? extends V>, ? extends DataCache<ObservationKey, ? extends V>> entry : dataHandler.getActiveCaches().entrySet()) {
                 if (!toSend.contains(entry.getKey())) {
                     continue;
                 }

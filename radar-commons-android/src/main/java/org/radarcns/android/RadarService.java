@@ -92,7 +92,11 @@ import static org.radarcns.android.RadarConfiguration.RADAR_CONFIGURATION_CHANGE
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
+import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI_DEFAULT;
+import static org.radarcns.android.RadarConfiguration.SEND_OVER_DATA_HIGH_PRIORITY;
+import static org.radarcns.android.RadarConfiguration.SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT;
 import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
+import static org.radarcns.android.RadarConfiguration.TOPICS_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
@@ -415,7 +419,17 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }
 
-        boolean sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, true);
+        boolean sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, SEND_ONLY_WITH_WIFI_DEFAULT);
+        boolean sendOverDataPriority = configuration.getBoolean(SEND_OVER_DATA_HIGH_PRIORITY, SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT);
+
+        String priorityTopics = configuration.getString(TOPICS_HIGH_PRIORITY, "");
+        Set<String> priorityTopicList = new HashSet<>();
+        for (String topic : priorityTopics.split(",")) {
+            topic = topic.trim();
+            if (!topic.isEmpty()) {
+                priorityTopicList.add(topic);
+            }
+        }
 
         int maxBytes = configuration.getInt(MAX_CACHE_SIZE, Integer.MAX_VALUE);
 
@@ -424,7 +438,7 @@ public class RadarService extends Service implements ServerStatusListener {
             if (dataHandler == null) {
                 dataHandler = new TableDataHandler(
                         this, kafkaConfig, remoteSchemaRetriever, maxBytes,
-                        sendOnlyWithWifi, authState);
+                        sendOnlyWithWifi, sendOverDataPriority, priorityTopicList, authState);
                 newlyCreated = true;
             } else {
                 newlyCreated = false;
@@ -441,9 +455,11 @@ public class RadarService extends Service implements ServerStatusListener {
             }
             localDataHandler.setMaximumCacheSize(maxBytes);
             localDataHandler.setAuthState(authState);
+            localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
+            localDataHandler.setSendOverDataHighPriority(sendOverDataPriority);
+            localDataHandler.setTopicsHighPriority(priorityTopicList);
         }
 
-        localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
         localDataHandler.setCompression(configuration.getBoolean(SEND_WITH_COMPRESSION, false));
 
         if (configuration.has(DATA_RETENTION_KEY)) {

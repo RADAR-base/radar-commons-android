@@ -22,7 +22,6 @@ import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
@@ -217,20 +216,17 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
         // Start the UI thread
         uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
-        mViewUpdater = new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    // Update all rows in the UI with the data from the connections
-                    MainActivityView localView = mView;
-                    if (localView != null) {
-                        localView.update();
-                    }
-                } finally {
-                    Handler handler = getHandler();
-                    if (handler != null) {
-                        handler.postDelayed(mViewUpdater, uiRefreshRate);
-                    }
+        mViewUpdater = () -> {
+            try {
+                // Update all rows in the UI with the data from the connections
+                MainActivityView localView = mView;
+                if (localView != null) {
+                    localView.update();
+                }
+            } finally {
+                Handler handler = getHandler();
+                if (handler != null) {
+                    handler.postDelayed(mViewUpdater, uiRefreshRate);
                 }
             }
         };
@@ -403,15 +399,13 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
         builder.setTitle(R.string.enable_location_title)
                 .setMessage(R.string.enable_location)
-                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                        if (intent.resolveActivity(getPackageManager()) == null) {
-                            intent = new Intent(Settings.ACTION_SETTINGS);
-                        }
-                        startActivityForResult(intent, LOCATION_REQUEST_CODE);
-                        dialog.cancel();
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                    if (intent.resolveActivity(getPackageManager()) == null) {
+                        intent = new Intent(Settings.ACTION_SETTINGS);
                     }
+                    startActivityForResult(intent, LOCATION_REQUEST_CODE);
+                    dialog.cancel();
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
@@ -421,15 +415,13 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
         builder.setTitle(R.string.enable_package_usage_title)
                 .setMessage(R.string.enable_package_usage)
-                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                        Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
-                        if (intent.resolveActivity(getPackageManager()) == null) {
-                            intent = new Intent(Settings.ACTION_SETTINGS);
-                        }
-                        startActivityForResult(intent, USAGE_REQUEST_CODE);
-                        dialog.cancel();
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                    if (intent.resolveActivity(getPackageManager()) == null) {
+                        intent = new Intent(Settings.ACTION_SETTINGS);
                     }
+                    startActivityForResult(intent, USAGE_REQUEST_CODE);
+                    dialog.cancel();
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();

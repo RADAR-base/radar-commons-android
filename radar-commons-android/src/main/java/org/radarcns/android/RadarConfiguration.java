@@ -33,8 +33,6 @@ import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -47,7 +45,7 @@ import static java.util.regex.Pattern.CASE_INSENSITIVE;
 
 public class RadarConfiguration {
     private static final Logger logger = LoggerFactory.getLogger(RadarConfiguration.class);
-    private static final Object SYNC_PREFS_OBJECT = new Object();
+    private static final long FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12*60*60 * 1000L;
 
     public static final String RADAR_PREFIX = "org.radarcns.android.";
 
@@ -59,7 +57,8 @@ public class RadarConfiguration {
     public static final String PROJECT_ID_KEY = "project_id";
     public static final String USER_ID_KEY = "user_id";
     public static final String SOURCE_ID_KEY = "source_id";
-    public static final String EMPATICA_API_KEY = "empatica_api_key";
+    public static final String SEND_OVER_DATA_HIGH_PRIORITY = "send_over_data_high_priority_only";
+    public static final String TOPICS_HIGH_PRIORITY = "topics_high_priority";
     public static final String UI_REFRESH_RATE_KEY = "ui_refresh_rate_millis";
     public static final String KAFKA_UPLOAD_RATE_KEY = "kafka_upload_rate";
     public static final String DATABASE_COMMIT_RATE_KEY = "database_commit_rate";
@@ -68,7 +67,6 @@ public class RadarConfiguration {
     public static final String SENDER_CONNECTION_TIMEOUT_KEY = "sender_connection_timeout";
     public static final String DATA_RETENTION_KEY = "data_retention_ms";
     public static final String FIREBASE_FETCH_TIMEOUT_MS_KEY = "firebase_fetch_timeout_ms";
-    public static final String CONDENSED_DISPLAY_KEY = "is_condensed_n_records_display";
     public static final String START_AT_BOOT = "start_at_boot";
     public static final String DEVICE_SERVICES_TO_CONNECT = "device_services_to_connect";
     public static final String KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level";
@@ -82,9 +80,12 @@ public class RadarConfiguration {
     public static final String OAUTH2_CLIENT_ID = "oauth2_client_id";
     public static final String OAUTH2_CLIENT_SECRET = "oauth2_client_secret";
 
-    public static final Pattern IS_TRUE = Pattern.compile(
+    public static final boolean SEND_ONLY_WITH_WIFI_DEFAULT = true;
+    public static final boolean SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true;
+
+    private static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
-    public static final Pattern IS_FALSE = Pattern.compile(
+    private static final Pattern IS_FALSE = Pattern.compile(
             "^(0|false|f|no|n|off|)$", CASE_INSENSITIVE);
 
     public FirebaseStatus getStatus() {
@@ -95,30 +96,15 @@ public class RadarConfiguration {
         UNAVAILABLE, ERROR, READY, FETCHING, FETCHED
     }
 
-    public static final Set<String> LONG_VALUES = new HashSet<>(Arrays.asList(
-            UI_REFRESH_RATE_KEY, KAFKA_UPLOAD_RATE_KEY, DATABASE_COMMIT_RATE_KEY,
-            KAFKA_CLEAN_RATE_KEY, SENDER_CONNECTION_TIMEOUT_KEY, DATA_RETENTION_KEY,
-            FIREBASE_FETCH_TIMEOUT_MS_KEY));
-
-    public static final Set<String> INT_VALUES = new HashSet<>(Arrays.asList(
-            KAFKA_RECORDS_SEND_LIMIT_KEY, MAX_CACHE_SIZE));
-
-    public static final Set<String> BOOLEAN_VALUES = new HashSet<>(Arrays.asList(
-            CONDENSED_DISPLAY_KEY, SEND_ONLY_WITH_WIFI, SEND_WITH_COMPRESSION,
-            UNSAFE_KAFKA_CONNECTION));
-
-    public static final Set<String> FLOAT_VALUES = Collections.singleton(
-            KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL);
-
     private static final Object syncObject = new Object();
     private static RadarConfiguration instance = null;
     private final FirebaseRemoteConfig config;
     private FirebaseStatus status;
 
-    public static final long FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12*60*60 * 1000L;
     private final Handler handler;
     private final OnCompleteListener<Void> onFetchCompleteHandler;
-    private final Map<String, Object> localConfiguration;
+    private final Map<String, String> localConfiguration;
+    private final Runnable persistChanges;
 
     private RadarConfiguration(@NonNull final Context context, @NonNull FirebaseRemoteConfig config) {
         this.config = config;
@@ -126,24 +112,37 @@ public class RadarConfiguration {
         this.localConfiguration = new ConcurrentHashMap<>();
         this.handler = new Handler();
 
-        this.onFetchCompleteHandler = new OnCompleteListener<Void>() {
-            @Override
-            public void onComplete(@NonNull Task<Void> task) {
-                if (task.isSuccessful()) {
-                    setStatus(FirebaseStatus.FETCHED);
-                    // Once the config is successfully fetched it must be
-                    // activated before newly fetched values are returned.
-                    activateFetched();
+        this.onFetchCompleteHandler = task -> {
+            if (task.isSuccessful()) {
+                setStatus(FirebaseStatus.FETCHED);
+                // Once the config is successfully fetched it must be
+                // activated before newly fetched values are returned.
+                activateFetched();
 
-                    logger.info("Remote Config: Activate success.");
-                    // Set global properties.
-                    logger.info("RADAR configuration changed: {}", RadarConfiguration.this);
-                    context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
-                } else {
-                    setStatus(status);
-                    logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
-                }
+                logger.info("Remote Config: Activate success.");
+                // Set global properties.
+                logger.info("RADAR configuration changed: {}", RadarConfiguration.this);
+                context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+            } else {
+                setStatus(status);
+                logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
             }
+        };
+
+        final SharedPreferences prefs = context.getApplicationContext().getSharedPreferences(getClass().getName(), Context.MODE_PRIVATE);
+        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+            Object value = entry.getValue();
+            if (value == null || value instanceof String) {
+                this.localConfiguration.put(entry.getKey(), (String) value);
+            }
+        }
+
+        persistChanges = () -> {
+            SharedPreferences.Editor editor = prefs.edit();
+            for (Map.Entry<String, String> entry : localConfiguration.entrySet()) {
+                editor.putString(entry.getKey(), entry.getValue());
+            }
+            editor.apply();
         };
 
         GoogleApiAvailability googleApi = GoogleApiAvailability.getInstance();
@@ -201,7 +200,17 @@ public class RadarConfiguration {
         }
     }
 
-    public Object put(String key, Object value) {
+    /**
+     * Adds a new or updated setting to the local configuration. This will be persisted to
+     * SharedPreferences. Using this will override Firebase settings. Setting it to {@code null}
+     * means that the default value in code will be used, not the Firebase setting. Use
+     * {@link #reset(String...)} to completely unset any local configuration.
+     *
+     * @param key configuration name
+     * @param value configuration value
+     * @return previous local value for given name, if any
+     */
+    public String put(String key, Object value) {
         if (!(value == null
                 || value instanceof String
                 || value instanceof Long
@@ -211,7 +220,26 @@ public class RadarConfiguration {
             throw new IllegalArgumentException("Cannot put value of type " + value.getClass()
                     + " into RadarConfiguration");
         }
-        return localConfiguration.put(key, value);
+        String config = value == null || value instanceof String ? (String)value : value.toString();
+        String oldValue = localConfiguration.put(key, config);
+        persistChanges.run();
+        return oldValue;
+    }
+
+    /**
+     * Reset configuration to Firebase Remote Config values. If no keys are given, all local
+     * settings are reset, otherwise only the given keys are reset.
+     * @param keys configuration names
+     */
+    public void reset(String... keys) {
+        if (keys == null || keys.length == 0) {
+            localConfiguration.clear();
+        } else {
+            for (String key : keys) {
+                localConfiguration.remove(key);
+            }
+        }
+        persistChanges.run();
     }
 
     /**
@@ -230,7 +258,7 @@ public class RadarConfiguration {
 
     /**
      * Fetch the configuration from the firebase server.
-     * @param delay
+     * @param delay seconds
      * @return fetch task or null status is {@link FirebaseStatus#UNAVAILABLE}.
      */
     private Task<Void> fetch(long delay) {
@@ -255,66 +283,9 @@ public class RadarConfiguration {
 
     private String getRawString(String key) {
         if (localConfiguration.containsKey(key)) {
-            Object value = localConfiguration.get(key);
-            if (value == null || value instanceof String) {
-                return (String)value;
-            } else {
-                return null;
-            }
+            return localConfiguration.get(key);
         } else {
             return config.getString(key);
-        }
-    }
-
-    private Long getRawLong(String key) {
-        if (localConfiguration.containsKey(key)) {
-            Object value = localConfiguration.get(key);
-            if (value == null) {
-                return null;
-            } else if (value instanceof Number) {
-                return ((Number)value).longValue();
-            } else if (value instanceof String) {
-                return Long.valueOf((String)value);
-            } else {
-                return null;
-            }
-        } else {
-            return Long.valueOf(getString(key));
-        }
-    }
-
-    private Integer getRawInteger(String key) {
-        if (localConfiguration.containsKey(key)) {
-            Object value = localConfiguration.get(key);
-            if (value == null) {
-                return null;
-            } else if (value instanceof Number) {
-                return ((Number)value).intValue();
-            } else if (value instanceof String) {
-                return Integer.valueOf((String)value);
-            } else {
-                return null;
-            }
-        } else {
-            return Integer.valueOf(getString(key));
-        }
-    }
-
-
-    private Float getRawFloat(String key) {
-        if (localConfiguration.containsKey(key)) {
-            Object value = localConfiguration.get(key);
-            if (value == null) {
-                return null;
-            } else if (value instanceof Number) {
-                return ((Number)value).floatValue();
-            } else if (value instanceof String) {
-                return Float.valueOf((String)value);
-            } else {
-                return null;
-            }
-        } else {
-            return Float.valueOf(getString(key));
         }
     }
 
@@ -336,13 +307,8 @@ public class RadarConfiguration {
      * @throws IllegalArgumentException if the key does not have an associated value
      */
     public long getLong(@NonNull String key) {
-        Long ret = getRawLong(key);
-        if (ret == null) {
-            throw new IllegalArgumentException("Key does not have a value");
-        }
-        return ret;
+        return Long.parseLong(getString(key));
     }
-
 
     /**
      * Get a configured int value.
@@ -352,11 +318,7 @@ public class RadarConfiguration {
      * @throws IllegalArgumentException if the key does not have an associated value
      */
     public int getInt(@NonNull String key) {
-        Integer ret = getRawInteger(key);
-        if (ret == null) {
-            throw new IllegalArgumentException("Key does not have a value");
-        }
-        return ret;
+        return Integer.parseInt(getString(key));
     }
 
     /**
@@ -367,11 +329,7 @@ public class RadarConfiguration {
      * @throws IllegalArgumentException if the key does not have an associated value
      */
     public float getFloat(@NonNull String key) {
-        Float ret = getRawFloat(key);
-        if (ret == null) {
-            throw new IllegalArgumentException("Key does not have a value");
-        }
-        return ret;
+        return Float.parseFloat(getString(key));
     }
 
     public String getString(@NonNull String key, String defaultValue) {
@@ -393,9 +351,9 @@ public class RadarConfiguration {
      */
     public long getLong(@NonNull String key, long defaultValue) {
         try {
-            Long ret = getRawLong(key);
-            if (ret != null) {
-                return ret;
+            String ret = getRawString(key);
+            if (ret != null && !ret.isEmpty()) {
+                return Long.parseLong(ret);
             }
         } catch (IllegalArgumentException ex) {
             // return default
@@ -412,9 +370,9 @@ public class RadarConfiguration {
      */
     public int getInt(@NonNull String key, int defaultValue) {
         try {
-            Integer ret = getRawInteger(key);
-            if (ret != null) {
-                return ret;
+            String ret = getRawString(key);
+            if (ret != null && !ret.isEmpty()) {
+                return Integer.parseInt(ret);
             }
         } catch (IllegalArgumentException ex) {
             // return default
@@ -432,9 +390,9 @@ public class RadarConfiguration {
      */
     public float getFloat(@NonNull String key, float defaultValue) {
         try {
-            Float ret = getRawFloat(key);
-            if (ret != null) {
-                return ret;
+            String ret = getRawString(key);
+            if (ret != null && !ret.isEmpty()) {
+                return Float.parseFloat(ret);
             }
         } catch (IllegalArgumentException ex) {
             // return default
@@ -464,13 +422,7 @@ public class RadarConfiguration {
         if (str == null) {
             return defaultValue;
         }
-        if (IS_TRUE.matcher(str).find()) {
-            return true;
-        } else if (IS_FALSE.matcher(str).find()) {
-            return false;
-        } else {
-            return defaultValue;
-        }
+        return IS_TRUE.matcher(str).find() || (!IS_FALSE.matcher(str).find() && defaultValue);
     }
 
     public Set<String> keySet() {
@@ -499,36 +451,10 @@ public class RadarConfiguration {
             String key = RADAR_PREFIX + extra;
 
             if (localConfiguration.containsKey(extra)) {
-                Object value = localConfiguration.get(extra);
-                if (value == null) {
-                    bundle.putString(key, null);
-                } else if (value instanceof String){
-                    bundle.putString(key, (String) value);
-                } else if (value instanceof Boolean) {
-                    bundle.putBoolean(key, (Boolean) value);
-                } else if (value instanceof Long) {
-                    bundle.putLong(key, (Long) value);
-                } else if (value instanceof Integer) {
-                    bundle.putInt(key, (Integer) value);
-                } else if (value instanceof Float) {
-                    bundle.putFloat(key, (Float) value);
-                } else {
-                    throw new IllegalStateException("Configuration contains unknown type");
-                }
-            }
-            else {
+                bundle.putString(key, localConfiguration.get(extra));
+            } else {
                 try {
-                    if (LONG_VALUES.contains(extra)) {
-                        bundle.putLong(key, getLong(extra));
-                    } else if (INT_VALUES.contains(extra)) {
-                        bundle.putInt(key, getInt(extra));
-                    } else if (BOOLEAN_VALUES.contains(extra)) {
-                        bundle.putBoolean(key, getString(extra).equals("true"));
-                    } else if (FLOAT_VALUES.contains(extra)) {
-                        bundle.putFloat(key, getFloat(extra));
-                    } else {
-                        bundle.putString(key, getString(extra));
-                    }
+                    bundle.putString(key, getString(extra));
                 } catch (IllegalArgumentException ex) {
                     // do nothing
                 }
@@ -545,23 +471,38 @@ public class RadarConfiguration {
     }
 
     public static int getIntExtra(Bundle bundle, String key, int defaultValue) {
-        return bundle.getInt(RADAR_PREFIX + key, defaultValue);
+        String value = bundle.getString(RADAR_PREFIX + key);
+        if (value == null) {
+            return defaultValue;
+        } else {
+            return Integer.parseInt(value);
+        }
     }
 
     public static boolean getBooleanExtra(Bundle bundle, String key, boolean defaultValue) {
-        return bundle.getBoolean(RADAR_PREFIX + key, defaultValue);
+        String value = bundle.getString(RADAR_PREFIX + key);
+        if (value == null) {
+            return defaultValue;
+        } else {
+            return Boolean.parseBoolean(value);
+        }
     }
 
     public static int getIntExtra(Bundle bundle, String key) {
-        return bundle.getInt(RADAR_PREFIX + key);
+        return Integer.parseInt(bundle.getString(RADAR_PREFIX + key));
     }
 
     public static long getLongExtra(Bundle bundle, String key, long defaultValue) {
-        return bundle.getLong(RADAR_PREFIX + key, defaultValue);
+        String value = bundle.getString(RADAR_PREFIX + key);
+        if (value == null) {
+            return defaultValue;
+        } else {
+            return Long.parseLong(value);
+        }
     }
 
     public static long getLongExtra(Bundle bundle, String key) {
-        return bundle.getLong(RADAR_PREFIX + key);
+        return Long.parseLong(bundle.getString(RADAR_PREFIX + key));
     }
 
     public static String getStringExtra(Bundle bundle, String key, String defaultValue) {
@@ -573,13 +514,13 @@ public class RadarConfiguration {
     }
 
     public static float getFloatExtra(Bundle bundle, String key) {
-        return bundle.getFloat(RADAR_PREFIX + key);
+        return Float.parseFloat(bundle.getString(RADAR_PREFIX + key));
     }
 
     public static String getOrSetUUID(@NonNull Context context, String key) {
         SharedPreferences prefs = context.getSharedPreferences("global", Context.MODE_PRIVATE);
         String uuid;
-        synchronized (SYNC_PREFS_OBJECT) {
+        synchronized (RadarConfiguration.class) {
             uuid = prefs.getString(key, null);
             if (uuid == null) {
                 uuid = UUID.randomUUID().toString();
@@ -590,11 +531,12 @@ public class RadarConfiguration {
     }
 
     public String toString() {
-        Set<String> keys = config.getKeysByPrefix(null);
+        Set<String> keys = new HashSet<>(config.getKeysByPrefix(null));
+        keys.addAll(localConfiguration.keySet());
         StringBuilder builder = new StringBuilder(keys.size() * 40 + 20);
         builder.append("RadarConfiguration:\n");
         for (String key : keys) {
-            builder.append("  ").append(key).append(": ").append(config.getValue(key).asString()).append('\n');
+            builder.append("  ").append(key).append(": ").append(getString(key)).append('\n');
         }
         return builder.toString();
     }

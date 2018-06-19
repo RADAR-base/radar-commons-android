@@ -19,7 +19,7 @@ buildscript {
         jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.1.2'
+        classpath 'com.android.tools.build:gradle:3.1.3'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.0'
         classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.5.4'
         classpath 'de.mobilej.unmock:UnMockPlugin:0.6.4'
@@ -47,8 +47,8 @@ subprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.6.1'
-    ext.versionCode = 15
+    version = '0.6.2'
+    ext.versionCode = 16
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-CNS/RADAR-Commons-Android'
 
@@ -77,6 +77,6 @@ subprojects {
     }
 }
 
-task wrapper(type: Wrapper) {
-    gradleVersion '4.4'
+wrapper {
+    gradleVersion '4.8'
 }
