@@ -23,7 +23,7 @@ This library takes the following firebase parameters:
 | `max_cache_size_bytes` | long (byte) | 450000000 | Maximum number of bytes per topic to store. |
 | `send_only_with_wifi` | boolean | `true` | Whether to send only when WiFi is connected. If false, for example LTE would also be used. |
 | `send_over_data_high_priority_only` | boolean | `true` | Only the data of high priority topics will be sent over LTE. Only used if `send_only_with_wifi` is set to `true`. High priority topics are determined by the `topics_high_priority` property. |
-| `topics_high_priority` | string | <empty> | A comma separated list of topics that should be considered high priority. |
+| `topics_high_priority` | string | `<empty>` | A comma separated list of topics that should be considered high priority. |
 | `send_with_compression` | boolean | `true` | Send data with GZIP compression. This requires RADAR-Gateway to be installed in front of the Kafka REST Proxy. |
 | `firebase_fetch_timeout_ms` | long (ms) | 43200000 (= 12 hours) | Interval for fetching new Firebase configuration if the app is not active. |
 
