@@ -73,7 +73,7 @@ public interface QueueStorage extends Closeable, Flushable {
      *
      * @param size new size in bytes.
      * @throws IllegalArgumentException if {@code size < QueueFileHeader.HEADER_LENGTH} or
-     *                                  {@code size > #getMaximumSize()}.
+     *                                  if the size is increased and {@code size > #getMaximumSize()}.
      * @throws IOException if the storage could not be resized
      */
     void resize(long size) throws IOException;
