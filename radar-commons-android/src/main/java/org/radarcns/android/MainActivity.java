@@ -240,7 +240,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             LocalBroadcastManager.getInstance(this)
                     .unregisterReceiver(configurationBroadcastReceiver);
         }
-        networkReceiver.unregister();
+        if (networkReceiver != null) {
+            networkReceiver.unregister();
+        }
     }
 
     protected Class<? extends RadarService> radarService() {
