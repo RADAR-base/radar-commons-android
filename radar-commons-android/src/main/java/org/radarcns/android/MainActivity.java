@@ -108,7 +108,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
     };
 
-    private final BroadcastReceiver bluetoothNeededReceiver = new BroadcastReceiver() {
+    private final BroadcastReceiver bluetoothNeededReceiverImpl = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (Objects.equals(intent.getAction(), ACTION_BLUETOOTH_NEEDED_CHANGED)) {
@@ -116,6 +116,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             }
         }
     };
+    private BroadcastReceiver bluetoothNeededReceiver;
 
     private volatile boolean bluetoothReceiverIsEnabled = false;
 
@@ -291,6 +292,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
         bindService(new Intent(this, radarService()), radarServiceConnection, 0);
         testBindBluetooth();
+        bluetoothNeededReceiver = bluetoothNeededReceiverImpl;
         LocalBroadcastManager.getInstance(this)
                 .registerReceiver(bluetoothNeededReceiver,
                         new IntentFilter(ACTION_BLUETOOTH_NEEDED_CHANGED));
@@ -326,7 +328,10 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
         mHandlerThread.quitSafely();
         mView = null;
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(bluetoothNeededReceiver);
+        if (bluetoothNeededReceiver != null) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(bluetoothNeededReceiver);
+            bluetoothNeededReceiver = null;
+        }
         if (bluetoothReceiverIsEnabled) {
             unregisterReceiver(bluetoothReceiver);
         }
