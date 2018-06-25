@@ -20,13 +20,25 @@ import static android.app.Notification.DEFAULT_VIBRATE;
 import static android.content.Context.NOTIFICATION_SERVICE;
 
 /**
- * Created by joris on 06/03/2018.
+ * Handle notifications and notification channels.
  */
-
 public class NotificationHandler {
+    /** Notification channel ID for informational messages. No user response required. */
     public static final String NOTIFICATION_CHANNEL_INFO = "NotificationHandler.INFO";
+    /**
+     * Notification channel ID for tasks and active notification messages.
+     * User response is requested.
+     */
     public static final String NOTIFICATION_CHANNEL_NOTIFY = "NotificationHandler.NOTIFY";
+    /**
+     * Notification channel ID for missed tasks and app failure notification messages.
+     * User response is strongly requested.
+     */
     public static final String NOTIFICATION_CHANNEL_ALERT = "NotificationHandler.ALERT";
+    /**
+     * Notification channel ID for missed tasks and app failure notification messages.
+     * User response is required.
+     */
     public static final String NOTIFICATION_CHANNEL_FINAL_ALERT = "NotificationHandler.FINAL_ALERT";
 
     private final Context context;
