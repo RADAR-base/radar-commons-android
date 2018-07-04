@@ -128,7 +128,10 @@ public class MappedQueueFileStorage implements QueueStorage {
     @Override
     public void resize(long newLength) throws IOException {
         requireNotClosed();
-        if (newLength > maximumLength) {
+        if (newLength == length) {
+            return;
+        }
+        if (newLength > length && newLength > maximumLength) {
             throw new IllegalArgumentException("New length " + newLength
                     + " exceeds maximum length " + maximumLength);
         }

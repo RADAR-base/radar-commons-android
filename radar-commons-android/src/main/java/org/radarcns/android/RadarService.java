@@ -108,7 +108,7 @@ import static org.radarcns.android.device.DeviceService.DEVICE_STATUS_NAME;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.SERVER_RECORDS_SENT_TOPIC;
 import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
-import static org.radarcns.android.util.NotificationHandler.NOTIFICATION_CHANNEL_NOTIFY;
+import static org.radarcns.android.util.NotificationHandler.NOTIFICATION_CHANNEL_INFO;
 
 @SuppressWarnings("unused")
 public class RadarService extends Service implements ServerStatusListener {
@@ -363,7 +363,7 @@ public class RadarService extends Service implements ServerStatusListener {
         RadarApplication app = (RadarApplication) getApplication();
         Intent mainIntent = new Intent().setComponent(new ComponentName(this, mainActivityClass));
         return RadarApplication.getNotificationHandler(this)
-                .builder(NOTIFICATION_CHANNEL_NOTIFY, true)
+                .builder(NOTIFICATION_CHANNEL_INFO, true)
                 .setContentText(getText(R.string.service_notification_text))
                 .setContentTitle(getText(R.string.service_notification_title))
                 .setContentIntent(PendingIntent.getActivity(this, 0,mainIntent, 0))
