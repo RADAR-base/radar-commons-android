@@ -345,10 +345,13 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                     logger.error("Login should not be cancellable. Opening login again");
                     startLogin(true);
                 }
-                Bundle extras = result.getExtras();
-                assert extras != null;
-                extras.setClassLoader(MainActivity.class.getClassLoader());
-                authState = AppAuthState.Builder.from(extras).build();
+                if (result != null && result.getExtras() != null) {
+                    Bundle extras = result.getExtras();
+                    extras.setClassLoader(MainActivity.class.getClassLoader());
+                    authState = AppAuthState.Builder.from(extras).build();
+                } else {
+                    authState = AppAuthState.Builder.from(this).build();
+                }
                 RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
                 RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
                 onConfigChanged();
