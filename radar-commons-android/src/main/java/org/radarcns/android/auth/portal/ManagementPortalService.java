@@ -90,6 +90,9 @@ public class ManagementPortalService extends IntentService {
     protected void onHandleIntent(Intent intent) {
         boolean isSuccessful;
         try {
+            if (intent == null) {
+                throw new IllegalArgumentException("No intent given");
+            }
             Bundle extras = intent.getExtras();
             if (extras == null) {
                 throw new IllegalArgumentException("No intent extras provided to ManagementPortalService");
