@@ -54,13 +54,10 @@ public final class BundleSerialization {
     public static Bundle getPersistentExtras(Intent intent, Context context) {
         SharedPreferences prefs = context.getSharedPreferences(context.getClass().getName(), Context.MODE_PRIVATE);
         Bundle bundle;
-        if (intent == null) {
+        if (intent == null || intent.getExtras() == null) {
             bundle = restoreFromPreferences(prefs);
         } else {
             bundle = intent.getExtras();
-            if (bundle == null) {
-                throw new IllegalArgumentException("Intent does not have extras");
-            }
             saveToPreferences(prefs, bundle);
         }
         bundle.setClassLoader(BundleSerialization.class.getClassLoader());
