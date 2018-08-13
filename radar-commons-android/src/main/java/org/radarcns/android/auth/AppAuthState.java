@@ -58,6 +58,7 @@ public final class AppAuthState {
     private static final String AUTH_PREFS = "org.radarcns.auth";
     private static final String LOGIN_PROPERTIES = "org.radarcns.android.auth.AppAuthState.properties";
     private static final String LOGIN_HEADERS = "org.radarcns.android.auth.AppAuthState.headers";
+    public static final String LOGIN_REFRESH_TOKEN = "org.radarcns.android.auth.AppAuthState.refreshToken";
     private static final Logger logger = LoggerFactory.getLogger(AppAuthState.class);
 
     private final String projectId;
