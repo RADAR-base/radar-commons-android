@@ -42,6 +42,24 @@ public class ManagementPortalClient implements Closeable {
     }
 
     /**
+     * Get refresh-token from meta-token url.
+     * @param metaTokenUrl current token url
+     * @param parser string parser
+     * @throws IOException if the management portal could not be reached or it gave an erroneous
+     *                     response.
+     */
+    public AppAuthState getRefreshToken(String metaTokenUrl, AuthStringParser parser)
+            throws IOException {
+        Request request = client.requestBuilder(metaTokenUrl)
+                .header("Accept", APPLICATION_JSON)
+                .build();
+
+        logger.info("Requesting refreshToken with token-url {}", metaTokenUrl);
+
+        return handleRequest(request, parser);
+    }
+
+    /**
      * Get subject information from the Management portal. This includes project ID, available
      * source types and assigned sources.
      * @param state current authentication state
