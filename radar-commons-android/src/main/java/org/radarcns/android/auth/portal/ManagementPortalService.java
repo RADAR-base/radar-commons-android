@@ -48,8 +48,7 @@ public class ManagementPortalService extends IntentService {
     public static final int MANAGEMENT_PORTAL_REGISTRATION_FAILED = 2;
     public static final int MANAGEMENT_PORTAL_REFRESH = 4;
     public static final int MANAGEMENT_PORTAL_REFRESH_FAILED = 5;
-    public static final int MANAGEMENT_PORTAL_REFRESH_TOKEN_RETRIEVED = 6;
-    public static final int MANAGEMENT_PORTAL_REFRESH_TOKEN_RETRIEVED_FAILED = 7;
+    public static final int MANAGEMENT_PORTAL_REFRESH_TOKEN_RETRIEVED_FAILED = 6;
 
 
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalService.class);
@@ -57,8 +56,8 @@ public class ManagementPortalService extends IntentService {
     private static final String GET_STATE_ACTION = "org.radarcns.android.auth.ManagementPortalService.getStateAction";
     private static final String REFRESH_TOKEN_ACTION = "org.radarcns.android.auth.ManagementPortalService.refreshTokenAction";
     private static final String GET_REFRESH_TOKEN_ACTION = "org.radarcns.android.auth.ManagementPortalService.getRefreshTokenAction";
-    private static final String REFRESH_TOKEN_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshToken";
-    private static final String REFRESH_TOKEN_KEY_URL = "org.radarcns.android.auth.ManagementPortalService.refreshTokenUrl";
+    public static final String REFRESH_TOKEN_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshToken";
+    private static final String REFRESH_TOKEN_URL_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshTokenUrl";
     private static final String UPDATE_SUBJECT_KEY = "org.radarcns.android.auth.ManagementPortalService.updateSubject";
     public static final String REQUEST_FAILED_REASON = "org.radarcns.android.auth.ManagementPortalService.refreshFailedReason";
     public static final int REQUEST_FAILED_REASON_IO = 1;
@@ -136,14 +135,20 @@ public class ManagementPortalService extends IntentService {
         }
     }
 
+    /**
+     * Gets refreshToken from tokenUrl and refreshes access-token using it.
+     * @param extras input bundle data.
+     * @return {@code true} if success.
+     * @see #refreshToken(Bundle) refreshing access token.
+     */
     private boolean getRefreshToken(Bundle extras) {
-        logger.info("retrieving refreshToken from url");
+        logger.info("Retrieving refreshToken from url");
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         if (receiver == null) {
             throw new IllegalArgumentException("ResultReceiver not set");
         }
 
-        String refreshTokenUrl = extras.getParcelable(REFRESH_TOKEN_KEY_URL);
+        String refreshTokenUrl = extras.getParcelable(REFRESH_TOKEN_URL_KEY);
         if (refreshTokenUrl == null) {
             throw new IllegalArgumentException("RefreshTokenUrl not set");
         }
@@ -161,11 +166,12 @@ public class ManagementPortalService extends IntentService {
 
         try {
             ensureClient();
-
+            // create parser
             AuthStringParser parser = new MetaTokenParser(authState);
+            // retrieve token and update authState
             authState = client.getRefreshToken(refreshTokenUrl, parser);
-            authState.addToBundle(result);
-            return refreshToken(result);
+            // refresh token
+            return refreshToken(extras);
         } catch (IOException e) {
             logger.error("Failed to get access token", e);
             result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_IO);
@@ -408,12 +414,13 @@ public class ManagementPortalService extends IntentService {
     }
 
     /** Build an intent to create a request for the management portal. */
-    public static void requestRefreshToken(Context context, String refreshTokenUrl, ResultReceiver receiver) {
+    public static void requestRefreshToken(Context context, String refreshTokenUrl, Boolean updateSubject,  ResultReceiver receiver) {
         Intent intent = new Intent(context, ManagementPortalService.class);
         intent.setAction(GET_REFRESH_TOKEN_ACTION);
         Bundle extras = new Bundle();
-        extras.putString(REFRESH_TOKEN_KEY_URL, refreshTokenUrl);
+        extras.putString(REFRESH_TOKEN_URL_KEY, refreshTokenUrl);
         extras.putParcelable(RESULT_RECEIVER_PROPERTY, receiver);
+        extras.putBoolean(UPDATE_SUBJECT_KEY, updateSubject);
         intent.putExtras(extras);
         context.startService(intent);
     }
