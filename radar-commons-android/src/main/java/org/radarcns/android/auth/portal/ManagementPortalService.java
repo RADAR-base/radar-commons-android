@@ -48,7 +48,6 @@ public class ManagementPortalService extends IntentService {
     public static final int MANAGEMENT_PORTAL_REGISTRATION_FAILED = 2;
     public static final int MANAGEMENT_PORTAL_REFRESH = 4;
     public static final int MANAGEMENT_PORTAL_REFRESH_FAILED = 5;
-    public static final int MANAGEMENT_PORTAL_REFRESH_TOKEN_RETRIEVED_FAILED = 6;
 
 
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalService.class);
@@ -168,7 +167,7 @@ public class ManagementPortalService extends IntentService {
         } catch (IOException e) {
             logger.error("Failed to get access token", e);
             result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_IO);
-            receiver.send(MANAGEMENT_PORTAL_REFRESH_TOKEN_RETRIEVED_FAILED, result);
+            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
         }
 
         return true;
