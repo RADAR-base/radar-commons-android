@@ -155,17 +155,10 @@ public class ManagementPortalService extends IntentService {
 
         Bundle result = new Bundle();
 
-        ConnectivityManager connManager =
-                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
-        if (networkInfo == null || !networkInfo.isConnected()) {
-            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
-            receiver.send(MANAGEMENT_PORTAL_REFRESH_TOKEN_RETRIEVED_FAILED, result);
-            return false;
-        }
-
         try {
-            ensureClient();
+            if (!ensureClientConnectivity(receiver, result)) {
+                return false;
+            }
             // create parser
             AuthStringParser parser = new MetaTokenParser(authState);
             // retrieve token and update authState
@@ -200,17 +193,12 @@ public class ManagementPortalService extends IntentService {
         }
         Bundle result = new Bundle();
 
-        ConnectivityManager connManager =
-                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
-        if (networkInfo == null || !networkInfo.isConnected()) {
-            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
-            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
-            return false;
-        }
 
         try {
-            ensureClient();
+
+            if (!ensureClientConnectivity(receiver, result)) {
+                return false;
+            }
 
             String refreshToken = extras.getString(REFRESH_TOKEN_KEY);
             if (refreshToken != null) {
@@ -313,17 +301,11 @@ public class ManagementPortalService extends IntentService {
 
         if (resultSource == null) {
 
-            ConnectivityManager connManager =
-                    (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
-            if (networkInfo == null || !networkInfo.isConnected()) {
-                result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
-                receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
-                return false;
-            }
-
             try {
-                ensureClient();
+                if (!ensureClientConnectivity(receiver, result)) {
+                    return false;
+                }
+
                 resultSource = client.registerSource(authState, source);
                 addSource(resultSource);
             } catch (IllegalArgumentException ex) {
@@ -388,6 +370,19 @@ public class ManagementPortalService extends IntentService {
             clientId = config.getString(OAUTH2_CLIENT_ID);
             clientSecret = config.getString(OAUTH2_CLIENT_SECRET);
         }
+    }
+
+    private Boolean ensureClientConnectivity(ResultReceiver resultReceiver, Bundle result) {
+        ConnectivityManager connManager =
+                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
+        if (networkInfo == null || !networkInfo.isConnected()) {
+            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
+            resultReceiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
+            return false;
+        }
+        ensureClient();
+        return true;
     }
 
     /** Build an intent to create a request for the management portal. */
