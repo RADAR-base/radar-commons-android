@@ -147,7 +147,7 @@ public class ManagementPortalService extends IntentService {
             throw new IllegalArgumentException("ResultReceiver not set");
         }
 
-        String refreshTokenUrl = extras.getParcelable(REFRESH_TOKEN_URL_KEY);
+        String refreshTokenUrl = extras.getString(REFRESH_TOKEN_URL_KEY);
         if (refreshTokenUrl == null) {
             throw new IllegalArgumentException("RefreshTokenUrl not set");
         }
@@ -304,7 +304,6 @@ public class ManagementPortalService extends IntentService {
                 if (!ensureClientConnectivity(receiver, result)) {
                     return false;
                 }
-
                 resultSource = client.registerSource(authState, source);
                 addSource(resultSource);
             } catch (IllegalArgumentException ex) {
