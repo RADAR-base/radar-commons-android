@@ -203,7 +203,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     private void broadcastServerStatus(ServerStatusListener.Status status) {
         Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
-        statusIntent.putExtra(SERVER_STATUS_CHANGED, UNAUTHORIZED.ordinal());
+        statusIntent.putExtra(SERVER_STATUS_CHANGED, status.ordinal());
         statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
         LocalBroadcastManager.getInstance(this).sendBroadcast(statusIntent);
     }
