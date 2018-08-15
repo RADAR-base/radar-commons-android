@@ -62,6 +62,7 @@ import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REGISTRATION;
 import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
+import static org.radarcns.android.kafka.ServerStatusListener.Status.UNAUTHORIZED;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send addToPreferences the data of a
@@ -198,6 +199,13 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             statusChanged.putExtra(DEVICE_STATUS_NAME, name);
         }
         LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged);
+    }
+
+    private void broadcastServerStatus(ServerStatusListener.Status status) {
+        Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
+        statusIntent.putExtra(SERVER_STATUS_CHANGED, UNAUTHORIZED.ordinal());
+        statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
+        LocalBroadcastManager.getInstance(this).sendBroadcast(statusIntent);
     }
 
     @Override
@@ -516,10 +524,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         AppAuthState auth = AppAuthState.Builder.from(result).build();
         if (auth.isInvalidated()) {
             logger.info("New source ID requires new OAuth2 JWT token.");
-            Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
-            statusIntent.putExtra(SERVER_STATUS_CHANGED, ServerStatusListener.Status.UNAUTHORIZED.ordinal());
-            statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-            sendBroadcast(statusIntent);
+            broadcastServerStatus(UNAUTHORIZED);
         }
         key.setProjectId(auth.getProjectId());
         key.setUserId(auth.getUserId());
