@@ -27,13 +27,11 @@ public class MetaTokenParser implements AuthStringParser {
 
     @Override
     public AppAuthState parse(@NonNull String authString) throws IOException {
-        String refreshToken = (String) currentState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
 
         try {
             JSONObject json = new JSONObject(authString);
-            refreshToken = json.optString("refreshToken", refreshToken);
             return currentState.newBuilder()
-                    .property(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
+                    .property(MP_REFRESH_TOKEN_PROPERTY, json.getString("refreshToken"))
                     .property(PRIVACY_POLICY_URL_PROPERTY, json.getString("privacyPolicyUrl"))
                     .property(BASE_URL_PROPERTY, json.getString("baseUrl"))
                     .build();
