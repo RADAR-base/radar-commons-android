@@ -30,6 +30,8 @@ public class ManagementPortalClient implements Closeable {
     public static final String SOURCES_PROPERTY =
             ManagementPortalClient.class.getName() + ".sources";
     public static final String MP_REFRESH_TOKEN_PROPERTY = ManagementPortalClient.class.getName() + ".refreshToken";
+    public static final String PRIVACY_POLICY_URL_PROPERTY = ManagementPortalClient.class.getName() + ".privacyPolicyUrl";
+    public static final String BASE_URL_PROPERTY = ManagementPortalClient.class.getName() + ".baseUrl";
     private static final String APPLICATION_JSON = "application/json";
     private static final String APPLICATION_JSON_UTF8 = APPLICATION_JSON + "; charset=utf-8";
     private static final MediaType APPLICATION_JSON_MEDIA_TYPE = MediaType
@@ -39,6 +41,24 @@ public class ManagementPortalClient implements Closeable {
 
     public ManagementPortalClient(ServerConfig managementPortal) {
         client = new RestClient(managementPortal);
+    }
+
+    /**
+     * Get refresh-token from meta-token url.
+     * @param metaTokenUrl current token url
+     * @param parser string parser
+     * @throws IOException if the management portal could not be reached or it gave an erroneous
+     *                     response.
+     */
+    public AppAuthState getRefreshToken(String metaTokenUrl, AuthStringParser parser)
+            throws IOException {
+        Request request = client.requestBuilder(metaTokenUrl)
+                .header("Accept", APPLICATION_JSON)
+                .build();
+
+        logger.info("Requesting refreshToken with token-url {}", metaTokenUrl);
+
+        return handleRequest(request, parser);
     }
 
     /**
