@@ -40,6 +40,7 @@ public class ManagementPortalClient implements Closeable {
     private final RestClient client;
 
     public ManagementPortalClient(ServerConfig managementPortal) {
+        logger.info("Creating ManagementPortalClient with {} ", managementPortal.toString());
         client = new RestClient(managementPortal);
     }
 
