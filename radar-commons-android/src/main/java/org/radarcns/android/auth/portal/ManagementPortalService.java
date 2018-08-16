@@ -7,6 +7,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.ResultReceiver;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.SparseArray;
 
 import com.crashlytics.android.Crashlytics;
@@ -28,10 +29,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.OAUTH2_AUTHORIZE_URL;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_ID;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_SECRET;
+import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
+import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
@@ -162,6 +168,8 @@ public class ManagementPortalService extends IntentService {
             AuthStringParser parser = new MetaTokenParser(authState);
             // retrieve token and update authState
             authState = client.getRefreshToken(refreshTokenUrl, parser);
+            // update radarConfig
+            updateConfigsWithCurrentAuthState(authState);
             // refresh token
             return refreshToken(extras);
         } catch (IOException e) {
@@ -353,6 +361,24 @@ public class ManagementPortalService extends IntentService {
         return true;
     }
 
+    private void updateConfigsWithCurrentAuthState(AppAuthState appAuthState) {
+        RadarConfiguration.getInstance().put(KAFKA_REST_PROXY_URL_KEY ,
+                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "kafka/");
+        RadarConfiguration.getInstance().put(SCHEMA_REGISTRY_URL_KEY ,
+                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "schema/");
+        RadarConfiguration.getInstance().put(MANAGEMENT_PORTAL_URL_KEY ,
+                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "managementportal/");
+        RadarConfiguration.getInstance().put(OAUTH2_TOKEN_URL ,
+                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "managementportal/oauth/token");
+        RadarConfiguration.getInstance().put(OAUTH2_AUTHORIZE_URL ,
+                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "managementportal/oauth/authorize");
+        logger.info("Broadcast config changed based on authState");
+        LocalBroadcastManager.getInstance(this)
+                .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+        refreshManagmentPortalClient();
+
+    }
+
     private void ensureClient() {
         if (client == null) {
             RadarConfiguration config = RadarConfiguration.getInstance();
@@ -368,6 +394,11 @@ public class ManagementPortalService extends IntentService {
             clientId = config.getString(OAUTH2_CLIENT_ID);
             clientSecret = config.getString(OAUTH2_CLIENT_SECRET);
         }
+    }
+
+    private void refreshManagmentPortalClient() {
+        client = null;
+        ensureClient();
     }
 
     private Boolean ensureClientConnectivity(ResultReceiver resultReceiver, Bundle result) {
