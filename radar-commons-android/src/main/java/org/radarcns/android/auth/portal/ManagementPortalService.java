@@ -362,17 +362,18 @@ public class ManagementPortalService extends IntentService {
     }
 
     private void updateConfigsWithCurrentAuthState(AppAuthState appAuthState) {
-        RadarConfiguration.getInstance().put(KAFKA_REST_PROXY_URL_KEY ,
-                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "kafka/");
-        RadarConfiguration.getInstance().put(SCHEMA_REGISTRY_URL_KEY ,
-                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "schema/");
-        RadarConfiguration.getInstance().put(MANAGEMENT_PORTAL_URL_KEY ,
-                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "managementportal/");
-        RadarConfiguration.getInstance().put(OAUTH2_TOKEN_URL ,
-                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "managementportal/oauth/token");
-        RadarConfiguration.getInstance().put(OAUTH2_AUTHORIZE_URL ,
-                appAuthState.getProperties().get(BASE_URL_PROPERTY) + "managementportal/oauth/authorize");
-        logger.info("Broadcast config changed based on authState");
+        RadarConfiguration configuration = RadarConfiguration.getInstance();
+        configuration.put(KAFKA_REST_PROXY_URL_KEY , buildPath(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY),  "kafka/"));
+        configuration.put(SCHEMA_REGISTRY_URL_KEY , buildPath(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "schema/"));
+        configuration.put(MANAGEMENT_PORTAL_URL_KEY , buildPath(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/"));
+        configuration.put(OAUTH2_TOKEN_URL , buildPath(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/oauth/token"));
+        configuration.put(OAUTH2_AUTHORIZE_URL , buildPath(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/oauth/authorize"));
+        logger.info("Broadcast config changed based on base URL change");
         LocalBroadcastManager.getInstance(this)
                 .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
         refreshManagmentPortalClient();
@@ -453,6 +454,20 @@ public class ManagementPortalService extends IntentService {
         return RadarConfiguration.getInstance().getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
     }
 
+
+    /**
+     * Build URI paths from given basePath and suffix.
+     * @param baseUrl baseUrl path
+     * @param suffix suffix to follow
+     * @return built path.
+     */
+    private String buildPath(String baseUrl, String suffix) {
+        if (baseUrl.endsWith("/")) {
+            return baseUrl.concat(suffix);
+        } else {
+            return buildPath(baseUrl.concat("/"), suffix);
+        }
+    }
     @Override
     public void onDestroy() {
         super.onDestroy();
