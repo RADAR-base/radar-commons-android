@@ -58,6 +58,7 @@ public final class AppAuthState {
     private static final String AUTH_PREFS = "org.radarcns.auth";
     private static final String LOGIN_PROPERTIES = "org.radarcns.android.auth.AppAuthState.properties";
     private static final String LOGIN_HEADERS = "org.radarcns.android.auth.AppAuthState.headers";
+    private static final String LOGIN_PRIVACY_POLICY_ACCEPTED = "org.radarcns.android.auth.AppAuthState.isPrivacyPolicyAccepted";
     private static final Logger logger = LoggerFactory.getLogger(AppAuthState.class);
 
     private final String projectId;
@@ -68,11 +69,12 @@ public final class AppAuthState {
     private long lastUpdate;
     private final Map<String, ? extends Serializable> properties;
     private final List<Map.Entry<String, String>> headers;
+    private Boolean isPrivacyPolicyAccepted;
 
     private AppAuthState(String projectId, String userId,
             String token, Map<String, ? extends Serializable> properties, int tokenType,
             long expiration, List<Map.Entry<String, String>> headers,
-            long lastUpdate) {
+            long lastUpdate, Boolean isPrivacyPolicyAccepted) {
         this.projectId = projectId;
         this.userId = userId;
         this.token = token;
@@ -81,6 +83,7 @@ public final class AppAuthState {
         this.properties = properties;
         this.headers = headers;
         this.lastUpdate = lastUpdate;
+        this.isPrivacyPolicyAccepted = isPrivacyPolicyAccepted;
     }
 
     @Nullable
@@ -116,6 +119,9 @@ public final class AppAuthState {
     public List<Map.Entry<String, String>> getHeaders() {
         return headers;
     }
+
+    @NonNull
+    public Boolean isPrivacyPolicyAccepted() {return isPrivacyPolicyAccepted;}
 
     @NonNull
     public Headers getOkHttpHeaders() {
@@ -159,6 +165,7 @@ public final class AppAuthState {
         bundle.putInt(LOGIN_TOKEN_TYPE, tokenType);
         bundle.putLong(LOGIN_EXPIRATION, expiration);
         bundle.putLong(LOGIN_UPDATE, lastUpdate);
+        bundle.putBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, isPrivacyPolicyAccepted);
         return bundle;
     }
 
@@ -173,6 +180,7 @@ public final class AppAuthState {
                 .putInt(LOGIN_TOKEN_TYPE, tokenType)
                 .putLong(LOGIN_EXPIRATION, expiration)
                 .putLong(LOGIN_UPDATE, lastUpdate)
+                .putBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, isPrivacyPolicyAccepted)
                 .apply();
     }
 
@@ -228,7 +236,8 @@ public final class AppAuthState {
                 .tokenType(tokenType)
                 .expiration(expiration)
                 .headers(headers)
-                .lastUpdate(lastUpdate);
+                .lastUpdate(lastUpdate)
+                .privacyPolicyAccepted(isPrivacyPolicyAccepted);
     }
 
     public static class Builder {
@@ -241,6 +250,7 @@ public final class AppAuthState {
         private int tokenType = AUTH_TYPE_UNKNOWN;
         private long expiration;
         private long lastUpdate = SystemClock.elapsedRealtime();
+        private Boolean isPrivacyPolicyAccepted = false;
 
         @SuppressWarnings("unchecked")
         @NonNull
@@ -254,7 +264,8 @@ public final class AppAuthState {
                     .tokenType(bundle.getInt(LOGIN_TOKEN_TYPE, 0))
                     .expiration(bundle.getLong(LOGIN_EXPIRATION, 0L))
                     .headers((ArrayList<Map.Entry<String, String>>)bundle.getSerializable(LOGIN_HEADERS))
-                    .lastUpdate(bundle.getLong(LOGIN_UPDATE));
+                    .lastUpdate(bundle.getLong(LOGIN_UPDATE))
+                    .privacyPolicyAccepted(bundle.getBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED));
         }
 
         @SuppressWarnings("unchecked")
@@ -274,7 +285,8 @@ public final class AppAuthState {
                     .tokenType(prefs.getInt(LOGIN_TOKEN_TYPE, 0))
                     .expiration(prefs.getLong(LOGIN_EXPIRATION, 0L))
                     .headers(headers)
-                    .lastUpdate(prefs.getLong(LOGIN_UPDATE, 0L));
+                    .lastUpdate(prefs.getLong(LOGIN_UPDATE, 0L))
+                    .privacyPolicyAccepted(prefs.getBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, false));
         }
 
         public Builder projectId(String projectId) {
@@ -351,10 +363,15 @@ public final class AppAuthState {
             return this;
         }
 
+        public Builder privacyPolicyAccepted(Boolean isPrivacyPolicyAccepted) {
+            this.isPrivacyPolicyAccepted = isPrivacyPolicyAccepted;
+            return this;
+        }
+
         public AppAuthState build() {
             return new AppAuthState(projectId, userId, token,
                     Collections.unmodifiableMap(properties), tokenType, expiration,
-                    Collections.unmodifiableList(headers), lastUpdate);
+                    Collections.unmodifiableList(headers), lastUpdate, isPrivacyPolicyAccepted);
         }
     }
 
@@ -368,6 +385,7 @@ public final class AppAuthState {
                 ", \nlastUpdate=" + lastUpdate +
                 ", \nproperties=" + properties +
                 ", \nheaders=" + headers +
+                ", \nisPrivacyPolicyAccepted=" + isPrivacyPolicyAccepted +
                 "\n";
     }
 }
