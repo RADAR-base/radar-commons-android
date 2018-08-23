@@ -38,6 +38,7 @@ import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.CLIENT_SECRET_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
@@ -373,6 +374,7 @@ public class ManagementPortalService extends IntentService {
                 (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/oauth/token"));
         configuration.put(OAUTH2_AUTHORIZE_URL , buildPath(
                 (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/oauth/authorize"));
+        configuration.put(OAUTH2_CLIENT_SECRET , appAuthState.getProperties().get(CLIENT_SECRET_PROPERTY));
         logger.info("Broadcast config changed based on base URL change");
         LocalBroadcastManager.getInstance(this)
                 .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));

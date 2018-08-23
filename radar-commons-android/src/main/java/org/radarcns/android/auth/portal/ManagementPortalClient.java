@@ -32,6 +32,7 @@ public class ManagementPortalClient implements Closeable {
     public static final String MP_REFRESH_TOKEN_PROPERTY = ManagementPortalClient.class.getName() + ".refreshToken";
     public static final String PRIVACY_POLICY_URL_PROPERTY = ManagementPortalClient.class.getName() + ".privacyPolicyUrl";
     public static final String BASE_URL_PROPERTY = ManagementPortalClient.class.getName() + ".baseUrl";
+    public static final String CLIENT_SECRET_PROPERTY = ManagementPortalClient.class.getName() + ".clientSecret";
     private static final String APPLICATION_JSON = "application/json";
     private static final String APPLICATION_JSON_UTF8 = APPLICATION_JSON + "; charset=utf-8";
     private static final MediaType APPLICATION_JSON_MEDIA_TYPE = MediaType
