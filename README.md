@@ -41,7 +41,7 @@ dependencies {
 
 ### Creating a plugin
 
-To add device types to the passive remote monitoring Android app, create a plugin using the following steps (see the [RADAR-Android-Pebble repository](https://github.com/RADAR-base/RADAR-Android-Pebble.git) as an example):
+To add device types to the passive remote monitoring Android app, create a plugin using the following steps (see the [RADAR-Android-Phone repository](https://github.com/RADAR-base/radar-android-phone.git) as an example):
 
 First, create an Android Library project. Include RADAR Commons Android as a module in `build.gradle`.
 
