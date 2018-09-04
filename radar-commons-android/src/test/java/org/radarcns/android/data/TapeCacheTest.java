@@ -26,7 +26,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
-import org.radarcns.data.Record;
+import org.radarcns.data.RecordData;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.monitor.application.ApplicationUptime;
 import org.radarcns.topic.AvroTopic;
@@ -38,12 +38,12 @@ import org.slf4j.impl.HandroidLoggerAdapter;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.List;
 import java.util.Random;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
@@ -89,28 +89,30 @@ public class TapeCacheTest {
 
     @Test
     public void addMeasurement() throws Exception {
-        assertEquals(Collections.emptyList(), tapeCache.unsentRecords(100));
+        assertEquals(null, tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
-        assertEquals(Collections.emptyList(), tapeCache.getRecords(100));
+        assertEquals(null, tapeCache.getRecords(100));
 
         tapeCache.addMeasurement(key, value);
 
-        assertEquals(Collections.emptyList(), tapeCache.unsentRecords(100));
+        assertEquals(null, tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         Thread.sleep(100);
 
-        List<Record<ObservationKey, ApplicationUptime>> unsent = tapeCache.unsentRecords(100);
+        RecordData<ObservationKey, ApplicationUptime> unsent = tapeCache.unsentRecords(100);
+        assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
         unsent = tapeCache.unsentRecords(100);
+        assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
-        Record<ObservationKey, ApplicationUptime> record = unsent.get(0);
-        assertEquals(key, record.key);
-        assertEquals(value, record.value);
+        ApplicationUptime actualValue = unsent.iterator().next();
+        assertEquals(key, unsent.getKey());
+        assertEquals(value, actualValue);
         tapeCache.remove(1);
-        assertEquals(Collections.emptyList(), tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         tapeCache.addMeasurement(key, value);
@@ -119,6 +121,7 @@ public class TapeCacheTest {
         Thread.sleep(100);
 
         unsent = tapeCache.unsentRecords(100);
+        assertNotNull(unsent);
         assertEquals(2, unsent.size());
         assertEquals(new Pair<>(2L, 0L), tapeCache.numberOfRecords());
     }
@@ -143,28 +146,31 @@ public class TapeCacheTest {
 
         localTapeCache.addMeasurement(key, localValue);
         localTapeCache.flush();
-        List<Record<ObservationKey, ActiveAudioRecording>> records = localTapeCache.unsentRecords(100);
+        RecordData<ObservationKey, ActiveAudioRecording> records = localTapeCache.unsentRecords(100);
 
+        assertNotNull(records);
         assertEquals(1, records.size());
-        Record<ObservationKey, ActiveAudioRecording> firstRecord = records.get(0);
-        assertEquals(firstRecord.key, key);
-        assertEquals(firstRecord.value, localValue);
+        ActiveAudioRecording firstRecord = records.iterator().next();
+        assertEquals(key, records.getKey());
+        assertEquals(localValue, firstRecord);
     }
 
     @Test
     public void flush() throws Exception {
-        assertEquals(Collections.emptyList(), tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
-        assertEquals(Collections.emptyList(), tapeCache.getRecords(100));
+        assertNull(tapeCache.getRecords(100));
 
         tapeCache.addMeasurement(key, value);
 
-        assertEquals(Collections.emptyList(), tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         tapeCache.flush();
 
-        assertEquals(1, tapeCache.unsentRecords(100).size());
+        RecordData<ObservationKey, ApplicationUptime> unsent = tapeCache.unsentRecords(100);
+        assertNotNull(unsent);
+        assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
     }
 }

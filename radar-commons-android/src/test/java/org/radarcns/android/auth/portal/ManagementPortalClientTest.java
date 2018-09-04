@@ -168,20 +168,19 @@ public class ManagementPortalClientTest {
 
             ServerConfig serverConfig = new ServerConfig(server.url("/").url());
 
-            try (ManagementPortalClient client = new ManagementPortalClient(serverConfig)) {
-                AppAuthState authState = new AppAuthState.Builder().build();
-                AppAuthState retAuthState = client.getSubject(authState, new GetSubjectParser(authState));
+            ManagementPortalClient client = new ManagementPortalClient(serverConfig);
+            AppAuthState authState = new AppAuthState.Builder().build();
+            AppAuthState retAuthState = client.getSubject(authState, new GetSubjectParser(authState));
 
-                AppSource expected = new AppSource(0, "p", "m", "v", true);
-                expected.setSourceId("i");
-                expected.setSourceName("s");
-                expected.setExpectedSourceName("e");
-                expected.setAttributes(Collections.singletonMap("k", "v"));
+            AppSource expected = new AppSource(0, "p", "m", "v", true);
+            expected.setSourceId("i");
+            expected.setSourceName("s");
+            expected.setExpectedSourceName("e");
+            expected.setAttributes(Collections.singletonMap("k", "v"));
 
-                assertEquals(Collections.singletonList(expected), retAuthState.getProperty(SOURCES_PROPERTY));
-                assertEquals("proj-name", retAuthState.getProjectId());
-                assertEquals("sub-1", retAuthState.getUserId());
-            }
+            assertEquals(Collections.singletonList(expected), retAuthState.getProperty(SOURCES_PROPERTY));
+            assertEquals("proj-name", retAuthState.getProjectId());
+            assertEquals("sub-1", retAuthState.getUserId());
         }
     }
 
