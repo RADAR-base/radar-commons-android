@@ -54,15 +54,13 @@ public class ManagementPortalLoginManager implements LoginManager {
         retrieveRefreshToken();
     }
 
-    private AppAuthState retrieveRefreshToken() {
-        if(this.refreshTokenUrl != null
-                && refreshToken == null
+    private void retrieveRefreshToken() {
+        if (refreshTokenUrl != null
                 && ManagementPortalService.isEnabled()
                 && isRefreshing.compareAndSet(false, true)) {
             ManagementPortalService.requestRefreshToken((Context) listener, refreshTokenUrl, true,
                    refreshResultReceiver);
         }
-        return null;
     }
 
     @Override
