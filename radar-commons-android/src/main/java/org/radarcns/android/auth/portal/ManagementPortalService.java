@@ -374,7 +374,8 @@ public class ManagementPortalService extends IntentService {
         logger.info("Broadcast config changed based on base URL change");
         LocalBroadcastManager.getInstance(this)
                 .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
-        refreshManagmentPortalClient();
+        // reset client
+        client = null;
     }
 
     private void ensureClient() {
@@ -392,11 +393,6 @@ public class ManagementPortalService extends IntentService {
             clientId = config.getString(OAUTH2_CLIENT_ID);
             clientSecret = config.getString(OAUTH2_CLIENT_SECRET);
         }
-    }
-
-    private void refreshManagmentPortalClient() {
-        client = null;
-        ensureClient();
     }
 
     private Boolean ensureClientConnectivity(ResultReceiver resultReceiver, Bundle result) {
