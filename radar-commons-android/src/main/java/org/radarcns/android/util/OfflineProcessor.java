@@ -68,6 +68,7 @@ public class OfflineProcessor implements Closeable {
      * @param requestCode a code unique to the application, used to identify the current processor
      * @param requestName a name unique to the application, used to identify the current processor
      * @param wake wake the device for processing.
+     * @param interval interval to run the processor in seconds.
      */
     public OfflineProcessor(Context context, Runnable runnable, int requestCode, final String
             requestName, long interval, final boolean wake) {

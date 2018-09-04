@@ -144,10 +144,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         stopDeviceManager(unsetDeviceManager());
         ((RadarApplication)getApplicationContext()).onDeviceServiceDestroy(this);
 
-        try {
-            dataHandler.close();
-        } catch (IOException e) {
-            // do nothing
+        if (dataHandler != null) {
+            try {
+                dataHandler.close();
+            } catch (IOException e) {
+                // do nothing
+            }
         }
     }
 
