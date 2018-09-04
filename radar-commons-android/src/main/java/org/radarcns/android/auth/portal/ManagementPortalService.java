@@ -7,6 +7,8 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.ResultReceiver;
+import android.support.annotation.Nullable;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.SparseArray;
 
 import com.crashlytics.android.Crashlytics;
@@ -28,10 +30,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.OAUTH2_AUTHORIZE_URL;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_ID;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_SECRET;
+import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
+import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
@@ -48,7 +55,6 @@ public class ManagementPortalService extends IntentService {
     public static final int MANAGEMENT_PORTAL_REGISTRATION_FAILED = 2;
     public static final int MANAGEMENT_PORTAL_REFRESH = 4;
     public static final int MANAGEMENT_PORTAL_REFRESH_FAILED = 5;
-
 
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalService.class);
     private static final String REGISTER_SOURCE_ACTION = "org.radarcns.android.auth.ManagementPortalService.registerSourceAction";
@@ -162,6 +168,8 @@ public class ManagementPortalService extends IntentService {
             AuthStringParser parser = new MetaTokenParser(authState);
             // retrieve token and update authState
             authState = client.getRefreshToken(refreshTokenUrl, parser);
+            // update radarConfig
+            updateConfigsWithCurrentAuthState(authState);
             // refresh token
             return refreshToken(extras);
         } catch (IOException e) {
@@ -192,9 +200,7 @@ public class ManagementPortalService extends IntentService {
         }
         Bundle result = new Bundle();
 
-
         try {
-
             if (!ensureClientConnectivity(receiver, result)) {
                 return false;
             }
@@ -353,6 +359,25 @@ public class ManagementPortalService extends IntentService {
         return true;
     }
 
+    private void updateConfigsWithCurrentAuthState(AppAuthState appAuthState) {
+        String baseUrl = stripEndSlashes(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY));
+        if (baseUrl == null) {
+            return;
+        }
+        RadarConfiguration configuration = RadarConfiguration.getInstance();
+        configuration.put(KAFKA_REST_PROXY_URL_KEY , baseUrl + "/kafka/");
+        configuration.put(SCHEMA_REGISTRY_URL_KEY , baseUrl + "/schema/");
+        configuration.put(MANAGEMENT_PORTAL_URL_KEY , baseUrl + "/managementportal/");
+        configuration.put(OAUTH2_TOKEN_URL , baseUrl + "/managementportal/oauth/token");
+        configuration.put(OAUTH2_AUTHORIZE_URL , baseUrl + "/managementportal/oauth/authorize");
+        logger.info("Broadcast config changed based on base URL change");
+        LocalBroadcastManager.getInstance(this)
+                .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+        // reset client
+        client = null;
+    }
+
     private void ensureClient() {
         if (client == null) {
             RadarConfiguration config = RadarConfiguration.getInstance();
@@ -426,5 +451,26 @@ public class ManagementPortalService extends IntentService {
     public void onDestroy() {
         super.onDestroy();
         authState.addToPreferences(this);
+    }
+
+    /**
+     * Strips all slashes from the end of a URL.
+     * @param url string to strip
+     * @return stripped URL or null if that would result in an empty or null string.
+     */
+    @Nullable
+    private static String stripEndSlashes(@Nullable String url) {
+        if (url == null) {
+            return null;
+        }
+        int lastIndex = url.length() - 1;
+        while (lastIndex >= 0 && url.charAt(lastIndex) == '/') {
+            lastIndex--;
+        }
+        if (lastIndex == -1) {
+            logger.warn("Base URL '{}' should be a valid URL.", url);
+            return null;
+        }
+        return url.substring(0, lastIndex + 1);
     }
 }

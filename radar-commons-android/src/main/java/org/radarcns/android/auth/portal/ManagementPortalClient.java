@@ -35,12 +35,12 @@ public class ManagementPortalClient {
     public static final String BASE_URL_PROPERTY = ManagementPortalClient.class.getName() + ".baseUrl";
     private static final String APPLICATION_JSON = "application/json";
     private static final String APPLICATION_JSON_UTF8 = APPLICATION_JSON + "; charset=utf-8";
-    private static final MediaType APPLICATION_JSON_MEDIA_TYPE = MediaType
-            .parse(APPLICATION_JSON_UTF8);
+    private static final MediaType APPLICATION_JSON_TYPE = MediaType.parse(APPLICATION_JSON_UTF8);
 
     private final RestClient client;
 
     public ManagementPortalClient(ServerConfig managementPortal) {
+        logger.info("Creating ManagementPortalClient for {}", managementPortal.toString());
         client = RestClient.newClient()
                 .server(managementPortal)
                 .build();
@@ -86,7 +86,7 @@ public class ManagementPortalClient {
     /** Register a source with the Management Portal. */
     public AppSource registerSource(AppAuthState auth, AppSource source)
             throws IOException, JSONException {
-        RequestBody body = RequestBody.create(APPLICATION_JSON_MEDIA_TYPE,
+        RequestBody body = RequestBody.create(APPLICATION_JSON_TYPE,
                 sourceRegistrationBody(source).toString());
 
         Request request = client.requestBuilder(
