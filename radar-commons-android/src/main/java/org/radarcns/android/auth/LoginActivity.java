@@ -57,10 +57,6 @@ public abstract class LoginActivity extends Activity implements LoginListener {
             startedFromActivity = Objects.equals(action, ACTION_LOGIN);
         }
 
-        if (startedFromActivity) {
-            Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
-        }
-
         appAuth = AppAuthState.Builder.from(this).build();
         loginManagers = createLoginManagers(appAuth);
 
@@ -77,6 +73,10 @@ public abstract class LoginActivity extends Activity implements LoginListener {
                 loginSucceeded(manager, localState);
                 return;
             }
+        }
+
+        if (startedFromActivity) {
+            Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
         }
 
         for (LoginManager manager : loginManagers) {
