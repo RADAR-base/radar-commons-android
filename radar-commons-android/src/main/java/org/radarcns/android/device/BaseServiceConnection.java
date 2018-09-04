@@ -21,23 +21,21 @@ import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.Pair;
 
 import com.crashlytics.android.Crashlytics;
 
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.data.Record;
+import org.radarcns.data.RecordData;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -75,10 +73,9 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
         }
     }
 
-    public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(@NonNull String topic, int limit) throws IOException {
-        List<Record<ObservationKey, V>> result = new ArrayList<>(serviceBinder.<V>getRecords(topic, limit));
-        Collections.reverse(result);
-        return result;
+    @Nullable
+    public <V extends SpecificRecord> RecordData<ObservationKey, SpecificRecord> getRecords(@NonNull String topic, int limit) throws IOException {
+        return serviceBinder.getRecords(topic, limit);
     }
 
     /**

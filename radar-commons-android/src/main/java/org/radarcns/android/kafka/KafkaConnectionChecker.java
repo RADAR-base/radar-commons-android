@@ -131,7 +131,7 @@ class KafkaConnectionChecker implements Runnable {
      * Signal that the Kafka REST sender has disconnected.
      * @param ex exception the sender disconnected with, may be null
      */
-    public void didDisconnect(IOException ex) {
+    public void didDisconnect(Exception ex) {
         logger.warn("Sender is disconnected", ex);
 
         if (isConnected.compareAndSet(true, false)) {

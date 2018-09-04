@@ -1,12 +1,7 @@
 package org.radarcns.android.auth.portal;
 
 import android.support.annotation.NonNull;
-import okhttp3.Credentials;
-import okhttp3.FormBody;
-import okhttp3.MediaType;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
@@ -19,12 +14,18 @@ import org.radarcns.producer.rest.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.Map;
 
-public class ManagementPortalClient implements Closeable {
+import okhttp3.Credentials;
+import okhttp3.FormBody;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class ManagementPortalClient {
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalClient.class);
 
     public static final String SOURCES_PROPERTY =
@@ -40,7 +41,9 @@ public class ManagementPortalClient implements Closeable {
     private final RestClient client;
 
     public ManagementPortalClient(ServerConfig managementPortal) {
-        client = new RestClient(managementPortal);
+        client = RestClient.newClient()
+                .server(managementPortal)
+                .build();
     }
 
     /**
@@ -155,11 +158,6 @@ public class ManagementPortalClient implements Closeable {
         source.setSourceName(responseObject.getString("sourceName"));
         source.setExpectedSourceName(responseObject.getString("expectedSourceName"));
         source.setAttributes(GetSubjectParser.attributesToMap(responseObject.optJSONObject("attributes")));
-    }
-
-    @Override
-    public void close() {
-        client.close();
     }
 
     public AppAuthState refreshToken(AppAuthState authState, String clientId, String clientSecret,

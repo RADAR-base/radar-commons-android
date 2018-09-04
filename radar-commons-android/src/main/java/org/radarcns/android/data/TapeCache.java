@@ -18,7 +18,6 @@ package org.radarcns.android.data;
 
 import android.content.Context;
 import android.content.Intent;
-import android.os.Parcel;
 import android.util.Pair;
 
 import com.crashlytics.android.Crashlytics;
@@ -26,12 +25,11 @@ import com.crashlytics.android.Crashlytics;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
-import org.radarcns.data.AvroEncoder;
+import org.radarcns.data.AvroRecordData;
 import org.radarcns.data.Record;
-import org.radarcns.data.SpecificRecordEncoder;
+import org.radarcns.data.RecordData;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.BackedObjectQueue;
-import org.radarcns.util.ListPool;
 import org.radarcns.util.QueueFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,9 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -63,14 +59,12 @@ import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
  */
 public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> implements DataCache<K, V> {
     private static final Logger logger = LoggerFactory.getLogger(TapeCache.class);
-    private static final ListPool listPool = new ListPool(10);
 
     private final AvroTopic<K, V> topic;
     private final ScheduledExecutorService executor;
     private final List<Record<K, V>> measurementsToAdd;
     private final File outputFile;
     private final BackedObjectQueue.Converter<Record<K, V>> converter;
-    private final Runnable flusher;
     private final int maxBytes;
     private QueueFile queueFile;
 
@@ -122,25 +116,36 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
         this.converter = new TapeAvroConverter<>(topic, specificData);
         this.queue = new BackedObjectQueue<>(queueFile, converter);
-        this.flusher = this::doFlush;
     }
 
     @Override
-    public List<Record<K, V>> unsentRecords(final int limit) throws IOException {
+    public RecordData<K, V> unsentRecords(final int limit) throws IOException {
         logger.info("Trying to retrieve records from topic {}", topic);
         try {
-            return listPool.get(executor.submit((Callable<List<Record<K, V>>>) () -> {
+            return executor.submit(() -> {
                 try {
-                    return queue.peek(limit);
+                    List<Record<K, V>> records = queue.peek(limit);
+                    if (records.isEmpty()) {
+                        return null;
+                    }
+                    K currentKey = records.get(0).key;
+                    List<V> values = new ArrayList<>(records.size());
+                    for (Record<K, V> record : records) {
+                        if (!currentKey.equals(record.key)) {
+                            break;
+                        }
+                        values.add(record.value);
+                    }
+                    return new AvroRecordData<>(topic, currentKey, values);
                 } catch (IOException | IllegalStateException ex) {
                     fixCorruptQueue();
-                    return Collections.emptyList();
+                    return null;
                 }
-            }).get());
+            }).get();
         } catch (InterruptedException ex) {
             logger.warn("unsentRecords was interrupted, returning an empty list", ex);
             Thread.currentThread().interrupt();
-            return listPool.get(Collections.<Record<K, V>>emptyList());
+            return null;
         } catch (ExecutionException ex) {
             logger.warn("Failed to retrieve records for topic {}", topic, ex);
             Throwable cause = ex.getCause();
@@ -153,7 +158,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     }
 
     @Override
-    public List<Record<K, V>> getRecords(int limit) throws IOException {
+    public RecordData<K, V> getRecords(int limit) throws IOException {
         return unsentRecords(limit);
     }
 
@@ -170,12 +175,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     @Override
     public void setMaximumSize(final int numBytes) {
         try {
-            executor.submit(new Runnable() {
-                @Override
-                public void run() {
-                    queueFile.setMaximumFileSize(numBytes);
-                }
-            }).get();
+            executor.submit(() -> queueFile.setMaximumFileSize(numBytes)).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Failed to update maximum size");
         }
@@ -184,18 +184,15 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     @Override
     public int remove(final int number) throws IOException {
         try {
-            return executor.submit(new Callable<Integer>() {
-                @Override
-                public Integer call() throws Exception {
-                    int actualNumber = Math.min(number, queue.size());
-                    if (actualNumber == 0) {
-                        return 0;
-                    }
-                    logger.info("Removing {} records from topic {}", actualNumber, topic);
-                    queue.remove(actualNumber);
-                    queueSize.addAndGet(-actualNumber);
-                    return actualNumber;
+            return executor.submit(() -> {
+                int actualNumber = Math.min(number, queue.size());
+                if (actualNumber == 0) {
+                    return 0;
                 }
+                logger.info("Removing {} records from topic {}", actualNumber, topic);
+                queue.remove(actualNumber);
+                queueSize.addAndGet(-actualNumber);
+                return actualNumber;
             }).get();
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
@@ -219,7 +216,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         measurementsToAdd.add(new Record<>(key, value));
 
         if (addMeasurementFuture == null) {
-            addMeasurementFuture = executor.schedule(flusher,
+            addMeasurementFuture = executor.schedule(this::doFlush,
                     timeWindowMillis, TimeUnit.MILLISECONDS);
         }
     }
@@ -235,30 +232,9 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     }
 
     @Override
-    public void writeRecordsToParcel(Parcel dest, int limit) throws IOException {
-        List<Record<K, V>> records = getRecords(limit);
-        SpecificRecordEncoder specificEncoder = new SpecificRecordEncoder(true);
-        AvroEncoder.AvroWriter<K> keyWriter = specificEncoder.writer(topic.getKeySchema(), topic.getKeyClass());
-        AvroEncoder.AvroWriter<V> valueWriter = specificEncoder.writer(topic.getValueSchema(), topic.getValueClass());
-
-        dest.writeInt(records.size());
-        for (Record<K, V> record : records) {
-            dest.writeByteArray(keyWriter.encode(record.key));
-            dest.writeByteArray(valueWriter.encode(record.value));
-        }
-        returnList(records);
-    }
-
-    @Override
-    public void returnList(List list) {
-        listPool.add(list);
-    }
-
-    @Override
     public void close() throws IOException {
         flush();
         queue.close();
-        listPool.clear();
     }
 
     @Override
@@ -273,7 +249,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
             if (measurementsToAdd.isEmpty()) {
                 return;
             }
-            flushFuture = executor.submit(this.flusher);
+            flushFuture = executor.submit(this::doFlush);
         }
         try {
             flushFuture.get();
@@ -289,7 +265,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
         synchronized (this) {
             addMeasurementFuture = null;
-            localList = listPool.get(measurementsToAdd);
+            localList = new ArrayList<>(measurementsToAdd);
             measurementsToAdd.clear();
         }
 
@@ -319,8 +295,6 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
                 throw new RuntimeException(ex);
             }
         }
-
-        listPool.add(localList);
     }
 
     private void fixCorruptQueue() throws IOException {
