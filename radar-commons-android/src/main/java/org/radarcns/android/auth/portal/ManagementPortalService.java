@@ -7,6 +7,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.ResultReceiver;
+import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.SparseArray;
 
@@ -38,7 +39,6 @@ import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
-import static org.radarcns.android.auth.portal.ManagementPortalClient.CLIENT_SECRET_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
@@ -55,7 +55,6 @@ public class ManagementPortalService extends IntentService {
     public static final int MANAGEMENT_PORTAL_REGISTRATION_FAILED = 2;
     public static final int MANAGEMENT_PORTAL_REFRESH = 4;
     public static final int MANAGEMENT_PORTAL_REFRESH_FAILED = 5;
-
 
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalService.class);
     private static final String REGISTER_SOURCE_ACTION = "org.radarcns.android.auth.ManagementPortalService.registerSourceAction";
@@ -201,9 +200,7 @@ public class ManagementPortalService extends IntentService {
         }
         Bundle result = new Bundle();
 
-
         try {
-
             if (!ensureClientConnectivity(receiver, result)) {
                 return false;
             }
@@ -363,23 +360,22 @@ public class ManagementPortalService extends IntentService {
     }
 
     private void updateConfigsWithCurrentAuthState(AppAuthState appAuthState) {
+        String baseUrl = stripEndSlashes(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY));
+        if (baseUrl == null) {
+            return;
+        }
         RadarConfiguration configuration = RadarConfiguration.getInstance();
-        configuration.put(KAFKA_REST_PROXY_URL_KEY , buildPath(
-                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY),  "kafka/"));
-        configuration.put(SCHEMA_REGISTRY_URL_KEY , buildPath(
-                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "schema/"));
-        configuration.put(MANAGEMENT_PORTAL_URL_KEY , buildPath(
-                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/"));
-        configuration.put(OAUTH2_TOKEN_URL , buildPath(
-                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/oauth/token"));
-        configuration.put(OAUTH2_AUTHORIZE_URL , buildPath(
-                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY), "managementportal/oauth/authorize"));
-        configuration.put(OAUTH2_CLIENT_SECRET , appAuthState.getProperties().get(CLIENT_SECRET_PROPERTY));
+        configuration.put(KAFKA_REST_PROXY_URL_KEY , baseUrl + "/kafka/");
+        configuration.put(SCHEMA_REGISTRY_URL_KEY , baseUrl + "/schema/");
+        configuration.put(MANAGEMENT_PORTAL_URL_KEY , baseUrl + "/managementportal/");
+        configuration.put(OAUTH2_TOKEN_URL , baseUrl + "/managementportal/oauth/token");
+        configuration.put(OAUTH2_AUTHORIZE_URL , baseUrl + "/managementportal/oauth/authorize");
         logger.info("Broadcast config changed based on base URL change");
         LocalBroadcastManager.getInstance(this)
                 .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
-        refreshManagmentPortalClient();
-
+        // reset client
+        client = null;
     }
 
     private void ensureClient() {
@@ -397,11 +393,6 @@ public class ManagementPortalService extends IntentService {
             clientId = config.getString(OAUTH2_CLIENT_ID);
             clientSecret = config.getString(OAUTH2_CLIENT_SECRET);
         }
-    }
-
-    private void refreshManagmentPortalClient() {
-        client = null;
-        ensureClient();
     }
 
     private Boolean ensureClientConnectivity(ResultReceiver resultReceiver, Bundle result) {
@@ -456,26 +447,30 @@ public class ManagementPortalService extends IntentService {
         return RadarConfiguration.getInstance().getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
     }
 
-
-    /**
-     * Build URI paths from given basePath and suffix.
-     * @param baseUrl baseUrl path
-     * @param suffix suffix to follow
-     * @return built path.
-     */
-    private String buildPath(String baseUrl, String suffix) {
-        if (baseUrl.endsWith("/")) {
-            return baseUrl.concat(suffix);
-        } else {
-            return buildPath(baseUrl.concat("/"), suffix);
-        }
-    }
     @Override
     public void onDestroy() {
         super.onDestroy();
         authState.addToPreferences(this);
-        if (client != null) {
-            client.close();
+    }
+
+    /**
+     * Strips all slashes from the end of a URL.
+     * @param url string to strip
+     * @return stripped URL or null if that would result in an empty or null string.
+     */
+    @Nullable
+    private static String stripEndSlashes(@Nullable String url) {
+        if (url == null) {
+            return null;
         }
+        int lastIndex = url.length() - 1;
+        while (lastIndex >= 0 && url.charAt(lastIndex) == '/') {
+            lastIndex--;
+        }
+        if (lastIndex == -1) {
+            logger.warn("Base URL '{}' should be a valid URL.", url);
+            return null;
+        }
+        return url.substring(0, lastIndex + 1);
     }
 }

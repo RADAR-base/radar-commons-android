@@ -45,14 +45,13 @@ import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.BundleSerialization;
-import org.radarcns.data.Record;
+import org.radarcns.data.RecordData;
 import org.radarcns.kafka.ObservationKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -292,12 +291,14 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
+        @SuppressWarnings("unchecked")
+        @Nullable
         @Override
-        public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(
+        public <V extends SpecificRecord> RecordData<ObservationKey, V> getRecords(
                 @NonNull String topic, int limit) throws IOException {
             TableDataHandler localDataHandler = getDataHandler();
             if (localDataHandler == null) {
-                return Collections.emptyList();
+                return null;
             }
             return localDataHandler.<V>getCache(topic).getRecords(limit);
         }

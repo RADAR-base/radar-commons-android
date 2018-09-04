@@ -16,6 +16,7 @@
 
 package org.radarcns.android;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
@@ -337,6 +338,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
     }
 
+    @SuppressLint("InlinedApi")
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent result) {
         switch (requestCode) {

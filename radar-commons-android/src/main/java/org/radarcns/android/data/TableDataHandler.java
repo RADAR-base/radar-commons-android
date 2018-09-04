@@ -33,6 +33,7 @@ import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.kafka.ObservationKey;
+import org.radarcns.producer.rest.RestClient;
 import org.radarcns.producer.rest.RestSender;
 import org.radarcns.producer.rest.SchemaRetriever;
 import org.radarcns.topic.AvroTopic;
@@ -164,12 +165,16 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         }
 
         updateServerStatus(Status.CONNECTING);
-        this.sender = new RestSender.Builder()
+        RestClient client = RestClient.global()
                 .server(kafkaConfig)
+                .gzipCompression(useCompression)
+                .timeout(senderConnectionTimeout, TimeUnit.SECONDS)
+                .build();
+        this.sender = new RestSender.Builder()
+                .httpClient(client)
                 .schemaRetriever(schemaRetriever)
-                .connectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS)
-                .useCompression(useCompression)
                 .headers(authState.getOkHttpHeaders())
+                .hasBinaryContent(true)
                 .build();
         this.submitter = new KafkaDataSubmitter<>(this, sender, kafkaRecordsSendLimit,
                 getPreferredUploadRate(), authState.getUserId());
@@ -233,9 +238,6 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             this.submitter.close();  // will also close sender
             this.submitter = null;
             this.sender = null;
-        }
-        if (schemaRetriever != null) {
-            schemaRetriever.close();
         }
         clean();
         for (DataCache<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
@@ -435,7 +437,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     public synchronized void setSenderConnectionTimeout(long senderConnectionTimeout) {
         if (sender != null) {
-            sender.setConnectionTimeout(senderConnectionTimeout);
+            sender.setConnectionTimeout(senderConnectionTimeout, TimeUnit.SECONDS);
         }
         this.senderConnectionTimeout = senderConnectionTimeout;
     }
@@ -451,11 +453,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         if (sender != null) {
             sender.setSchemaRetriever(schemaRetriever);
         }
-        SchemaRetriever oldSchemaRetriever = this.schemaRetriever;
         this.schemaRetriever = schemaRetriever;
-        if (oldSchemaRetriever != null) {
-            oldSchemaRetriever.close();
-        }
     }
 
     public synchronized void setCompression(boolean useCompression) {

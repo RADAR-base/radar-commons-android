@@ -10,7 +10,6 @@ import org.radarcns.android.auth.AuthStringParser;
 import java.io.IOException;
 
 import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
-import static org.radarcns.android.auth.portal.ManagementPortalClient.CLIENT_SECRET_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.PRIVACY_POLICY_URL_PROPERTY;
 
@@ -35,7 +34,6 @@ public class MetaTokenParser implements AuthStringParser {
                     .property(MP_REFRESH_TOKEN_PROPERTY, json.getString("refreshToken"))
                     .property(PRIVACY_POLICY_URL_PROPERTY, json.getString("privacyPolicyUrl"))
                     .property(BASE_URL_PROPERTY, json.getString("baseUrl"))
-                    .property(CLIENT_SECRET_PROPERTY, json.getString("clientSecret"))
                     .build();
         } catch (JSONException ex) {
             throw new IOException("Failed to parse json string " + authString, ex);
