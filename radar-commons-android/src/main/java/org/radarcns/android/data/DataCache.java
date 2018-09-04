@@ -16,31 +16,32 @@
 
 package org.radarcns.android.data;
 
-import android.os.Parcel;
+import android.support.annotation.Nullable;
 import android.util.Pair;
 
-import org.radarcns.data.Record;
+import org.radarcns.data.RecordData;
 import org.radarcns.topic.AvroTopic;
 
 import java.io.Closeable;
 import java.io.Flushable;
 import java.io.IOException;
-import java.util.List;
 
 public interface DataCache<K, V> extends Flushable, Closeable {
     /**
      * Get all unsent records in the cache.
      *
-     * @return records.
+     * @return records or null if none are found.
      */
-    List<Record<K, V>> unsentRecords(int limit) throws IOException;
+    @Nullable
+    RecordData<K, V> unsentRecords(int limit) throws IOException;
 
     /**
      * Get latest records in the cache, from new to old.
      *
-     * @return records.
+     * @return records or null if none are found.
      */
-    List<Record<K, V>> getRecords(int limit) throws IOException;
+    @Nullable
+    RecordData<K, V> getRecords(int limit) throws IOException;
 
     /**
      * Get a pair with the number of [unsent records], [sent records]
@@ -66,14 +67,6 @@ public interface DataCache<K, V> extends Flushable, Closeable {
 
     /** Get the topic the cache stores. */
     AvroTopic<K, V> getTopic();
-
-    /**
-     * Write the latest records in the cache to a parcel, from new to old.
-     */
-    void writeRecordsToParcel(Parcel dest, int limit) throws IOException;
-
-    /** Return a list to cache. It will be cleared immediately and should not be used again. */
-    void returnList(List list);
 
     /** Set the time until data is committed to disk. */
     void setTimeWindow(long period);

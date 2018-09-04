@@ -56,15 +56,15 @@ ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarcns:radar-commons:0.9.0') {
+    api ('org.radarcns:radar-commons:0.10.0') {
         exclude group: 'org.json', module: 'json'
     }
-    api 'org.radarcns:radar-schemas-commons:0.3.4'
+    api 'org.radarcns:radar-schemas-commons:0.4.0'
 
     implementation 'com.android.support:support-v4:27.1.1'
 
     implementation 'com.google.firebase:firebase-config:16.0.0'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.4'
+    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.5'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.26'
 }
 

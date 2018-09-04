@@ -1,12 +1,7 @@
 package org.radarcns.android.auth.portal;
 
 import android.support.annotation.NonNull;
-import okhttp3.Credentials;
-import okhttp3.FormBody;
-import okhttp3.MediaType;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
@@ -19,12 +14,18 @@ import org.radarcns.producer.rest.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.Map;
 
-public class ManagementPortalClient implements Closeable {
+import okhttp3.Credentials;
+import okhttp3.FormBody;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class ManagementPortalClient {
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalClient.class);
 
     public static final String SOURCES_PROPERTY =
@@ -34,14 +35,15 @@ public class ManagementPortalClient implements Closeable {
     public static final String BASE_URL_PROPERTY = ManagementPortalClient.class.getName() + ".baseUrl";
     private static final String APPLICATION_JSON = "application/json";
     private static final String APPLICATION_JSON_UTF8 = APPLICATION_JSON + "; charset=utf-8";
-    private static final MediaType APPLICATION_JSON_MEDIA_TYPE = MediaType
-            .parse(APPLICATION_JSON_UTF8);
+    private static final MediaType APPLICATION_JSON_TYPE = MediaType.parse(APPLICATION_JSON_UTF8);
 
     private final RestClient client;
 
     public ManagementPortalClient(ServerConfig managementPortal) {
-        logger.info("Creating ManagementPortalClient with {} ", managementPortal.toString());
-        client = new RestClient(managementPortal);
+        logger.info("Creating ManagementPortalClient for {}", managementPortal.toString());
+        client = RestClient.newClient()
+                .server(managementPortal)
+                .build();
     }
 
     /**
@@ -84,7 +86,7 @@ public class ManagementPortalClient implements Closeable {
     /** Register a source with the Management Portal. */
     public AppSource registerSource(AppAuthState auth, AppSource source)
             throws IOException, JSONException {
-        RequestBody body = RequestBody.create(APPLICATION_JSON_MEDIA_TYPE,
+        RequestBody body = RequestBody.create(APPLICATION_JSON_TYPE,
                 sourceRegistrationBody(source).toString());
 
         Request request = client.requestBuilder(
@@ -156,11 +158,6 @@ public class ManagementPortalClient implements Closeable {
         source.setSourceName(responseObject.getString("sourceName"));
         source.setExpectedSourceName(responseObject.getString("expectedSourceName"));
         source.setAttributes(GetSubjectParser.attributesToMap(responseObject.optJSONObject("attributes")));
-    }
-
-    @Override
-    public void close() {
-        client.close();
     }
 
     public AppAuthState refreshToken(AppAuthState authState, String clientId, String clientSecret,

@@ -472,8 +472,5 @@ public class ManagementPortalService extends IntentService {
     public void onDestroy() {
         super.onDestroy();
         authState.addToPreferences(this);
-        if (client != null) {
-            client.close();
-        }
     }
 }
