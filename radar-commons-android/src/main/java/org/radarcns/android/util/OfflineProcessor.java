@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.content.Context.ALARM_SERVICE;
@@ -58,7 +59,7 @@ public class OfflineProcessor implements Closeable {
 
     private boolean doStop;
     private Thread processorThread;
-    private long interval;
+    private long intervalMillis;
     private final AtomicBoolean isStarted;
 
     /**
@@ -69,10 +70,29 @@ public class OfflineProcessor implements Closeable {
      * @param requestName a name unique to the application, used to identify the current processor
      * @param wake wake the device for processing.
      * @param interval interval to run the processor in seconds.
+     * @deprecated use
+     *      {@link #OfflineProcessor(Context, Runnable, int, String, long, TimeUnit, boolean)}
+     *      instead for unambiguous time specification.
      */
+    @Deprecated
     public OfflineProcessor(Context context, Runnable runnable, int requestCode, final String
             requestName, long interval, final boolean wake) {
-        this.context = context;
+        this(context, runnable, requestCode, requestName, interval, TimeUnit.SECONDS, wake);
+    }
+
+    /**
+     * Creates a processor that will register a BroadcastReceiver and alarm with the given context.
+     * @param context context to register a BroadcastReceiver with
+     * @param runnable code to run in offline mode
+     * @param requestCode a code unique to the application, used to identify the current processor
+     * @param requestName a name unique to the application, used to identify the current processor
+     * @param interval interval to run the processor.
+     * @param intervalUnit time unit to measure interval with.
+     * @param wake wake the device for processing.
+     */
+    public OfflineProcessor(Context context, Runnable runnable, int requestCode, final String
+        requestName, long interval, TimeUnit intervalUnit, final boolean wake) {
+            this.context = context;
         this.doStop = false;
         this.requestName = requestName;
         this.alarmManager = (AlarmManager) context.getSystemService(ALARM_SERVICE);
@@ -80,7 +100,8 @@ public class OfflineProcessor implements Closeable {
         this.runnable = runnable;
 
         Intent intent = new Intent(requestName);
-        pendingIntent = PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+        pendingIntent = PendingIntent.getBroadcast(context, requestCode, intent,
+                PendingIntent.FLAG_CANCEL_CURRENT);
 
         this.receiver = new BroadcastReceiver() {
             @Override
@@ -88,7 +109,7 @@ public class OfflineProcessor implements Closeable {
                 processBroadcast();
             }
         };
-        this.interval = interval;
+        this.intervalMillis = intervalUnit.toMillis(interval);
         isStarted = new AtomicBoolean(false);
     }
 
@@ -141,12 +162,24 @@ public class OfflineProcessor implements Closeable {
     /**
      * Change the processing interval to the given value.
      * @param interval time between processing in seconds.
+     * @deprecated use {@link #setInterval(long, TimeUnit)} instead.
      */
+    @Deprecated
     public final void setInterval(long interval) {
-        if (this.interval == interval) {
+        setInterval(interval, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Change the processing interval to the given value.
+     * @param interval time between processing.
+     * @param timeUnit time unit to that interval is given with
+     */
+    public final void setInterval(long interval, TimeUnit timeUnit) {
+        long newIntervalMillis = timeUnit.toMillis(interval);
+        if (this.intervalMillis == newIntervalMillis) {
             return;
         }
-        this.interval = interval;
+        this.intervalMillis = newIntervalMillis;
         if (isStarted.get()) {
             schedule();
         }
@@ -157,12 +190,12 @@ public class OfflineProcessor implements Closeable {
         long firstAlarm;
         if (runImmediately) {
             processBroadcast();
-            firstAlarm = SystemClock.elapsedRealtime() + interval * 1000;
+            firstAlarm = SystemClock.elapsedRealtime() + intervalMillis;
         } else {
             firstAlarm = SystemClock.elapsedRealtime();
         }
         int type = keepAwake ? AlarmManager.ELAPSED_REALTIME_WAKEUP : AlarmManager.ELAPSED_REALTIME;
-        alarmManager.setInexactRepeating(type, firstAlarm, interval * 1000, pendingIntent);
+        alarmManager.setInexactRepeating(type, firstAlarm, intervalMillis, pendingIntent);
     }
 
     /** Whether the processing Runnable should stop execution. */
