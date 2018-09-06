@@ -396,6 +396,8 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     protected void configure() {
+        LoginActivity.updateConfigsWithAuthState(authState);
+
         RadarConfiguration configuration = RadarConfiguration.getInstance();
 
         TableDataHandler localDataHandler;
