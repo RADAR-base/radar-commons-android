@@ -54,8 +54,8 @@ public class RadarConfiguration {
     public static final String KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url";
     public static final String SCHEMA_REGISTRY_URL_KEY = "schema_registry_url";
     public static final String MANAGEMENT_PORTAL_URL_KEY = "management_portal_url";
-    public static final String PROJECT_ID_KEY = "project_id";
-    public static final String USER_ID_KEY = "user_id";
+    public static final String PROJECT_ID_KEY = "radar_project_id";
+    public static final String USER_ID_KEY = "radar_user_id";
     public static final String SOURCE_ID_KEY = "source_id";
     public static final String SEND_OVER_DATA_HIGH_PRIORITY = "send_over_data_high_priority_only";
     public static final String TOPICS_HIGH_PRIORITY = "topics_high_priority";

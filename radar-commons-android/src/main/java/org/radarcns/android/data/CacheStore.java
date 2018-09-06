@@ -79,7 +79,7 @@ public class CacheStore {
 
         CountedReference<DataCache> ref = caches.get(topic.getName());
         if (ref == null) {
-            ref = new CountedReference<DataCache>(
+            ref = new CountedReference<>(
                     new TapeCache<>(context, topic, cacheExecutorFactory, specificData));
             caches.put(topic.getName(), ref);
         }

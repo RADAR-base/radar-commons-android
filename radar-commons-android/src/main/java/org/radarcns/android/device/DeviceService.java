@@ -45,14 +45,13 @@ import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.BundleSerialization;
-import org.radarcns.data.Record;
+import org.radarcns.data.RecordData;
 import org.radarcns.kafka.ObservationKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -62,6 +61,7 @@ import static org.radarcns.android.RadarConfiguration.SOURCE_ID_KEY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REGISTRATION;
 import static org.radarcns.android.device.DeviceServiceProvider.NEEDS_BLUETOOTH_KEY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
+import static org.radarcns.android.kafka.ServerStatusListener.Status.UNAUTHORIZED;
 
 /**
  * A service that manages a DeviceManager and a TableDataHandler to send addToPreferences the data of a
@@ -200,6 +200,13 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged);
     }
 
+    private void broadcastServerStatus(ServerStatusListener.Status status) {
+        Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
+        statusIntent.putExtra(SERVER_STATUS_CHANGED, status.ordinal());
+        statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
+        LocalBroadcastManager.getInstance(this).sendBroadcast(statusIntent);
+    }
+
     @Override
     public void deviceStatusUpdated(DeviceManager deviceManager, DeviceStatusListener.Status status) {
         switch (status) {
@@ -284,12 +291,14 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
+        @SuppressWarnings("unchecked")
+        @Nullable
         @Override
-        public <V extends SpecificRecord> List<Record<ObservationKey, V>> getRecords(
+        public <V extends SpecificRecord> RecordData<ObservationKey, V> getRecords(
                 @NonNull String topic, int limit) throws IOException {
             TableDataHandler localDataHandler = getDataHandler();
             if (localDataHandler == null) {
-                return Collections.emptyList();
+                return null;
             }
             return localDataHandler.<V>getCache(topic).getRecords(limit);
         }
@@ -516,10 +525,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         AppAuthState auth = AppAuthState.Builder.from(result).build();
         if (auth.isInvalidated()) {
             logger.info("New source ID requires new OAuth2 JWT token.");
-            Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
-            statusIntent.putExtra(SERVER_STATUS_CHANGED, ServerStatusListener.Status.UNAUTHORIZED.ordinal());
-            statusIntent.putExtra(DEVICE_SERVICE_CLASS, getClass().getName());
-            sendBroadcast(statusIntent);
+            broadcastServerStatus(UNAUTHORIZED);
         }
         key.setProjectId(auth.getProjectId());
         key.setUserId(auth.getUserId());

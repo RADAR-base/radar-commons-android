@@ -7,6 +7,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.ResultReceiver;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.SparseArray;
 
 import com.crashlytics.android.Crashlytics;
@@ -16,6 +17,7 @@ import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
+import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.slf4j.Logger;
@@ -31,6 +33,7 @@ import java.util.Objects;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_ID;
 import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_SECRET;
+import static org.radarcns.android.RadarConfiguration.RADAR_CONFIGURATION_CHANGED;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
@@ -53,7 +56,9 @@ public class ManagementPortalService extends IntentService {
     private static final String REGISTER_SOURCE_ACTION = "org.radarcns.android.auth.ManagementPortalService.registerSourceAction";
     private static final String GET_STATE_ACTION = "org.radarcns.android.auth.ManagementPortalService.getStateAction";
     private static final String REFRESH_TOKEN_ACTION = "org.radarcns.android.auth.ManagementPortalService.refreshTokenAction";
-    private static final String REFRESH_TOKEN_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshToken";
+    private static final String GET_REFRESH_TOKEN_ACTION = "org.radarcns.android.auth.ManagementPortalService.getRefreshTokenAction";
+    public static final String REFRESH_TOKEN_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshToken";
+    private static final String REFRESH_TOKEN_URL_KEY = "org.radarcns.android.auth.ManagementPortalService.refreshTokenUrl";
     private static final String UPDATE_SUBJECT_KEY = "org.radarcns.android.auth.ManagementPortalService.updateSubject";
     public static final String REQUEST_FAILED_REASON = "org.radarcns.android.auth.ManagementPortalService.refreshFailedReason";
     public static final int REQUEST_FAILED_REASON_IO = 1;
@@ -113,6 +118,9 @@ public class ManagementPortalService extends IntentService {
                 case GET_STATE_ACTION:
                     isSuccessful = getState(extras);
                     break;
+                case GET_REFRESH_TOKEN_ACTION:
+                    isSuccessful = getRefreshToken(extras);
+                    break;
                 default:
                     logger.warn("Cannot complete action {}: action unknown", intent.getAction());
                     isSuccessful = false;
@@ -126,6 +134,52 @@ public class ManagementPortalService extends IntentService {
         } catch (IllegalArgumentException ex) {
             Crashlytics.logException(ex);
         }
+    }
+
+    /**
+     * Gets refreshToken from tokenUrl and refreshes access-token using it.
+     * @param extras input bundle data.
+     * @return {@code true} if success.
+     * @see #refreshToken(Bundle) refreshing access token.
+     */
+    private boolean getRefreshToken(Bundle extras) {
+        logger.info("Retrieving refreshToken from url");
+        ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
+        if (receiver == null) {
+            throw new IllegalArgumentException("ResultReceiver not set");
+        }
+
+        String refreshTokenUrl = extras.getString(REFRESH_TOKEN_URL_KEY);
+        if (refreshTokenUrl == null) {
+            throw new IllegalArgumentException("RefreshTokenUrl not set");
+        }
+
+        Bundle result = new Bundle();
+
+        try {
+            if (!ensureClientConnectivity(receiver, result)) {
+                return false;
+            }
+            // create parser
+            AuthStringParser parser = new MetaTokenParser(authState);
+            // retrieve token and update authState
+            authState = client.getRefreshToken(refreshTokenUrl, parser);
+            // update radarConfig
+            if (LoginActivity.updateConfigsWithAuthState(authState)) {
+                LocalBroadcastManager.getInstance(this)
+                        .sendBroadcast(new Intent(RADAR_CONFIGURATION_CHANGED));
+                // refresh client
+                client = null;
+            }
+            // refresh token
+            return refreshToken(extras);
+        } catch (IOException e) {
+            logger.error("Failed to get access token", e);
+            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_IO);
+            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
+        }
+
+        return true;
     }
 
     private boolean getState(Bundle extras) {
@@ -147,17 +201,10 @@ public class ManagementPortalService extends IntentService {
         }
         Bundle result = new Bundle();
 
-        ConnectivityManager connManager =
-                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
-        if (networkInfo == null || !networkInfo.isConnected()) {
-            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
-            receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
-            return false;
-        }
-
         try {
-            ensureClient();
+            if (!ensureClientConnectivity(receiver, result)) {
+                return false;
+            }
 
             String refreshToken = extras.getString(REFRESH_TOKEN_KEY);
             if (refreshToken != null) {
@@ -260,17 +307,10 @@ public class ManagementPortalService extends IntentService {
 
         if (resultSource == null) {
 
-            ConnectivityManager connManager =
-                    (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
-            if (networkInfo == null || !networkInfo.isConnected()) {
-                result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
-                receiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
-                return false;
-            }
-
             try {
-                ensureClient();
+                if (!ensureClientConnectivity(receiver, result)) {
+                    return false;
+                }
                 resultSource = client.registerSource(authState, source);
                 addSource(resultSource);
             } catch (IllegalArgumentException ex) {
@@ -337,6 +377,19 @@ public class ManagementPortalService extends IntentService {
         }
     }
 
+    private Boolean ensureClientConnectivity(ResultReceiver resultReceiver, Bundle result) {
+        ConnectivityManager connManager =
+                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connManager != null ? connManager.getActiveNetworkInfo() : null;
+        if (networkInfo == null || !networkInfo.isConnected()) {
+            result.putInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_DISCONNECTED);
+            resultReceiver.send(MANAGEMENT_PORTAL_REFRESH_FAILED, result);
+            return false;
+        }
+        ensureClient();
+        return true;
+    }
+
     /** Build an intent to create a request for the management portal. */
     public static void registerSource(Context context, AppSource source, ResultReceiver receiver) {
         Intent intent = new Intent(context, ManagementPortalService.class);
@@ -360,6 +413,18 @@ public class ManagementPortalService extends IntentService {
         context.startService(intent);
     }
 
+    /** Build an intent to create a request for the management portal. */
+    public static void requestRefreshToken(Context context, String refreshTokenUrl, Boolean updateSubject,  ResultReceiver receiver) {
+        Intent intent = new Intent(context, ManagementPortalService.class);
+        intent.setAction(GET_REFRESH_TOKEN_ACTION);
+        Bundle extras = new Bundle();
+        extras.putString(REFRESH_TOKEN_URL_KEY, refreshTokenUrl);
+        extras.putParcelable(RESULT_RECEIVER_PROPERTY, receiver);
+        extras.putBoolean(UPDATE_SUBJECT_KEY, updateSubject);
+        intent.putExtras(extras);
+        context.startService(intent);
+    }
+
     public static boolean isEnabled() {
         return RadarConfiguration.getInstance().getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
     }
@@ -368,8 +433,5 @@ public class ManagementPortalService extends IntentService {
     public void onDestroy() {
         super.onDestroy();
         authState.addToPreferences(this);
-        if (client != null) {
-            client.close();
-        }
     }
 }
