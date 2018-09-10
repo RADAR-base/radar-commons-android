@@ -20,16 +20,25 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
 
 import org.radarcns.android.R;
+import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.util.Boast;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Objects;
+
+import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
+import static org.radarcns.android.RadarConfiguration.OAUTH2_AUTHORIZE_URL;
+import static org.radarcns.android.RadarConfiguration.OAUTH2_TOKEN_URL;
+import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
 
 /** Activity to log in using a variety of login managers. */
 public abstract class LoginActivity extends Activity implements LoginListener {
@@ -57,10 +66,6 @@ public abstract class LoginActivity extends Activity implements LoginListener {
             startedFromActivity = Objects.equals(action, ACTION_LOGIN);
         }
 
-        if (startedFromActivity) {
-            Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
-        }
-
         appAuth = AppAuthState.Builder.from(this).build();
         loginManagers = createLoginManagers(appAuth);
 
@@ -77,6 +82,10 @@ public abstract class LoginActivity extends Activity implements LoginListener {
                 loginSucceeded(manager, localState);
                 return;
             }
+        }
+
+        if (startedFromActivity) {
+            Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
         }
 
         for (LoginManager manager : loginManagers) {
@@ -131,6 +140,8 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         LocalBroadcastManager.getInstance(this)
                 .sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
 
+        updateConfigsWithAuthState(appAuth);
+
         if (startedFromActivity) {
             logger.info("Start next activity with result");
             setResult(RESULT_OK, this.appAuth.toIntent());
@@ -148,5 +159,54 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+    }
+
+    /**
+     * Adds base URL from auth state to configuration.
+     * @return true if any configuration was updated, false otherwise.
+     */
+    public static boolean updateConfigsWithAuthState(@Nullable AppAuthState appAuthState) {
+        if (appAuthState == null) {
+            return false;
+        }
+        String baseUrl = stripEndSlashes(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY));
+        if (baseUrl == null) {
+            return false;
+        }
+        RadarConfiguration configuration = RadarConfiguration.getInstance();
+
+        if (baseUrl.equals(configuration.getString(BASE_URL_PROPERTY, null))) {
+            return false;
+        }
+        configuration.put(BASE_URL_PROPERTY, baseUrl);
+        configuration.put(KAFKA_REST_PROXY_URL_KEY, baseUrl + "/kafka/");
+        configuration.put(SCHEMA_REGISTRY_URL_KEY, baseUrl + "/schema/");
+        configuration.put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
+        configuration.put(OAUTH2_TOKEN_URL, baseUrl + "/managementportal/oauth/token");
+        configuration.put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
+        logger.info("Broadcast config changed based on base URL change");
+        return true;
+    }
+
+    /**
+     * Strips all slashes from the end of a URL.
+     * @param url string to strip
+     * @return stripped URL or null if that would result in an empty or null string.
+     */
+    @Nullable
+    private static String stripEndSlashes(@Nullable String url) {
+        if (url == null) {
+            return null;
+        }
+        int lastIndex = url.length() - 1;
+        while (lastIndex >= 0 && url.charAt(lastIndex) == '/') {
+            lastIndex--;
+        }
+        if (lastIndex == -1) {
+            logger.warn("Base URL '{}' should be a valid URL.", url);
+            return null;
+        }
+        return url.substring(0, lastIndex + 1);
     }
 }

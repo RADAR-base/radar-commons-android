@@ -396,6 +396,8 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     protected void configure() {
+        LoginActivity.updateConfigsWithAuthState(authState);
+
         RadarConfiguration configuration = RadarConfiguration.getInstance();
 
         TableDataHandler localDataHandler;
@@ -629,7 +631,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
         Intent statusIntent = new Intent(SERVER_STATUS_CHANGED);
         statusIntent.putExtra(SERVER_STATUS_CHANGED, serverStatus.ordinal());
-        sendBroadcast(statusIntent);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(statusIntent);
     }
 
     @Override
