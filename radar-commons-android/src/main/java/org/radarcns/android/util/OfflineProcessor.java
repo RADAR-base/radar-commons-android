@@ -101,7 +101,7 @@ public class OfflineProcessor implements Closeable {
 
         Intent intent = new Intent(requestName);
         pendingIntent = PendingIntent.getBroadcast(context, requestCode, intent,
-                PendingIntent.FLAG_CANCEL_CURRENT);
+                PendingIntent.FLAG_UPDATE_CURRENT);
 
         this.receiver = new BroadcastReceiver() {
             @Override
