@@ -21,6 +21,7 @@ import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 
 import org.apache.avro.SchemaValidationException;
+import org.apache.avro.generic.IndexedRecord;
 import org.radarcns.android.data.DataCache;
 import org.radarcns.android.data.DataHandler;
 import org.radarcns.android.data.TopicKey;
@@ -296,9 +297,9 @@ public class KafkaDataSubmitter<V> implements Closeable {
      * Upload some data from a single table.
      * @return number of records sent.
      */
-    private int uploadCache(AvroTopic<ObservationKey, V> topic, DataCache<ObservationKey, V> cache, int limit,
+    private int uploadCache(AvroTopic<ObservationKey, V> topic, DataCache<ObservationKey, ? extends IndexedRecord> cache, int limit,
                             boolean uploadingNotified) throws IOException, SchemaValidationException {
-        RecordData<ObservationKey, V> data = cache.unsentRecords(limit);
+        RecordData<ObservationKey, ? extends IndexedRecord> data = cache.unsentRecords(limit);
         if (data == null) {
             return 0;
         }

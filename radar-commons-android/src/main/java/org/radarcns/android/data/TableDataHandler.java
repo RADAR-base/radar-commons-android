@@ -531,7 +531,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             return;
         }
         DataCache<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
-                .getOrCreateCache(context.getApplicationContext(), topic);
+                .getOrCreateCaches(context.getApplicationContext(), topic);
         cache.setMaximumSize(maxBytes);
         tables.put(topic, cache);
         tablesByName.put(topic.getName(), cache);

@@ -26,8 +26,11 @@ import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.CountedReference;
 
+import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
@@ -69,13 +72,17 @@ public class CacheStore {
     }
 
     @SuppressWarnings("unchecked")
-    public synchronized <K extends SpecificRecord, V extends SpecificRecord> DataCache<K, V>
-            getOrCreateCache(Context context, AvroTopic<K, V> topic) throws IOException {
+    public synchronized <K extends SpecificRecord, V extends SpecificRecord> List<DataCache<K, V>>
+            getOrCreateCaches(Context context, AvroTopic<K, V> topic) throws IOException {
 
         if (cacheExecutorFactory == null) {
             cacheExecutorFactory = new SharedSingleThreadExecutorFactory(
                     new AndroidThreadFactory("DataCache", THREAD_PRIORITY_BACKGROUND));
         }
+
+        List<String> fileBases = getFileBases(context.getCacheDir(), topic.getName());
+
+        outputFile = new File(context.getCacheDir(), topic.getName() + ".tape");
 
         CountedReference<DataCache> ref = caches.get(topic.getName());
         if (ref == null) {
@@ -84,6 +91,15 @@ public class CacheStore {
             caches.put(topic.getName(), ref);
         }
         return ref.acquire();
+    }
+
+    private List<String> getFileBases(File cacheDir, String topicName) {
+        String base = cacheDir.getAbsolutePath() + "/" + topicName;
+        List<String> files = new ArrayList<>(2);
+        if (new File(base + ".tape").isFile()) {
+            files.add(base);
+        }
+        return files;
     }
 
     public synchronized <K extends SpecificRecord, V extends SpecificRecord> void releaseCache(DataCache<K, V> cache) throws IOException {
@@ -105,4 +121,10 @@ public class CacheStore {
     public SpecificData getSpecificData() {
         return specificData;
     }
+
+    public static class DataCacheGroup {
+        private void
+    }
+
+    public static class DataCache
 }
