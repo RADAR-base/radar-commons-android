@@ -119,7 +119,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     };
     private BroadcastReceiver bluetoothNeededReceiver;
 
-    private volatile boolean bluetoothReceiverIsEnabled = false;
+    private volatile boolean bluetoothReceiverIsEnabled;
 
     /**
      * Sends an intent to request bluetooth to be turned on.
@@ -154,12 +154,16 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private void testBindBluetooth() {
         boolean needsBluetooth = radarService != null && radarService.needsBluetooth();
 
-        if (needsBluetooth && !bluetoothReceiverIsEnabled) {
+        if (needsBluetooth == bluetoothReceiverIsEnabled) {
+            return;
+        }
+
+        if (needsBluetooth) {
             registerReceiver(bluetoothReceiver,
                     new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
             bluetoothReceiverIsEnabled = true;
             requestEnableBt();
-        } else if (bluetoothReceiverIsEnabled && !needsBluetooth) {
+        } else {
             bluetoothReceiverIsEnabled = false;
             unregisterReceiver(bluetoothReceiver);
         }
@@ -170,6 +174,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     @Override
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        bluetoothReceiverIsEnabled = false;
 
         if (getIntent() == null || getIntent().getExtras() == null) {
             authState = AppAuthState.Builder.from(this).build();
@@ -334,6 +339,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             bluetoothNeededReceiver = null;
         }
         if (bluetoothReceiverIsEnabled) {
+            bluetoothReceiverIsEnabled = false;
             unregisterReceiver(bluetoothReceiver);
         }
     }
