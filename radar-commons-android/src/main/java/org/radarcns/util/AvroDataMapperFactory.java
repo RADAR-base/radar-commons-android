@@ -3,11 +3,13 @@ package org.radarcns.util;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaValidationException;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +17,17 @@ import java.util.Map;
 import static org.apache.avro.JsonProperties.NULL_VALUE;
 
 public class AvroDataMapperFactory {
-    private static final AvroDataMapper IDENTITY_MAPPER = obj -> obj;
+    private static final AvroDataMapper IDENTITY_MAPPER = new AvroDataMapper() {
+        @Override
+        public Object convert(Object obj) {
+            return obj;
+        }
+
+        @Override
+        public String toString() {
+            return "Identity";
+        }
+    };
 
     public static AvroDataMapper createMapper(Schema from, Schema to, Object defaultVal) throws SchemaValidationException {
         if (from.equals(to)) {
@@ -85,19 +97,21 @@ public class AvroDataMapperFactory {
             if (containsAll) {
                 return obj -> new GenericData.EnumSymbol(to, obj.toString());
             } else {
-                Object mappedDefaultVal = defaultVal != null ? defaultVal : (
-                        to.hasEnumSymbol("UNKNOWN")
-                                ? new GenericData.EnumSymbol(to, "UNKNOWN") : null);
-                if (mappedDefaultVal == null) {
+                String defaultString = (String) defaultVal;
+                if (defaultString == null && to.hasEnumSymbol("UNKNOWN")) {
+                    defaultString = "UNKNOWN";
+                }
+                if (defaultString == null) {
                     throw new SchemaValidationException(from, to,
                             new RuntimeException("Cannot map enum symbols without default value"));
                 } else {
+                    GenericEnumSymbol symbol = new GenericData.EnumSymbol(to, defaultString);
                     return obj -> {
                         String value = obj.toString();
                         if (to.hasEnumSymbol(value)) {
                             return new GenericData.EnumSymbol(to, value);
                         } else {
-                            return mappedDefaultVal;
+                            return symbol;
                         }
                     };
                 }
@@ -106,6 +120,16 @@ public class AvroDataMapperFactory {
             return Object::toString;
         }
         return null;
+    }
+
+    private static Object getDefaultValue(Object defaultVal, Schema schema) {
+        if (defaultVal == null) {
+            return null;
+        } if (schema.getType() == Schema.Type.ENUM) {
+            return new GenericData.EnumSymbol(schema, defaultVal);
+        } else {
+            return defaultVal;
+        }
     }
 
     private static AvroDataMapper mapNumber(Schema from, Schema to, Object defaultVal) throws SchemaValidationException {
@@ -202,7 +226,14 @@ public class AvroDataMapperFactory {
         Schema resolvedFrom = from.getType() == Schema.Type.UNION ? nonNullUnionSchema(from) : from;
 
         if (from.getType() == Schema.Type.UNION && to.getType() != Schema.Type.UNION) {
-            return createMapper(resolvedFrom, to, defaultVal);
+            if (defaultVal != null) {
+                Object actualDefault = getDefaultValue(defaultVal, to);
+                AvroDataMapper subMapper = createMapper(resolvedFrom, to, defaultVal);
+                return obj -> obj == null ? actualDefault : subMapper.convert(obj);
+            } else {
+                throw new SchemaValidationException(from, to, new RuntimeException(
+                        "Cannot map union to non-union without a default value"));
+            }
         } else {
             Schema toNonNull = nonNullUnionSchema(to);
             AvroDataMapper unionMapper = createMapper(resolvedFrom, toNonNull, defaultVal);
@@ -225,7 +256,6 @@ public class AvroDataMapperFactory {
             return toArray;
         };
     }
-
 
     private static AvroDataMapper mapMap(Schema from, Schema to) throws SchemaValidationException {
         if (to.getType() != Schema.Type.MAP) {
@@ -273,6 +303,8 @@ public class AvroDataMapperFactory {
             Schema.Field[] toFields = new Schema.Field[fromFields.size()];
             AvroDataMapper[] fieldMappers = new AvroDataMapper[fromFields.size()];
 
+            boolean[] filledPositions = new boolean[to.getFields().size()];
+
             for (int i = 0; i < fromFields.size(); i++) {
                 Schema.Field fromField = fromFields.get(i);
                 Schema.Field toField = to.getField(fromField.name());
@@ -280,12 +312,20 @@ public class AvroDataMapperFactory {
                     continue;
                 }
 
+                filledPositions[toField.pos()] = true;
+
                 Schema fromSchema = fromField.schema();
                 Schema toSchema = toField.schema();
 
-                if (fromSchema.equals(toSchema)) {
-                    toFields[i] = toField;
-                    fieldMappers[i] = createMapper(fromSchema, toSchema, toField.defaultVal());
+                toFields[i] = toField;
+                fieldMappers[i] = createMapper(fromSchema, toSchema, toField.defaultVal());
+            }
+
+            for (int i = 0; i < filledPositions.length; i++) {
+                if (!filledPositions[i] && to.getFields().get(i).defaultVal() == null) {
+                    throw new SchemaValidationException(from, to,
+                            new RuntimeException("Cannot map to record without default value" +
+                                    " for new field " + to.getFields().get(i).name()));
                 }
             }
 
@@ -304,6 +344,14 @@ public class AvroDataMapperFactory {
                 builder.set(field, fieldMappers[i].convert(record.get(i)));
             }
             return builder.build();
+        }
+
+        @Override
+        public String toString() {
+            return "RecordMapper{" +
+                    "fieldMappers=" + Arrays.toString(fieldMappers) +
+                    ", toFields=" + Arrays.toString(toFields) +
+                    '}';
         }
     }
 }

@@ -58,13 +58,10 @@ public class TapeCacheTest {
     public static void setUpClass() {
         System.err.println("Setting up TapeCacheTest tests");
         HandroidLoggerAdapter.APP_NAME = "Test";
-        HandroidLoggerAdapter.LOG_TO_CRASHLYTICS = false;
     }
 
     @Before
     public void setUp() throws IOException {
-        System.err.println("log to crashlytics " + HandroidLoggerAdapter.LOG_TO_CRASHLYTICS);
-
         AvroTopic<ObservationKey, ApplicationUptime> topic = new AvroTopic<>("test",
                 ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
                 ObservationKey.class, ApplicationUptime.class);
