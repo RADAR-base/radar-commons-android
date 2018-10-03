@@ -166,22 +166,16 @@ public class AvroDataMapperFactoryTest {
     private static String doMap(Schema from, Schema to, String value)
             throws IOException, SchemaValidationException {
         AvroDataMapper mapper = AvroDataMapperFactory.createMapper(from, to, null);
-        return toJson(mapper.convert(fromJson(value, from)), to);
-    }
 
-    private static Object fromJson(String input, Schema schema) throws IOException {
-        GenericDatumReader<Object> reader = new GenericDatumReader<>(schema);
-        JsonDecoder decoder = DecoderFactory.get().jsonDecoder(schema, input);
-        return reader.read(null, decoder);
-    }
+        GenericDatumReader<Object> reader = new GenericDatumReader<>(from);
+        JsonDecoder decoder = DecoderFactory.get().jsonDecoder(from, value);
+        Object readValue = reader.read(null, decoder);
 
-    private static String toJson(Object object, Schema schema) throws IOException {
-        GenericDatumWriter<Object> writer = new GenericDatumWriter<>(schema);
+        GenericDatumWriter<Object> writer = new GenericDatumWriter<>(to);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        JsonEncoder encoder = EncoderFactory.get().jsonEncoder(schema, out);
-        writer.write(object, encoder);
+        JsonEncoder encoder = EncoderFactory.get().jsonEncoder(to, out);
+        writer.write(mapper.convert(readValue), encoder);
         encoder.flush();
         return out.toString(UTF8);
     }
-
 }
