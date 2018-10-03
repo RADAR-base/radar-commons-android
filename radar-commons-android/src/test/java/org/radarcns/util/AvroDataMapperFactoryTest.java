@@ -174,7 +174,7 @@ public class AvroDataMapperFactoryTest {
         GenericDatumWriter<Object> writer = new GenericDatumWriter<>(to);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         JsonEncoder encoder = EncoderFactory.get().jsonEncoder(to, out);
-        writer.write(mapper.convert(readValue), encoder);
+        writer.write(mapper.convertAvro(readValue), encoder);
         encoder.flush();
         return out.toString(UTF8);
     }

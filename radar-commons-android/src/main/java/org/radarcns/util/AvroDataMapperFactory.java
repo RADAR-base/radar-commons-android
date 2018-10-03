@@ -19,7 +19,7 @@ import static org.apache.avro.JsonProperties.NULL_VALUE;
 public class AvroDataMapperFactory {
     private static final AvroDataMapper IDENTITY_MAPPER = new AvroDataMapper() {
         @Override
-        public Object convert(Object obj) {
+        public Object convertAvro(Object obj) {
             return obj;
         }
 
@@ -229,7 +229,7 @@ public class AvroDataMapperFactory {
             if (defaultVal != null) {
                 Object actualDefault = getDefaultValue(defaultVal, to);
                 AvroDataMapper subMapper = createMapper(resolvedFrom, to, defaultVal);
-                return obj -> obj == null ? actualDefault : subMapper.convert(obj);
+                return obj -> obj == null ? actualDefault : subMapper.convertAvro(obj);
             } else {
                 throw new SchemaValidationException(from, to, new RuntimeException(
                         "Cannot map union to non-union without a default value"));
@@ -237,7 +237,7 @@ public class AvroDataMapperFactory {
         } else {
             Schema toNonNull = nonNullUnionSchema(to);
             AvroDataMapper unionMapper = createMapper(resolvedFrom, toNonNull, defaultVal);
-            return obj -> obj == null ? null : unionMapper.convert(obj);
+            return obj -> obj == null ? null : unionMapper.convertAvro(obj);
         }
     }
 
@@ -251,7 +251,7 @@ public class AvroDataMapperFactory {
             List array = (List) obj;
             List<Object> toArray = new ArrayList<>(array.size());
             for (Object val : array) {
-                toArray.add(entryMapper.convert(val));
+                toArray.add(entryMapper.convertAvro(val));
             }
             return toArray;
         };
@@ -268,7 +268,7 @@ public class AvroDataMapperFactory {
             Map<String, ?> map = (Map<String, ?>) obj;
             Map<String, Object> toMap = new HashMap<>(map.size() * 4 / 3 + 1);
             for (Map.Entry<String, ?> entry : map.entrySet()) {
-                toMap.put(entry.getKey(), entryMapper.convert(entry.getValue()));
+                toMap.put(entry.getKey(), entryMapper.convertAvro(entry.getValue()));
             }
             return toMap;
         };
@@ -333,7 +333,7 @@ public class AvroDataMapperFactory {
         }
 
         @Override
-        public GenericRecord convert(Object obj) {
+        public GenericRecord convertAvro(Object obj) {
             GenericRecordBuilder builder = new GenericRecordBuilder(toSchema);
             IndexedRecord record = (IndexedRecord) obj;
             for (int i = 0; i < toFields.length; i++) {
@@ -341,7 +341,7 @@ public class AvroDataMapperFactory {
                 if (field == null) {
                     continue;
                 }
-                builder.set(field, fieldMappers[i].convert(record.get(i)));
+                builder.set(field, fieldMappers[i].convertAvro(record.get(i)));
             }
             return builder.build();
         }

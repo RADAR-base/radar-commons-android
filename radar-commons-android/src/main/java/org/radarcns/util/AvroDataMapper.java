@@ -1,5 +1,5 @@
 package org.radarcns.util;
 
 public interface AvroDataMapper {
-    Object convert(Object object);
+    Object convertAvro(Object object);
 }
