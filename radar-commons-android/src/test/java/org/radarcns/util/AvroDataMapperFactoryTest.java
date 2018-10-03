@@ -94,9 +94,8 @@ public class AvroDataMapperFactoryTest {
                     + "]}");
     @Test
     public void mapRecord() throws SchemaValidationException, IOException {
-        AvroDataMapper mapper = AvroDataMapperFactory.createMapper(MEASUREMENT_KEY_SCHEMA, ObservationKey.getClassSchema(), null);
-        Object record = fromJson("{\"userId\":\"u\", \"sourceId\": \"s\"}", MEASUREMENT_KEY_SCHEMA);
-        String actual = toJson(mapper.convert(record), ObservationKey.getClassSchema());
+        String actual = doMap(MEASUREMENT_KEY_SCHEMA, ObservationKey.getClassSchema(),
+                "{\"userId\":\"u\", \"sourceId\": \"s\"}");
         assertEquals("{\"projectId\":null,\"userId\":\"u\",\"sourceId\":\"s\"}", actual);
     }
 
@@ -107,9 +106,7 @@ public class AvroDataMapperFactoryTest {
 
     @Test
     public void mapEnumLarger() throws SchemaValidationException, IOException {
-        AvroDataMapper mapper = AvroDataMapperFactory.createMapper(SMALL_ENUM_SCHEMA, LARGE_ENUM_SCHEMA, null);
-        Object enumA = fromJson("{\"e\":\"A\"}", SMALL_ENUM_SCHEMA);
-        String actual = toJson(mapper.convert(enumA), LARGE_ENUM_SCHEMA);
+        String actual = doMap(SMALL_ENUM_SCHEMA, LARGE_ENUM_SCHEMA, "{\"e\":\"A\"}");
         assertEquals("{\"e\":\"A\"}", actual);
     }
 
@@ -120,44 +117,37 @@ public class AvroDataMapperFactoryTest {
 
     @Test
     public void mapEnumSmallerUnknown() throws SchemaValidationException, IOException {
-        AvroDataMapper mapper = AvroDataMapperFactory.createMapper(LARGE_ENUM_SCHEMA, UNKNOWN_ENUM_SCHEMA, null);
-        Object enumA = fromJson("{\"e\":\"C\"}", LARGE_ENUM_SCHEMA);
-        String actual = toJson(mapper.convert(enumA), UNKNOWN_ENUM_SCHEMA);
+        String actual = doMap(LARGE_ENUM_SCHEMA, UNKNOWN_ENUM_SCHEMA, "{\"e\":\"C\"}");
         assertEquals("{\"e\":\"UNKNOWN\"}", actual);
     }
 
 
     @Test
     public void mapEnumSmallerDefault() throws SchemaValidationException, IOException {
-        AvroDataMapper mapper = AvroDataMapperFactory.createMapper(LARGE_ENUM_SCHEMA, DEFAULT_ENUM_SCHEMA, null);
-        Object enumA = fromJson("{\"e\":\"C\"}", LARGE_ENUM_SCHEMA);
-        String actual = toJson(mapper.convert(enumA), DEFAULT_ENUM_SCHEMA);
+        String actual = doMap(LARGE_ENUM_SCHEMA, DEFAULT_ENUM_SCHEMA, "{\"e\":\"C\"}");
         assertEquals("{\"e\":\"A\"}", actual);
     }
 
     @Test
     public void mapAll() throws SchemaValidationException, IOException {
-        AvroDataMapper mapper = AvroDataMapperFactory.createMapper(ALL_TYPES_SCHEMA, ALL_TYPES_ALT_SCHEMA, null);
+        String actual = doMap(ALL_TYPES_SCHEMA, ALL_TYPES_ALT_SCHEMA, "{" +
+                "\"e\":\"A\"," +
+                "\"i\":1," +
+                "\"l\":2," +
+                "\"d\":3.0," +
+                "\"f\":4.0," +
+                "\"sI\":\"5\"," +
+                "\"sD\":\"6.5\"," +
+                "\"sU\":null," +
+                "\"sUi\":{\"string\":\"7\"}," +
+                "\"sUe\":null," +
+                "\"uS\":\"s\"," +
+                "\"a\":[1,2]," +
+                "\"m\":{\"a\":9}," +
+                "\"unmapped\":10}");
 
-        Object enumA = fromJson(
-                "{\"e\":\"A\"," +
-                        "\"i\":1," +
-                        "\"l\":2," +
-                        "\"d\":3.0," +
-                        "\"f\":4.0," +
-                        "\"sI\":\"5\"," +
-                        "\"sD\":\"6.5\"," +
-                        "\"sU\":null," +
-                        "\"sUi\":{\"string\":\"7\"}," +
-                        "\"sUe\":null," +
-                        "\"uS\":\"s\"," +
-                        "\"a\":[1,2]," +
-                        "\"m\":{\"a\":9}," +
-                        "\"unmapped\":10}",
-                ALL_TYPES_SCHEMA);
-        String actual = toJson(mapper.convert(enumA), ALL_TYPES_ALT_SCHEMA);
-
-        assertEquals("{\"e\":\"A\"," +
+        assertEquals("{" +
+                "\"e\":\"A\"," +
                 "\"i\":1," +
                 "\"l\":2.0," +
                 "\"d\":3.0," +
@@ -171,6 +161,12 @@ public class AvroDataMapperFactoryTest {
                 "\"a\":[1.0,2.0]," +
                 "\"m\":{\"a\":9.0}}", actual);
 
+    }
+
+    private static String doMap(Schema from, Schema to, String value)
+            throws IOException, SchemaValidationException {
+        AvroDataMapper mapper = AvroDataMapperFactory.createMapper(from, to, null);
+        return toJson(mapper.convert(fromJson(value, from)), to);
     }
 
     private static Object fromJson(String input, Schema schema) throws IOException {
