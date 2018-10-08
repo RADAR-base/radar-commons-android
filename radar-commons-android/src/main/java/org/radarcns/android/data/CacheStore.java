@@ -26,6 +26,7 @@ import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.topic.AvroTopic;
+import org.radarcns.util.SynchronizedReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,9 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 
@@ -45,17 +48,12 @@ public class CacheStore {
     static final String TAPE_EXTENSION = ".tape";
     static final String KEY_SCHEMA_EXTENSION = ".key.avsc";
     static final String VALUE_SCHEMA_EXTENSION = ".value.avsc";
-    private static final Object SYNC_OBJECT = new Object();
-    private static CacheStore store = null;
+    private static CacheStore store = new CacheStore();
     private final GenericData genericData;
+    private final Map<String, SynchronizedReference<DataCacheGroup>> tables;
 
-    public static CacheStore getInstance() {
-        synchronized (SYNC_OBJECT) {
-            if (store == null) {
-                store = new CacheStore();
-            }
-            return store;
-        }
+    public static CacheStore get() {
+        return store;
     }
 
     private final SpecificData specificData;
@@ -92,19 +90,38 @@ public class CacheStore {
                         && !((Double) object).isInfinite();
             }
         };
+        tables = new HashMap<>();
     }
 
-    @SuppressWarnings("unchecked")
-    public synchronized <K extends SpecificRecord, V extends SpecificRecord> DataCacheGroup<K, V>
-            getOrCreateCaches(Context context, AvroTopic<K, V> topic) throws IOException {
-
+    private synchronized SingleThreadExecutorFactory getCacheExecutorFactory() {
         if (cacheExecutorFactory == null) {
             cacheExecutorFactory = new SharedSingleThreadExecutorFactory(
                     new AndroidThreadFactory("DataCache", THREAD_PRIORITY_BACKGROUND));
         }
+        return cacheExecutorFactory;
+    }
 
-        String base = context.getCacheDir().getAbsolutePath() + "/" + topic.getName();
 
+    @SuppressWarnings("unchecked")
+    public synchronized <K extends SpecificRecord, V extends SpecificRecord> DataCacheGroup<K, V>
+            getOrCreateCaches(Context context, AvroTopic<K, V> topic) throws IOException {
+        SynchronizedReference<DataCacheGroup> ref = tables.get(topic.getName());
+        if (ref == null) {
+            final String base = context.getCacheDir().getAbsolutePath() + "/" + topic.getName();
+
+            ref = new SynchronizedReference<DataCacheGroup>() {
+                @Override
+                protected DataCacheGroup compute() throws IOException {
+                    return loadCache(base, topic);
+                }
+            };
+
+            tables.put(topic.getName(), ref);
+        }
+        return ref.get();
+    }
+
+    private <K, V> DataCacheGroup<K, V> loadCache(String base, AvroTopic<K, V> topic) throws IOException {
         List<String> fileBases = getFileBases(base);
 
         DataCache<K, V> activeDataCache = null;
@@ -120,7 +137,8 @@ public class CacheStore {
             File tapeFile = new File(fileBase + TAPE_EXTENSION);
 
             if (keySchema == null || valueSchema == null) {
-                if ((keySchema != null && !keySchema.equals(topic.getKeySchema())) || (valueSchema != null && !valueSchema.equals(topic.getValueSchema()))) {
+                if ((keySchema != null && !keySchema.equals(topic.getKeySchema()))
+                        || (valueSchema != null && !valueSchema.equals(topic.getValueSchema()))) {
                     logger.error("Cannot load partially specified schema");
                 } else if (activeDataCache != null) {
                     logger.error("Cannot have more than one active cache");
@@ -147,7 +165,7 @@ public class CacheStore {
                     }
 
                     activeDataCache = new TapeCache<>(
-                            context, topic, tapeFile, outputTopic, cacheExecutorFactory,
+                            tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
                 }
             } else {
@@ -161,11 +179,11 @@ public class CacheStore {
                     }
 
                     activeDataCache = new TapeCache<>(
-                            context, topic, tapeFile, outputTopic, cacheExecutorFactory,
+                            tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
                 } else {
-                    deprecatedDataCaches.add(new TapeCache<>(context, outputTopic, tapeFile,
-                            outputTopic, cacheExecutorFactory, specificData, genericData));
+                    deprecatedDataCaches.add(new TapeCache<>(tapeFile, outputTopic,
+                            outputTopic, getCacheExecutorFactory(), specificData, genericData));
                 }
             }
         }
@@ -200,7 +218,7 @@ public class CacheStore {
                     }
 
                     activeDataCache = new TapeCache<>(
-                            context, topic, tapeFile, outputTopic, cacheExecutorFactory,
+                            tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
                     break;
                 }

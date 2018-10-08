@@ -16,7 +16,6 @@
 
 package org.radarcns.android.data;
 
-import android.content.Context;
 import android.util.Pair;
 
 import org.apache.avro.generic.GenericData;
@@ -25,7 +24,9 @@ import org.apache.avro.specific.SpecificData;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
@@ -35,11 +36,9 @@ import org.radarcns.monitor.application.ApplicationUptime;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.ActiveAudioRecording;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.slf4j.impl.HandroidLoggerAdapter;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Random;
@@ -56,9 +55,11 @@ public class TapeCacheTest {
     private TapeCache<ObservationKey, ApplicationUptime> tapeCache;
     private ObservationKey key;
     private ApplicationUptime value;
-    private SpecificData specificData = CacheStore.getInstance().getSpecificData();
-    private GenericData genericData = CacheStore.getInstance().getGenericData();
-    private Context context;
+    private SpecificData specificData = CacheStore.get().getSpecificData();
+    private GenericData genericData = CacheStore.get().getGenericData();
+
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
 
     @BeforeClass
     public static void setUpClass() {
@@ -75,11 +76,9 @@ public class TapeCacheTest {
                 ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
                 Object.class, Object.class);
 
-        context = RuntimeEnvironment.application.getApplicationContext();
         executorFactory = new SharedSingleThreadExecutorFactory(
                 new AndroidThreadFactory("test", THREAD_PRIORITY_BACKGROUND));
-        tapeCache = new TapeCache<>(
-                context, topic, new File(context.getCacheDir(), "test.tape"),
+        tapeCache = new TapeCache<>(folder.newFile(), topic,
                 outputTopic, executorFactory, specificData, genericData);
         tapeCache.setMaximumSize(4096);
         tapeCache.setTimeWindow(100);
@@ -143,8 +142,7 @@ public class TapeCacheTest {
                 ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
                 Object.class, Object.class);
         TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
-                context, topic, new File(context.getCacheDir(), "test.tape"),
-                outputTopic, executorFactory, specificData, genericData);
+                folder.newFile(), topic, outputTopic, executorFactory, specificData, genericData);
 
         localTapeCache.setMaximumSize(45000000);
         localTapeCache.setTimeWindow(100);

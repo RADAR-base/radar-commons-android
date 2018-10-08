@@ -16,14 +16,11 @@
 
 package org.radarcns.android.data;
 
-import android.content.Context;
-import android.content.Intent;
 import android.util.Pair;
 
 import com.crashlytics.android.Crashlytics;
 
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.specific.SpecificData;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.data.AvroRecordData;
 import org.radarcns.data.Record;
@@ -43,10 +40,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_SENT_NUMBER;
-import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_UNSENT_NUMBER;
-import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
 
 /**
  * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
@@ -78,16 +71,14 @@ public class TapeCache<K, V> implements DataCache<K, V> {
 
     /**
      * TapeCache to cache measurements with
-     * @param context Android context to get the cache directory and broadcast the cache size.
      * @param topic Kafka Avro topic to write data for.
      * @param executorFactory factory to get a single-threaded {@link ScheduledExecutorService}
      *                        from.
      * @throws IOException if a BackedObjectQueue cannot be created.
      */
-    public TapeCache(final Context context, AvroTopic<K, V> topic, File file,
-                     AvroTopic<Object, Object> outputTopic,
-                     SingleThreadExecutorFactory executorFactory, SpecificData specificData,
-                     GenericData genericData)
+    public TapeCache(File file, AvroTopic<K, V> topic, AvroTopic<Object, Object> outputTopic,
+                     SingleThreadExecutorFactory executorFactory, GenericData inputFormat,
+                     GenericData outputFormat)
             throws IOException {
         this.topic = topic;
         this.outputTopic = outputTopic;
@@ -108,19 +99,10 @@ public class TapeCache<K, V> implements DataCache<K, V> {
 
         this.executor = executorFactory.getScheduledExecutorService();
 
-        // TODO: move to kafka data sender
-        this.executor.scheduleAtFixedRate(() -> {
-            Intent numberCached = new Intent(CACHE_TOPIC);
-            numberCached.putExtra(CACHE_TOPIC, getTopic().getName());
-            numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, 0L);
-            numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, queueSize.get());
-            context.sendBroadcast(numberCached);
-        }, 10L, 10L, TimeUnit.SECONDS);
-
         this.measurementsToAdd = new ArrayList<>();
 
-        this.serializer = new TapeAvroSerializer<>(topic, specificData);
-        this.deserializer = new TapeAvroDeserializer<>(outputTopic, genericData);
+        this.serializer = new TapeAvroSerializer<>(topic, inputFormat);
+        this.deserializer = new TapeAvroDeserializer<>(outputTopic, outputFormat);
         this.queue = new BackedObjectQueue<>(queueFile, serializer, deserializer);
     }
 

@@ -36,12 +36,9 @@ public class AndroidThreadFactory implements ThreadFactory {
 
     @Override
     public Thread newThread(@NonNull final Runnable r) {
-        return new Thread(new Runnable() {
-            @Override
-            public void run() {
-                android.os.Process.setThreadPriority(priority);
-                r.run();
-            }
+        return new Thread(() -> {
+            android.os.Process.setThreadPriority(priority);
+            r.run();
         }, name);
     }
 }

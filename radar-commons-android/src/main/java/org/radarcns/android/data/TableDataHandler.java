@@ -17,20 +17,20 @@
 package org.radarcns.android.data;
 
 import android.content.Context;
-import android.os.Process;
+import android.content.Intent;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.util.Pair;
 
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.AtomicFloat;
 import org.radarcns.android.util.BatteryLevelReceiver;
 import org.radarcns.android.util.NetworkConnectedReceiver;
-import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
-import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.RestClient;
@@ -54,6 +54,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_SENT_NUMBER;
+import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_UNSENT_NUMBER;
+import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
+
 /**
  * Stores data in databases and sends it to the server.
  */
@@ -68,13 +72,15 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
     private final Map<String, DataCacheGroup<ObservationKey, ? extends SpecificRecord>> tables = new ConcurrentHashMap<>();
-    private final Set<ServerStatusListener> statusListeners;
-    private final SingleThreadExecutorFactory executorFactory;
+    private ServerStatusListener statusListener;
+    private final Object STATUS_SYNC = new Object();
     private final BatteryLevelReceiver batteryLevelReceiver;
     private final NetworkConnectedReceiver networkConnectedReceiver;
     private final AtomicBoolean sendOnlyWithWifi;
     private final Context context;
     private final SpecificData specificData;
+    private Handler handler;
+    private final HandlerThread handlerThread;
     private int maxBytes;
     private AppAuthState authState;
     private ServerConfig kafkaConfig;
@@ -111,22 +117,41 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
         this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
-        this.executorFactory = new SharedSingleThreadExecutorFactory(
-                new AndroidThreadFactory("TableDataHandler", Process.THREAD_PRIORITY_BACKGROUND));
+        this.handlerThread = new HandlerThread("TableDataHandler");
+        this.handlerThread.start();
+        this.handler = new Handler(handlerThread.getLooper());
+        this.handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                for (ReadableDataCache cache : getCaches()) {
+                    Pair<Long, Long> records = cache.numberOfRecords();
+                    Intent numberCached = new Intent(CACHE_TOPIC);
+                    numberCached.putExtra(CACHE_TOPIC, cache.getReadTopic().getName());
+                    numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, records.first);
+                    numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, records.second);
+                    context.sendBroadcast(numberCached);
+                }
+                synchronized (TableDataHandler.this) {
+                    if (handler != null) {
+                        handler.postDelayed(this, 10_000);
+                    }
+                }
+            }
+        }, 10_000L);
 
         this.batteryLevelReceiver = new BatteryLevelReceiver(context, this);
         this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
         this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
         this.useCompression = false;
         this.authState = authState;
-        this.specificData = CacheStore.getInstance().getSpecificData();
+        this.specificData = CacheStore.get().getSpecificData();
 
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
         submitter = null;
         sender = null;
 
-        statusListeners = new HashSet<>();
+        statusListener = null;
 
         if (kafkaUrl != null) {
             doEnableSubmitter();
@@ -182,7 +207,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                 getPreferredUploadRate(), authState.getUserId());
     }
 
-    public synchronized boolean isStarted() {
+    private synchronized boolean isStarted() {
         return submitter != null;
     }
 
@@ -232,6 +257,9 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * @throws IOException if the tables cannot be flushed
      */
     public synchronized void close() throws IOException {
+        handler = null;
+        handlerThread.quitSafely();
+
         if (status != Status.DISABLED) {
             networkConnectedReceiver.unregister();
             batteryLevelReceiver.unregister();
@@ -245,7 +273,6 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         for (DataCacheGroup<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
         }
-        executorFactory.close();
     }
 
     @Override
@@ -263,7 +290,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Check the connection with the server.
      *
      * Updates will be given to any listeners registered to
-     * {@link #addStatusListener(ServerStatusListener)}.
+     * {@link #setStatusListener(ServerStatusListener)}.
      */
     public synchronized void checkConnection() {
         if (status == Status.DISABLED) {
@@ -332,31 +359,18 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         }
     }
 
-    private boolean isTopicActive(AvroTopic<?, ?> topic) {
-        return submitter != null
-                && (networkConnectedReceiver.hasWifiOrEthernet()
-                || !sendOverDataHighPriority.get()
-                || highPriorityTopics.contains(topic.getName()));
-    }
-
     /** Add a listener for ServerStatus updates. */
-    public void addStatusListener(ServerStatusListener listener) {
-        synchronized (statusListeners) {
-            statusListeners.add(listener);
-        }
-    }
-    /** Remove a listener for ServerStatus updates. */
-    public void removeStatusListener(ServerStatusListener listener) {
-        synchronized (statusListeners) {
-            statusListeners.remove(listener);
+    public void setStatusListener(ServerStatusListener listener) {
+        synchronized (STATUS_SYNC) {
+            statusListener = listener;
         }
     }
 
     @Override
     public void updateServerStatus(ServerStatusListener.Status status) {
-        synchronized (statusListeners) {
-            for (ServerStatusListener listener : statusListeners) {
-                listener.updateServerStatus(status);
+        synchronized (STATUS_SYNC) {
+            if (statusListener != null) {
+                statusListener.updateServerStatus(status);
             }
             this.status = status;
         }
@@ -364,16 +378,16 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     /** Get the latest server status. */
     public ServerStatusListener.Status getStatus() {
-        synchronized (statusListeners) {
+        synchronized (STATUS_SYNC) {
             return this.status;
         }
     }
 
     @Override
     public void updateRecordsSent(String topicName, int numberOfRecords) {
-        synchronized (statusListeners) {
-            for (ServerStatusListener listener : statusListeners) {
-                listener.updateRecordsSent(topicName, numberOfRecords);
+        synchronized (STATUS_SYNC) {
+            if (statusListener != null) {
+                statusListener.updateRecordsSent(topicName, numberOfRecords);
             }
             // Overwrite key-value if exists. Only stores the last
             this.lastNumberOfRecordsSent.put(topicName, numberOfRecords );
@@ -390,7 +404,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     public Map<String, Integer> getRecordsSent() {
-        synchronized (statusListeners) {
+        synchronized (STATUS_SYNC) {
             return this.lastNumberOfRecordsSent;
         }
     }
@@ -521,7 +535,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         if (tables.containsKey(topic.getName())) {
             return;
         }
-        DataCacheGroup<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
+        DataCacheGroup<ObservationKey, ? extends SpecificRecord> cache = CacheStore.get()
                 .getOrCreateCaches(context.getApplicationContext(), topic);
         cache.getActiveDataCache().setMaximumSize(maxBytes);
         tables.put(topic.getName(), cache);

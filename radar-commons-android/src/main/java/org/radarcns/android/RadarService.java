@@ -495,7 +495,7 @@ public class RadarService extends Service implements ServerStatusListener {
         }
 
         if (newlyCreated) {
-            localDataHandler.addStatusListener(this);
+            localDataHandler.setStatusListener(this);
             localDataHandler.start();
         } else if (kafkaConfig != null) {
             localDataHandler.enableSubmitter();
