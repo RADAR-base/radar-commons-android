@@ -56,7 +56,7 @@ ext.moduleName = 'radar-commons-android'
 ext.description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarcns:radar-commons:0.10.0') {
+    api ('org.radarcns:radar-commons:0.11.0-SNAPSHOT') {
         exclude group: 'org.json', module: 'json'
     }
     api 'org.radarcns:radar-schemas-commons:0.4.0'

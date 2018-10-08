@@ -18,26 +18,36 @@ package org.radarcns.android.data;
 
 import android.content.Context;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.topic.AvroTopic;
-import org.radarcns.util.CountedReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 
 public class CacheStore {
+    private static final Logger logger = LoggerFactory.getLogger(CacheStore.class);
+
+    static final String TAPE_EXTENSION = ".tape";
+    static final String KEY_SCHEMA_EXTENSION = ".key.avsc";
+    static final String VALUE_SCHEMA_EXTENSION = ".value.avsc";
     private static final Object SYNC_OBJECT = new Object();
     private static CacheStore store = null;
+    private final GenericData genericData;
 
     public static CacheStore getInstance() {
         synchronized (SYNC_OBJECT) {
@@ -48,14 +58,27 @@ public class CacheStore {
         }
     }
 
-    private final Map<String, CountedReference<DataCache>> caches;
     private final SpecificData specificData;
     private SingleThreadExecutorFactory cacheExecutorFactory;
 
     private CacheStore() {
-        caches = new HashMap<>();
         cacheExecutorFactory = null;
         specificData = new SpecificData(CacheStore.class.getClassLoader()) {
+            @Override
+            protected boolean isFloat(Object object) {
+                return object instanceof Float
+                        && !((Float) object).isNaN()
+                        && !((Float) object).isInfinite();
+            }
+            @Override
+            protected boolean isDouble(Object object) {
+                return object instanceof Double
+                        && !((Double) object).isNaN()
+                        && !((Double) object).isInfinite();
+            }
+        };
+
+        genericData = new GenericData(CacheStore.class.getClassLoader()) {
             @Override
             protected boolean isFloat(Object object) {
                 return object instanceof Float
@@ -72,7 +95,7 @@ public class CacheStore {
     }
 
     @SuppressWarnings("unchecked")
-    public synchronized <K extends SpecificRecord, V extends SpecificRecord> List<DataCache<K, V>>
+    public synchronized <K extends SpecificRecord, V extends SpecificRecord> DataCacheGroup<K, V>
             getOrCreateCaches(Context context, AvroTopic<K, V> topic) throws IOException {
 
         if (cacheExecutorFactory == null) {
@@ -80,51 +103,138 @@ public class CacheStore {
                     new AndroidThreadFactory("DataCache", THREAD_PRIORITY_BACKGROUND));
         }
 
-        List<String> fileBases = getFileBases(context.getCacheDir(), topic.getName());
+        String base = context.getCacheDir().getAbsolutePath() + "/" + topic.getName();
 
-        outputFile = new File(context.getCacheDir(), topic.getName() + ".tape");
+        List<String> fileBases = getFileBases(base);
 
-        CountedReference<DataCache> ref = caches.get(topic.getName());
-        if (ref == null) {
-            ref = new CountedReference<>(
-                    new TapeCache<>(context, topic, cacheExecutorFactory, specificData));
-            caches.put(topic.getName(), ref);
-        }
-        return ref.acquire();
-    }
+        DataCache<K, V> activeDataCache = null;
+        List<ReadableDataCache> deprecatedDataCaches = new ArrayList<>();
 
-    private List<String> getFileBases(File cacheDir, String topicName) {
-        String base = cacheDir.getAbsolutePath() + "/" + topicName;
-        List<String> files = new ArrayList<>(2);
-        if (new File(base + ".tape").isFile()) {
-            files.add(base);
-        }
-        return files;
-    }
+        for (String fileBase : fileBases) {
+            Schema.Parser parser = new Schema.Parser();
+            File keySchemaFile = new File(fileBase + KEY_SCHEMA_EXTENSION);
+            Schema keySchema = keySchemaFile.isFile() ? parser.parse(keySchemaFile) : null;
+            File valueSchemaFile = new File(fileBase + VALUE_SCHEMA_EXTENSION);
+            Schema valueSchema = valueSchemaFile.isFile() ? parser.parse(valueSchemaFile) : null;
 
-    public synchronized <K extends SpecificRecord, V extends SpecificRecord> void releaseCache(DataCache<K, V> cache) throws IOException {
-        CountedReference<DataCache> ref = caches.get(cache.getTopic().getName());
-        if (ref == null) {
-            throw new IllegalStateException("DataCache " + cache.getTopic() + " is not held");
-        }
-        DataCache storedCache = ref.release();
-        if (ref.isNotHeld()) {
-            storedCache.close();
-            caches.remove(cache.getTopic().getName());
-            if (caches.size() == 0) {
-                cacheExecutorFactory.close();
-                cacheExecutorFactory = null;
+            File tapeFile = new File(fileBase + TAPE_EXTENSION);
+
+            if (keySchema == null || valueSchema == null) {
+                if ((keySchema != null && !keySchema.equals(topic.getKeySchema())) || (valueSchema != null && !valueSchema.equals(topic.getValueSchema()))) {
+                    logger.error("Cannot load partially specified schema");
+                } else if (activeDataCache != null) {
+                    logger.error("Cannot have more than one active cache");
+                } else {
+                    AvroTopic<Object, Object> outputTopic = new AvroTopic<>(topic.getName(),
+                            topic.getKeySchema(), topic.getValueSchema(),
+                            Object.class, Object.class);
+
+                    if (keySchema == null) {
+                        try (FileOutputStream out = new FileOutputStream(keySchemaFile);
+                             OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
+                            writer.write(topic.getKeySchema().toString(false));
+                        } catch (IOException ex) {
+                            logger.error("Cannot write key schema", ex);
+                        }
+                    }
+                    if (valueSchema == null) {
+                        try (FileOutputStream out = new FileOutputStream(valueSchemaFile);
+                             OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
+                            writer.write(topic.getValueSchema().toString(false));
+                        } catch (IOException ex) {
+                            logger.error("Cannot write value schema", ex);
+                        }
+                    }
+
+                    activeDataCache = new TapeCache<>(
+                            context, topic, tapeFile, outputTopic, cacheExecutorFactory,
+                            specificData, genericData);
+                }
+            } else {
+                AvroTopic<Object, Object> outputTopic = new AvroTopic<>(topic.getName(),
+                        keySchema, valueSchema,
+                        Object.class, Object.class);
+
+                if (keySchema.equals(topic.getKeySchema()) && valueSchema.equals(topic.getValueSchema())) {
+                    if (activeDataCache != null) {
+                        logger.error("Cannot have more than one active cache");
+                    }
+
+                    activeDataCache = new TapeCache<>(
+                            context, topic, tapeFile, outputTopic, cacheExecutorFactory,
+                            specificData, genericData);
+                } else {
+                    deprecatedDataCaches.add(new TapeCache<>(context, outputTopic, tapeFile,
+                            outputTopic, cacheExecutorFactory, specificData, genericData));
+                }
             }
         }
+
+        if (activeDataCache == null) {
+            File baseDir = new File(base);
+            if (!baseDir.exists() && !baseDir.mkdirs()) {
+                throw new IOException("Cannot make data cache directory");
+            }
+            for (int i = 0; i < 100; i++) {
+                String fileBase = base + "/cache-" + i;
+                if (!fileBases.contains(fileBase)) {
+                    File tapeFile = new File(fileBase + TAPE_EXTENSION);
+                    File keySchemaFile = new File(fileBase + KEY_SCHEMA_EXTENSION);
+                    File valueSchemaFile = new File(fileBase + KEY_SCHEMA_EXTENSION);
+
+                    AvroTopic<Object, Object> outputTopic = new AvroTopic<>(topic.getName(),
+                            topic.getKeySchema(), topic.getValueSchema(),
+                            Object.class, Object.class);
+
+                    try (FileOutputStream out = new FileOutputStream(keySchemaFile);
+                         OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
+                        writer.write(topic.getKeySchema().toString(false));
+                    } catch (IOException ex) {
+                        logger.error("Cannot write key schema", ex);
+                    }
+                    try (FileOutputStream out = new FileOutputStream(valueSchemaFile);
+                         OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
+                        writer.write(topic.getValueSchema().toString(false));
+                    } catch (IOException ex) {
+                        logger.error("Cannot write value schema", ex);
+                    }
+
+                    activeDataCache = new TapeCache<>(
+                            context, topic, tapeFile, outputTopic, cacheExecutorFactory,
+                            specificData, genericData);
+                    break;
+                }
+            }
+
+            if (activeDataCache == null) {
+                throw new IOException("No empty slot to store active data cache in.");
+            }
+        }
+
+        return new DataCacheGroup<>(activeDataCache, deprecatedDataCaches);
+    }
+
+    private List<String> getFileBases(String base) {
+        List<String> files = new ArrayList<>(2);
+        if (new File(base + TAPE_EXTENSION).isFile()) {
+            files.add(base);
+        }
+        File baseDir = new File(base);
+        if (baseDir.isDirectory()) {
+            File[] tapeFiles = baseDir.listFiles((dir, name) -> name.toLowerCase().endsWith(TAPE_EXTENSION));
+            for (File tapeFile : tapeFiles) {
+                String name = tapeFile.getName();
+                files.add(base + "/" + name.substring(0, name.length() - TAPE_EXTENSION.length()));
+            }
+        }
+        return files;
     }
 
     public SpecificData getSpecificData() {
         return specificData;
     }
 
-    public static class DataCacheGroup {
-        private void
+    public GenericData getGenericData() {
+        return genericData;
     }
-
-    public static class DataCache
 }
