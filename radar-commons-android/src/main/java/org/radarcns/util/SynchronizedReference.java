@@ -3,11 +3,13 @@ package org.radarcns.util;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 
-public abstract class SynchronizedReference<T> {
+public class SynchronizedReference<T> {
+    private final ThrowingSupplier<T> supplier;
     private WeakReference<T> ref;
 
-    public SynchronizedReference() {
+    public SynchronizedReference(ThrowingSupplier<T> supplier) {
         ref = null;
+        this.supplier = supplier;
     }
 
     public synchronized T get() throws IOException {
@@ -16,11 +18,9 @@ public abstract class SynchronizedReference<T> {
             localValue = ref.get();
         }
         if (localValue == null) {
-            localValue = compute();
+            localValue = supplier.get();
             ref = new WeakReference<>(localValue);
         }
         return localValue;
     }
-
-    protected abstract T compute() throws IOException;
 }

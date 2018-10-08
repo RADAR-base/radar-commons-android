@@ -109,12 +109,7 @@ public class CacheStore {
         if (ref == null) {
             final String base = context.getCacheDir().getAbsolutePath() + "/" + topic.getName();
 
-            ref = new SynchronizedReference<DataCacheGroup>() {
-                @Override
-                protected DataCacheGroup compute() throws IOException {
-                    return loadCache(base, topic);
-                }
-            };
+            ref = new SynchronizedReference<>(() -> loadCache(base, topic));
 
             tables.put(topic.getName(), ref);
         }
