@@ -251,14 +251,32 @@ public class KafkaDataSubmitter implements Closeable {
                 if (!toSend.contains(entry.getTopicName())) {
                     continue;
                 }
-                @SuppressWarnings("unchecked") // we can upload any record
-                        // TODO: send inactive data caches as well
+                boolean hasFullCache = false;
                 int sent = uploadCache(entry.getActiveDataCache(), currentSendLimit, uploadingNotified);
-                if (sent < currentSendLimit) {
-                    toSend.remove(entry.getTopicName());
+                if (sent == currentSendLimit) {
+                    hasFullCache = true;
                 }
                 if (!uploadingNotified && sent > 0) {
                     uploadingNotified = true;
+                }
+
+                boolean hasEmptyDeprecatedCache = false;
+                for (ReadableDataCache cache : entry.getDeprecatedCaches()) {
+                    sent = uploadCache(cache, currentSendLimit, uploadingNotified);
+                    if (sent == currentSendLimit) {
+                        hasFullCache = true;
+                    } else {
+                        hasEmptyDeprecatedCache = true;
+                    }
+                    if (!uploadingNotified && sent > 0) {
+                        uploadingNotified = true;
+                    }
+                }
+                if (hasEmptyDeprecatedCache) {
+                    entry.deleteEmptyCaches();
+                }
+                if (!hasFullCache) {
+                    toSend.remove(entry.getTopicName());
                 }
             }
             if (uploadingNotified) {
@@ -284,11 +302,15 @@ public class KafkaDataSubmitter implements Closeable {
         int size = data.size();
 
         AvroTopic<Object, Object> topic = cache.getReadTopic();
-        Schema.Field userIdField = null;
+        String keyUserId = null;
+
         if (topic.getKeySchema().getType() == Schema.Type.RECORD) {
-            userIdField = topic.getKeySchema().getField("userId");
+            Schema.Field userIdField = topic.getKeySchema().getField("userId");
+            if (userIdField != null) {
+                keyUserId = ((IndexedRecord)data.getKey()).get(userIdField.pos()).toString();
+            }
         }
-        if (userIdField == null || ((IndexedRecord)data.getKey()).get(userIdField.pos()).toString().equals(userId)) {
+        if (keyUserId == null || keyUserId.equals(userId)) {
             KafkaTopicSender<Object, Object> cacheSender = sender(topic);
 
             if (!uploadingNotified) {
