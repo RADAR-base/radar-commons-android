@@ -79,6 +79,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private AppAuthState authState;
     private ServerConfig kafkaConfig;
     private SchemaRetriever schemaRetriever;
+    private boolean hasBinaryContent;
     private final AtomicBoolean sendOverDataHighPriority;
     private final Set<String> highPriorityTopics;
     private int kafkaRecordsSendLimit;
@@ -97,12 +98,13 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            int maxBytes, boolean sendOnlyWithWifi,
+                            int maxBytes, boolean sendOnlyWithWifi, boolean hasBinaryContent,
                             boolean sendOverDataHighPriority, Set<String> highPriorityTopics,
                             AppAuthState authState) {
         this.context =  context;
         this.kafkaConfig = kafkaUrl;
         this.schemaRetriever = schemaRetriever;
+        this.hasBinaryContent = hasBinaryContent;
         this.sendOverDataHighPriority = new AtomicBoolean(sendOverDataHighPriority);
         this.highPriorityTopics = new HashSet<>(highPriorityTopics);
         this.kafkaUploadRate = UPLOAD_RATE_DEFAULT;
@@ -174,7 +176,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                 .httpClient(client)
                 .schemaRetriever(schemaRetriever)
                 .headers(authState.getOkHttpHeaders())
-                .hasBinaryContent(true)
+                .hasBinaryContent(hasBinaryContent)
                 .build();
         this.submitter = new KafkaDataSubmitter<>(this, sender, kafkaRecordsSendLimit,
                 getPreferredUploadRate(), authState.getUserId());
@@ -432,6 +434,20 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         }
         if (authStateWasNull) {
             start();
+        }
+    }
+
+    public synchronized void setHasBinaryContent(boolean hasBinaryContent) {
+        if (this.hasBinaryContent == hasBinaryContent) {
+            return;
+        }
+        this.hasBinaryContent = hasBinaryContent;
+        if (sender != null) {
+            if (hasBinaryContent) {
+                sender.useLegacyEncoding(RestSender.KAFKA_REST_ACCEPT_ENCODING, RestSender.KAFKA_REST_BINARY_ENCODING, true);
+            } else {
+                sender.useLegacyEncoding(RestSender.KAFKA_REST_ACCEPT_ENCODING, RestSender.KAFKA_REST_AVRO_ENCODING, false);
+            }
         }
     }
 

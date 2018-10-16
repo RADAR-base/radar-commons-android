@@ -72,6 +72,7 @@ public class RadarConfiguration {
     public static final String KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level";
     public static final String MAX_CACHE_SIZE = "cache_max_size_bytes";
     public static final String SEND_ONLY_WITH_WIFI = "send_only_with_wifi";
+    public static final String SEND_BINARY_CONTENT = "send_binary_content";
     public static final String SEND_WITH_COMPRESSION = "send_with_compression";
     public static final String UNSAFE_KAFKA_CONNECTION = "unsafe_kafka_connection";
     public static final String OAUTH2_AUTHORIZE_URL = "oauth2_authorize_url";
@@ -82,6 +83,7 @@ public class RadarConfiguration {
 
     public static final boolean SEND_ONLY_WITH_WIFI_DEFAULT = true;
     public static final boolean SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true;
+    public static final boolean SEND_BINARY_CONTENT_DEFAULT = true;
 
     private static final Pattern IS_TRUE = Pattern.compile(
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);

@@ -82,6 +82,7 @@ import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static android.app.Notification.DEFAULT_VIBRATE;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
+import static org.radarcns.android.RadarConfiguration.SEND_BINARY_CONTENT;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
@@ -91,6 +92,7 @@ import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
 import static org.radarcns.android.RadarConfiguration.RADAR_CONFIGURATION_CHANGED;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
+import static org.radarcns.android.RadarConfiguration.SEND_BINARY_CONTENT_DEFAULT;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI_DEFAULT;
 import static org.radarcns.android.RadarConfiguration.SEND_OVER_DATA_HIGH_PRIORITY;
@@ -422,6 +424,7 @@ public class RadarService extends Service implements ServerStatusListener {
         }
 
         boolean sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, SEND_ONLY_WITH_WIFI_DEFAULT);
+        boolean sendBinaryContent = configuration.getBoolean(SEND_BINARY_CONTENT, SEND_BINARY_CONTENT_DEFAULT);
         boolean sendOverDataPriority = configuration.getBoolean(SEND_OVER_DATA_HIGH_PRIORITY, SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT);
 
         String priorityTopics = configuration.getString(TOPICS_HIGH_PRIORITY, "");
@@ -440,7 +443,8 @@ public class RadarService extends Service implements ServerStatusListener {
             if (dataHandler == null) {
                 dataHandler = new TableDataHandler(
                         this, kafkaConfig, remoteSchemaRetriever, maxBytes,
-                        sendOnlyWithWifi, sendOverDataPriority, priorityTopicList, authState);
+                        sendBinaryContent, sendOnlyWithWifi, sendOverDataPriority,
+                        priorityTopicList, authState);
                 newlyCreated = true;
             } else {
                 newlyCreated = false;
@@ -455,6 +459,7 @@ public class RadarService extends Service implements ServerStatusListener {
                 localDataHandler.setKafkaConfig(kafkaConfig);
                 localDataHandler.setSchemaRetriever(remoteSchemaRetriever);
             }
+            localDataHandler.setHasBinaryContent(sendBinaryContent);
             localDataHandler.setMaximumCacheSize(maxBytes);
             localDataHandler.setAuthState(authState);
             localDataHandler.setSendOnlyWithWifi(sendOnlyWithWifi);
