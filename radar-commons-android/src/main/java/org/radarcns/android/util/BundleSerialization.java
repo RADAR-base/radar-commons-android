@@ -21,6 +21,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Parcel;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +53,7 @@ public final class BundleSerialization {
         return sb.toString();
     }
 
+    @Nullable
     public static Bundle getPersistentExtras(Intent intent, Context context) {
         SharedPreferences prefs = context.getSharedPreferences(context.getClass().getName(), Context.MODE_PRIVATE);
         Bundle bundle;
@@ -60,7 +63,9 @@ public final class BundleSerialization {
             bundle = intent.getExtras();
             saveToPreferences(prefs, bundle);
         }
-        bundle.setClassLoader(BundleSerialization.class.getClassLoader());
+        if (bundle != null) {
+            bundle.setClassLoader(BundleSerialization.class.getClassLoader());
+        }
         return bundle;
     }
 
@@ -86,7 +91,8 @@ public final class BundleSerialization {
         }
     }
 
-    public static Bundle restoreFromPreferences(SharedPreferences prefs) {
+    @Nullable
+    public static Bundle restoreFromPreferences(@NonNull SharedPreferences prefs) {
         Bundle bundle = null;
         String serialized = prefs.getString("parcel", null);
 

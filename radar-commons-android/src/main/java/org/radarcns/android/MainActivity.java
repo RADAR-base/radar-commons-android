@@ -39,7 +39,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -169,8 +168,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
     }
 
-    protected abstract Class<? extends LoginActivity> loginActivity();
-
     @Override
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -217,8 +214,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
         Bundle extras = new Bundle();
         authState.addToBundle(extras);
-        extras.putString(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName());
-        extras.putString(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName());
         startService(new Intent(this, radarService()).putExtras(extras));
 
         // Start the UI thread
@@ -402,7 +397,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             requestPackageUsageStats();
         } else if (!needsPermissions.isEmpty()) {
             ActivityCompat.requestPermissions(this,
-                    needsPermissions.toArray(new String[needsPermissions.size()]),
+                    needsPermissions.toArray(new String[0]),
                     REQUEST_ENABLE_PERMISSIONS);
         } else {
             LocalBroadcastManager.getInstance(this)
@@ -464,7 +459,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
 
     protected void startLogin(boolean forResult) {
-        Intent intent = new Intent(this, loginActivity());
+        Class<?> loginActivity = ((RadarApplication) getApplication()).getLoginActivity();
+        Intent intent = new Intent(this, loginActivity);
         RadarConfiguration config = RadarConfiguration.getInstance();
 
         Bundle extras = new Bundle();

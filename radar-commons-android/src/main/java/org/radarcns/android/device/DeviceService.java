@@ -27,7 +27,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Parcel;
-import android.os.RemoteException;
 import android.os.ResultReceiver;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
@@ -169,7 +168,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private void doBind(Intent intent, boolean firstBind) {
         logger.info("Received (re)bind in {}", this);
         Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
-        onInvocation(extras);
+        onInvocation(extras != null ? extras : new Bundle());
 
         RadarApplication application = (RadarApplication)getApplicationContext();
         application.onDeviceServiceInvocation(this, extras, firstBind);
@@ -388,7 +387,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+        public boolean onTransact(int code, Parcel data, Parcel reply, int flags) {
             throw new UnsupportedOperationException();
         }
     }
@@ -514,12 +513,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
         if (updatedSource == null) {
             // try again in a minute
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    stopDeviceManager(unsetDeviceManager());
-                }
-            }, ThreadLocalRandom.current().nextLong(1_000L, 120_000L));
+            long delay = ThreadLocalRandom.current().nextLong(1_000L, 120_000L);
+            handler.postDelayed(() -> stopDeviceManager(unsetDeviceManager()), delay);
             return;
         }
         AppAuthState auth = AppAuthState.Builder.from(result).build();
