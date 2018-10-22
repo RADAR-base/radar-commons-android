@@ -39,7 +39,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -119,7 +118,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     };
     private BroadcastReceiver bluetoothNeededReceiver;
 
-    private volatile boolean bluetoothReceiverIsEnabled = false;
+    private volatile boolean bluetoothReceiverIsEnabled;
 
     /**
      * Sends an intent to request bluetooth to be turned on.
@@ -154,22 +153,25 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private void testBindBluetooth() {
         boolean needsBluetooth = radarService != null && radarService.needsBluetooth();
 
-        if (needsBluetooth && !bluetoothReceiverIsEnabled) {
+        if (needsBluetooth == bluetoothReceiverIsEnabled) {
+            return;
+        }
+
+        if (needsBluetooth) {
             registerReceiver(bluetoothReceiver,
                     new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
             bluetoothReceiverIsEnabled = true;
             requestEnableBt();
-        } else if (bluetoothReceiverIsEnabled && !needsBluetooth) {
+        } else {
             bluetoothReceiverIsEnabled = false;
             unregisterReceiver(bluetoothReceiver);
         }
     }
 
-    protected abstract Class<? extends LoginActivity> loginActivity();
-
     @Override
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        bluetoothReceiverIsEnabled = false;
 
         if (getIntent() == null || getIntent().getExtras() == null) {
             authState = AppAuthState.Builder.from(this).build();
@@ -212,8 +214,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
         Bundle extras = new Bundle();
         authState.addToBundle(extras);
-        extras.putString(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName());
-        extras.putString(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName());
         startService(new Intent(this, radarService()).putExtras(extras));
 
         // Start the UI thread
@@ -334,6 +334,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             bluetoothNeededReceiver = null;
         }
         if (bluetoothReceiverIsEnabled) {
+            bluetoothReceiverIsEnabled = false;
             unregisterReceiver(bluetoothReceiver);
         }
     }
@@ -396,7 +397,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             requestPackageUsageStats();
         } else if (!needsPermissions.isEmpty()) {
             ActivityCompat.requestPermissions(this,
-                    needsPermissions.toArray(new String[needsPermissions.size()]),
+                    needsPermissions.toArray(new String[0]),
                     REQUEST_ENABLE_PERMISSIONS);
         } else {
             LocalBroadcastManager.getInstance(this)
@@ -458,7 +459,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
 
     protected void startLogin(boolean forResult) {
-        Intent intent = new Intent(this, loginActivity());
+        Class<?> loginActivity = ((RadarApplication) getApplication()).getLoginActivity();
+        Intent intent = new Intent(this, loginActivity);
         RadarConfiguration config = RadarConfiguration.getInstance();
 
         Bundle extras = new Bundle();

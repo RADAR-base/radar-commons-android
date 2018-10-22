@@ -16,15 +16,21 @@
 
 package org.radarcns.android;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.support.annotation.CallSuper;
+import android.support.annotation.NonNull;
+
+import com.crashlytics.android.Crashlytics;
 
 import org.radarcns.android.device.DeviceService;
 import org.radarcns.android.util.NotificationHandler;
 import org.slf4j.impl.HandroidLoggerAdapter;
+
+import io.fabric.sdk.android.Fabric;
 
 /** Provides the name and some metadata of the main activity */
 public abstract class RadarApplication extends Application {
@@ -59,8 +65,11 @@ public abstract class RadarApplication extends Application {
     }
 
     protected void setupLogging() {
+        // initialize crashlytics
+        Fabric.with(this, new Crashlytics());
         HandroidLoggerAdapter.DEBUG = BuildConfig.DEBUG;
         HandroidLoggerAdapter.APP_NAME = getPackageName();
+        HandroidLoggerAdapter.enableLoggingToCrashlytics();
     }
 
     /**
@@ -70,4 +79,10 @@ public abstract class RadarApplication extends Application {
      * @return configured RadarConfiguration
      */
     protected abstract RadarConfiguration createConfiguration();
+
+    @NonNull
+    public abstract Class<? extends Activity> getMainActivity();
+
+    @NonNull
+    public abstract Class<? extends Activity> getLoginActivity();
 }
