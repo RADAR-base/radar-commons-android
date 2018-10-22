@@ -152,8 +152,6 @@ public class RadarService extends Service implements ServerStatusListener {
     private IBinder binder;
 
     private TableDataHandler dataHandler;
-    private String mainActivityClass;
-    private String loginActivityClass;
     private Handler mHandler;
     private boolean needsBluetooth;
 
@@ -569,8 +567,7 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     protected void requestPermissions(String[] permissions) {
-        startActivity(new Intent()
-                .setComponent(new ComponentName(this, mainActivityClass))
+        startActivity(new Intent(this, ((RadarApplication)getApplication()).getMainActivity())
                 .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .setAction(ACTION_CHECK_PERMISSIONS)
