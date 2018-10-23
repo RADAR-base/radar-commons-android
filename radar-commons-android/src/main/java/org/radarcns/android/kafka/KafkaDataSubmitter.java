@@ -36,8 +36,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -118,7 +118,7 @@ public class KafkaDataSubmitter implements Closeable {
         }
         // Get upload frequency from system property
         uploadFuture = new Runnable() {
-            Set<String> topicsToSend = Collections.emptySet();
+            Set<String> topicsToSend = new HashSet<>();
 
             @Override
             public void run() {
