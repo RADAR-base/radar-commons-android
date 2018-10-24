@@ -25,7 +25,7 @@ import org.radarcns.data.TimedInt;
 import java.util.List;
 import java.util.Set;
 
-public interface IRadarService {
+public interface IRadarBinder {
     ServerStatusListener.Status getServerStatus();
 
     TimedInt getLatestNumberOfRecordsSent();

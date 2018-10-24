@@ -795,7 +795,7 @@ public class RadarService extends Service implements ServerStatusListener {
         }
     }
 
-    protected class RadarBinder extends Binder implements IRadarService {
+    protected class RadarBinder extends Binder implements IRadarBinder {
         @Override
         public ServerStatusListener.Status getServerStatus() {
              return serverStatus;

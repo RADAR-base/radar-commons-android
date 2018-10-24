@@ -18,6 +18,7 @@ package org.radarcns.android;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.Service;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Bundle;
@@ -85,4 +86,9 @@ public abstract class RadarApplication extends Application {
 
     @NonNull
     public abstract Class<? extends Activity> getLoginActivity();
+
+    @NonNull
+    public Class<? extends Service> getRadarService() {
+        return RadarService.class;
+    }
 }
