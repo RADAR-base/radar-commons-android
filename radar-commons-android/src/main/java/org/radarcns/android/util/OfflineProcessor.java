@@ -122,7 +122,7 @@ public class OfflineProcessor implements Closeable {
 
     /** Start up a new thread to process. */
     public synchronized void trigger() {
-        if (doStop) {
+        if (doStop || processorThread != null) {
             return;
         }
         final PowerManager.WakeLock wakeLock;
@@ -140,6 +140,9 @@ public class OfflineProcessor implements Closeable {
                 } finally {
                     if (wakeLock != null) {
                         wakeLock.release();
+                    }
+                    synchronized (OfflineProcessor.this) {
+                        processorThread = null;
                     }
                 }
             }
@@ -220,6 +223,7 @@ public class OfflineProcessor implements Closeable {
         synchronized (this) {
             doStop = true;
             localThread = processorThread;
+            processorThread = null;
         }
         if (localThread != null) {
             try {
