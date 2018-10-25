@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
@@ -343,7 +344,17 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     /**
      * Android permissions that the underlying service needs to function correctly.
      */
+    @NonNull
     public abstract List<String> needsPermissions();
+
+    /**
+     * Android features (Under PackageManager.FEATURE_) that the provider requires. If the feature
+     * is not available, the provider will not be enabled.
+     */
+    @NonNull
+    public List<String> needsFeatures() {
+        return Collections.emptyList();
+    }
 
     /**
      * Match device type.

@@ -283,7 +283,7 @@ public class RadarService extends Service implements ServerStatusListener {
     private ServerStatusListener.Status serverStatus;
     private AppAuthState authState;
 
-    private final LinkedHashSet<String> needsPermissions = new LinkedHashSet<>();
+    private final Set<String> needsPermissions = new LinkedHashSet<>();
 
 
     @Override
@@ -526,9 +526,13 @@ public class RadarService extends Service implements ServerStatusListener {
             return;
         }
 
+        PackageManager packageManager = getPackageManager();
         boolean didAddProvider = false;
         for (DeviceServiceProvider provider : connections) {
             if (!mConnections.contains(provider)) {
+                if (!hasFeatures(provider, packageManager)) {
+                    continue;
+                }
                 @SuppressWarnings("unchecked")
                 List<AppSource> sources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
                 if (sources != null) {
@@ -556,6 +560,17 @@ public class RadarService extends Service implements ServerStatusListener {
         }
     }
 
+    private boolean hasFeatures(DeviceServiceProvider<?> provider, PackageManager packageManager) {
+        if (packageManager != null) {
+            for (String feature : provider.needsFeatures()) {
+                if (!packageManager.hasSystemFeature(feature)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private void addProvider(DeviceServiceProvider provider) {
         mConnections.add(provider);
         DeviceServiceConnection connection = provider.getConnection();
@@ -567,6 +582,7 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     protected void requestPermissions(String[] permissions) {
+        logger.info("Requesting permissions for {}");
         startActivity(new Intent(this, ((RadarApplication)getApplication()).getMainActivity())
                 .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
