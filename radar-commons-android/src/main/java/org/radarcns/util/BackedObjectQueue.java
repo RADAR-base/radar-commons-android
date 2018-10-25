@@ -33,22 +33,27 @@ import java.util.NoSuchElementException;
 
 /**
  * A queue-like object queue that is backed by a file storage.
- * @param <T> type of objects to store.
+ * @param <S> type of objects to store.
+ * @param <T> type of objects to retrieve.
  */
-public class BackedObjectQueue<T> implements Closeable {
+public class BackedObjectQueue<S, T> implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(BackedObjectQueue.class);
 
-    private final Converter<T> converter;
+    private final Serializer<S> serializer;
+    private final Deserializer<T> deserializer;
     private final QueueFile queueFile;
 
     /**
      * Creates a new object queue from given file.
      * @param queueFile file to write objects to
-     * @param converter way to parse from and to given objects
+     * @param serializer way to serialize from given objects
+     * @param deserializer way to deserialize to objects from a stream
      */
-    public BackedObjectQueue(QueueFile queueFile, Converter<T> converter) {
+    public BackedObjectQueue(QueueFile queueFile, Serializer<S> serializer,
+                             Deserializer<T> deserializer) {
         this.queueFile = queueFile;
-        this.converter = converter;
+        this.serializer = serializer;
+        this.deserializer = deserializer;
     }
 
     /** Number of elements in the queue. */
@@ -63,9 +68,9 @@ public class BackedObjectQueue<T> implements Closeable {
      *                     cannot be converted.
      * @throws IllegalArgumentException if given entry is not a valid object for serialization.
      */
-    public void add(T entry) throws IOException {
+    public void add(S entry) throws IOException {
         try (QueueFileOutputStream out = queueFile.elementOutputStream()) {
-            converter.serialize(entry, out);
+            serializer.serialize(entry, out);
         }
     }
 
@@ -76,10 +81,10 @@ public class BackedObjectQueue<T> implements Closeable {
      *                     cannot be converted.
      * @throws IllegalArgumentException if given entry is not a valid object for serialization.
      */
-    public void addAll(Collection<? extends T> entries) throws IOException {
+    public void addAll(Collection<? extends S> entries) throws IOException {
         try (QueueFileOutputStream out = queueFile.elementOutputStream()) {
-            for (T entry : entries) {
-                converter.serialize(entry, out);
+            for (S entry : entries) {
+                serializer.serialize(entry, out);
                 out.next();
             }
         }
@@ -93,7 +98,7 @@ public class BackedObjectQueue<T> implements Closeable {
      */
     public T peek() throws IOException {
         try (InputStream in = queueFile.peek()) {
-            return converter.deserialize(in);
+            return deserializer.deserialize(in);
         }
     }
 
@@ -111,7 +116,7 @@ public class BackedObjectQueue<T> implements Closeable {
         for (int i = 0; i < n && iter.hasNext(); i++) {
             try (InputStream in = iter.next()) {
                 try {
-                    results.add(converter.deserialize(in));
+                    results.add(deserializer.deserialize(in));
                 } catch (IllegalStateException ex) {
                     Crashlytics.logException(ex);
                     logger.warn("Invalid record ignored: {}", ex.getMessage());
@@ -155,8 +160,18 @@ public class BackedObjectQueue<T> implements Closeable {
         queueFile.close();
     }
 
+    /** Converts objects into streams. */
+    public interface Serializer<S> {
+        /**
+         * Serialize an object to given output stream.
+         * @param out output, which will not be closed after this call.
+         * @throws IOException if a valid object could not be serialized to the stream
+         */
+        void serialize(S value, OutputStream out) throws IOException;
+    }
+
     /** Converts streams into objects. */
-    public interface Converter<T> {
+    public interface Deserializer<T> {
         /**
          * Deserialize an object from given input stream.
          * @param in input, which will not be closed after this call.
@@ -164,11 +179,5 @@ public class BackedObjectQueue<T> implements Closeable {
          * @throws IOException if a valid object could not be deserialized from the stream
          */
         T deserialize(InputStream in) throws IOException;
-        /**
-         * Serialize an object to given output stream.
-         * @param out output, which will not be closed after this call.
-         * @throws IOException if a valid object could not be serialized to the stream
-         */
-        void serialize(T value, OutputStream out) throws IOException;
     }
 }

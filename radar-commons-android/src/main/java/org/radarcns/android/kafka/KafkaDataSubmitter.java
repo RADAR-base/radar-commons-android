@@ -20,12 +20,13 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 
+import org.apache.avro.Schema;
 import org.apache.avro.SchemaValidationException;
-import org.radarcns.android.data.DataCache;
+import org.apache.avro.generic.IndexedRecord;
+import org.radarcns.android.data.DataCacheGroup;
 import org.radarcns.android.data.DataHandler;
-import org.radarcns.android.data.TopicKey;
+import org.radarcns.android.data.ReadableDataCache;
 import org.radarcns.data.RecordData;
-import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.KafkaSender;
 import org.radarcns.producer.KafkaTopicSender;
@@ -35,17 +36,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
@@ -56,14 +50,12 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
  *
  * It uses a set of timers to addMeasurement data and clean the databases.
  */
-public class KafkaDataSubmitter<V> implements Closeable {
+public class KafkaDataSubmitter implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(KafkaDataSubmitter.class);
 
-    private final DataHandler<ObservationKey, V> dataHandler;
+    private final DataHandler<?, ?> dataHandler;
     private final KafkaSender sender;
-    private final ConcurrentMap<TopicKey<V>, Queue<V>> trySendCache;
-    private final Map<TopicKey<V>, Runnable> trySendFuture;
-    private final Map<AvroTopic<ObservationKey, V>, KafkaTopicSender<ObservationKey, V>> topicSenders;
+    private final Map<String, KafkaTopicSender<Object, Object>> topicSenders;
     private final KafkaConnectionChecker connection;
     private final AtomicInteger sendLimit;
     private final HandlerThread mHandlerThread;
@@ -75,13 +67,11 @@ public class KafkaDataSubmitter<V> implements Closeable {
     private long uploadRate;
     private String userId;
 
-    public KafkaDataSubmitter(@NonNull DataHandler<ObservationKey, V> dataHandler, @NonNull
+    public KafkaDataSubmitter(@NonNull DataHandler<?, ?> dataHandler, @NonNull
             KafkaSender sender, int sendLimit, long uploadRate, String userId) {
         this.dataHandler = dataHandler;
         this.sender = sender;
         this.userId = userId;
-        trySendCache = new ConcurrentHashMap<>();
-        trySendFuture = new HashMap<>();
         topicSenders = new HashMap<>();
         this.sendLimit = new AtomicInteger(sendLimit);
 
@@ -128,13 +118,15 @@ public class KafkaDataSubmitter<V> implements Closeable {
         }
         // Get upload frequency from system property
         uploadFuture = new Runnable() {
-            Set<AvroTopic<ObservationKey, ? extends V>> topicsToSend = Collections.emptySet();
+            Set<String> topicsToSend = new HashSet<>();
 
             @Override
             public void run() {
                 if (connection.isConnected()) {
                     if (topicsToSend.isEmpty()) {
-                        topicsToSend = new HashSet<>(KafkaDataSubmitter.this.dataHandler.getActiveCaches().keySet());
+                        for (DataCacheGroup<?, ?> group : dataHandler.getActiveCaches()) {
+                            topicsToSend.add(group.getTopicName());
+                        }
                     }
                     uploadCaches(topicsToSend);
                     // still more data to send, do that immediately
@@ -166,11 +158,6 @@ public class KafkaDataSubmitter<V> implements Closeable {
         mHandler.postDelayed(uploadIfNeededFuture, uploadRate / 5);
     }
 
-    /** Upload rate in seconds. */
-    private synchronized long getUploadRate() {
-        return this.uploadRate / 1000L;
-    }
-
     public void setSendLimit(int limit) {
         sendLimit.set(limit);
     }
@@ -184,19 +171,11 @@ public class KafkaDataSubmitter<V> implements Closeable {
             mHandler.removeCallbacks(uploadFuture);
             mHandler.removeCallbacks(uploadIfNeededFuture);
 
-            synchronized (trySendFuture) {
-                for (Runnable future : trySendFuture.values()) {
-                    mHandler.removeCallbacks(future);
-                }
-                trySendFuture.clear();
-                trySendCache.clear();
-            }
-
-            for (Map.Entry<AvroTopic<ObservationKey, V>, KafkaTopicSender<ObservationKey, V>> topicSender : topicSenders.entrySet()) {
+            for (Map.Entry<String, KafkaTopicSender<Object, Object>> topicSender : topicSenders.entrySet()) {
                 try {
                     topicSender.getValue().close();
                 } catch (IOException e) {
-                    logger.warn("failed to close topicSender for topic {}", topicSender.getKey().getName(), e);
+                    logger.warn("failed to close topicSender for topic {}", topicSender.getKey(), e);
                 }
             }
             topicSenders.clear();
@@ -211,11 +190,11 @@ public class KafkaDataSubmitter<V> implements Closeable {
     }
 
     /** Get a sender for a topic. Per topic, only ONE thread may use this. */
-    private KafkaTopicSender<ObservationKey, V> sender(AvroTopic<ObservationKey, V> topic) throws IOException, SchemaValidationException {
-        KafkaTopicSender<ObservationKey, V> topicSender = topicSenders.get(topic);
+    private KafkaTopicSender<Object, Object> sender(AvroTopic<Object, Object> topic) throws IOException, SchemaValidationException {
+        KafkaTopicSender<Object, Object> topicSender = topicSenders.get(topic.getName());
         if (topicSender == null) {
             topicSender = sender.sender(topic);
-            topicSenders.put(topic, topicSender);
+            topicSenders.put(topic.getName(), topicSender);
         }
         return topicSender;
     }
@@ -236,13 +215,11 @@ public class KafkaDataSubmitter<V> implements Closeable {
         boolean sendAgain = false;
 
         try {
-            for (Map.Entry<AvroTopic<ObservationKey, ? extends V>, ? extends DataCache<ObservationKey, ? extends V>> entry
-                    : dataHandler.getActiveCaches().entrySet()) {
-                long unsent = entry.getValue().numberOfRecords().first;
+            for (DataCacheGroup<?, ?> entry : dataHandler.getActiveCaches()) {
+                long unsent = entry.getActiveDataCache().numberOfRecords().first;
                 if (unsent > currentSendLimit) {
                     //noinspection unchecked
-                    int sent = uploadCache(
-                            (AvroTopic<ObservationKey, V>) entry.getKey(), (DataCache<ObservationKey, V>) entry.getValue(),
+                    int sent = uploadCache(entry.getActiveDataCache(),
                             currentSendLimit, uploadingNotified);
                     if (!uploadingNotified) {
                         uploadingNotified = true;
@@ -266,21 +243,40 @@ public class KafkaDataSubmitter<V> implements Closeable {
     /**
      * Upload a limited amount of data stored in the database which is not yet sent.
      */
-    private void uploadCaches(Set<AvroTopic<ObservationKey, ? extends V>> toSend) {
+    private void uploadCaches(Set<String> toSend) {
         boolean uploadingNotified = false;
         int currentSendLimit = sendLimit.get();
         try {
-            for (Map.Entry<AvroTopic<ObservationKey, ? extends V>, ? extends DataCache<ObservationKey, ? extends V>> entry : dataHandler.getActiveCaches().entrySet()) {
-                if (!toSend.contains(entry.getKey())) {
+            for (DataCacheGroup<?, ?> entry : dataHandler.getActiveCaches()) {
+                if (!toSend.contains(entry.getTopicName())) {
                     continue;
                 }
-                @SuppressWarnings("unchecked") // we can upload any record
-                int sent = uploadCache((AvroTopic<ObservationKey, V>)entry.getKey(), (DataCache<ObservationKey, V>)entry.getValue(), currentSendLimit, uploadingNotified);
-                if (sent < currentSendLimit) {
-                    toSend.remove(entry.getKey());
+                boolean hasFullCache = false;
+                int sent = uploadCache(entry.getActiveDataCache(), currentSendLimit, uploadingNotified);
+                if (sent == currentSendLimit) {
+                    hasFullCache = true;
                 }
                 if (!uploadingNotified && sent > 0) {
                     uploadingNotified = true;
+                }
+
+                boolean hasEmptyDeprecatedCache = false;
+                for (ReadableDataCache cache : entry.getDeprecatedCaches()) {
+                    sent = uploadCache(cache, currentSendLimit, uploadingNotified);
+                    if (sent == currentSendLimit) {
+                        hasFullCache = true;
+                    } else {
+                        hasEmptyDeprecatedCache = true;
+                    }
+                    if (!uploadingNotified && sent > 0) {
+                        uploadingNotified = true;
+                    }
+                }
+                if (hasEmptyDeprecatedCache) {
+                    entry.deleteEmptyCaches();
+                }
+                if (!hasFullCache) {
+                    toSend.remove(entry.getTopicName());
                 }
             }
             if (uploadingNotified) {
@@ -296,17 +292,26 @@ public class KafkaDataSubmitter<V> implements Closeable {
      * Upload some data from a single table.
      * @return number of records sent.
      */
-    private int uploadCache(AvroTopic<ObservationKey, V> topic, DataCache<ObservationKey, V> cache, int limit,
+    private int uploadCache(ReadableDataCache cache, int limit,
                             boolean uploadingNotified) throws IOException, SchemaValidationException {
-        RecordData<ObservationKey, V> data = cache.unsentRecords(limit);
+        RecordData<Object, Object> data = cache.unsentRecords(limit);
         if (data == null) {
             return 0;
         }
 
         int size = data.size();
 
-        if (data.getKey().getUserId().equals(userId)) {
-            KafkaTopicSender<ObservationKey, V> cacheSender = sender(topic);
+        AvroTopic<Object, Object> topic = cache.getReadTopic();
+        String keyUserId = null;
+
+        if (topic.getKeySchema().getType() == Schema.Type.RECORD) {
+            Schema.Field userIdField = topic.getKeySchema().getField("userId");
+            if (userIdField != null) {
+                keyUserId = ((IndexedRecord)data.getKey()).get(userIdField.pos()).toString();
+            }
+        }
+        if (keyUserId == null || keyUserId.equals(userId)) {
+            KafkaTopicSender<Object, Object> cacheSender = sender(topic);
 
             if (!uploadingNotified) {
                 dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING);
@@ -332,69 +337,6 @@ public class KafkaDataSubmitter<V> implements Closeable {
         cache.remove(size);
 
         return size;
-    }
-
-    /**
-     * Try to addMeasurement a message, without putting it in any permanent storage. Any failure may cause
-     * messages to be lost. If the sender is disconnected, messages are immediately discarded.
-     * @return whether the message was queued for sending.
-     */
-    public <W extends V> boolean trySend(final AvroTopic<ObservationKey, W> topic,
-                                         final ObservationKey deviceId, final W record) {
-        if (!connection.isConnected()) {
-            return false;
-        }
-        @SuppressWarnings("unchecked")
-        final AvroTopic<ObservationKey, V> castTopic = (AvroTopic<ObservationKey, V>)topic;
-        TopicKey<V> topicKey = new TopicKey<>(castTopic, deviceId);
-        Queue<V> records = trySendCache.get(topicKey);
-        if (records == null) {
-            records = new ConcurrentLinkedQueue<>();
-            //noinspection unchecked
-            trySendCache.put(topicKey, records);
-        }
-        records.add(record);
-
-        long period = getUploadRate();
-
-        synchronized (trySendFuture) {
-            if (!trySendFuture.containsKey(topicKey)) {
-                Runnable future = () -> {
-                    if (!connection.isConnected()) {
-                        return;
-                    }
-
-                    List<V> localRecords;
-
-                    synchronized (trySendFuture) {
-                        Queue<V> queue = trySendCache.get(topicKey);
-                        trySendFuture.remove(topicKey);
-                        localRecords = new ArrayList<>(queue);
-                    }
-
-                    try {
-                        doImmediateSend(topicKey, localRecords);
-                        connection.didConnect();
-                    } catch (IOException e) {
-                        dataHandler.updateRecordsSent(topic.getName(), -1);
-                        connection.didDisconnect(e);
-                    } catch (SchemaValidationException e) {
-                        dataHandler.updateRecordsSent(topic.getName(), -1);
-                        connection.didDisconnect(new IOException(e));
-                    }
-                };
-                mHandler.postDelayed(future, period * 1000L);
-                trySendFuture.put(topicKey, future);
-            }
-        }
-        return true;
-    }
-
-    /** Immediately send given records, without any error recovery. */
-    private void doImmediateSend(TopicKey<V> topicKey,
-                                 List<V> records) throws IOException, SchemaValidationException {
-        sender(topicKey.topic).send(topicKey.getRecordData(records));
-        dataHandler.updateRecordsSent(topicKey.topic.getName(), records.size());
     }
 
     public void setUserId(String userId) {

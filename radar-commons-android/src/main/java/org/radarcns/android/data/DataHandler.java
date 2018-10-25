@@ -19,7 +19,7 @@ package org.radarcns.android.data;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.topic.AvroTopic;
 
-import java.util.Map;
+import java.util.List;
 
 public interface DataHandler<K, V> extends ServerStatusListener {
     /**
@@ -28,10 +28,10 @@ public interface DataHandler<K, V> extends ServerStatusListener {
     void clean();
 
     /** Get all caches. */
-    Map<AvroTopic<K, ? extends V>, ? extends DataCache<K, ? extends V>> getCaches();
+    List<ReadableDataCache> getCaches();
 
     /** Get caches currently active for sending. */
-    Map<AvroTopic<K, ? extends V>, ? extends DataCache<K, ? extends V>> getActiveCaches();
+    List<DataCacheGroup<?, ?>> getActiveCaches();
 
     /**
      * Add a measurement using given cache.

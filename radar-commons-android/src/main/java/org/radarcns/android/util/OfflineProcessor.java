@@ -45,7 +45,7 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
  * processing. If wake is set to true, {@link android.Manifest.permission#WAKE_LOCK} should be
  * acquired in the Manifest.
  */
-@SuppressWarnings({"unused"})
+@SuppressWarnings({"unused", "WeakerAccess"})
 public class OfflineProcessor implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(OfflineProcessor.class);
 
@@ -106,7 +106,7 @@ public class OfflineProcessor implements Closeable {
         this.receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                processBroadcast();
+                trigger();
             }
         };
         this.intervalMillis = intervalUnit.toMillis(interval);
@@ -121,8 +121,8 @@ public class OfflineProcessor implements Closeable {
     }
 
     /** Start up a new thread to process. */
-    private synchronized void processBroadcast() {
-        if (doStop) {
+    public synchronized void trigger() {
+        if (doStop || processorThread != null) {
             return;
         }
         final PowerManager.WakeLock wakeLock;
@@ -140,6 +140,9 @@ public class OfflineProcessor implements Closeable {
                 } finally {
                     if (wakeLock != null) {
                         wakeLock.release();
+                    }
+                    synchronized (OfflineProcessor.this) {
+                        processorThread = null;
                     }
                 }
             }
@@ -189,7 +192,7 @@ public class OfflineProcessor implements Closeable {
         boolean runImmediately = Debug.isDebuggerConnected();
         long firstAlarm;
         if (runImmediately) {
-            processBroadcast();
+            trigger();
             firstAlarm = SystemClock.elapsedRealtime() + intervalMillis;
         } else {
             firstAlarm = SystemClock.elapsedRealtime();
@@ -220,6 +223,7 @@ public class OfflineProcessor implements Closeable {
         synchronized (this) {
             doStop = true;
             localThread = processorThread;
+            processorThread = null;
         }
         if (localThread != null) {
             try {

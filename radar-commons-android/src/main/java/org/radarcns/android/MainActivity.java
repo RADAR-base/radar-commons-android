@@ -39,7 +39,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,7 +90,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private Set<String> needsPermissions = Collections.emptySet();
     private boolean requestedBt;
 
-    private IRadarService radarService;
+    private IRadarBinder radarService;
 
     /** Defines callbacks for service binding, passed to bindService() */
     private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
@@ -140,7 +139,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private final ServiceConnection radarServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
-            radarService = (IRadarService) service;
+            radarService = (IRadarBinder) service;
             mView = createView();
             testBindBluetooth();
         }
@@ -168,8 +167,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             unregisterReceiver(bluetoothReceiver);
         }
     }
-
-    protected abstract Class<? extends LoginActivity> loginActivity();
 
     @Override
     protected final void onCreate(Bundle savedInstanceState) {
@@ -217,9 +214,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
         Bundle extras = new Bundle();
         authState.addToBundle(extras);
-        extras.putString(RadarService.EXTRA_MAIN_ACTIVITY, getClass().getName());
-        extras.putString(RadarService.EXTRA_LOGIN_ACTIVITY, loginActivity().getName());
-        startService(new Intent(this, radarService()).putExtras(extras));
+        startService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()).putExtras(extras));
 
         // Start the UI thread
         uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
@@ -250,10 +245,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         if (networkReceiver != null) {
             networkReceiver.unregister();
         }
-    }
-
-    protected Class<? extends RadarService> radarService() {
-        return RadarService.class;
     }
 
     /**
@@ -296,7 +287,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         synchronized (this) {
             mHandler = localHandler;
         }
-        bindService(new Intent(this, radarService()), radarServiceConnection, 0);
+        bindService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()), radarServiceConnection, 0);
         testBindBluetooth();
         bluetoothNeededReceiver = bluetoothNeededReceiverImpl;
         LocalBroadcastManager.getInstance(this)
@@ -402,7 +393,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             requestPackageUsageStats();
         } else if (!needsPermissions.isEmpty()) {
             ActivityCompat.requestPermissions(this,
-                    needsPermissions.toArray(new String[needsPermissions.size()]),
+                    needsPermissions.toArray(new String[0]),
                     REQUEST_ENABLE_PERMISSIONS);
         } else {
             LocalBroadcastManager.getInstance(this)
@@ -464,7 +455,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
 
     protected void startLogin(boolean forResult) {
-        Intent intent = new Intent(this, loginActivity());
+        Class<?> loginActivity = ((RadarApplication) getApplication()).getLoginActivity();
+        Intent intent = new Intent(this, loginActivity);
         RadarConfiguration config = RadarConfiguration.getInstance();
 
         Bundle extras = new Bundle();
@@ -480,7 +472,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
     }
 
-    public IRadarService getRadarService() {
+    public IRadarBinder getRadarService() {
         return radarService;
     }
 

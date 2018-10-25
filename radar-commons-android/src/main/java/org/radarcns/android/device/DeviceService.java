@@ -27,7 +27,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Parcel;
-import android.os.RemoteException;
 import android.os.ResultReceiver;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
@@ -35,13 +34,12 @@ import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
 
-import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.portal.ManagementPortalService;
-import org.radarcns.android.data.DataCache;
+import org.radarcns.android.data.ReadableDataCache;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.BundleSerialization;
@@ -169,7 +167,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private void doBind(Intent intent, boolean firstBind) {
         logger.info("Received (re)bind in {}", this);
         Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
-        onInvocation(extras);
+        onInvocation(extras != null ? extras : new Bundle());
 
         RadarApplication application = (RadarApplication)getApplicationContext();
         application.onDeviceServiceInvocation(this, extras, firstBind);
@@ -294,13 +292,13 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         @SuppressWarnings("unchecked")
         @Nullable
         @Override
-        public <V extends SpecificRecord> RecordData<ObservationKey, V> getRecords(
+        public RecordData<Object, Object> getRecords(
                 @NonNull String topic, int limit) throws IOException {
             TableDataHandler localDataHandler = getDataHandler();
             if (localDataHandler == null) {
                 return null;
             }
-            return localDataHandler.<V>getCache(topic).getRecords(limit);
+            return localDataHandler.getCache(topic).getRecords(limit);
         }
 
         @Override
@@ -356,7 +354,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             long sent = -1L;
             TableDataHandler localDataHandler = getDataHandler();
             if (localDataHandler != null) {
-                for (DataCache<?, ?> cache : localDataHandler.getCaches().values()) {
+                for (ReadableDataCache cache : localDataHandler.getCaches()) {
                     Pair<Long, Long> pair = cache.numberOfRecords();
                     if (pair.first != -1L) {
                         if (unsent == -1L) {
@@ -388,7 +386,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+        public boolean onTransact(int code, Parcel data, Parcel reply, int flags) {
             throw new UnsupportedOperationException();
         }
     }
@@ -514,12 +512,8 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
         if (updatedSource == null) {
             // try again in a minute
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    stopDeviceManager(unsetDeviceManager());
-                }
-            }, ThreadLocalRandom.current().nextLong(1_000L, 120_000L));
+            long delay = ThreadLocalRandom.current().nextLong(1_000L, 120_000L);
+            handler.postDelayed(() -> stopDeviceManager(unsetDeviceManager()), delay);
             return;
         }
         AppAuthState auth = AppAuthState.Builder.from(result).build();

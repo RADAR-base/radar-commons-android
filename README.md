@@ -35,7 +35,7 @@ repositories {
     jcenter()
 }
 dependencies {
-    api 'org.radarcns:radar-commons-android:0.7.0'
+    api 'org.radarcns:radar-commons-android:0.8.0'
 }
 ```
 
@@ -52,10 +52,10 @@ First, create an Android Library project. Include RADAR Commons Android as a mod
     Once the schemas are published as part of the central schemas repository, you can remove the generated files again. Do not publish a non-alpha version of your plugin without the central schemas being published, otherwise there may be class conflicts later on.
 2. Create a new package `org.radarcns.mydevicetype`. In that package, create classes that:
     - implement `org.radarcns.android.device.DeviceManager` to connect to a device and collect its data, register all Kafka topics in its constructor.
-    - implement `org.radarcns.android.DeviceState` to keep the current state of the device or simply use `org.radarcns.android.BaseDeviceState`.
+    - implement a `org.radarcns.android.DeviceState` to keep the current state of the device or simply use `org.radarcns.android.BaseDeviceState`.
     - subclass `org.radarcns.android.device.DeviceService` to run the device manager in.
     - subclass a `org.radarcns.android.device.DeviceServiceProvider` that exposes the new service.
-3. Add a new service element to `AndroidManifest.xml`, referencing the newly created device service. Also add all the required permissions there.
+3. Add a new service element to `AndroidManifest.xml`, referencing the newly created device service. Also add all the required permissions there. Set all features as optional.
 4. Add the `DeviceServiceProvider` you just created to the `device_services_to_connect` property in `app/src/main/res/xml/remote_config_defaults.xml`.
 
 Make a pull request once the code is working.

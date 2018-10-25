@@ -17,12 +17,12 @@
 package org.radarcns.android.kafka;
 
 import android.os.Handler;
+
 import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.KafkaSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * heartbeatInterval signal when the connection is assumed to be
  * present, and a exponential back-off mechanism if the connection is severed. If the connection is
  * assessed to be present through another mechanism, {@link #didConnect()} should be called,
- * conversely, if it is assessed to be severed, {@link #didDisconnect(IOException)} should be
+ * conversely, if it is assessed to be severed, {@link #didDisconnect(Exception)} should be
  * called.
  */
 class KafkaConnectionChecker implements Runnable {

@@ -98,7 +98,6 @@ public class RadarConfiguration {
         UNAVAILABLE, ERROR, READY, FETCHING, FETCHED
     }
 
-    private static final Object syncObject = new Object();
     private static RadarConfiguration instance = null;
     private final FirebaseRemoteConfig config;
     private FirebaseStatus status;
@@ -175,31 +174,28 @@ public class RadarConfiguration {
         this.status = status;
     }
 
-    public static RadarConfiguration getInstance() {
-        synchronized (syncObject) {
-            if (instance == null) {
-                throw new IllegalStateException("RadarConfiguration instance is not yet "
-                        + "initialized");
-            }
-            return instance;
+    public synchronized static RadarConfiguration getInstance() {
+
+        if (instance == null) {
+            throw new IllegalStateException("RadarConfiguration instance is not yet "
+                    + "initialized");
         }
+        return instance;
     }
 
-    public static RadarConfiguration configure(@NonNull final Context context, boolean inDevelopmentMode, int defaultSettings) {
-        synchronized (syncObject) {
-            if (instance == null) {
-                FirebaseRemoteConfigSettings configSettings = new FirebaseRemoteConfigSettings.Builder()
-                        .setDeveloperModeEnabled(inDevelopmentMode)
-                        .build();
-                final FirebaseRemoteConfig config = FirebaseRemoteConfig.getInstance();
-                config.setConfigSettings(configSettings);
-                config.setDefaults(defaultSettings);
+    public synchronized static RadarConfiguration configure(@NonNull final Context context, boolean inDevelopmentMode, int defaultSettings) {
+        if (instance == null) {
+            FirebaseRemoteConfigSettings configSettings = new FirebaseRemoteConfigSettings.Builder()
+                    .setDeveloperModeEnabled(inDevelopmentMode)
+                    .build();
+            final FirebaseRemoteConfig config = FirebaseRemoteConfig.getInstance();
+            config.setConfigSettings(configSettings);
+            config.setDefaults(defaultSettings);
 
-                instance = new RadarConfiguration(context, config);
-                instance.fetch();
-            }
-            return instance;
+            instance = new RadarConfiguration(context, config);
+            instance.fetch();
         }
+        return instance;
     }
 
     /**

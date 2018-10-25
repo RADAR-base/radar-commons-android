@@ -16,54 +16,13 @@
 
 package org.radarcns.android.data;
 
-import android.support.annotation.Nullable;
-import android.util.Pair;
-
-import org.radarcns.data.RecordData;
 import org.radarcns.topic.AvroTopic;
 
-import java.io.Closeable;
 import java.io.Flushable;
-import java.io.IOException;
 
-public interface DataCache<K, V> extends Flushable, Closeable {
-    /**
-     * Get all unsent records in the cache.
-     *
-     * @return records or null if none are found.
-     */
-    @Nullable
-    RecordData<K, V> unsentRecords(int limit) throws IOException;
-
-    /**
-     * Get latest records in the cache, from new to old.
-     *
-     * @return records or null if none are found.
-     */
-    @Nullable
-    RecordData<K, V> getRecords(int limit) throws IOException;
-
-    /**
-     * Get a pair with the number of [unsent records], [sent records]
-     */
-    Pair<Long, Long> numberOfRecords();
-
-    /**
-     * Remove oldest records.
-     * @param number number of records (inclusive) to remove.
-     * @return number of rows removed
-     */
-    int remove(int number) throws IOException;
-
+public interface DataCache<K, V> extends Flushable, ReadableDataCache {
     /** Add a new measurement to the cache. */
     void addMeasurement(K key, V value);
-
-    /**
-     * Remove all sent records before a given time.
-     * @param millis time in milliseconds before which to remove.
-     * @return number of rows removed
-     */
-    int removeBeforeTimestamp(long millis);
 
     /** Get the topic the cache stores. */
     AvroTopic<K, V> getTopic();

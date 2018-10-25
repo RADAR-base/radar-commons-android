@@ -17,20 +17,20 @@
 package org.radarcns.android.data;
 
 import android.content.Context;
-import android.os.Process;
+import android.content.Intent;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.util.Pair;
 
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.kafka.KafkaDataSubmitter;
 import org.radarcns.android.kafka.ServerStatusListener;
-import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.AtomicFloat;
 import org.radarcns.android.util.BatteryLevelReceiver;
 import org.radarcns.android.util.NetworkConnectedReceiver;
-import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
-import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.RestClient;
@@ -41,9 +41,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -52,6 +53,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_SENT_NUMBER;
+import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_UNSENT_NUMBER;
+import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
 
 /**
  * Stores data in databases and sends it to the server.
@@ -66,15 +71,16 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private static final float MINIMUM_BATTERY_LEVEL = 0.1f;
     private static final float REDUCED_BATTERY_LEVEL = 0.2f;
 
-    private final Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> tables = new ConcurrentHashMap<>();
-    private final Map<String, DataCache<ObservationKey, ? extends SpecificRecord>> tablesByName = new ConcurrentHashMap<>();
-    private final Set<ServerStatusListener> statusListeners;
-    private final SingleThreadExecutorFactory executorFactory;
+    private final Map<String, DataCacheGroup<ObservationKey, ? extends SpecificRecord>> tables = new ConcurrentHashMap<>();
+    private ServerStatusListener statusListener;
+    private final Object STATUS_SYNC = new Object();
     private final BatteryLevelReceiver batteryLevelReceiver;
     private final NetworkConnectedReceiver networkConnectedReceiver;
     private final AtomicBoolean sendOnlyWithWifi;
     private final Context context;
     private final SpecificData specificData;
+    private Handler handler;
+    private final HandlerThread handlerThread;
     private int maxBytes;
     private AppAuthState authState;
     private ServerConfig kafkaConfig;
@@ -89,7 +95,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     private ServerStatusListener.Status status;
     private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
-    private KafkaDataSubmitter<SpecificRecord> submitter;
+    private KafkaDataSubmitter submitter;
     private RestSender sender;
     private final AtomicFloat minimumBatteryLevel;
     private boolean useCompression;
@@ -111,22 +117,41 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
         this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
-        this.executorFactory = new SharedSingleThreadExecutorFactory(
-                new AndroidThreadFactory("TableDataHandler", Process.THREAD_PRIORITY_BACKGROUND));
+        this.handlerThread = new HandlerThread("TableDataHandler");
+        this.handlerThread.start();
+        this.handler = new Handler(handlerThread.getLooper());
+        this.handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                for (ReadableDataCache cache : getCaches()) {
+                    Pair<Long, Long> records = cache.numberOfRecords();
+                    Intent numberCached = new Intent(CACHE_TOPIC);
+                    numberCached.putExtra(CACHE_TOPIC, cache.getReadTopic().getName());
+                    numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, records.first);
+                    numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, records.second);
+                    context.sendBroadcast(numberCached);
+                }
+                synchronized (TableDataHandler.this) {
+                    if (handler != null) {
+                        handler.postDelayed(this, 10_000);
+                    }
+                }
+            }
+        }, 10_000L);
 
         this.batteryLevelReceiver = new BatteryLevelReceiver(context, this);
         this.networkConnectedReceiver = new NetworkConnectedReceiver(context, this);
         this.sendOnlyWithWifi = new AtomicBoolean(sendOnlyWithWifi);
         this.useCompression = false;
         this.authState = authState;
-        this.specificData = CacheStore.getInstance().getSpecificData();
+        this.specificData = CacheStore.get().getSpecificData();
 
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
         submitter = null;
         sender = null;
 
-        statusListeners = new HashSet<>();
+        statusListener = null;
 
         if (kafkaUrl != null) {
             doEnableSubmitter();
@@ -178,11 +203,11 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                 .headers(authState.getOkHttpHeaders())
                 .hasBinaryContent(hasBinaryContent)
                 .build();
-        this.submitter = new KafkaDataSubmitter<>(this, sender, kafkaRecordsSendLimit,
+        this.submitter = new KafkaDataSubmitter(this, sender, kafkaRecordsSendLimit,
                 getPreferredUploadRate(), authState.getUserId());
     }
 
-    public synchronized boolean isStarted() {
+    private synchronized boolean isStarted() {
         return submitter != null;
     }
 
@@ -232,6 +257,9 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * @throws IOException if the tables cannot be flushed
      */
     public synchronized void close() throws IOException {
+        handler = null;
+        handlerThread.quitSafely();
+
         if (status != Status.DISABLED) {
             networkConnectedReceiver.unregister();
             batteryLevelReceiver.unregister();
@@ -242,29 +270,19 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             this.sender = null;
         }
         clean();
-        for (DataCache<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
+        for (DataCacheGroup<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
         }
-        executorFactory.close();
     }
 
     @Override
     public void clean() {
         long timestamp = (System.currentTimeMillis() - dataRetention.get());
-        for (DataCache<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
-            table.removeBeforeTimestamp(timestamp);
-        }
-    }
-
-    /**
-     * Try to submit given data. This will only send data if the submitter is active and there is
-     * a connection with the server. Otherwise, the data is discarded.
-     */
-    @SuppressWarnings("UnusedReturnValue")
-    public <V extends SpecificRecord> boolean trySend(AvroTopic<ObservationKey, V> topic, ObservationKey key, V value) {
-        checkRecord(topic, key, value);
-        synchronized (this) {
-            return isTopicActive(topic) && submitter.trySend(topic, key, value);
+        for (DataCacheGroup<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
+            table.getActiveDataCache().removeBeforeTimestamp(timestamp);
+            for (ReadableDataCache oldTable : table.getDeprecatedCaches()) {
+                oldTable.removeBeforeTimestamp(timestamp);
+            }
         }
     }
 
@@ -272,7 +290,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Check the connection with the server.
      *
      * Updates will be given to any listeners registered to
-     * {@link #addStatusListener(ServerStatusListener)}.
+     * {@link #setStatusListener(ServerStatusListener)}.
      */
     public synchronized void checkConnection() {
         if (status == Status.DISABLED) {
@@ -290,19 +308,14 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Get the table of a given topic
      */
     @SuppressWarnings("unchecked")
-    public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(AvroTopic<ObservationKey, V> topic) {
-        return (DataCache<ObservationKey, V>)this.tables.get(topic);
-    }
-
-    @SuppressWarnings("unchecked")
     public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(String topic) {
-        return (DataCache<ObservationKey, V>) tablesByName.get(topic);
+        return (DataCache<ObservationKey, V>) tables.get(topic).getActiveDataCache();
     }
 
     @Override
     public <W extends SpecificRecord> void addMeasurement(AvroTopic<ObservationKey, W> topic, ObservationKey key, W value) {
         checkRecord(topic, key, value);
-        getCache(topic).addMeasurement(key, value);
+        getCache(topic.getName()).addMeasurement(key, value);
     }
 
     private void checkRecord(AvroTopic topic, ObservationKey key, SpecificRecord value) {
@@ -316,56 +329,48 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     @Override
     public void setMaximumCacheSize(int numBytes) {
         maxBytes = numBytes;
-        for (DataCache cache : tables.values()) {
-            cache.setMaximumSize(numBytes);
+        for (DataCacheGroup<?, ?> cache : tables.values()) {
+            cache.getActiveDataCache().setMaximumSize(numBytes);
         }
     }
 
-    public Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> getCaches() {
-        return tables;
+    public List<ReadableDataCache> getCaches() {
+        List<ReadableDataCache> caches = new ArrayList<>(tables.size());
+        for (DataCacheGroup<?, ?> table : tables.values()) {
+            caches.add(table.getActiveDataCache());
+            caches.addAll(table.getDeprecatedCaches());
+        }
+        return caches;
     }
 
-    public Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> getActiveCaches() {
+    public List<DataCacheGroup<?, ?>> getActiveCaches() {
         if (submitter == null) {
-            return Collections.emptyMap();
+            return Collections.emptyList();
         } else if (networkConnectedReceiver.hasWifiOrEthernet() || !sendOverDataHighPriority.get()) {
-            return tables;
+            return new ArrayList<>(tables.values());
         } else {
-            Map<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> filteredMap = new HashMap<>();
-            for (Map.Entry<AvroTopic<ObservationKey, ? extends SpecificRecord>, DataCache<ObservationKey, ? extends SpecificRecord>> entry : tables.entrySet()) {
-                if (highPriorityTopics.contains(entry.getKey().getName())) {
-                    filteredMap.put(entry.getKey(), entry.getValue());
+            List<DataCacheGroup<?, ?>> filteredCaches = new ArrayList<>(tables.size());
+            for (DataCacheGroup<?, ?> table : tables.values()) {
+                if (highPriorityTopics.contains(table.getTopicName())) {
+                    filteredCaches.add(table);
                 }
             }
-            return filteredMap;
+            return filteredCaches;
         }
-    }
-
-    private boolean isTopicActive(AvroTopic<?, ?> topic) {
-        return submitter != null
-                && (networkConnectedReceiver.hasWifiOrEthernet()
-                || !sendOverDataHighPriority.get()
-                || highPriorityTopics.contains(topic.getName()));
     }
 
     /** Add a listener for ServerStatus updates. */
-    public void addStatusListener(ServerStatusListener listener) {
-        synchronized (statusListeners) {
-            statusListeners.add(listener);
-        }
-    }
-    /** Remove a listener for ServerStatus updates. */
-    public void removeStatusListener(ServerStatusListener listener) {
-        synchronized (statusListeners) {
-            statusListeners.remove(listener);
+    public void setStatusListener(ServerStatusListener listener) {
+        synchronized (STATUS_SYNC) {
+            statusListener = listener;
         }
     }
 
     @Override
     public void updateServerStatus(ServerStatusListener.Status status) {
-        synchronized (statusListeners) {
-            for (ServerStatusListener listener : statusListeners) {
-                listener.updateServerStatus(status);
+        synchronized (STATUS_SYNC) {
+            if (statusListener != null) {
+                statusListener.updateServerStatus(status);
             }
             this.status = status;
         }
@@ -373,16 +378,16 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
 
     /** Get the latest server status. */
     public ServerStatusListener.Status getStatus() {
-        synchronized (statusListeners) {
+        synchronized (STATUS_SYNC) {
             return this.status;
         }
     }
 
     @Override
     public void updateRecordsSent(String topicName, int numberOfRecords) {
-        synchronized (statusListeners) {
-            for (ServerStatusListener listener : statusListeners) {
-                listener.updateRecordsSent(topicName, numberOfRecords);
+        synchronized (STATUS_SYNC) {
+            if (statusListener != null) {
+                statusListener.updateRecordsSent(topicName, numberOfRecords);
             }
             // Overwrite key-value if exists. Only stores the last
             this.lastNumberOfRecordsSent.put(topicName, numberOfRecords );
@@ -399,14 +404,14 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     public Map<String, Integer> getRecordsSent() {
-        synchronized (statusListeners) {
+        synchronized (STATUS_SYNC) {
             return this.lastNumberOfRecordsSent;
         }
     }
 
     public void setDatabaseCommitRate(long period) {
-        for (DataCache<?, ?> table : tables.values()) {
-            table.setTimeWindow(period);
+        for (DataCacheGroup<?, ?> table : tables.values()) {
+            table.getActiveDataCache().setTimeWindow(period);
         }
     }
 
@@ -527,14 +532,13 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     public void registerTopic(AvroTopic<ObservationKey, ? extends SpecificRecord> topic) throws IOException {
-        if (tables.containsKey(topic)) {
+        if (tables.containsKey(topic.getName())) {
             return;
         }
-        DataCache<ObservationKey, ? extends SpecificRecord> cache = CacheStore.getInstance()
-                .getOrCreateCache(context.getApplicationContext(), topic);
-        cache.setMaximumSize(maxBytes);
-        tables.put(topic, cache);
-        tablesByName.put(topic.getName(), cache);
+        DataCacheGroup<ObservationKey, ? extends SpecificRecord> cache = CacheStore.get()
+                .getOrCreateCaches(context.getApplicationContext(), topic);
+        cache.getActiveDataCache().setMaximumSize(maxBytes);
+        tables.put(topic.getName(), cache);
     }
 
     public synchronized void setTopicsHighPriority(Set<String> topicsHighPriority) {

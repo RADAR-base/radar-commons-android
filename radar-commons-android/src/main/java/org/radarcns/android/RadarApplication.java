@@ -16,11 +16,14 @@
 
 package org.radarcns.android;
 
+import android.app.Activity;
 import android.app.Application;
+import android.app.Service;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.support.annotation.CallSuper;
+import android.support.annotation.NonNull;
 
 import com.crashlytics.android.Crashlytics;
 
@@ -77,4 +80,15 @@ public abstract class RadarApplication extends Application {
      * @return configured RadarConfiguration
      */
     protected abstract RadarConfiguration createConfiguration();
+
+    @NonNull
+    public abstract Class<? extends Activity> getMainActivity();
+
+    @NonNull
+    public abstract Class<? extends Activity> getLoginActivity();
+
+    @NonNull
+    public Class<? extends Service> getRadarService() {
+        return RadarService.class;
+    }
 }

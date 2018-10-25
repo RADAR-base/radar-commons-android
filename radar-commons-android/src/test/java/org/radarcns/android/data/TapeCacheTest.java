@@ -18,11 +18,15 @@ package org.radarcns.android.data;
 
 import android.util.Pair;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificData;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.radarcns.android.util.AndroidThreadFactory;
 import org.radarcns.android.util.SharedSingleThreadExecutorFactory;
@@ -32,7 +36,6 @@ import org.radarcns.monitor.application.ApplicationUptime;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.ActiveAudioRecording;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.slf4j.impl.HandroidLoggerAdapter;
 
@@ -52,7 +55,11 @@ public class TapeCacheTest {
     private TapeCache<ObservationKey, ApplicationUptime> tapeCache;
     private ObservationKey key;
     private ApplicationUptime value;
-    private SpecificData specificData = CacheStore.getInstance().getSpecificData();
+    private SpecificData specificData = CacheStore.get().getSpecificData();
+    private GenericData genericData = CacheStore.get().getGenericData();
+
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
 
     @BeforeClass
     public static void setUpClass() {
@@ -65,11 +72,14 @@ public class TapeCacheTest {
         AvroTopic<ObservationKey, ApplicationUptime> topic = new AvroTopic<>("test",
                 ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
                 ObservationKey.class, ApplicationUptime.class);
+        AvroTopic<Object, Object> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
+                Object.class, Object.class);
+
         executorFactory = new SharedSingleThreadExecutorFactory(
                 new AndroidThreadFactory("test", THREAD_PRIORITY_BACKGROUND));
-        tapeCache = new TapeCache<>(
-                RuntimeEnvironment.application.getApplicationContext(),
-                topic, executorFactory, specificData);
+        tapeCache = new TapeCache<>(folder.newFile(), topic,
+                outputTopic, executorFactory, specificData, genericData);
         tapeCache.setMaximumSize(4096);
         tapeCache.setTimeWindow(100);
 
@@ -97,7 +107,7 @@ public class TapeCacheTest {
 
         Thread.sleep(100);
 
-        RecordData<ObservationKey, ApplicationUptime> unsent = tapeCache.unsentRecords(100);
+        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100);
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
@@ -105,9 +115,9 @@ public class TapeCacheTest {
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
-        ApplicationUptime actualValue = unsent.iterator().next();
-        assertEquals(key, unsent.getKey());
-        assertEquals(value, actualValue);
+        GenericRecord actualValue = (GenericRecord)unsent.iterator().next();
+        assertEquals(key.getSourceId(), ((GenericRecord)unsent.getKey()).get("sourceId"));
+        assertEquals(value.getUptime(), actualValue.get("uptime"));
         tapeCache.remove(1);
         assertNull(tapeCache.unsentRecords(100));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
@@ -128,9 +138,11 @@ public class TapeCacheTest {
         AvroTopic<ObservationKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
                 ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
                 ObservationKey.class, ActiveAudioRecording.class);
+        AvroTopic<Object, Object> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                Object.class, Object.class);
         TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
-                RuntimeEnvironment.application.getApplicationContext(),
-                topic, executorFactory, specificData);
+                folder.newFile(), topic, outputTopic, executorFactory, specificData, genericData);
 
         localTapeCache.setMaximumSize(45000000);
         localTapeCache.setTimeWindow(100);
@@ -143,13 +155,13 @@ public class TapeCacheTest {
 
         localTapeCache.addMeasurement(key, localValue);
         localTapeCache.flush();
-        RecordData<ObservationKey, ActiveAudioRecording> records = localTapeCache.unsentRecords(100);
+        RecordData<Object, Object> records = localTapeCache.unsentRecords(100);
 
         assertNotNull(records);
         assertEquals(1, records.size());
-        ActiveAudioRecording firstRecord = records.iterator().next();
-        assertEquals(key, records.getKey());
-        assertEquals(localValue, firstRecord);
+        GenericRecord firstRecord = (GenericRecord)records.iterator().next();
+        assertEquals(key.getSourceId(), ((GenericRecord)records.getKey()).get("sourceId"));
+        assertEquals(localValue.getData(), firstRecord.get("data"));
     }
 
     @Test
@@ -165,7 +177,7 @@ public class TapeCacheTest {
 
         tapeCache.flush();
 
-        RecordData<ObservationKey, ApplicationUptime> unsent = tapeCache.unsentRecords(100);
+        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100);
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());

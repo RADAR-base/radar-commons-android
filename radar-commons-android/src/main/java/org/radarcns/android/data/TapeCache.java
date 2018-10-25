@@ -16,14 +16,11 @@
 
 package org.radarcns.android.data;
 
-import android.content.Context;
-import android.content.Intent;
 import android.util.Pair;
 
 import com.crashlytics.android.Crashlytics;
 
-import org.apache.avro.specific.SpecificData;
-import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.generic.GenericData;
 import org.radarcns.android.util.SingleThreadExecutorFactory;
 import org.radarcns.data.AvroRecordData;
 import org.radarcns.data.Record;
@@ -44,10 +41,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_SENT_NUMBER;
-import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_UNSENT_NUMBER;
-import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
-
 /**
  * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
  * before being written in batches to the BackedObjectQueue, using a single-threaded
@@ -57,18 +50,20 @@ import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
  * @param <K> measurement key type
  * @param <V> measurement value type
  */
-public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> implements DataCache<K, V> {
+public class TapeCache<K, V> implements DataCache<K, V> {
     private static final Logger logger = LoggerFactory.getLogger(TapeCache.class);
 
     private final AvroTopic<K, V> topic;
     private final ScheduledExecutorService executor;
     private final List<Record<K, V>> measurementsToAdd;
-    private final File outputFile;
-    private final BackedObjectQueue.Converter<Record<K, V>> converter;
+    private final File file;
+    private final BackedObjectQueue.Serializer<Record<K, V>> serializer;
+    private final BackedObjectQueue.Deserializer<Record<Object, Object>> deserializer;
     private final int maxBytes;
+    private final AvroTopic<Object, Object> outputTopic;
     private QueueFile queueFile;
 
-    private BackedObjectQueue<Record<K, V>> queue;
+    private BackedObjectQueue<Record<K, V>, Record<Object, Object>> queue;
     private Future<?> addMeasurementFuture;
     private long timeWindowMillis;
 
@@ -76,25 +71,26 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
     /**
      * TapeCache to cache measurements with
-     * @param context Android context to get the cache directory and broadcast the cache size.
      * @param topic Kafka Avro topic to write data for.
      * @param executorFactory factory to get a single-threaded {@link ScheduledExecutorService}
      *                        from.
      * @throws IOException if a BackedObjectQueue cannot be created.
      */
-    public TapeCache(final Context context, AvroTopic<K, V> topic,
-                     SingleThreadExecutorFactory executorFactory, SpecificData specificData)
+    public TapeCache(File file, AvroTopic<K, V> topic, AvroTopic<Object, Object> outputTopic,
+                     SingleThreadExecutorFactory executorFactory, GenericData inputFormat,
+                     GenericData outputFormat)
             throws IOException {
         this.topic = topic;
+        this.outputTopic = outputTopic;
         this.timeWindowMillis = 10_000L;
         this.maxBytes = 450_000_000;
-        outputFile = new File(context.getCacheDir(), topic.getName() + ".tape");
+        this.file = file;
         try {
-            queueFile = QueueFile.newMapped(outputFile, maxBytes);
+            queueFile = QueueFile.newMapped(file, maxBytes);
         } catch (IOException ex) {
-            logger.error("TapeCache " + outputFile + " was corrupted. Removing old cache.");
-            if (outputFile.delete()) {
-                queueFile = QueueFile.newMapped(outputFile, maxBytes);
+            logger.error("TapeCache " + file + " was corrupted. Removing old cache.");
+            if (file.delete()) {
+                queueFile = QueueFile.newMapped(file, maxBytes);
             } else {
                 throw ex;
             }
@@ -103,40 +99,32 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
 
         this.executor = executorFactory.getScheduledExecutorService();
 
-        // TODO: move to kafka data sender
-        this.executor.scheduleAtFixedRate(() -> {
-            Intent numberCached = new Intent(CACHE_TOPIC);
-            numberCached.putExtra(CACHE_TOPIC, getTopic().getName());
-            numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, 0L);
-            numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, queueSize.get());
-            context.sendBroadcast(numberCached);
-        }, 10L, 10L, TimeUnit.SECONDS);
-
         this.measurementsToAdd = new ArrayList<>();
 
-        this.converter = new TapeAvroConverter<>(topic, specificData);
-        this.queue = new BackedObjectQueue<>(queueFile, converter);
+        this.serializer = new TapeAvroSerializer<>(topic, inputFormat);
+        this.deserializer = new TapeAvroDeserializer<>(outputTopic, outputFormat);
+        this.queue = new BackedObjectQueue<>(queueFile, serializer, deserializer);
     }
 
     @Override
-    public RecordData<K, V> unsentRecords(final int limit) throws IOException {
+    public RecordData<Object, Object> unsentRecords(final int limit) throws IOException {
         logger.info("Trying to retrieve records from topic {}", topic);
         try {
             return executor.submit(() -> {
                 try {
-                    List<Record<K, V>> records = queue.peek(limit);
+                    List<Record<Object, Object>> records = queue.peek(limit);
                     if (records.isEmpty()) {
                         return null;
                     }
-                    K currentKey = records.get(0).key;
-                    List<V> values = new ArrayList<>(records.size());
-                    for (Record<K, V> record : records) {
+                    Object currentKey = records.get(0).key;
+                    List<Object> values = new ArrayList<>(records.size());
+                    for (Record<Object, Object> record : records) {
                         if (!currentKey.equals(record.key)) {
                             break;
                         }
                         values.add(record.value);
                     }
-                    return new AvroRecordData<>(topic, currentKey, values);
+                    return new AvroRecordData<>(outputTopic, currentKey, values);
                 } catch (IOException | IllegalStateException ex) {
                     fixCorruptQueue();
                     return null;
@@ -158,7 +146,7 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     }
 
     @Override
-    public RecordData<K, V> getRecords(int limit) throws IOException {
+    public RecordData<Object, Object> getRecords(int limit) throws IOException {
         return unsentRecords(limit);
     }
 
@@ -224,6 +212,16 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
     @Override
     public int removeBeforeTimestamp(long millis) {
         return 0;
+    }
+
+    @Override
+    public AvroTopic<Object, Object> getReadTopic() {
+        return outputTopic;
+    }
+
+    @Override
+    public File getFile() {
+        return file;
     }
 
     @Override
@@ -304,10 +302,10 @@ public class TapeCache<K extends SpecificRecord, V extends SpecificRecord> imple
         } catch (IOException ioex) {
             logger.warn("Failed to close corrupt queue", ioex);
         }
-        if (outputFile.delete()) {
-            queueFile = QueueFile.newMapped(outputFile, maxBytes);
+        if (file.delete()) {
+            queueFile = QueueFile.newMapped(file, maxBytes);
             queueSize.set(queueFile.size());
-            queue = new BackedObjectQueue<>(queueFile, converter);
+            queue = new BackedObjectQueue<>(queueFile, serializer, deserializer);
         } else {
             throw new IOException("Cannot create new cache.");
         }

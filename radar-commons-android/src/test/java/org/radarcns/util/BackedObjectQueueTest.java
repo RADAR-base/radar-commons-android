@@ -16,13 +16,16 @@
 
 package org.radarcns.util;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificData;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.radarcns.android.data.CacheStore;
-import org.radarcns.android.data.TapeAvroConverter;
+import org.radarcns.android.data.TapeAvroDeserializer;
+import org.radarcns.android.data.TapeAvroSerializer;
 import org.radarcns.data.Record;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.passive.phone.PhoneLight;
@@ -47,7 +50,8 @@ public class BackedObjectQueueTest {
     @Rule
     public ExpectedException exception = ExpectedException.none();
 
-    private static final SpecificData specificData = CacheStore.getInstance().getSpecificData();
+    private static final SpecificData specificData = CacheStore.get().getSpecificData();
+    private static final GenericData genericData = CacheStore.get().getGenericData();
 
     @Test
     public void testBinaryObject() throws IOException {
@@ -60,8 +64,13 @@ public class BackedObjectQueueTest {
         AvroTopic<ObservationKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
                 ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
                 ObservationKey.class, ActiveAudioRecording.class);
-        try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic, specificData))) {
+
+        AvroTopic<GenericRecord, GenericRecord> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                GenericRecord.class, GenericRecord.class);
+
+        try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
+                QueueFile.newMapped(file, 450000000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData))) {
 
             ByteBuffer buffer = ByteBuffer.wrap(data);
             Record<ObservationKey, ActiveAudioRecording> record = new Record<>(
@@ -70,11 +79,11 @@ public class BackedObjectQueueTest {
             queue.add(record);
         }
 
-        try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>> queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 450000000), new TapeAvroConverter<>(topic, specificData))) {
-            Record<ObservationKey, ActiveAudioRecording> result = queue.peek();
+        try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
+                QueueFile.newMapped(file, 450000000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData))) {
+            Record<GenericRecord, GenericRecord> result = queue.peek();
 
-            assertArrayEquals(data, result.value.getData().array());
+            assertArrayEquals(data, ((ByteBuffer) result.value.get("data")).array());
         }
     }
 
@@ -85,10 +94,13 @@ public class BackedObjectQueueTest {
         AvroTopic<ObservationKey, ObservationKey> topic = new AvroTopic<>("test",
                 ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
                 ObservationKey.class, ObservationKey.class);
+        AvroTopic<GenericRecord, GenericRecord> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
+                GenericRecord.class, GenericRecord.class);
 
-        BackedObjectQueue<Record<ObservationKey, ObservationKey>> queue;
+        BackedObjectQueue<Record<ObservationKey, ObservationKey>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic, specificData));
+                QueueFile.newMapped(file, 10000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData));
 
         Record<ObservationKey, ObservationKey> record = new Record<>(
                 new ObservationKey("test", "a", "b"),
@@ -106,9 +118,14 @@ public class BackedObjectQueueTest {
                 ObservationKey.getClassSchema(), PhoneLight.getClassSchema(),
                 ObservationKey.class, PhoneLight.class);
 
-        BackedObjectQueue<Record<ObservationKey, PhoneLight>> queue;
+        AvroTopic<GenericRecord, GenericRecord> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), PhoneLight.getClassSchema(),
+                GenericRecord.class, GenericRecord.class);
+
+
+        BackedObjectQueue<Record<ObservationKey, PhoneLight>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 10000), new TapeAvroConverter<>(topic, specificData));
+                QueueFile.newMapped(file, 10000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData));
 
         double now = System.currentTimeMillis() / 1000d;
         Record<ObservationKey, PhoneLight> record = new Record<>(
