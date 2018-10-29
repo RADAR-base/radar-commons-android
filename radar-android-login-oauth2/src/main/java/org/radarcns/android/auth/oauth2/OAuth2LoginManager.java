@@ -18,9 +18,10 @@ package org.radarcns.android.auth.oauth2;
 
 import android.content.Intent;
 import android.support.annotation.NonNull;
+
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.radarcns.android.RadarConfiguration;
+import org.radarcns.android.RadarApplication;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.Jwt;
 import org.radarcns.android.auth.LoginActivity;
@@ -30,6 +31,7 @@ import org.radarcns.android.auth.LoginManager;
 /**
  * Authenticates against the RADAR Management Portal.
  */
+@SuppressWarnings("WeakerAccess")
 public class OAuth2LoginManager implements LoginManager, LoginListener {
     public static final String LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken";
     private final String projectIdClaim;
@@ -45,6 +47,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         this.authState = authState;
     }
 
+    @SuppressWarnings("unused")
     public void update(AppAuthState state) {
         this.authState = state;
     }
@@ -64,7 +67,8 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
 
     @Override
     public void start() {
-        OAuth2StateManager.getInstance(activity).login(activity, RadarConfiguration.getInstance());
+        OAuth2StateManager.getInstance(activity)
+                .login(activity, ((RadarApplication)activity.getApplication()).getConfiguration());
     }
 
     @Override
@@ -79,10 +83,16 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
 
     @Override
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
+        String token = appAuthState.getToken();
+        if (token == null) {
+            this.activity.loginFailed(this,
+                    new IllegalArgumentException("Cannot login using OAuth2 without a token"));
+            return;
+        }
         try {
             AppAuthState.Builder authStateBuilder = processJwt(
                     appAuthState.newBuilder(),
-                    Jwt.parse(appAuthState.getToken()));
+                    Jwt.parse(token));
 
             this.activity.loginSucceeded(this, authStateBuilder.build());
         } catch (JSONException ex) {
@@ -90,7 +100,7 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
         }
     }
 
-    protected AppAuthState.Builder processJwt(AppAuthState.Builder builder, Jwt jwt) throws JSONException {
+    protected AppAuthState.Builder processJwt(AppAuthState.Builder builder, Jwt jwt) {
         JSONObject body = jwt.getBody();
 
         return builder

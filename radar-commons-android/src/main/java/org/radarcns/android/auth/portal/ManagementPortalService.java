@@ -13,11 +13,11 @@ import android.util.SparseArray;
 import com.crashlytics.android.Crashlytics;
 
 import org.json.JSONException;
+import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
-import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.slf4j.Logger;
@@ -162,10 +162,12 @@ public class ManagementPortalService extends IntentService {
             }
             // create parser
             AuthStringParser parser = new MetaTokenParser(authState);
+
             // retrieve token and update authState
             authState = client.getRefreshToken(refreshTokenUrl, parser);
+            RadarConfiguration config = ((RadarApplication) getApplication()).getConfiguration();
             // update radarConfig
-            if (LoginActivity.updateConfigsWithAuthState(authState)) {
+            if (config.updateWithAuthState(this, authState)) {
                 LocalBroadcastManager.getInstance(this)
                         .sendBroadcast(new Intent(RADAR_CONFIGURATION_CHANGED));
                 // refresh client

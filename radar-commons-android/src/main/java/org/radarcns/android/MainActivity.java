@@ -119,6 +119,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private BroadcastReceiver bluetoothNeededReceiver;
 
     private volatile boolean bluetoothReceiverIsEnabled;
+    protected RadarConfiguration configuration;
 
     /**
      * Sends an intent to request bluetooth to be turned on.
@@ -192,14 +193,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     @CallSuper
     protected void create() {
-        RadarConfiguration radarConfiguration = RadarConfiguration.getInstance();
-
         if (authState.getProjectId() != null) {
-            radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
+            configuration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
         }
-        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
+        configuration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
 
-        logger.info("RADAR configuration at create: {}", radarConfiguration);
+        logger.info("RADAR configuration at create: {}", configuration);
         onConfigChanged();
 
         configurationBroadcastReceiver = new BroadcastReceiver() {
@@ -217,7 +216,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         startService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()).putExtras(extras));
 
         // Start the UI thread
-        uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
+        uiRefreshRate = configuration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
         mViewUpdater = () -> {
             try {
                 // Update all rows in the UI with the data from the connections
@@ -351,8 +350,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 } else {
                     authState = AppAuthState.Builder.from(this).build();
                 }
-                RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-                RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
+                configuration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
+                configuration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
                 onConfigChanged();
                 break;
             }
@@ -457,10 +456,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     protected void startLogin(boolean forResult) {
         Class<?> loginActivity = ((RadarApplication) getApplication()).getLoginActivity();
         Intent intent = new Intent(this, loginActivity);
-        RadarConfiguration config = RadarConfiguration.getInstance();
 
         Bundle extras = new Bundle();
-        config.putExtras(extras, MANAGEMENT_PORTAL_URL_KEY, UNSAFE_KAFKA_CONNECTION);
+        configuration.putExtras(extras, MANAGEMENT_PORTAL_URL_KEY, UNSAFE_KAFKA_CONNECTION);
         intent.putExtras(extras);
 
         if (forResult) {
@@ -477,10 +475,10 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     }
 
     public String getUserId() {
-        return RadarConfiguration.getInstance().getString(RadarConfiguration.USER_ID_KEY, null);
+        return configuration.getString(RadarConfiguration.USER_ID_KEY, null);
     }
 
     public String getProjectId() {
-        return RadarConfiguration.getInstance().getString(RadarConfiguration.PROJECT_ID_KEY, null);
+        return configuration.getString(RadarConfiguration.PROJECT_ID_KEY, null);
     }
 }

@@ -36,6 +36,7 @@ import io.fabric.sdk.android.Fabric;
 /** Provides the name and some metadata of the main activity */
 public abstract class RadarApplication extends Application {
     private NotificationHandler notificationHandler;
+    private RadarConfiguration radarConfiguration;
 
     /** Large icon bitmap. */
     public abstract Bitmap getLargeIcon();
@@ -51,7 +52,7 @@ public abstract class RadarApplication extends Application {
     public void onCreate() {
         super.onCreate();
         setupLogging();
-        createConfiguration();
+        radarConfiguration = createConfiguration();
         notificationHandler = new NotificationHandler(this);
     }
 
@@ -80,6 +81,11 @@ public abstract class RadarApplication extends Application {
      * @return configured RadarConfiguration
      */
     protected abstract RadarConfiguration createConfiguration();
+
+    @NonNull
+    public RadarConfiguration getConfiguration() {
+        return radarConfiguration;
+    }
 
     @NonNull
     public abstract Class<? extends Activity> getMainActivity();

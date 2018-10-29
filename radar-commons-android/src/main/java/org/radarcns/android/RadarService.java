@@ -82,7 +82,6 @@ import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static android.app.Notification.DEFAULT_VIBRATE;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
-import static org.radarcns.android.RadarConfiguration.SEND_BINARY_CONTENT;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
@@ -92,6 +91,7 @@ import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
 import static org.radarcns.android.RadarConfiguration.RADAR_CONFIGURATION_CHANGED;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY;
+import static org.radarcns.android.RadarConfiguration.SEND_BINARY_CONTENT;
 import static org.radarcns.android.RadarConfiguration.SEND_BINARY_CONTENT_DEFAULT;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI_DEFAULT;
@@ -100,7 +100,6 @@ import static org.radarcns.android.RadarConfiguration.SEND_OVER_DATA_HIGH_PRIORI
 import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
 import static org.radarcns.android.RadarConfiguration.TOPICS_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
-import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
@@ -154,6 +153,7 @@ public class RadarService extends Service implements ServerStatusListener {
     private TableDataHandler dataHandler;
     private Handler mHandler;
     private boolean needsBluetooth;
+    protected RadarConfiguration configuration;
 
     /** Filters to only listen to certain device IDs. */
     private final Map<DeviceServiceConnection, Set<String>> deviceFilters = new HashMap<>();
@@ -298,6 +298,7 @@ public class RadarService extends Service implements ServerStatusListener {
         binder = createBinder();
         mHandler = new Handler(getMainLooper());
         needsBluetooth = false;
+        configuration = ((RadarApplication)getApplication()).getConfiguration();
 
         LocalBroadcastManager broadcastManager = LocalBroadcastManager.getInstance(this);
 
@@ -390,9 +391,7 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     protected void configure() {
-        LoginActivity.updateConfigsWithAuthState(authState);
-
-        RadarConfiguration configuration = RadarConfiguration.getInstance();
+        configuration.updateWithAuthState(this, authState);
 
         TableDataHandler localDataHandler;
         ServerConfig kafkaConfig = null;
@@ -493,7 +492,7 @@ public class RadarService extends Service implements ServerStatusListener {
             localDataHandler.enableSubmitter();
         }
 
-        List<DeviceServiceProvider> connections = DeviceServiceProvider.loadProviders(this, RadarConfiguration.getInstance());
+        List<DeviceServiceProvider> connections = DeviceServiceProvider.loadProviders(this, configuration);
 
         boolean anyNeedsBluetooth = false;
         Iterator<DeviceServiceProvider> iter = mConnections.iterator();
@@ -610,8 +609,6 @@ public class RadarService extends Service implements ServerStatusListener {
 
     protected void updateAuthState(AppAuthState authState) {
         this.authState = authState;
-        RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-        RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
         configure();
     }
 
@@ -796,7 +793,7 @@ public class RadarService extends Service implements ServerStatusListener {
                 getApplicationContext(), bootReceiver);
         PackageManager pm = getApplicationContext().getPackageManager();
 
-        boolean startAtBoot = RadarConfiguration.getInstance().getBoolean(RadarConfiguration.START_AT_BOOT, false);
+        boolean startAtBoot = configuration.getBoolean(RadarConfiguration.START_AT_BOOT, false);
         boolean isStartedAtBoot = pm.getComponentEnabledSetting(receiver) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
         if (startAtBoot && !isStartedAtBoot) {
             logger.info("From now on, this application will start at boot");
