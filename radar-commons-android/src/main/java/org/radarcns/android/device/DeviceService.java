@@ -289,7 +289,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
-        @SuppressWarnings("unchecked")
         @Nullable
         @Override
         public RecordData<Object, Object> getRecords(

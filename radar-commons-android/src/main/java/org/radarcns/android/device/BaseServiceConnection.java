@@ -26,10 +26,8 @@ import android.util.Pair;
 
 import com.crashlytics.android.Crashlytics;
 
-import org.apache.avro.specific.SpecificRecord;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.data.RecordData;
-import org.radarcns.kafka.ObservationKey;
 import org.radarcns.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,7 +72,7 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
     }
 
     @Nullable
-    public <V extends SpecificRecord> RecordData<ObservationKey, SpecificRecord> getRecords(@NonNull String topic, int limit) throws IOException {
+    public RecordData<Object, Object> getRecords(@NonNull String topic, int limit) throws IOException {
         return serviceBinder.getRecords(topic, limit);
     }
 
