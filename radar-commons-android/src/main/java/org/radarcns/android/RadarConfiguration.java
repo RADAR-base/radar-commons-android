@@ -550,10 +550,10 @@ public class RadarConfiguration {
         String userId = appAuthState.getUserId();
 
         boolean baseUrlChanged = baseUrl != null
-                && !baseUrl.equals(getString(BASE_URL_PROPERTY, null));
+                && !baseUrl.equals(getString(BASE_URL_KEY, null));
 
         if (baseUrlChanged) {
-            put(BASE_URL_PROPERTY, baseUrl);
+            put(BASE_URL_KEY, baseUrl);
             put(KAFKA_REST_PROXY_URL_KEY, baseUrl + "/kafka/");
             put(SCHEMA_REGISTRY_URL_KEY, baseUrl + "/schema/");
             put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
@@ -566,6 +566,7 @@ public class RadarConfiguration {
         put(READABLE_USER_ID_KEY, getHumanReadableUserId(appAuthState));
 
         FirebaseAnalytics analytics = FirebaseAnalytics.getInstance(context);
+        analytics.setUserId(userId);
         analytics.setUserProperty(USER_ID_KEY, maxCharacters(userId, 36));
         analytics.setUserProperty(PROJECT_ID_KEY, maxCharacters(projectId, 36));
         analytics.setUserProperty(BASE_URL_KEY, maxCharacters(baseUrl, 36));

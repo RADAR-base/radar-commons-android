@@ -174,6 +174,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         super.onCreate(savedInstanceState);
         bluetoothReceiverIsEnabled = false;
 
+        configuration = ((RadarApplication)getApplication()).getConfiguration();
+
         if (getIntent() == null || getIntent().getExtras() == null) {
             authState = AppAuthState.Builder.from(this).build();
         } else {
