@@ -94,7 +94,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private long senderConnectionTimeout;
 
     private ServerStatusListener.Status status;
-    private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
+    private final Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
     private KafkaDataSubmitter submitter;
     private RestSender sender;
     private final AtomicFloat minimumBatteryLevel;
@@ -269,20 +269,8 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             this.submitter = null;
             this.sender = null;
         }
-        clean();
         for (DataCacheGroup<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
-        }
-    }
-
-    @Override
-    public void clean() {
-        long timestamp = (System.currentTimeMillis() - dataRetention.get());
-        for (DataCacheGroup<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
-            table.getActiveDataCache().removeBeforeTimestamp(timestamp);
-            for (ReadableDataCache oldTable : table.getDeprecatedCaches()) {
-                oldTable.removeBeforeTimestamp(timestamp);
-            }
         }
     }
 

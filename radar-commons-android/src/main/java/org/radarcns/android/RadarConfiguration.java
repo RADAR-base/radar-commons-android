@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,6 +49,7 @@ import static java.util.regex.Pattern.CASE_INSENSITIVE;
 import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
 
+@SuppressWarnings("WeakerAccess")
 public class RadarConfiguration {
     private static final Logger logger = LoggerFactory.getLogger(RadarConfiguration.class);
     private static final long FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12*60*60 * 1000L;
@@ -215,9 +217,9 @@ public class RadarConfiguration {
      * @param value configuration value
      * @return previous local value for given name, if any
      */
-    public String put(String key, Object value) {
-        if (!(value == null
-                || value instanceof String
+    public String put(@NonNull String key, @NonNull Object value) {
+        Objects.requireNonNull(value);
+        if (!(value instanceof String
                 || value instanceof Long
                 || value instanceof Integer
                 || value instanceof Float
@@ -225,7 +227,7 @@ public class RadarConfiguration {
             throw new IllegalArgumentException("Cannot put value of type " + value.getClass()
                     + " into RadarConfiguration");
         }
-        String config = value == null || value instanceof String ? (String)value : value.toString();
+        String config = value instanceof String ? (String)value : value.toString();
         String oldValue = localConfiguration.put(key, config);
         persistChanges.run();
         return oldValue;
@@ -561,9 +563,14 @@ public class RadarConfiguration {
             put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
             logger.info("Broadcast config changed based on base URL change");
         }
-        put(PROJECT_ID_KEY, projectId);
-        put(USER_ID_KEY, userId);
-        put(READABLE_USER_ID_KEY, getHumanReadableUserId(appAuthState));
+
+        if (projectId != null) {
+            put(PROJECT_ID_KEY, projectId);
+        }
+        if (userId != null) {
+            put(USER_ID_KEY, userId);
+            put(READABLE_USER_ID_KEY, getHumanReadableUserId(appAuthState));
+        }
 
         FirebaseAnalytics analytics = FirebaseAnalytics.getInstance(context);
         analytics.setUserId(userId);

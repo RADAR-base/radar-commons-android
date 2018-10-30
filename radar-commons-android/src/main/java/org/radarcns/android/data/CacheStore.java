@@ -48,12 +48,12 @@ public class CacheStore {
     static final String TAPE_EXTENSION = ".tape";
     static final String KEY_SCHEMA_EXTENSION = ".key.avsc";
     static final String VALUE_SCHEMA_EXTENSION = ".value.avsc";
-    private static CacheStore store = new CacheStore();
+    private static final CacheStore INSTANCE = new CacheStore();
     private final GenericData genericData;
     private final Map<String, SynchronizedReference<DataCacheGroup>> tables;
 
     public static CacheStore get() {
-        return store;
+        return INSTANCE;
     }
 
     private final SpecificData specificData;
@@ -160,7 +160,7 @@ public class CacheStore {
                         }
                     }
 
-                    logger.debug("Loading data store without schemas {}", tapeFile);
+                    logger.debug("Loading data INSTANCE without schemas {}", tapeFile);
                     activeDataCache = new TapeCache<>(
                             tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
@@ -175,12 +175,12 @@ public class CacheStore {
                         logger.error("Cannot have more than one active cache");
                     }
 
-                    logger.info("Loading matching data store with schemas {}", tapeFile);
+                    logger.info("Loading matching data INSTANCE with schemas {}", tapeFile);
                     activeDataCache = new TapeCache<>(
                             tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
                 } else {
-                    logger.debug("Loading deprecated data store {}", tapeFile);
+                    logger.debug("Loading deprecated data INSTANCE {}", tapeFile);
                     deprecatedDataCaches.add(new TapeCache<>(tapeFile, outputTopic,
                             outputTopic, getCacheExecutorFactory(), specificData, genericData));
                 }
@@ -216,7 +216,7 @@ public class CacheStore {
                         logger.error("Cannot write value schema", ex);
                     }
 
-                    logger.info("Creating new data store {}", tapeFile);
+                    logger.info("Creating new data INSTANCE {}", tapeFile);
                     activeDataCache = new TapeCache<>(
                             tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
@@ -225,7 +225,7 @@ public class CacheStore {
             }
 
             if (activeDataCache == null) {
-                throw new IOException("No empty slot to store active data cache in.");
+                throw new IOException("No empty slot to INSTANCE active data cache in.");
             }
         }
 

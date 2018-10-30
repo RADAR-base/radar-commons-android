@@ -1,6 +1,5 @@
 package org.radarcns.android.auth.portal;
 
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -10,7 +9,7 @@ import android.os.ResultReceiver;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigException;
 
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.LoginListener;
+import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.auth.LoginManager;
 import org.radarcns.producer.AuthenticationException;
 
@@ -26,14 +25,15 @@ import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_F
 import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_IO;
 import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_UNAUTHORIZED;
 
+@SuppressWarnings("unused")
 public class ManagementPortalLoginManager implements LoginManager {
     private String refreshToken;
     private String refreshTokenUrl;
-    private final LoginListener listener;
+    private final LoginActivity listener;
     private final AtomicBoolean isRefreshing = new AtomicBoolean(false);
     private final ResultReceiver refreshResultReceiver;
 
-    public ManagementPortalLoginManager(LoginListener listener, AppAuthState state) {
+    public ManagementPortalLoginManager(LoginActivity listener, AppAuthState state) {
         this.listener = listener;
         this.refreshToken = (String)state.getProperty(MP_REFRESH_TOKEN_PROPERTY);
         this.refreshResultReceiver = new ResultReceiver(new Handler(Looper.getMainLooper())) {
@@ -56,9 +56,9 @@ public class ManagementPortalLoginManager implements LoginManager {
 
     private void retrieveRefreshToken() {
         if (refreshTokenUrl != null
-                && ManagementPortalService.isEnabled()
+                && ManagementPortalService.isEnabled(listener)
                 && isRefreshing.compareAndSet(false, true)) {
-            ManagementPortalService.requestRefreshToken((Context) listener, refreshTokenUrl, true,
+            ManagementPortalService.requestRefreshToken(listener, refreshTokenUrl, true,
                    refreshResultReceiver);
         }
     }
@@ -66,9 +66,9 @@ public class ManagementPortalLoginManager implements LoginManager {
     @Override
     public AppAuthState refresh() {
         if (refreshToken != null
-                && ManagementPortalService.isEnabled()
+                && ManagementPortalService.isEnabled(listener)
                 && isRefreshing.compareAndSet(false, true)) {
-            ManagementPortalService.requestAccessToken((Context)listener, refreshToken, true,
+            ManagementPortalService.requestAccessToken(listener, refreshToken, true,
                     refreshResultReceiver);
         }
         return null;

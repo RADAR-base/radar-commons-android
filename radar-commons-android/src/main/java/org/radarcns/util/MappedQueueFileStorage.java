@@ -147,7 +147,7 @@ public class MappedQueueFileStorage implements QueueStorage {
     }
 
     @Override
-    public void flush() throws IOException {
+    public void flush() {
         byteBuffer.force();
     }
 

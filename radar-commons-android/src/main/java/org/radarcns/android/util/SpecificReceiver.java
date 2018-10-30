@@ -33,7 +33,7 @@ public abstract class SpecificReceiver extends BroadcastReceiver {
     }
 
     protected abstract String getAction();
-    protected abstract void onSpecificReceive(Intent intent);
+    protected abstract void onSpecificReceive(@NonNull Intent intent);
 
     public void onReceive(Context context, Intent intent) {
         if (intent == null || !Objects.equals(intent.getAction(), getAction())) {

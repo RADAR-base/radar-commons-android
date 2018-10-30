@@ -148,9 +148,4 @@ public abstract class LoginActivity extends Activity implements LoginListener {
         }
         finish();
     }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-    }
 }

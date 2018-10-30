@@ -108,8 +108,8 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
         return serviceBinder.getServerRecordsSent();
     }
 
+    @SuppressWarnings("unchecked")
     public S getDeviceData() {
-        //noinspection unchecked
         return (S)serviceBinder.getDeviceStatus();
     }
 

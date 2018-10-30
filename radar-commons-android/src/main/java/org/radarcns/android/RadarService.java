@@ -79,7 +79,6 @@ import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.ACCESS_NETWORK_STATE;
 import static android.Manifest.permission.INTERNET;
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
-import static android.app.Notification.DEFAULT_VIBRATE;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
@@ -193,7 +192,6 @@ public class RadarService extends Service implements ServerStatusListener {
                 .builder(NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false)
                 .setContentTitle(getString(R.string.notification_bluetooth_needed_title))
                 .setContentText(getString(R.string.notification_bluetooth_needed_text))
-                .setDefaults(DEFAULT_VIBRATE)
                 .build();
 
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -225,7 +223,7 @@ public class RadarService extends Service implements ServerStatusListener {
                     return;
                 }
                 final String refreshToken = (String) authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
-                if (ManagementPortalService.isEnabled() && refreshToken != null) {
+                if (ManagementPortalService.isEnabled(context) && refreshToken != null) {
                     authState.invalidate(RadarService.this);
                     logger.info("Creating request to management portal");
                     ManagementPortalService.requestAccessToken(RadarService.this,
@@ -338,7 +336,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
         startForeground(1, createForegroundNotification());
 
-        if (authState.getProperty(SOURCES_PROPERTY) == null && ManagementPortalService.isEnabled()) {
+        if (authState.getProperty(SOURCES_PROPERTY) == null && ManagementPortalService.isEnabled(this)) {
             ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
                 @Override
                 protected void onReceiveResult(int resultCode, Bundle resultData) {
@@ -693,7 +691,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
     protected void startScanning() {
         for (DeviceServiceProvider<?> provider : mConnections) {
-            DeviceServiceConnection connection = provider.getConnection();
+            DeviceServiceConnection<?> connection = provider.getConnection();
             if (!connection.hasService() || connection.isRecording() || !checkPermissions(provider)) {
                 continue;
             }
@@ -830,7 +828,7 @@ public class RadarService extends Service implements ServerStatusListener {
         }
 
         @Override
-        public void setAllowedDeviceIds(final DeviceServiceConnection connection, Set<String> allowedIds) {
+        public void setAllowedDeviceIds(final DeviceServiceConnection<?> connection, Set<String> allowedIds) {
             deviceFilters.put(connection, allowedIds);
 
             DeviceStatusListener.Status status = connection.getDeviceStatus();

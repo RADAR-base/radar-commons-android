@@ -19,8 +19,14 @@ package org.radarcns.android.util;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
+import android.os.Build;
 import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
 import static android.net.ConnectivityManager.TYPE_ETHERNET;
@@ -28,6 +34,8 @@ import static android.net.ConnectivityManager.TYPE_WIFI;
 
 /** Keeps track of whether there is a network connection (e.g., WiFi or Ethernet). */
 public class NetworkConnectedReceiver extends SpecificReceiver {
+    private static final Logger logger = LoggerFactory.getLogger(NetworkConnectedReceiver.class);
+
     private final NetworkConnectedListener listener;
     private boolean hasWifiOrEthernet;
     private boolean isConnected;
@@ -40,8 +48,24 @@ public class NetworkConnectedReceiver extends SpecificReceiver {
     }
 
     @Override
-    protected void onSpecificReceive(Intent intent) {
+    protected void onSpecificReceive(@NonNull Intent intent) {
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            logger.warn("Connectivity cannot be checked: System ConnectivityManager is unavailable.");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            updateCapabilities(cm);
+        } else {
+            updateNetworkInfo(cm);
+        }
+        if (listener != null) {
+            listener.onNetworkConnectionChanged(isConnected, hasWifiOrEthernet);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void updateNetworkInfo(@NonNull ConnectivityManager cm) {
         NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
         if (activeNetwork == null) {
             isConnected = false;
@@ -51,8 +75,20 @@ public class NetworkConnectedReceiver extends SpecificReceiver {
             int networkType = activeNetwork.getType();
             hasWifiOrEthernet = networkType == TYPE_WIFI || networkType == TYPE_ETHERNET;
         }
-        if (listener != null) {
-            listener.onNetworkConnectionChanged(isConnected, hasWifiOrEthernet);
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    private void updateCapabilities(@NonNull ConnectivityManager cm) {
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+
+        if (activeNetwork == null) {
+            isConnected = false;
+            hasWifiOrEthernet = false;
+        } else {
+            NetworkCapabilities capabilities = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            isConnected = activeNetwork.isConnected();
+            hasWifiOrEthernet = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
         }
     }
 

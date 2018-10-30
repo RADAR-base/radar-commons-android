@@ -385,7 +385,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public boolean onTransact(int code, Parcel data, Parcel reply, int flags) {
+        public boolean onTransact(int code, @NonNull Parcel data, Parcel reply, int flags) {
             throw new UnsupportedOperationException();
         }
     }
@@ -477,7 +477,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         source.setAttributes(attributes);
         // not yet registered
         if (source.getSourceId() == null) {
-            if (ManagementPortalService.isEnabled()) {
+            if (ManagementPortalService.isEnabled(this)) {
                 // do registration with management portal
                 final Handler handler = new Handler(getMainLooper());
                 ManagementPortalService.registerSource(this, source,

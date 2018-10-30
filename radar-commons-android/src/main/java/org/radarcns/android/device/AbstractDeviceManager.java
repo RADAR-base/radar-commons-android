@@ -17,6 +17,7 @@
 package org.radarcns.android.device;
 
 import android.support.annotation.CallSuper;
+import android.support.annotation.NonNull;
 
 import com.crashlytics.android.Crashlytics;
 
@@ -81,6 +82,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
      *
      * @param status status to set
      */
+    @SuppressWarnings("SameParameterValue")
     protected void updateStatus(DeviceStatusListener.Status status) {
         this.deviceStatus.setStatus(status);
         if (status == DeviceStatusListener.Status.READY) {
@@ -94,17 +96,19 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
      * override with an empty implementation.
      */
     protected void registerDeviceAtReady() {
-        service.registerDevice(deviceName, Collections.<String, String>emptyMap());
+        service.registerDevice(deviceName, Collections.emptyMap());
     }
 
     /**
      * Creates and registers an Avro topic
      * @param name The name of the topic
      * @param valueClass The value class
-     * @param <V>
-     * @return
+     * @param <V> topic value type
+     * @return created topic
      */
-    protected <V extends SpecificRecord> AvroTopic<ObservationKey, V> createTopic(String name, Class<V> valueClass) {
+    @NonNull
+    protected <V extends SpecificRecord> AvroTopic<ObservationKey, V> createTopic(
+            @NonNull String name, @NonNull Class<V> valueClass) {
         try {
             Method method = valueClass.getMethod("getClassSchema");
             Schema valueSchema = (Schema) method.invoke(null);
@@ -178,6 +182,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
      * additional resources should be cleaned up. This implementation calls updateStatus with status
      * DISCONNECTED.
      */
+    @SuppressWarnings("RedundantThrows")
     @Override
     public void close() throws IOException {
         closed = true;

@@ -210,11 +210,6 @@ public class TapeCache<K, V> implements DataCache<K, V> {
     }
 
     @Override
-    public int removeBeforeTimestamp(long millis) {
-        return 0;
-    }
-
-    @Override
     public AvroTopic<Object, Object> getReadTopic() {
         return outputTopic;
     }

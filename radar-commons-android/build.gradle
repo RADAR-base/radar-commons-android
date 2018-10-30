@@ -59,7 +59,7 @@ dependencies {
     api ('org.radarcns:radar-commons:0.11.1-SNAPSHOT') {
         exclude group: 'org.json', module: 'json'
     }
-    api 'org.radarcns:radar-schemas-commons:0.4.0'
+    api 'org.radarcns:radar-schemas-commons:0.4.1'
 
     implementation 'com.android.support:support-v4:28.0.0'
 

@@ -44,7 +44,7 @@ public class BatteryLevelReceiver extends SpecificReceiver {
     }
 
     @Override
-    protected void onSpecificReceive(Intent intent) {
+    protected void onSpecificReceive(@NonNull Intent intent) {
         int level = intent.getIntExtra(EXTRA_LEVEL, -1);
         int scale = intent.getIntExtra(EXTRA_SCALE, -1);
 

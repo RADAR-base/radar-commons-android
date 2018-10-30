@@ -19,7 +19,7 @@ import static org.radarcns.android.auth.portal.ManagementPortalClient.PRIVACY_PO
  */
 public class MetaTokenParser implements AuthStringParser {
 
-    private AppAuthState currentState;
+    private final AppAuthState currentState;
 
     public MetaTokenParser(AppAuthState state) {
         this.currentState = state;

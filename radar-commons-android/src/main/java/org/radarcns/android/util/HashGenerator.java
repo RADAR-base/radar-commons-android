@@ -22,7 +22,6 @@ import android.util.Base64;
 
 import org.radarcns.util.Serialization;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -60,8 +59,6 @@ public class HashGenerator {
             throw new IllegalStateException("Cannot retrieve hashing algorithm", ex);
         } catch (InvalidKeyException ex) {
             throw new IllegalStateException("Encoding is invalid", ex);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Cannot load hashing key", ex);
         }
     }
 
@@ -74,7 +71,7 @@ public class HashGenerator {
         this(context.getSharedPreferences(context.getClass().getName(), Context.MODE_PRIVATE));
     }
 
-    private byte[] loadHashKey() throws IOException {
+    private byte[] loadHashKey() {
         String b64Salt = preferences.getString(HASH_KEY, null);
         if (b64Salt == null) {
             byte[] byteSalt = new byte[16];

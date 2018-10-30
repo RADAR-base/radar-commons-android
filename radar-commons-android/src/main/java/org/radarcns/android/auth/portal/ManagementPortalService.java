@@ -7,6 +7,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.ResultReceiver;
+import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.SparseArray;
 
@@ -364,7 +365,7 @@ public class ManagementPortalService extends IntentService {
 
     private void ensureClient() {
         if (client == null) {
-            RadarConfiguration config = RadarConfiguration.getInstance();
+            RadarConfiguration config = ((RadarApplication)getApplication()).getConfiguration();
             String url = config.getString(MANAGEMENT_PORTAL_URL_KEY);
             boolean unsafe = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false);
             try {
@@ -427,8 +428,9 @@ public class ManagementPortalService extends IntentService {
         context.startService(intent);
     }
 
-    public static boolean isEnabled() {
-        return RadarConfiguration.getInstance().getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
+    public static boolean isEnabled(@NonNull Context context) {
+        return ((RadarApplication)context.getApplicationContext()).getConfiguration()
+                .getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
     }
 
     @Override

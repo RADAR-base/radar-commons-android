@@ -20,7 +20,7 @@ package org.radarcns.util;
  * Reference that will close itself once its released.
  */
 public class CountedReference<T> {
-    private T value;
+    private final T value;
     private int count;
 
     public CountedReference(T referent) {

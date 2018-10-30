@@ -118,7 +118,7 @@ public class KafkaDataSubmitter implements Closeable {
         }
         // Get upload frequency from system property
         uploadFuture = new Runnable() {
-            Set<String> topicsToSend = new HashSet<>();
+            final Set<String> topicsToSend = new HashSet<>();
 
             @Override
             public void run() {

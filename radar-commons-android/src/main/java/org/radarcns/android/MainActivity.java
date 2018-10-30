@@ -54,7 +54,6 @@ import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
-import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
@@ -195,11 +194,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     @CallSuper
     protected void create() {
-        if (authState.getProjectId() != null) {
-            configuration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-        }
-        configuration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
-
         logger.info("RADAR configuration at create: {}", configuration);
         onConfigChanged();
 
@@ -352,8 +346,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 } else {
                     authState = AppAuthState.Builder.from(this).build();
                 }
-                configuration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-                configuration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
                 onConfigChanged();
                 break;
             }

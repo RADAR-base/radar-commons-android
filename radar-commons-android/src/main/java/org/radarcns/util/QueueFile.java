@@ -29,6 +29,7 @@ import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.ArrayDeque;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.radarcns.util.Serialization.bytesToInt;
 
@@ -96,7 +97,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
      * {@link #remove(int)} and {@link #elementOutputStream()}. Used by {@link ElementIterator}
      * to guard against concurrent modification.
      */
-    private volatile int modCount = 0;
+    private final AtomicInteger modCount = new AtomicInteger(0);
 
     private final byte[] elementHeaderBuffer = new byte[QueueFileElement.HEADER_LENGTH];
 
@@ -231,14 +232,14 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
 
         private ElementIterator() {
             nextElementIndex = 0;
-            expectedModCount = modCount;
+            expectedModCount = modCount.get();
             previousCached = new QueueFileElement();
             cacheIterator = first.iterator();
             nextElementPosition = first.isEmpty() ? 0 : first.getFirst().getPosition();
         }
 
         private void checkForComodification() {
-            if (modCount != expectedModCount) {
+            if (modCount.get() != expectedModCount) {
                 throw new ConcurrentModificationException();
             }
         }
@@ -358,7 +359,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         }
 
         // Commit the header.
-        modCount++;
+        modCount.incrementAndGet();
         header.setFirstPosition(newFirst.getPosition());
         header.addCount(-n);
         truncateIfNeeded();
@@ -404,7 +405,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
 
         header.write();
 
-        modCount++;
+        modCount.incrementAndGet();
     }
 
     private void requireNotClosed() throws IOException {
@@ -438,7 +439,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         public QueueFileInputStream(QueueFileElement element) {
             this.storagePosition = header.wrapPosition(element.dataPosition());
             this.totalLength = element.getLength();
-            this.expectedModCount = modCount;
+            this.expectedModCount = modCount.get();
             this.bytesRead = 0;
         }
 
@@ -484,7 +485,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         }
 
         private void checkForComodification() throws IOException {
-            if (modCount != expectedModCount) {
+            if (modCount.get() != expectedModCount) {
                 throw new IOException("Buffer modified while reading InputStream");
             }
         }
@@ -528,7 +529,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
         storage.flush();
         header.addCount(count);
         header.write();
-        modCount++;
+        modCount.incrementAndGet();
     }
 
     public void setFileLength(long size, long position, long beginningOfFirstElement) throws IOException {
@@ -556,7 +557,7 @@ public final class QueueFile implements Closeable, Iterable<InputStream> {
                 long count = position - QueueFileHeader.HEADER_LENGTH;
                 storage.move(QueueFileHeader.HEADER_LENGTH, oldLength, count);
             }
-            modCount++;
+            modCount.incrementAndGet();
 
             // Last position was moved forward in the copy
             long positionUpdate = oldLength - QueueFileHeader.HEADER_LENGTH;
