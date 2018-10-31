@@ -644,7 +644,7 @@ public class RadarService extends Service implements ServerStatusListener {
         // Signal that a certain topic changed, the key of the map retrieved by getRecordsSent().
         recordsIntent.putExtra(SERVER_RECORDS_SENT_TOPIC, topicName);
         recordsIntent.putExtra(SERVER_RECORDS_SENT_NUMBER, numberOfRecords);
-        sendBroadcast(recordsIntent);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(recordsIntent);
     }
 
     public void deviceStatusUpdated(final DeviceServiceConnection<?> connection, final DeviceStatusListener.Status status) {
