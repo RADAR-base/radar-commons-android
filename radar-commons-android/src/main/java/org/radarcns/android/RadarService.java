@@ -178,6 +178,7 @@ public class RadarService extends Service implements ServerStatusListener {
         }
     };
     private ProviderLoader providerLoader;
+    private Map<String, String> previousConfiguration;
 
     private void removeBluetoothNotification() {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -298,6 +299,7 @@ public class RadarService extends Service implements ServerStatusListener {
         needsBluetooth = false;
         configuration = ((RadarApplication)getApplication()).getConfiguration();
         providerLoader = new ProviderLoader();
+        previousConfiguration = null;
 
         LocalBroadcastManager broadcastManager = LocalBroadcastManager.getInstance(this);
 
@@ -390,6 +392,12 @@ public class RadarService extends Service implements ServerStatusListener {
 
     protected void configure() {
         configuration.updateWithAuthState(this, authState);
+
+        Map<String, String> newConfiguration = configuration.toMap();
+        if (newConfiguration.equals(previousConfiguration)) {
+            return;
+        }
+        previousConfiguration = newConfiguration;
 
         TableDataHandler localDataHandler;
         ServerConfig kafkaConfig = null;

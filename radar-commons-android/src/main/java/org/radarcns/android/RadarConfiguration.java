@@ -37,6 +37,7 @@ import org.radarcns.android.auth.AppAuthState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -610,6 +611,17 @@ public class RadarConfiguration {
             return null;
         }
         return url.substring(0, lastIndex + 1);
+    }
+
+    public Map<String, String> toMap() {
+        Set<String> keys = new HashSet<>(config.getKeysByPrefix(null));
+
+        Map<String, String> result = new HashMap<>((keys.size() + localConfiguration.size()) * 2);
+        for (String key : keys) {
+            result.put(key, config.getString(key));
+        }
+        result.putAll(localConfiguration);
+        return result;
     }
 
     public String toString() {
