@@ -207,8 +207,10 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 onConfigChanged();
             }
         };
-        LocalBroadcastManager.getInstance(this).registerReceiver(configurationBroadcastReceiver,
-                new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+        LocalBroadcastManager.getInstance(this)
+                .registerReceiver(configurationBroadcastReceiver,
+                        new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+
         networkReceiver.register();
 
         Bundle extras = new Bundle();

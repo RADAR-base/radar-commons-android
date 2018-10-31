@@ -21,6 +21,7 @@ import android.content.Intent;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
 
 import org.apache.avro.specific.SpecificData;
@@ -129,7 +130,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                     numberCached.putExtra(CACHE_TOPIC, cache.getReadTopic().getName());
                     numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, records.first);
                     numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, records.second);
-                    context.sendBroadcast(numberCached);
+                    LocalBroadcastManager.getInstance(context).sendBroadcast(numberCached);
                 }
                 synchronized (TableDataHandler.this) {
                     if (handler != null) {
