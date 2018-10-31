@@ -33,6 +33,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Process;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
@@ -88,7 +89,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private AppAuthState authState;
 
     private Set<String> needsPermissions = Collections.emptySet();
-    private Set<String> isRequestingPermissions = Collections.emptySet();
+    private final Set<String> isRequestingPermissions = new HashSet<>();
+    private long isRequestingPermissionsTime = Long.MAX_VALUE;
 
     private boolean requestedBt;
 
@@ -280,6 +282,15 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         Handler localHandler = new Handler(mHandlerThread.getLooper());
         synchronized (this) {
             mHandler = localHandler;
+            if (!isRequestingPermissions.isEmpty()) {
+                long now = SystemClock.elapsedRealtime();
+                long expires = isRequestingPermissionsTime + getRequestPermissionTimeoutMs();
+                if (expires <= now) {
+                    resetRequestingPermission();
+                } else {
+                    mHandler.postDelayed(this::resetRequestingPermission, expires - now);
+                }
+            }
         }
         bindService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()), radarServiceConnection, 0);
         testBindBluetooth();
@@ -287,6 +298,11 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         LocalBroadcastManager.getInstance(this)
                 .registerReceiver(bluetoothNeededReceiver,
                         new IntentFilter(ACTION_BLUETOOTH_NEEDED_CHANGED));
+    }
+
+    private synchronized void resetRequestingPermission() {
+        isRequestingPermissions.clear();
+        isRequestingPermissionsTime = Long.MAX_VALUE;
     }
 
     @Override
@@ -363,7 +379,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     private void onPermissionRequestResult(String permission, boolean granted) {
         needsPermissions.remove(permission);
-        isRequestingPermissions.remove(permission);
+        synchronized (this) {
+            isRequestingPermissions.remove(permission);
+        }
 
         int result = granted ? PackageManager.PERMISSION_GRANTED : PackageManager.PERMISSION_DENIED;
         LocalBroadcastManager.getInstance(this)
@@ -394,6 +412,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         synchronized (this) {
             currentlyNeeded.removeAll(isRequestingPermissions);
         }
+        if (currentlyNeeded.isEmpty()) {
+            return;
+        }
         if (currentlyNeeded.contains(LOCATION_SERVICE)) {
             addRequestingPermissions(LOCATION_SERVICE);
             requestLocationProvider();
@@ -413,16 +434,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     }
 
     private synchronized void addRequestingPermissions(Set<String> permissions) {
-        if (isRequestingPermissions.isEmpty()) {
-            isRequestingPermissions = permissions;
-        } else {
-            isRequestingPermissions.addAll(permissions);
-        }
-        if (mHandler != null) {
+        isRequestingPermissions.addAll(permissions);
+
+        if (mHandler != null && isRequestingPermissionsTime != Long.MAX_VALUE) {
+            isRequestingPermissionsTime = SystemClock.elapsedRealtime();
             mHandler.postDelayed(() -> {
-                synchronized (this) {
-                    isRequestingPermissions = Collections.emptySet();
-                }
+                resetRequestingPermission();
                 checkPermissions();
             }, getRequestPermissionTimeoutMs());
         }
