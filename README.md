@@ -26,6 +26,7 @@ This library takes the following firebase parameters:
 | `topics_high_priority` | string | `<empty>` | A comma separated list of topics that should be considered high priority. |
 | `send_with_compression` | boolean | `true` | Send data with GZIP compression. This requires RADAR-Gateway to be installed in front of the Kafka REST Proxy. |
 | `firebase_fetch_timeout_ms` | long (ms) | 43200000 (= 12 hours) | Interval for fetching new Firebase configuration if the app is not active. |
+| `send_binary_data` | boolean | `true` | Send data using a binary protocol. If the server does not support it, the app will fall back to regular JSON protocol. |
 
 ## Usage
 
@@ -35,7 +36,7 @@ repositories {
     jcenter()
 }
 dependencies {
-    api 'org.radarcns:radar-commons-android:0.8.0'
+    api 'org.radarcns:radar-commons-android:0.8.1'
 }
 ```
 
@@ -63,7 +64,6 @@ Make a pull request once the code is working.
 ### Creating an application
 
 To create an Android App, follow the following steps:
-
 
 1. Include this module in the Gradle dependencies, and also all plugins that you would like to use
 2. Update your code with
