@@ -16,7 +16,7 @@
 
 package org.radarcns.android;
 
-import android.annotation.SuppressLint;
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
@@ -27,6 +27,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -49,7 +50,6 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED;
@@ -65,6 +65,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private static final int LOGIN_REQUEST_CODE = 232619693;
     private static final int LOCATION_REQUEST_CODE = 232619694;
     private static final int USAGE_REQUEST_CODE = 232619695;
+    private static final long REQUEST_PERMISSION_TIMEOUT_MS = 3_600_000L;
 
     private BroadcastReceiver configurationBroadcastReceiver;
 
@@ -87,6 +88,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private AppAuthState authState;
 
     private Set<String> needsPermissions = Collections.emptySet();
+    private Set<String> isRequestingPermissions = Collections.emptySet();
+
     private boolean requestedBt;
 
     private IRadarBinder radarService;
@@ -330,7 +333,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
     }
 
-    @SuppressLint("InlinedApi")
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent result) {
         switch (requestCode) {
@@ -354,7 +356,11 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 break;
             }
             case USAGE_REQUEST_CODE: {
-                onPermissionRequestResult(PACKAGE_USAGE_STATS, resultCode == RESULT_OK);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    onPermissionRequestResult(
+                            Manifest.permission.PACKAGE_USAGE_STATS,
+                            resultCode == RESULT_OK);
+                }
                 break;
             }
         }
@@ -362,6 +368,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     private void onPermissionRequestResult(String permission, boolean granted) {
         needsPermissions.remove(permission);
+        isRequestingPermissions.remove(permission);
 
         int result = granted ? PackageManager.PERMISSION_GRANTED : PackageManager.PERMISSION_DENIED;
         LocalBroadcastManager.getInstance(this)
@@ -378,22 +385,51 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         return mHandler;
     }
 
-
     protected void checkPermissions() {
-        if (needsPermissions.contains(LOCATION_SERVICE)) {
-            requestLocationProvider();
-        } else if (needsPermissions.contains(PACKAGE_USAGE_STATS)) {
-            requestPackageUsageStats();
-        } else if (!needsPermissions.isEmpty()) {
-            ActivityCompat.requestPermissions(this,
-                    needsPermissions.toArray(new String[0]),
-                    REQUEST_ENABLE_PERMISSIONS);
-        } else {
+        if (needsPermissions.isEmpty()) {
             LocalBroadcastManager.getInstance(this)
                     .sendBroadcast(new Intent()
                             .setAction(RadarService.ACTION_PERMISSIONS_GRANTED)
                             .putExtra(RadarService.EXTRA_PERMISSIONS, new String[0])
                             .putExtra(RadarService.EXTRA_GRANT_RESULTS, new int[0]));
+            return;
+        }
+
+        Set<String> currentlyNeeded = new HashSet<>(needsPermissions);
+        synchronized (this) {
+            currentlyNeeded.removeAll(isRequestingPermissions);
+        }
+        if (currentlyNeeded.contains(LOCATION_SERVICE)) {
+            addRequestingPermissions(LOCATION_SERVICE);
+            requestLocationProvider();
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && currentlyNeeded.contains(Manifest.permission.PACKAGE_USAGE_STATS)) {
+            addRequestingPermissions(Manifest.permission.PACKAGE_USAGE_STATS);
+            requestPackageUsageStats();
+        } else {
+            addRequestingPermissions(currentlyNeeded);
+            ActivityCompat.requestPermissions(this,
+                    currentlyNeeded.toArray(new String[0]), REQUEST_ENABLE_PERMISSIONS);
+        }
+    }
+
+    private void addRequestingPermissions(String permission) {
+        addRequestingPermissions(Collections.singleton(permission));
+    }
+
+    private synchronized void addRequestingPermissions(Set<String> permissions) {
+        if (isRequestingPermissions.isEmpty()) {
+            isRequestingPermissions = permissions;
+        } else {
+            isRequestingPermissions.addAll(permissions);
+        }
+        if (mHandler != null) {
+            mHandler.postDelayed(() -> {
+                synchronized (this) {
+                    isRequestingPermissions = Collections.emptySet();
+                }
+                checkPermissions();
+            }, getRequestPermissionTimeoutMs());
         }
     }
 
@@ -418,12 +454,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         builder.setTitle(R.string.enable_package_usage_title)
                 .setMessage(R.string.enable_package_usage)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    dialog.cancel();
                     Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
                     if (intent.resolveActivity(getPackageManager()) == null) {
                         intent = new Intent(Settings.ACTION_SETTINGS);
                     }
                     startActivityForResult(intent, USAGE_REQUEST_CODE);
-                    dialog.cancel();
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
@@ -462,6 +498,10 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             startActivity(intent);
             finish();
         }
+    }
+
+    protected long getRequestPermissionTimeoutMs() {
+        return REQUEST_PERMISSION_TIMEOUT_MS;
     }
 
     public IRadarBinder getRadarService() {
