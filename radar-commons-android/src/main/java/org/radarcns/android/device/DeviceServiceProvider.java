@@ -23,8 +23,6 @@ import android.os.Parcelable;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 
-import com.crashlytics.android.Crashlytics;
-
 import org.radarcns.android.MainActivity;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
@@ -34,11 +32,9 @@ import org.radarcns.android.auth.AppSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Scanner;
 
 import static android.Manifest.permission.BLUETOOTH;
 import static android.Manifest.permission.BLUETOOTH_ADMIN;
@@ -48,7 +44,6 @@ import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.MAX_CACHE_SIZE;
-import static org.radarcns.android.RadarConfiguration.TOPICS_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.PROJECT_ID_KEY;
 import static org.radarcns.android.RadarConfiguration.RADAR_PREFIX;
 import static org.radarcns.android.RadarConfiguration.SCHEMA_REGISTRY_URL_KEY;
@@ -56,6 +51,7 @@ import static org.radarcns.android.RadarConfiguration.SENDER_CONNECTION_TIMEOUT_
 import static org.radarcns.android.RadarConfiguration.SEND_ONLY_WITH_WIFI;
 import static org.radarcns.android.RadarConfiguration.SEND_OVER_DATA_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
+import static org.radarcns.android.RadarConfiguration.TOPICS_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarConfiguration.USER_ID_KEY;
 
@@ -238,46 +234,6 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 permissions.contains(BLUETOOTH_ADMIN));
         AppAuthState.Builder.from(radarService).build().addToBundle(bundle);
         bundle.putParcelable(SOURCE_KEY, source);
-    }
-
-    /**
-     * Loads the service providers specified in the
-     * {@link RadarConfiguration#DEVICE_SERVICES_TO_CONNECT}. This function will call
-     * {@link #setRadarService(RadarService)} and {@link #setConfig(RadarConfiguration)} on each of the
-     * loaded service providers.
-     */
-    public static List<DeviceServiceProvider> loadProviders(@NonNull RadarService context,
-                                                            @NonNull RadarConfiguration config) {
-        List<DeviceServiceProvider> providers = loadProviders(config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT));
-        for (DeviceServiceProvider provider : providers) {
-            provider.setRadarService(context);
-            provider.setConfig(config);
-        }
-        return providers;
-    }
-
-    /**
-     * Loads the service providers specified in given whitespace-delimited String.
-     */
-    public static List<DeviceServiceProvider> loadProviders(@NonNull String deviceServicesToConnect) {
-        List<DeviceServiceProvider> providers = new ArrayList<>();
-        Scanner scanner = new Scanner(deviceServicesToConnect);
-        while (scanner.hasNext()) {
-            String className = scanner.next();
-            if (className.charAt(0) == '.') {
-                className = "org.radarcns" + className;
-            }
-            try {
-                Class<?> providerClass = Class.forName(className);
-                DeviceServiceProvider serviceProvider = (DeviceServiceProvider) providerClass.newInstance();
-                providers.add(serviceProvider);
-            } catch (ClassNotFoundException | ClassCastException | InstantiationException
-                    | IllegalAccessException ex) {
-                logger.warn("Provider {} is not a legal DeviceServiceProvider", className, ex);
-                Crashlytics.logException(ex);
-            }
-        }
-        return providers;
     }
 
     /** Get the MainActivity associated to the current connection. */

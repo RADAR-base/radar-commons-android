@@ -49,6 +49,7 @@ import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.device.DeviceServiceConnection;
 import org.radarcns.android.device.DeviceServiceProvider;
 import org.radarcns.android.device.DeviceStatusListener;
+import org.radarcns.android.device.ProviderLoader;
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.Boast;
 import org.radarcns.android.util.BundleSerialization;
@@ -176,6 +177,7 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }
     };
+    private ProviderLoader providerLoader;
 
     private void removeBluetoothNotification() {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -270,7 +272,7 @@ public class RadarService extends Service implements ServerStatusListener {
     };
 
     /** Connections. **/
-    private final List<DeviceServiceProvider> mConnections = new ArrayList<>();
+    private final List<DeviceServiceProvider<?>> mConnections = new ArrayList<>();
 
     /** An overview of how many records have been sent throughout the application. */
     private final TimedInt latestNumberOfRecordsSent = new TimedInt();
@@ -295,6 +297,7 @@ public class RadarService extends Service implements ServerStatusListener {
         mHandler = new Handler(getMainLooper());
         needsBluetooth = false;
         configuration = ((RadarApplication)getApplication()).getConfiguration();
+        providerLoader = new ProviderLoader();
 
         LocalBroadcastManager broadcastManager = LocalBroadcastManager.getInstance(this);
 
@@ -487,10 +490,10 @@ public class RadarService extends Service implements ServerStatusListener {
             localDataHandler.enableSubmitter();
         }
 
-        List<DeviceServiceProvider> connections = DeviceServiceProvider.loadProviders(this, configuration);
+        List<DeviceServiceProvider<?>> connections = providerLoader.loadProviders(this, configuration);
 
         boolean anyNeedsBluetooth = false;
-        Iterator<DeviceServiceProvider> iter = mConnections.iterator();
+        Iterator<DeviceServiceProvider<?>> iter = mConnections.iterator();
         while (iter.hasNext()) {
             DeviceServiceProvider provider = iter.next();
             if (!connections.contains(provider)) {
@@ -522,7 +525,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
         PackageManager packageManager = getPackageManager();
         boolean didAddProvider = false;
-        for (DeviceServiceProvider provider : connections) {
+        for (DeviceServiceProvider<?> provider : connections) {
             if (!mConnections.contains(provider)) {
                 if (!hasFeatures(provider, packageManager)) {
                     continue;
