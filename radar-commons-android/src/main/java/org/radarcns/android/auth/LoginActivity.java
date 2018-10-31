@@ -136,10 +136,10 @@ public abstract class LoginActivity extends Activity implements LoginListener {
                 .sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
 
         if (startedFromActivity) {
-            logger.info("Start next activity with result");
+            logger.debug("Start next activity with result");
             setResult(RESULT_OK, this.appAuth.toIntent());
         } else if (!refreshOnly) {
-            logger.info("Start next activity without result");
+            logger.debug("Start next activity without result");
             Intent next = new Intent(this, nextActivity());
             Bundle extras = new Bundle();
             this.appAuth.addToBundle(extras);

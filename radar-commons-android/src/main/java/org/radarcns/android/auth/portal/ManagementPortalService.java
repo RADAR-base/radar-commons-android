@@ -144,7 +144,8 @@ public class ManagementPortalService extends IntentService {
      * @see #refreshToken(Bundle) refreshing access token.
      */
     private boolean getRefreshToken(Bundle extras) {
-        logger.info("Retrieving refreshToken from url");
+        logger.debug("Retrieving refreshToken from url");
+
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         if (receiver == null) {
             throw new IllegalArgumentException("ResultReceiver not set");
@@ -174,6 +175,7 @@ public class ManagementPortalService extends IntentService {
                 // refresh client
                 client = null;
             }
+            logger.info("Retrieved refreshToken from url");
             // refresh token
             return refreshToken(extras);
         } catch (IOException e) {
@@ -197,7 +199,7 @@ public class ManagementPortalService extends IntentService {
     }
 
     private boolean refreshToken(Bundle extras) {
-        logger.info("Refreshing JWT");
+        logger.debug("Refreshing JWT");
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         if (receiver == null) {
             throw new IllegalArgumentException("ResultReceiver not set");
@@ -294,7 +296,7 @@ public class ManagementPortalService extends IntentService {
     }
 
     private boolean registerSource(Bundle extras) {
-        logger.info("Handling source registration");
+        logger.debug("Handling source registration");
         AppSource source = extras.getParcelable(SOURCE_KEY);
         if (source == null) {
             throw new IllegalArgumentException("AppSource not set");

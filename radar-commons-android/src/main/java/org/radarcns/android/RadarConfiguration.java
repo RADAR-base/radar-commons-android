@@ -129,7 +129,6 @@ public class RadarConfiguration {
                 // activated before newly fetched values are returned.
                 activateFetched();
 
-                logger.info("Remote Config: Activate success.");
                 // Set global properties.
                 logger.info("RADAR configuration changed: {}", RadarConfiguration.this);
                 context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
@@ -561,7 +560,7 @@ public class RadarConfiguration {
             put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
             put(OAUTH2_TOKEN_URL, baseUrl + "/managementportal/oauth/token");
             put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
-            logger.info("Broadcast config changed based on base URL change");
+            logger.info("Broadcast config changed based on base URL {}", baseUrl);
         }
 
         if (projectId != null) {

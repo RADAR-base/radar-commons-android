@@ -380,13 +380,15 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             // Overwrite key-value if exists. Only stores the last
             this.lastNumberOfRecordsSent.put(topicName, numberOfRecords );
 
-            if (numberOfRecords < 0 ) {
-                String message = String.format(Locale.US, "%1$45s has FAILED uploading", topicName);
-                logger.warn(message);
-            } else {
-                String message = String.format(Locale.US, "%1$45s uploaded %2$4d records",
-                        topicName, numberOfRecords);
-                logger.info(message);
+            if (logger.isInfoEnabled()) {
+                if (numberOfRecords < 0) {
+                    String message = String.format(Locale.US, "%1$45s has FAILED uploading", topicName);
+                    logger.warn(message);
+                } else {
+                    String message = String.format(Locale.US, "%1$45s uploaded %2$4d records",
+                            topicName, numberOfRecords);
+                    logger.info(message);
+                }
             }
         }
     }

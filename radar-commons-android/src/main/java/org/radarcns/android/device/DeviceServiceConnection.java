@@ -48,8 +48,10 @@ public class DeviceServiceConnection<S extends BaseDeviceState> extends BaseServ
                         deviceName = intent.getStringExtra(DEVICE_STATUS_NAME);
                         logger.info("AppSource status changed of device {}", deviceName);
                     }
-                    setDeviceStatus(DeviceStatusListener.Status.values()[intent.getIntExtra(DEVICE_STATUS_CHANGED, 0)]);
-                    logger.info("Updated device status to {}", getDeviceStatus());
+                    int statusOrdinal = intent.getIntExtra(DEVICE_STATUS_CHANGED, 0);
+                    DeviceStatusListener.Status status = DeviceStatusListener.Status.values()[statusOrdinal];
+                    setDeviceStatus(status);
+                    logger.info("Updated device status to {}", status);
                     radarService.deviceStatusUpdated(DeviceServiceConnection.this, getDeviceStatus());
                 }
             }

@@ -108,7 +108,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
 
     @Override
     public RecordData<Object, Object> unsentRecords(final int limit) throws IOException {
-        logger.info("Trying to retrieve records from topic {}", topic);
+        logger.debug("Trying to retrieve records from topic {}", topic);
         try {
             return executor.submit(() -> {
                 try {
@@ -177,7 +177,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
                 if (actualNumber == 0) {
                     return 0;
                 }
-                logger.info("Removing {} records from topic {}", actualNumber, topic);
+                logger.debug("Removing {} records from topic {}", actualNumber, topic.getName());
                 queue.remove(actualNumber);
                 queueSize.addAndGet(-actualNumber);
                 return actualNumber;
@@ -263,7 +263,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
         }
 
         try {
-            logger.info("Writing {} records to file in topic {}", localList.size(), topic);
+            logger.info("Writing {} records to file in topic {}", localList.size(), topic.getName());
             queue.addAll(localList);
             queueSize.addAndGet(localList.size());
         } catch (IOException ex) {
@@ -273,7 +273,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
         } catch (IllegalArgumentException ex) {
             logger.error("Failed to validate all records; adding individual records instead: {}", ex.getMessage());
             try {
-                logger.info("Writing {} records to file in topic {}", localList.size(), topic);
+                logger.info("Writing {} records to file in topic {}", localList.size(), topic.getName());
                 for (Record<K, V> record : localList) {
                     try {
                         queue.add(record);

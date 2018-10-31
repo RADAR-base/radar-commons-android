@@ -32,7 +32,13 @@ import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
 import static android.net.ConnectivityManager.TYPE_ETHERNET;
 import static android.net.ConnectivityManager.TYPE_WIFI;
 
-/** Keeps track of whether there is a network connection (e.g., WiFi or Ethernet). */
+/**
+ * Keeps track of whether there is a network connection (e.g., WiFi or Ethernet).
+ *
+ * <p>This class should be updated to use
+ * {@link ConnectivityManager#registerDefaultNetworkCallback(ConnectivityManager.NetworkCallback)}
+ * instead of a BroadcastReceiver.
+ */
 public class NetworkConnectedReceiver extends SpecificReceiver {
     private static final Logger logger = LoggerFactory.getLogger(NetworkConnectedReceiver.class);
 

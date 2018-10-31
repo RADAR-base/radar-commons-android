@@ -168,7 +168,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (bound) {
             throw new IllegalStateException("Service is already bound");
         }
-        logger.info("Binding {}", this);
+        logger.debug("Binding {}", this);
         Intent intent = new Intent(radarService, getServiceClass());
         Bundle extras = new Bundle();
         configure(extras);
@@ -191,7 +191,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (!bound) {
             throw new IllegalStateException("Service is not bound");
         }
-        logger.info("Unbinding {}", this);
+        logger.debug("Unbinding {}", this);
         bound = false;
         radarService.unbindService(connection);
         connection.onServiceDisconnected(null);

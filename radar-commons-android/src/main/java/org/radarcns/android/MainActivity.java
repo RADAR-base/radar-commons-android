@@ -100,10 +100,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         public void onReceive(Context context, Intent intent) {
             if (Objects.equals(intent.getAction(), BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                logger.info("Bluetooth state {}", state);
+                logger.debug("Bluetooth state {}", state);
                 // Upon state change, restart ui handler and restart Scanning.
                 if (state == BluetoothAdapter.STATE_OFF) {
-                    logger.warn("Bluetooth is off");
                     requestEnableBt();
                 }
             }
@@ -259,21 +258,18 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     @Override
     protected void onResume() {
-        logger.info("mainActivity onResume");
         super.onResume();
         getHandler().post(mViewUpdater);
     }
 
     @Override
     protected void onPause() {
-        logger.info("mainActivity onPause");
         getHandler().removeCallbacks(mViewUpdater);
         super.onPause();
     }
 
     @Override
     protected void onStart() {
-        logger.info("mainActivity onStart");
         super.onStart();
         if (!authState.isValid()) {
             startLogin(true);
@@ -313,7 +309,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     @Override
     protected void onStop() {
-        logger.info("mainActivity onStop");
         super.onStop();
 
         unbindService(radarServiceConnection);

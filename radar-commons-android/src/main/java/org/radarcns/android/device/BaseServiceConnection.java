@@ -57,7 +57,7 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
     @Override
     public void onServiceConnected(final ComponentName className, IBinder service) {
         if (serviceBinder == null) {
-            logger.info("Bound to service {}", className);
+            logger.debug("Bound to service {}", className);
             try {
                 synchronized (this) {
                     serviceBinder = (DeviceServiceBinder) service;

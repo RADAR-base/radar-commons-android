@@ -165,7 +165,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     private void doBind(Intent intent, boolean firstBind) {
-        logger.info("Received (re)bind in {}", this);
+        logger.debug("Received (re)bind in {}", this);
         Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
         onInvocation(extras != null ? extras : new Bundle());
 
@@ -175,7 +175,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     @Override
     public boolean onUnbind(Intent intent) {
-        logger.info("Received unbind in {}", this);
+        logger.debug("Received unbind in {}", this);
         return true;
     }
 

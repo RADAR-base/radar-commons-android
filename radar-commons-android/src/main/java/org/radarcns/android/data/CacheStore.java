@@ -118,7 +118,7 @@ public class CacheStore {
 
     private <K, V> DataCacheGroup<K, V> loadCache(String base, AvroTopic<K, V> topic) throws IOException {
         List<String> fileBases = getFileBases(base);
-        logger.info("Files for topic {}: {}", topic.getName(), fileBases);
+        logger.debug("Files for topic {}: {}", topic.getName(), fileBases);
 
         DataCache<K, V> activeDataCache = null;
         List<ReadableDataCache> deprecatedDataCaches = new ArrayList<>();
@@ -160,7 +160,7 @@ public class CacheStore {
                         }
                     }
 
-                    logger.debug("Loading data INSTANCE without schemas {}", tapeFile);
+                    logger.debug("Loading data store without schemas {}", tapeFile);
                     activeDataCache = new TapeCache<>(
                             tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
@@ -175,12 +175,12 @@ public class CacheStore {
                         logger.error("Cannot have more than one active cache");
                     }
 
-                    logger.info("Loading matching data INSTANCE with schemas {}", tapeFile);
+                    logger.info("Loading matching data store with schemas {}", tapeFile);
                     activeDataCache = new TapeCache<>(
                             tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
                 } else {
-                    logger.debug("Loading deprecated data INSTANCE {}", tapeFile);
+                    logger.debug("Loading deprecated data store {}", tapeFile);
                     deprecatedDataCaches.add(new TapeCache<>(tapeFile, outputTopic,
                             outputTopic, getCacheExecutorFactory(), specificData, genericData));
                 }
@@ -216,7 +216,7 @@ public class CacheStore {
                         logger.error("Cannot write value schema", ex);
                     }
 
-                    logger.info("Creating new data INSTANCE {}", tapeFile);
+                    logger.info("Creating new data store {}", tapeFile);
                     activeDataCache = new TapeCache<>(
                             tapeFile, topic, outputTopic, getCacheExecutorFactory(),
                             specificData, genericData);
@@ -225,7 +225,7 @@ public class CacheStore {
             }
 
             if (activeDataCache == null) {
-                throw new IOException("No empty slot to INSTANCE active data cache in.");
+                throw new IOException("No empty slot to store active data cache in.");
             }
         }
 

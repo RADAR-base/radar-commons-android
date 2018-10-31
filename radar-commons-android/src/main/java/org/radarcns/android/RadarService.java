@@ -168,11 +168,9 @@ public class RadarService extends Service implements ServerStatusListener {
                 logger.info("Bluetooth state {}", state);
                 // Upon state change, restart ui handler and restart Scanning.
                 if (state == BluetoothAdapter.STATE_ON) {
-                    logger.info("Bluetooth is on");
                     removeBluetoothNotification();
                     startScanning();
                 } else if (state == BluetoothAdapter.STATE_OFF) {
-                    logger.warn("Bluetooth is off");
                     createBluetoothNotification();
                 }
             }
@@ -218,14 +216,14 @@ public class RadarService extends Service implements ServerStatusListener {
         public void onReceive(Context context, Intent intent) {
             serverStatus = Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, -1)];
             if (serverStatus == Status.UNAUTHORIZED) {
-                logger.info("Status unauthorized");
+                logger.debug("Status unauthorized");
                 if (!isMakingRequest.compareAndSet(false, true)) {
                     return;
                 }
                 final String refreshToken = (String) authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
                 if (ManagementPortalService.isEnabled(context) && refreshToken != null) {
                     authState.invalidate(RadarService.this);
-                    logger.info("Creating request to management portal");
+                    logger.debug("Creating request to management portal");
                     ManagementPortalService.requestAccessToken(RadarService.this,
                             refreshToken, false, new ResultReceiver(mHandler) {
                         @Override
@@ -378,10 +376,9 @@ public class RadarService extends Service implements ServerStatusListener {
 
         for (DeviceServiceProvider provider : mConnections) {
             if (provider.isBound()) {
-                logger.info("Unbinding service: {}", provider);
                 provider.unbind();
             } else {
-                logger.info("Already unbound: {}", provider);
+                logger.debug("Already unbound: {}", provider);
             }
         }
 
@@ -579,7 +576,6 @@ public class RadarService extends Service implements ServerStatusListener {
     }
 
     protected void requestPermissions(String[] permissions) {
-        logger.info("Requesting permissions for {}");
         startActivity(new Intent(this, ((RadarApplication)getApplication()).getMainActivity())
                 .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -612,7 +608,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
     public void serviceConnected(DeviceServiceConnection<?> connection) {
         ServerStatusListener.Status status = connection.getServerStatus();
-        logger.info("Initial server status: {}", status);
+        logger.debug("Initial server status: {}", status);
         updateServerStatus(status);
         if (!needsBluetooth && connection.needsBluetooth()) {
             needsBluetooth = true;
@@ -684,7 +680,7 @@ public class RadarService extends Service implements ServerStatusListener {
                 return provider;
             }
         }
-        logger.info("DeviceServiceConnection no longer enabled");
+        logger.warn("DeviceServiceConnection no longer enabled");
         return null;
     }
 
@@ -744,12 +740,13 @@ public class RadarService extends Service implements ServerStatusListener {
                 }
             } else if (ContextCompat.checkSelfPermission(this, permission) != PackageManager
                     .PERMISSION_GRANTED) {
-                logger.info("Need to request permission for {}", permission);
+                logger.debug("Need to request permission for {}", permission);
                 needsPermissions.add(permission);
             }
         }
 
         if (!needsPermissions.isEmpty()) {
+            logger.debug("Requesting permission for {}", needsPermissions);
             requestPermissions(needsPermissions.toArray(new String[0]));
         }
     }
@@ -872,10 +869,9 @@ public class RadarService extends Service implements ServerStatusListener {
                     }
                 }
                 if (!provider.isBound()) {
-                    logger.info("Binding to service: {}", provider);
                     provider.bind();
                 } else {
-                    logger.info("Already bound: {}", provider);
+                    logger.debug("Already bound: {}", provider);
                 }
             }
             return null;
