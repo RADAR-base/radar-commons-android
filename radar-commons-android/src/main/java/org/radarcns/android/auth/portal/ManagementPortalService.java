@@ -7,17 +7,18 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.ResultReceiver;
+import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.SparseArray;
 
 import com.crashlytics.android.Crashlytics;
 
 import org.json.JSONException;
+import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
-import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.slf4j.Logger;
@@ -143,7 +144,8 @@ public class ManagementPortalService extends IntentService {
      * @see #refreshToken(Bundle) refreshing access token.
      */
     private boolean getRefreshToken(Bundle extras) {
-        logger.info("Retrieving refreshToken from url");
+        logger.debug("Retrieving refreshToken from url");
+
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         if (receiver == null) {
             throw new IllegalArgumentException("ResultReceiver not set");
@@ -162,15 +164,18 @@ public class ManagementPortalService extends IntentService {
             }
             // create parser
             AuthStringParser parser = new MetaTokenParser(authState);
+
             // retrieve token and update authState
             authState = client.getRefreshToken(refreshTokenUrl, parser);
+            RadarConfiguration config = ((RadarApplication) getApplication()).getConfiguration();
             // update radarConfig
-            if (LoginActivity.updateConfigsWithAuthState(authState)) {
+            if (config.updateWithAuthState(this, authState)) {
                 LocalBroadcastManager.getInstance(this)
                         .sendBroadcast(new Intent(RADAR_CONFIGURATION_CHANGED));
                 // refresh client
                 client = null;
             }
+            logger.info("Retrieved refreshToken from url");
             // refresh token
             return refreshToken(extras);
         } catch (IOException e) {
@@ -194,7 +199,7 @@ public class ManagementPortalService extends IntentService {
     }
 
     private boolean refreshToken(Bundle extras) {
-        logger.info("Refreshing JWT");
+        logger.debug("Refreshing JWT");
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         if (receiver == null) {
             throw new IllegalArgumentException("ResultReceiver not set");
@@ -291,7 +296,7 @@ public class ManagementPortalService extends IntentService {
     }
 
     private boolean registerSource(Bundle extras) {
-        logger.info("Handling source registration");
+        logger.debug("Handling source registration");
         AppSource source = extras.getParcelable(SOURCE_KEY);
         if (source == null) {
             throw new IllegalArgumentException("AppSource not set");
@@ -362,7 +367,7 @@ public class ManagementPortalService extends IntentService {
 
     private void ensureClient() {
         if (client == null) {
-            RadarConfiguration config = RadarConfiguration.getInstance();
+            RadarConfiguration config = ((RadarApplication)getApplication()).getConfiguration();
             String url = config.getString(MANAGEMENT_PORTAL_URL_KEY);
             boolean unsafe = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false);
             try {
@@ -425,8 +430,9 @@ public class ManagementPortalService extends IntentService {
         context.startService(intent);
     }
 
-    public static boolean isEnabled() {
-        return RadarConfiguration.getInstance().getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
+    public static boolean isEnabled(@NonNull Context context) {
+        return ((RadarApplication)context.getApplicationContext()).getConfiguration()
+                .getString(MANAGEMENT_PORTAL_URL_KEY, null) != null;
     }
 
     @Override

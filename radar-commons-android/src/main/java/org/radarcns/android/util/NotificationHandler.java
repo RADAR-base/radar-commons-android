@@ -110,35 +110,41 @@ public class NotificationHandler {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             builder = new Notification.Builder(context, channel);
         } else {
-            builder = new Notification.Builder(context);
-            switch (channel) {
-                case NOTIFICATION_CHANNEL_INFO:
-                    builder.setPriority(Notification.PRIORITY_LOW);
-                    break;
-                case NOTIFICATION_CHANNEL_NOTIFY:
-                    builder.setPriority(Notification.PRIORITY_DEFAULT);
-                    break;
-                case NOTIFICATION_CHANNEL_ALERT:
-                    builder.setDefaults(DEFAULT_VIBRATE)
-                            .setPriority(Notification.PRIORITY_HIGH);
-                    break;
-                case NOTIFICATION_CHANNEL_FINAL_ALERT:
-                    builder.setDefaults(DEFAULT_SOUND | DEFAULT_VIBRATE)
-                            .setPriority(Notification.PRIORITY_HIGH);
-                    break;
-                default:
-                    // no further action
-                    break;
-            }
-            if (channel.equals(NOTIFICATION_CHANNEL_ALERT)) {
-                builder.setDefaults(DEFAULT_VIBRATE)
-                        .setPriority(Notification.PRIORITY_HIGH);
-            } else if (channel.equals(NOTIFICATION_CHANNEL_FINAL_ALERT)) {
-                builder.setDefaults(DEFAULT_SOUND | DEFAULT_VIBRATE)
-                        .setPriority(Notification.PRIORITY_HIGH);
-            }
+            builder = deprecatedBuilder(channel);
         }
         return updateNotificationAppSettings(builder, includeIntent);
+    }
+
+    @SuppressWarnings("deprecation")
+    private Notification.Builder deprecatedBuilder(String channel) {
+        Notification.Builder builder = new Notification.Builder(context);
+        switch (channel) {
+            case NOTIFICATION_CHANNEL_INFO:
+                builder.setPriority(Notification.PRIORITY_LOW);
+                break;
+            case NOTIFICATION_CHANNEL_NOTIFY:
+                builder.setPriority(Notification.PRIORITY_DEFAULT);
+                break;
+            case NOTIFICATION_CHANNEL_ALERT:
+                builder.setDefaults(DEFAULT_VIBRATE)
+                        .setPriority(Notification.PRIORITY_HIGH);
+                break;
+            case NOTIFICATION_CHANNEL_FINAL_ALERT:
+                builder.setDefaults(DEFAULT_SOUND | DEFAULT_VIBRATE)
+                        .setPriority(Notification.PRIORITY_HIGH);
+                break;
+            default:
+                // no further action
+                break;
+        }
+        if (channel.equals(NOTIFICATION_CHANNEL_ALERT)) {
+            builder.setDefaults(DEFAULT_VIBRATE)
+                    .setPriority(Notification.PRIORITY_HIGH);
+        } else if (channel.equals(NOTIFICATION_CHANNEL_FINAL_ALERT)) {
+            builder.setDefaults(DEFAULT_SOUND | DEFAULT_VIBRATE)
+                    .setPriority(Notification.PRIORITY_HIGH);
+        }
+        return builder;
     }
 
     public Notification.Builder updateNotificationAppSettings(Notification.Builder builder, boolean includeIntent) {

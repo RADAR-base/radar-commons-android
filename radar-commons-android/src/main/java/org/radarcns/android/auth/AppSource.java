@@ -19,7 +19,7 @@ public class AppSource implements Parcelable, Serializable {
     private String sourceId;
     private String sourceName;
     private String expectedSourceName;
-    private Map<String, String> attributes;
+    private final Map<String, String> attributes;
 
     public static final Creator<AppSource> CREATOR = new Creator<AppSource>() {
         @Override

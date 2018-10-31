@@ -48,12 +48,12 @@ public class CacheStore {
     static final String TAPE_EXTENSION = ".tape";
     static final String KEY_SCHEMA_EXTENSION = ".key.avsc";
     static final String VALUE_SCHEMA_EXTENSION = ".value.avsc";
-    private static CacheStore store = new CacheStore();
+    private static final CacheStore INSTANCE = new CacheStore();
     private final GenericData genericData;
     private final Map<String, SynchronizedReference<DataCacheGroup>> tables;
 
     public static CacheStore get() {
-        return store;
+        return INSTANCE;
     }
 
     private final SpecificData specificData;
@@ -118,7 +118,7 @@ public class CacheStore {
 
     private <K, V> DataCacheGroup<K, V> loadCache(String base, AvroTopic<K, V> topic) throws IOException {
         List<String> fileBases = getFileBases(base);
-        logger.info("Files for topic {}: {}", topic.getName(), fileBases);
+        logger.debug("Files for topic {}: {}", topic.getName(), fileBases);
 
         DataCache<K, V> activeDataCache = null;
         List<ReadableDataCache> deprecatedDataCaches = new ArrayList<>();

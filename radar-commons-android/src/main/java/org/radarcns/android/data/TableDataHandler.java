@@ -21,6 +21,7 @@ import android.content.Intent;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
 
 import org.apache.avro.specific.SpecificData;
@@ -94,7 +95,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private long senderConnectionTimeout;
 
     private ServerStatusListener.Status status;
-    private Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
+    private final Map<String, Integer> lastNumberOfRecordsSent = new TreeMap<>();
     private KafkaDataSubmitter submitter;
     private RestSender sender;
     private final AtomicFloat minimumBatteryLevel;
@@ -129,7 +130,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                     numberCached.putExtra(CACHE_TOPIC, cache.getReadTopic().getName());
                     numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, records.first);
                     numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, records.second);
-                    context.sendBroadcast(numberCached);
+                    LocalBroadcastManager.getInstance(context).sendBroadcast(numberCached);
                 }
                 synchronized (TableDataHandler.this) {
                     if (handler != null) {
@@ -269,20 +270,8 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             this.submitter = null;
             this.sender = null;
         }
-        clean();
         for (DataCacheGroup<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
             table.close();
-        }
-    }
-
-    @Override
-    public void clean() {
-        long timestamp = (System.currentTimeMillis() - dataRetention.get());
-        for (DataCacheGroup<ObservationKey, ? extends SpecificRecord> table : tables.values()) {
-            table.getActiveDataCache().removeBeforeTimestamp(timestamp);
-            for (ReadableDataCache oldTable : table.getDeprecatedCaches()) {
-                oldTable.removeBeforeTimestamp(timestamp);
-            }
         }
     }
 
@@ -392,13 +381,15 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
             // Overwrite key-value if exists. Only stores the last
             this.lastNumberOfRecordsSent.put(topicName, numberOfRecords );
 
-            if (numberOfRecords < 0 ) {
-                String message = String.format(Locale.US, "%1$45s has FAILED uploading", topicName);
-                logger.warn(message);
-            } else {
-                String message = String.format(Locale.US, "%1$45s uploaded %2$4d records",
-                        topicName, numberOfRecords);
-                logger.info(message);
+            if (logger.isInfoEnabled()) {
+                if (numberOfRecords < 0) {
+                    String message = String.format(Locale.US, "%1$45s has FAILED uploading", topicName);
+                    logger.warn(message);
+                } else {
+                    String message = String.format(Locale.US, "%1$45s uploaded %2$4d records",
+                            topicName, numberOfRecords);
+                    logger.info(message);
+                }
             }
         }
     }

@@ -37,7 +37,7 @@ import static org.radarcns.util.Serialization.intToBytes;
 public class QueueFileOutputStream extends OutputStream {
     private static final Logger logger = LoggerFactory.getLogger(QueueFileOutputStream.class);
 
-    private QueueFile queue;
+    private final QueueFile queue;
     private final QueueFileElement current;
     private boolean closed;
     private final QueueFileElement newLast;
@@ -50,7 +50,7 @@ public class QueueFileOutputStream extends OutputStream {
     private final QueueStorage storage;
     private long storagePosition;
 
-    QueueFileOutputStream(QueueFile queue, QueueFileHeader header, QueueStorage storage, long position) throws IOException {
+    QueueFileOutputStream(QueueFile queue, QueueFileHeader header, QueueStorage storage, long position) {
         this.queue = queue;
         this.header = header;
         this.storage = storage;
@@ -174,7 +174,7 @@ public class QueueFileOutputStream extends OutputStream {
 
     /**
      * Closes the stream and commits it to file.
-     * @throws IOException
+     * @throws IOException if the output stream cannot be written to.
      */
     @Override
     public void close() throws IOException {

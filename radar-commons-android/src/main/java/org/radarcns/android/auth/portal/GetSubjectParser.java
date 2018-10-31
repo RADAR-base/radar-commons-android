@@ -96,7 +96,7 @@ public class GetSubjectParser implements AuthStringParser {
             JSONObject sourceObj = sources.getJSONObject(i);
             String sourceId = sourceObj.getString("sourceId");
             if (!sourceObj.optBoolean("assigned", true)) {
-                logger.info("Skipping unassigned source {}", sourceId);
+                logger.debug("Skipping unassigned source {}", sourceId);
             }
             int sourceTypeId = sourceObj.getInt("sourceTypeId");
             AppSource source = sourceTypes.get(sourceTypeId);

@@ -22,27 +22,36 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.content.LocalBroadcastManager;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 
+import org.radarcns.android.auth.AppAuthState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import static java.util.regex.Pattern.CASE_INSENSITIVE;
+import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
 
+@SuppressWarnings("WeakerAccess")
 public class RadarConfiguration {
     private static final Logger logger = LoggerFactory.getLogger(RadarConfiguration.class);
     private static final long FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12*60*60 * 1000L;
@@ -56,6 +65,8 @@ public class RadarConfiguration {
     public static final String MANAGEMENT_PORTAL_URL_KEY = "management_portal_url";
     public static final String PROJECT_ID_KEY = "radar_project_id";
     public static final String USER_ID_KEY = "radar_user_id";
+    public static final String READABLE_USER_ID_KEY = "readable_user_id";
+    public static final String BASE_URL_KEY = "radar_base_url";
     public static final String SOURCE_ID_KEY = "source_id";
     public static final String SEND_OVER_DATA_HIGH_PRIORITY = "send_over_data_high_priority_only";
     public static final String TOPICS_HIGH_PRIORITY = "topics_high_priority";
@@ -120,10 +131,10 @@ public class RadarConfiguration {
                 // activated before newly fetched values are returned.
                 activateFetched();
 
-                logger.info("Remote Config: Activate success.");
                 // Set global properties.
                 logger.info("RADAR configuration changed: {}", RadarConfiguration.this);
-                context.sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+                LocalBroadcastManager.getInstance(context)
+                        .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
             } else {
                 setStatus(status);
                 logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
@@ -174,8 +185,8 @@ public class RadarConfiguration {
         this.status = status;
     }
 
+    @Deprecated
     public synchronized static RadarConfiguration getInstance() {
-
         if (instance == null) {
             throw new IllegalStateException("RadarConfiguration instance is not yet "
                     + "initialized");
@@ -208,9 +219,9 @@ public class RadarConfiguration {
      * @param value configuration value
      * @return previous local value for given name, if any
      */
-    public String put(String key, Object value) {
-        if (!(value == null
-                || value instanceof String
+    public String put(@NonNull String key, @NonNull Object value) {
+        Objects.requireNonNull(value);
+        if (!(value instanceof String
                 || value instanceof Long
                 || value instanceof Integer
                 || value instanceof Float
@@ -218,7 +229,7 @@ public class RadarConfiguration {
             throw new IllegalArgumentException("Cannot put value of type " + value.getClass()
                     + " into RadarConfiguration");
         }
-        String config = value == null || value instanceof String ? (String)value : value.toString();
+        String config = value instanceof String ? (String)value : value.toString();
         String oldValue = localConfiguration.put(key, config);
         persistChanges.run();
         return oldValue;
@@ -526,6 +537,91 @@ public class RadarConfiguration {
             }
         }
         return uuid;
+    }
+
+    /**
+     * Adds base URL from auth state to configuration.
+     * @return true if the base URL configuration was updated, false otherwise.
+     */
+    public boolean updateWithAuthState(@NonNull Context context, @Nullable AppAuthState appAuthState) {
+        if (appAuthState == null) {
+            return false;
+        }
+        String baseUrl = stripEndSlashes(
+                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY));
+
+        String projectId = appAuthState.getProjectId();
+        String userId = appAuthState.getUserId();
+
+        boolean baseUrlChanged = baseUrl != null
+                && !baseUrl.equals(getString(BASE_URL_KEY, null));
+
+        if (baseUrlChanged) {
+            put(BASE_URL_KEY, baseUrl);
+            put(KAFKA_REST_PROXY_URL_KEY, baseUrl + "/kafka/");
+            put(SCHEMA_REGISTRY_URL_KEY, baseUrl + "/schema/");
+            put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
+            put(OAUTH2_TOKEN_URL, baseUrl + "/managementportal/oauth/token");
+            put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
+            logger.info("Broadcast config changed based on base URL {}", baseUrl);
+        }
+
+        if (projectId != null) {
+            put(PROJECT_ID_KEY, projectId);
+        }
+        if (userId != null) {
+            put(USER_ID_KEY, userId);
+            put(READABLE_USER_ID_KEY, getHumanReadableUserId(appAuthState));
+        }
+
+        FirebaseAnalytics analytics = FirebaseAnalytics.getInstance(context);
+        analytics.setUserId(userId);
+        analytics.setUserProperty(USER_ID_KEY, maxCharacters(userId, 36));
+        analytics.setUserProperty(PROJECT_ID_KEY, maxCharacters(projectId, 36));
+        analytics.setUserProperty(BASE_URL_KEY, maxCharacters(baseUrl, 36));
+
+        return baseUrlChanged;
+    }
+
+    @Nullable
+    private static String maxCharacters(@Nullable String value, int numChars) {
+        if (value != null && value.length() > numChars) {
+            return value.substring(0, numChars);
+        } else {
+            return value;
+        }
+    }
+
+    /**
+     * Strips all slashes from the end of a URL.
+     * @param url string to strip
+     * @return stripped URL or null if that would result in an empty or null string.
+     */
+    @Nullable
+    private static String stripEndSlashes(@Nullable String url) {
+        if (url == null) {
+            return null;
+        }
+        int lastIndex = url.length() - 1;
+        while (lastIndex >= 0 && url.charAt(lastIndex) == '/') {
+            lastIndex--;
+        }
+        if (lastIndex == -1) {
+            logger.warn("Base URL '{}' should be a valid URL.", url);
+            return null;
+        }
+        return url.substring(0, lastIndex + 1);
+    }
+
+    public Map<String, String> toMap() {
+        Set<String> keys = new HashSet<>(config.getKeysByPrefix(null));
+
+        Map<String, String> result = new HashMap<>((keys.size() + localConfiguration.size()) * 2);
+        for (String key : keys) {
+            result.put(key, config.getString(key));
+        }
+        result.putAll(localConfiguration);
+        return result;
     }
 
     public String toString() {

@@ -47,8 +47,8 @@ subprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.8.0'
-    ext.versionCode = 20
+    version = '0.8.1'
+    ext.versionCode = 21
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
 
@@ -74,6 +74,9 @@ subprojects {
             showStackTraces = true
             exceptionFormat 'full'
         }
+    }
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
     }
 }
 

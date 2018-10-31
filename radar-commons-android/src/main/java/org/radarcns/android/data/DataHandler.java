@@ -22,10 +22,6 @@ import org.radarcns.topic.AvroTopic;
 import java.util.List;
 
 public interface DataHandler<K, V> extends ServerStatusListener {
-    /**
-     * Remove any old caches from the handler.
-     */
-    void clean();
 
     /** Get all caches. */
     List<ReadableDataCache> getCaches();

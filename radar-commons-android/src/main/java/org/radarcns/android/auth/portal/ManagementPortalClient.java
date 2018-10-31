@@ -40,7 +40,7 @@ public class ManagementPortalClient {
     private final RestClient client;
 
     public ManagementPortalClient(ServerConfig managementPortal) {
-        logger.info("Creating ManagementPortalClient for {}", managementPortal.toString());
+        logger.debug("Creating ManagementPortalClient for {}", managementPortal);
         client = RestClient.newClient()
                 .server(managementPortal)
                 .build();
@@ -59,7 +59,7 @@ public class ManagementPortalClient {
                 .header("Accept", APPLICATION_JSON)
                 .build();
 
-        logger.info("Requesting refreshToken with token-url {}", metaTokenUrl);
+        logger.debug("Requesting refreshToken with token-url {}", metaTokenUrl);
 
         return handleRequest(request, parser);
     }

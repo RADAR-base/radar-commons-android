@@ -165,7 +165,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     private void doBind(Intent intent, boolean firstBind) {
-        logger.info("Received (re)bind in {}", this);
+        logger.debug("Received (re)bind in {}", this);
         Bundle extras = BundleSerialization.getPersistentExtras(intent, this);
         onInvocation(extras != null ? extras : new Bundle());
 
@@ -175,7 +175,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
 
     @Override
     public boolean onUnbind(Intent intent) {
-        logger.info("Received unbind in {}", this);
+        logger.debug("Received unbind in {}", this);
         return true;
     }
 
@@ -289,7 +289,6 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     protected class DeviceBinder extends Binder implements DeviceServiceBinder {
-        @SuppressWarnings("unchecked")
         @Nullable
         @Override
         public RecordData<Object, Object> getRecords(
@@ -386,7 +385,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public boolean onTransact(int code, Parcel data, Parcel reply, int flags) {
+        public boolean onTransact(int code, @NonNull Parcel data, Parcel reply, int flags) {
             throw new UnsupportedOperationException();
         }
     }
@@ -478,7 +477,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         source.setAttributes(attributes);
         // not yet registered
         if (source.getSourceId() == null) {
-            if (ManagementPortalService.isEnabled()) {
+            if (ManagementPortalService.isEnabled(this)) {
                 // do registration with management portal
                 final Handler handler = new Handler(getMainLooper());
                 ManagementPortalService.registerSource(this, source,

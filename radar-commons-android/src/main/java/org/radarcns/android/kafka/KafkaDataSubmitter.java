@@ -79,7 +79,7 @@ public class KafkaDataSubmitter implements Closeable {
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper());
 
-        logger.info("Started data submission executor");
+        logger.debug("Started data submission executor");
 
         connection = new KafkaConnectionChecker(sender, mHandler, dataHandler, uploadRate * 5);
 
@@ -102,7 +102,6 @@ public class KafkaDataSubmitter implements Closeable {
             uploadIfNeededFuture = null;
             setUploadRate(uploadRate);
         }
-        logger.info("Remote Config: Upload rate is '{}' sec per upload", uploadRate);
     }
 
     /** Set upload rate in seconds. */
@@ -118,7 +117,7 @@ public class KafkaDataSubmitter implements Closeable {
         }
         // Get upload frequency from system property
         uploadFuture = new Runnable() {
-            Set<String> topicsToSend = new HashSet<>();
+            final Set<String> topicsToSend = new HashSet<>();
 
             @Override
             public void run() {

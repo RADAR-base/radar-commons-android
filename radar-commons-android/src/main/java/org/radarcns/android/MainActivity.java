@@ -16,7 +16,7 @@
 
 package org.radarcns.android;
 
-import android.annotation.SuppressLint;
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
@@ -27,11 +27,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Process;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
@@ -49,12 +51,10 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
-import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
@@ -66,6 +66,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private static final int LOGIN_REQUEST_CODE = 232619693;
     private static final int LOCATION_REQUEST_CODE = 232619694;
     private static final int USAGE_REQUEST_CODE = 232619695;
+    private static final long REQUEST_PERMISSION_TIMEOUT_MS = 3_600_000L;
 
     private BroadcastReceiver configurationBroadcastReceiver;
 
@@ -88,6 +89,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private AppAuthState authState;
 
     private Set<String> needsPermissions = Collections.emptySet();
+    private final Set<String> isRequestingPermissions = new HashSet<>();
+    private long isRequestingPermissionsTime = Long.MAX_VALUE;
+
     private boolean requestedBt;
 
     private IRadarBinder radarService;
@@ -98,10 +102,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         public void onReceive(Context context, Intent intent) {
             if (Objects.equals(intent.getAction(), BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                logger.info("Bluetooth state {}", state);
+                logger.debug("Bluetooth state {}", state);
                 // Upon state change, restart ui handler and restart Scanning.
                 if (state == BluetoothAdapter.STATE_OFF) {
-                    logger.warn("Bluetooth is off");
                     requestEnableBt();
                 }
             }
@@ -119,6 +122,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private BroadcastReceiver bluetoothNeededReceiver;
 
     private volatile boolean bluetoothReceiverIsEnabled;
+    protected RadarConfiguration configuration;
 
     /**
      * Sends an intent to request bluetooth to be turned on.
@@ -173,6 +177,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         super.onCreate(savedInstanceState);
         bluetoothReceiverIsEnabled = false;
 
+        configuration = ((RadarApplication)getApplication()).getConfiguration();
+
         if (getIntent() == null || getIntent().getExtras() == null) {
             authState = AppAuthState.Builder.from(this).build();
         } else {
@@ -192,14 +198,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     @CallSuper
     protected void create() {
-        RadarConfiguration radarConfiguration = RadarConfiguration.getInstance();
-
-        if (authState.getProjectId() != null) {
-            radarConfiguration.put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-        }
-        radarConfiguration.put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
-
-        logger.info("RADAR configuration at create: {}", radarConfiguration);
+        logger.info("RADAR configuration at create: {}", configuration);
         onConfigChanged();
 
         configurationBroadcastReceiver = new BroadcastReceiver() {
@@ -208,8 +207,10 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 onConfigChanged();
             }
         };
-        LocalBroadcastManager.getInstance(this).registerReceiver(configurationBroadcastReceiver,
-                new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+        LocalBroadcastManager.getInstance(this)
+                .registerReceiver(configurationBroadcastReceiver,
+                        new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+
         networkReceiver.register();
 
         Bundle extras = new Bundle();
@@ -217,7 +218,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         startService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()).putExtras(extras));
 
         // Start the UI thread
-        uiRefreshRate = radarConfiguration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
+        uiRefreshRate = configuration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
         mViewUpdater = () -> {
             try {
                 // Update all rows in the UI with the data from the connections
@@ -261,21 +262,18 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     @Override
     protected void onResume() {
-        logger.info("mainActivity onResume");
         super.onResume();
         getHandler().post(mViewUpdater);
     }
 
     @Override
     protected void onPause() {
-        logger.info("mainActivity onPause");
         getHandler().removeCallbacks(mViewUpdater);
         super.onPause();
     }
 
     @Override
     protected void onStart() {
-        logger.info("mainActivity onStart");
         super.onStart();
         if (!authState.isValid()) {
             startLogin(true);
@@ -286,6 +284,15 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         Handler localHandler = new Handler(mHandlerThread.getLooper());
         synchronized (this) {
             mHandler = localHandler;
+            if (!isRequestingPermissions.isEmpty()) {
+                long now = SystemClock.elapsedRealtime();
+                long expires = isRequestingPermissionsTime + getRequestPermissionTimeoutMs();
+                if (expires <= now) {
+                    resetRequestingPermission();
+                } else {
+                    mHandler.postDelayed(this::resetRequestingPermission, expires - now);
+                }
+            }
         }
         bindService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()), radarServiceConnection, 0);
         testBindBluetooth();
@@ -293,6 +300,11 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         LocalBroadcastManager.getInstance(this)
                 .registerReceiver(bluetoothNeededReceiver,
                         new IntentFilter(ACTION_BLUETOOTH_NEEDED_CHANGED));
+    }
+
+    private synchronized void resetRequestingPermission() {
+        isRequestingPermissions.clear();
+        isRequestingPermissionsTime = Long.MAX_VALUE;
     }
 
     @Override
@@ -315,7 +327,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     @Override
     protected void onStop() {
-        logger.info("mainActivity onStop");
         super.onStop();
 
         unbindService(radarServiceConnection);
@@ -335,7 +346,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
     }
 
-    @SuppressLint("InlinedApi")
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent result) {
         switch (requestCode) {
@@ -351,8 +361,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 } else {
                     authState = AppAuthState.Builder.from(this).build();
                 }
-                RadarConfiguration.getInstance().put(RadarConfiguration.PROJECT_ID_KEY, authState.getProjectId());
-                RadarConfiguration.getInstance().put(RadarConfiguration.USER_ID_KEY, getHumanReadableUserId(authState));
                 onConfigChanged();
                 break;
             }
@@ -361,7 +369,11 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 break;
             }
             case USAGE_REQUEST_CODE: {
-                onPermissionRequestResult(PACKAGE_USAGE_STATS, resultCode == RESULT_OK);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    onPermissionRequestResult(
+                            Manifest.permission.PACKAGE_USAGE_STATS,
+                            resultCode == RESULT_OK);
+                }
                 break;
             }
         }
@@ -369,6 +381,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
     private void onPermissionRequestResult(String permission, boolean granted) {
         needsPermissions.remove(permission);
+        synchronized (this) {
+            isRequestingPermissions.remove(permission);
+        }
 
         int result = granted ? PackageManager.PERMISSION_GRANTED : PackageManager.PERMISSION_DENIED;
         LocalBroadcastManager.getInstance(this)
@@ -385,22 +400,50 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         return mHandler;
     }
 
-
     protected void checkPermissions() {
-        if (needsPermissions.contains(LOCATION_SERVICE)) {
-            requestLocationProvider();
-        } else if (needsPermissions.contains(PACKAGE_USAGE_STATS)) {
-            requestPackageUsageStats();
-        } else if (!needsPermissions.isEmpty()) {
-            ActivityCompat.requestPermissions(this,
-                    needsPermissions.toArray(new String[0]),
-                    REQUEST_ENABLE_PERMISSIONS);
-        } else {
+        if (needsPermissions.isEmpty()) {
             LocalBroadcastManager.getInstance(this)
                     .sendBroadcast(new Intent()
                             .setAction(RadarService.ACTION_PERMISSIONS_GRANTED)
                             .putExtra(RadarService.EXTRA_PERMISSIONS, new String[0])
                             .putExtra(RadarService.EXTRA_GRANT_RESULTS, new int[0]));
+            return;
+        }
+
+        Set<String> currentlyNeeded = new HashSet<>(needsPermissions);
+        synchronized (this) {
+            currentlyNeeded.removeAll(isRequestingPermissions);
+        }
+        if (currentlyNeeded.isEmpty()) {
+            return;
+        }
+        if (currentlyNeeded.contains(LOCATION_SERVICE)) {
+            addRequestingPermissions(LOCATION_SERVICE);
+            requestLocationProvider();
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && currentlyNeeded.contains(Manifest.permission.PACKAGE_USAGE_STATS)) {
+            addRequestingPermissions(Manifest.permission.PACKAGE_USAGE_STATS);
+            requestPackageUsageStats();
+        } else {
+            addRequestingPermissions(currentlyNeeded);
+            ActivityCompat.requestPermissions(this,
+                    currentlyNeeded.toArray(new String[0]), REQUEST_ENABLE_PERMISSIONS);
+        }
+    }
+
+    private void addRequestingPermissions(String permission) {
+        addRequestingPermissions(Collections.singleton(permission));
+    }
+
+    private synchronized void addRequestingPermissions(Set<String> permissions) {
+        isRequestingPermissions.addAll(permissions);
+
+        if (mHandler != null && isRequestingPermissionsTime != Long.MAX_VALUE) {
+            isRequestingPermissionsTime = SystemClock.elapsedRealtime();
+            mHandler.postDelayed(() -> {
+                resetRequestingPermission();
+                checkPermissions();
+            }, getRequestPermissionTimeoutMs());
         }
     }
 
@@ -425,12 +468,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         builder.setTitle(R.string.enable_package_usage_title)
                 .setMessage(R.string.enable_package_usage)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    dialog.cancel();
                     Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
                     if (intent.resolveActivity(getPackageManager()) == null) {
                         intent = new Intent(Settings.ACTION_SETTINGS);
                     }
                     startActivityForResult(intent, USAGE_REQUEST_CODE);
-                    dialog.cancel();
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
@@ -457,10 +500,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     protected void startLogin(boolean forResult) {
         Class<?> loginActivity = ((RadarApplication) getApplication()).getLoginActivity();
         Intent intent = new Intent(this, loginActivity);
-        RadarConfiguration config = RadarConfiguration.getInstance();
 
         Bundle extras = new Bundle();
-        config.putExtras(extras, MANAGEMENT_PORTAL_URL_KEY, UNSAFE_KAFKA_CONNECTION);
+        configuration.putExtras(extras, MANAGEMENT_PORTAL_URL_KEY, UNSAFE_KAFKA_CONNECTION);
         intent.putExtras(extras);
 
         if (forResult) {
@@ -472,15 +514,19 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         }
     }
 
+    protected long getRequestPermissionTimeoutMs() {
+        return REQUEST_PERMISSION_TIMEOUT_MS;
+    }
+
     public IRadarBinder getRadarService() {
         return radarService;
     }
 
     public String getUserId() {
-        return RadarConfiguration.getInstance().getString(RadarConfiguration.USER_ID_KEY, null);
+        return configuration.getString(RadarConfiguration.USER_ID_KEY, null);
     }
 
     public String getProjectId() {
-        return RadarConfiguration.getInstance().getString(RadarConfiguration.PROJECT_ID_KEY, null);
+        return configuration.getString(RadarConfiguration.PROJECT_ID_KEY, null);
     }
 }

@@ -55,13 +55,6 @@ public interface ReadableDataCache extends Closeable {
      */
     int remove(int number) throws IOException;
 
-    /**
-     * Remove all sent records before a given time.
-     * @param millis time in milliseconds before which to remove.
-     * @return number of rows removed
-     */
-    int removeBeforeTimestamp(long millis);
-
     /** Get the topic the cache stores. */
     AvroTopic<Object, Object> getReadTopic();
 
