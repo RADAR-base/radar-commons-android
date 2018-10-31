@@ -24,8 +24,10 @@ import org.radarcns.data.Record;
 import org.radarcns.topic.AvroTopic;
 import org.radarcns.util.BackedObjectQueue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Objects;
 
 /**
  * Converts records from an AvroTopic for Tape
@@ -36,20 +38,35 @@ public class TapeAvroSerializer<K, V> implements BackedObjectQueue.Serializer<Re
     private final DatumWriter keyWriter;
     private final DatumWriter valueWriter;
     private BinaryEncoder encoder;
+    private K previousKey;
+    private byte[] keyBytes;
 
     public TapeAvroSerializer(AvroTopic<K, V> topic, GenericData specificData) {
         encoderFactory = EncoderFactory.get();
         keyWriter = specificData.createDatumWriter(topic.getKeySchema());
         valueWriter = specificData.createDatumWriter(topic.getValueSchema());
         encoder = null;
+
+        previousKey = null;
+        keyBytes = new byte[0];
     }
 
     @SuppressWarnings("unchecked")
     public void serialize(Record<K, V> o, OutputStream out) throws IOException {
         // for backwards compatibility
         out.write(EMPTY_HEADER, 0, 8);
+
+        if (!Objects.equals(o.key, previousKey)) {
+            ByteArrayOutputStream keyOut = new ByteArrayOutputStream();
+            encoder = encoderFactory.binaryEncoder(keyOut, encoder);
+            keyWriter.write(o.key, encoder);
+            encoder.flush();
+            previousKey = o.key;
+            keyBytes = keyOut.toByteArray();
+        }
+        out.write(keyBytes);
+
         encoder = encoderFactory.binaryEncoder(out, encoder);
-        keyWriter.write(o.key, encoder);
         valueWriter.write(o.value, encoder);
         encoder.flush();
     }
