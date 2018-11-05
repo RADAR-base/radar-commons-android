@@ -52,6 +52,7 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
  */
 public class KafkaDataSubmitter implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(KafkaDataSubmitter.class);
+    public static final int DEFAULT_SIZE_LIMIT = 5_000_000;  // 5 MB
 
     private final DataHandler<?, ?> dataHandler;
     private final KafkaSender sender;
@@ -66,6 +67,7 @@ public class KafkaDataSubmitter implements Closeable {
     /** Upload rate in milliseconds. */
     private long uploadRate;
     private String userId;
+    private final AtomicInteger sizeLimit;
 
     public KafkaDataSubmitter(@NonNull DataHandler<?, ?> dataHandler, @NonNull
             KafkaSender sender, int sendLimit, long uploadRate, String userId) {
@@ -74,6 +76,7 @@ public class KafkaDataSubmitter implements Closeable {
         this.userId = userId;
         topicSenders = new HashMap<>();
         this.sendLimit = new AtomicInteger(sendLimit);
+        this.sizeLimit = new AtomicInteger(DEFAULT_SIZE_LIMIT);
 
         mHandlerThread = new HandlerThread("data-submitter", THREAD_PRIORITY_BACKGROUND);
         mHandlerThread.start();
@@ -157,6 +160,10 @@ public class KafkaDataSubmitter implements Closeable {
         mHandler.postDelayed(uploadIfNeededFuture, uploadRate / 5);
     }
 
+    public void setSizeLimit(int limit) {
+        sizeLimit.set(limit);
+    }
+
     public void setSendLimit(int limit) {
         sendLimit.set(limit);
     }
@@ -211,6 +218,7 @@ public class KafkaDataSubmitter implements Closeable {
     private boolean uploadCachesIfNeeded() {
         boolean uploadingNotified = false;
         int currentSendLimit = sendLimit.get();
+        int currentSizeLimit = sizeLimit.get();
         boolean sendAgain = false;
 
         try {
@@ -219,7 +227,7 @@ public class KafkaDataSubmitter implements Closeable {
                 if (unsent > currentSendLimit) {
                     //noinspection unchecked
                     int sent = uploadCache(entry.getActiveDataCache(),
-                            currentSendLimit, uploadingNotified);
+                            currentSendLimit, currentSizeLimit, uploadingNotified);
                     if (!uploadingNotified) {
                         uploadingNotified = true;
                     }
@@ -245,13 +253,15 @@ public class KafkaDataSubmitter implements Closeable {
     private void uploadCaches(Set<String> toSend) {
         boolean uploadingNotified = false;
         int currentSendLimit = sendLimit.get();
+        int currentSizeLimit = sizeLimit.get();
         try {
             for (DataCacheGroup<?, ?> entry : dataHandler.getActiveCaches()) {
                 if (!toSend.contains(entry.getTopicName())) {
                     continue;
                 }
                 boolean hasFullCache = false;
-                int sent = uploadCache(entry.getActiveDataCache(), currentSendLimit, uploadingNotified);
+                int sent = uploadCache(entry.getActiveDataCache(), currentSendLimit,
+                        currentSizeLimit, uploadingNotified);
                 if (sent == currentSendLimit) {
                     hasFullCache = true;
                 }
@@ -261,7 +271,7 @@ public class KafkaDataSubmitter implements Closeable {
 
                 boolean hasEmptyDeprecatedCache = false;
                 for (ReadableDataCache cache : entry.getDeprecatedCaches()) {
-                    sent = uploadCache(cache, currentSendLimit, uploadingNotified);
+                    sent = uploadCache(cache, currentSendLimit, currentSizeLimit, uploadingNotified);
                     if (sent == currentSendLimit) {
                         hasFullCache = true;
                     } else {
@@ -291,9 +301,9 @@ public class KafkaDataSubmitter implements Closeable {
      * Upload some data from a single table.
      * @return number of records sent.
      */
-    private int uploadCache(ReadableDataCache cache, int limit,
+    private int uploadCache(ReadableDataCache cache, int limit, int sizeLimit,
                             boolean uploadingNotified) throws IOException, SchemaValidationException {
-        RecordData<Object, Object> data = cache.unsentRecords(limit);
+        RecordData<Object, Object> data = cache.unsentRecords(limit, sizeLimit);
         if (data == null) {
             return 0;
         }

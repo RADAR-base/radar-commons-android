@@ -33,7 +33,7 @@ public interface ReadableDataCache extends Closeable {
      * @return records or null if none are found.
      */
     @Nullable
-    RecordData<Object, Object> unsentRecords(int limit) throws IOException;
+    RecordData<Object, Object> unsentRecords(int limit, int sizeLimit) throws IOException;
 
     /**
      * Get latest records in the cache, from new to old.
