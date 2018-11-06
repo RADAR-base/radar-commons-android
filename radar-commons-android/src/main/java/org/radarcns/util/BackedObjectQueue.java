@@ -104,17 +104,25 @@ public class BackedObjectQueue<S, T> implements Closeable {
 
     /**
      * Get at most {@code n} front-most objects in the queue. This does not remove the elements.
-     * Elements that were found to be invalid according to the current schema are
-     * @param n number of elements to retrieve
+     * Elements that were found to be invalid according to the current schema are logged. This
+     * method will try to read at least one record. After that, no more than {@code n} records are
+     * read, and their collective serialized size is no larger than {@code sizeLimit}.
+     * @param n number of elements to retrieve at most.
+     * @param sizeLimit limit for the size of read data.
      * @return list of elements, with at most {@code n} elements.
      * @throws IOException if the element could not be read or deserialized
      * @throws IllegalStateException if the element could not be read
      */
-    public List<T> peek(int n) throws IOException {
+    public List<T> peek(int n, int sizeLimit) throws IOException {
         Iterator<InputStream> iter = queueFile.iterator();
+        int curSize = 0;
         List<T> results = new ArrayList<>(n);
         for (int i = 0; i < n && iter.hasNext(); i++) {
             try (InputStream in = iter.next()) {
+                curSize += in.available();
+                if (i > 0 && curSize > sizeLimit) {
+                    break;
+                }
                 try {
                     results.add(deserializer.deserialize(in));
                 } catch (IllegalStateException ex) {

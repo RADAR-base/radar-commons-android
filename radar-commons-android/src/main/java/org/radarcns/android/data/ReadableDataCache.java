@@ -28,12 +28,14 @@ import java.io.IOException;
 
 public interface ReadableDataCache extends Closeable {
     /**
-     * Get all unsent records in the cache.
+     * Get unsent records from the cache.
      *
+     * @param limit maximum number of records.
+     * @param sizeLimit maximum serialized size of those records.
      * @return records or null if none are found.
      */
     @Nullable
-    RecordData<Object, Object> unsentRecords(int limit) throws IOException;
+    RecordData<Object, Object> unsentRecords(int limit, int sizeLimit) throws IOException;
 
     /**
      * Get latest records in the cache, from new to old.

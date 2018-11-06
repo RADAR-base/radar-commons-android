@@ -42,11 +42,13 @@ import org.slf4j.impl.HandroidLoggerAdapter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.radarcns.android.kafka.KafkaDataSubmitter.SIZE_LIMIT_DEFAULT;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
@@ -96,22 +98,22 @@ public class TapeCacheTest {
 
     @Test
     public void addMeasurement() throws Exception {
-        assertEquals(null, tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
-        assertEquals(null, tapeCache.getRecords(100));
+        assertNull(tapeCache.getRecords(100));
 
         tapeCache.addMeasurement(key, value);
 
-        assertEquals(null, tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         Thread.sleep(100);
 
-        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100);
+        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
-        unsent = tapeCache.unsentRecords(100);
+        unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
@@ -119,7 +121,7 @@ public class TapeCacheTest {
         assertEquals(key.getSourceId(), ((GenericRecord)unsent.getKey()).get("sourceId"));
         assertEquals(value.getUptime(), actualValue.get("uptime"));
         tapeCache.remove(1);
-        assertNull(tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         tapeCache.addMeasurement(key, value);
@@ -127,7 +129,7 @@ public class TapeCacheTest {
 
         Thread.sleep(100);
 
-        unsent = tapeCache.unsentRecords(100);
+        unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
         assertNotNull(unsent);
         assertEquals(2, unsent.size());
         assertEquals(new Pair<>(2L, 0L), tapeCache.numberOfRecords());
@@ -135,27 +137,13 @@ public class TapeCacheTest {
 
     @Test
     public void testBinaryObject() throws IOException {
-        AvroTopic<ObservationKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
-                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
-                ObservationKey.class, ActiveAudioRecording.class);
-        AvroTopic<Object, Object> outputTopic = new AvroTopic<>("test",
-                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
-                Object.class, Object.class);
-        TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
-                folder.newFile(), topic, outputTopic, executorFactory, specificData, genericData);
+        TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = getAudioCache();
 
-        localTapeCache.setMaximumSize(45000000);
-        localTapeCache.setTimeWindow(100);
-
-        Random random = new Random();
-        byte[] data = new byte[176482];
-        random.nextBytes(data);
-        ByteBuffer buffer = ByteBuffer.wrap(data);
-        ActiveAudioRecording localValue = new ActiveAudioRecording(buffer);
+        ActiveAudioRecording localValue = getRecording(176_482);
 
         localTapeCache.addMeasurement(key, localValue);
         localTapeCache.flush();
-        RecordData<Object, Object> records = localTapeCache.unsentRecords(100);
+        RecordData<Object, Object> records = localTapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
 
         assertNotNull(records);
         assertEquals(1, records.size());
@@ -164,20 +152,64 @@ public class TapeCacheTest {
         assertEquals(localValue.getData(), firstRecord.get("data"));
     }
 
+    private ActiveAudioRecording getRecording(int size) {
+        Random random = ThreadLocalRandom.current();
+        byte[] data = new byte[size];
+        random.nextBytes(data);
+        ByteBuffer buffer = ByteBuffer.wrap(data);
+        return new ActiveAudioRecording(buffer);
+    }
+
+    private TapeCache<ObservationKey, ActiveAudioRecording> getAudioCache() throws IOException {
+        AvroTopic<ObservationKey, ActiveAudioRecording> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                ObservationKey.class, ActiveAudioRecording.class);
+        AvroTopic<Object, Object> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                Object.class, Object.class);
+
+        TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
+                folder.newFile(), topic, outputTopic, executorFactory, specificData, genericData);
+        localTapeCache.setTimeWindow(100L);
+        return localTapeCache;
+    }
+
+
+    @Test
+    public void testMaxUnsentObject() throws IOException {
+        TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = getAudioCache();
+
+        localTapeCache.addMeasurement(key, getRecording(100_000));
+        localTapeCache.addMeasurement(key, getRecording(100_000));
+        localTapeCache.flush();
+        // fit two times header (8) + key (13) + value (100,000)
+        RecordData<Object, Object> records = localTapeCache.unsentRecords(100, 200_042);
+        assertNotNull(records);
+        assertEquals(2, records.size());
+
+        records = localTapeCache.unsentRecords(100, 200_041);
+        assertNotNull(records);
+        assertEquals(1, records.size());
+
+        records = localTapeCache.unsentRecords(100, 1);
+        assertNotNull(records);
+        assertEquals(1, records.size());
+    }
+
     @Test
     public void flush() throws Exception {
-        assertNull(tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
         assertNull(tapeCache.getRecords(100));
 
         tapeCache.addMeasurement(key, value);
 
-        assertNull(tapeCache.unsentRecords(100));
+        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         tapeCache.flush();
 
-        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100);
+        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());

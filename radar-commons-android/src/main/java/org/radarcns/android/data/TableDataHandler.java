@@ -100,6 +100,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private RestSender sender;
     private final AtomicFloat minimumBatteryLevel;
     private boolean useCompression;
+    private int kafkaRecordsSizeLimit;
 
     /**
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
@@ -146,6 +147,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         this.useCompression = false;
         this.authState = authState;
         this.specificData = CacheStore.get().getSpecificData();
+        this.kafkaRecordsSizeLimit = KafkaDataSubmitter.SIZE_LIMIT_DEFAULT;
 
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 
@@ -206,6 +208,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                 .build();
         this.submitter = new KafkaDataSubmitter(this, sender, kafkaRecordsSendLimit,
                 getPreferredUploadRate(), authState.getUserId());
+        this.submitter.setSizeLimit(kafkaRecordsSizeLimit);
     }
 
     private synchronized boolean isStarted() {
@@ -404,6 +407,13 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         for (DataCacheGroup<?, ?> table : tables.values()) {
             table.getActiveDataCache().setTimeWindow(period);
         }
+    }
+
+    public synchronized void setKafkaRecordsSizeLimit(int kafkaRecordsSizeLimit) {
+        if (submitter != null) {
+            submitter.setSizeLimit(kafkaRecordsSizeLimit);
+        }
+        this.kafkaRecordsSizeLimit = kafkaRecordsSizeLimit;
     }
 
     public synchronized void setKafkaRecordsSendLimit(int kafkaRecordsSendLimit) {

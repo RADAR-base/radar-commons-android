@@ -75,6 +75,7 @@ public class RadarConfiguration {
     public static final String DATABASE_COMMIT_RATE_KEY = "database_commit_rate";
     public static final String KAFKA_CLEAN_RATE_KEY = "kafka_clean_rate";
     public static final String KAFKA_RECORDS_SEND_LIMIT_KEY = "kafka_records_send_limit";
+    public static final String KAFKA_RECORDS_SIZE_LIMIT_KEY = "kafka_records_size_limit";
     public static final String SENDER_CONNECTION_TIMEOUT_KEY = "sender_connection_timeout";
     public static final String DATA_RETENTION_KEY = "data_retention_ms";
     public static final String FIREBASE_FETCH_TIMEOUT_MS_KEY = "firebase_fetch_timeout_ms";

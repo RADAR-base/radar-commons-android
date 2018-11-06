@@ -41,6 +41,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.radarcns.android.kafka.KafkaDataSubmitter.SIZE_LIMIT_DEFAULT;
+
 /**
  * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
  * before being written in batches to the BackedObjectQueue, using a single-threaded
@@ -107,12 +109,13 @@ public class TapeCache<K, V> implements DataCache<K, V> {
     }
 
     @Override
-    public RecordData<Object, Object> unsentRecords(final int limit) throws IOException {
+    public RecordData<Object, Object> unsentRecords(final int limit, final int sizeLimit)
+            throws IOException {
         logger.debug("Trying to retrieve records from topic {}", topic);
         try {
             return executor.submit(() -> {
                 try {
-                    List<Record<Object, Object>> records = queue.peek(limit);
+                    List<Record<Object, Object>> records = queue.peek(limit, sizeLimit);
                     if (records.isEmpty()) {
                         return null;
                     }
@@ -147,7 +150,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
 
     @Override
     public RecordData<Object, Object> getRecords(int limit) throws IOException {
-        return unsentRecords(limit);
+        return unsentRecords(limit, SIZE_LIMIT_DEFAULT);
     }
 
     @Override

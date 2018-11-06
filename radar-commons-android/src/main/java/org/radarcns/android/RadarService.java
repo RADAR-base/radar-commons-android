@@ -83,6 +83,7 @@ import static android.Manifest.permission.PACKAGE_USAGE_STATS;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
+import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SIZE_LIMIT_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_REST_PROXY_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL;
 import static org.radarcns.android.RadarConfiguration.KAFKA_UPLOAD_RATE_KEY;
@@ -478,6 +479,11 @@ public class RadarService extends Service implements ServerStatusListener {
             localDataHandler.setKafkaRecordsSendLimit(
                     configuration.getInt(KAFKA_RECORDS_SEND_LIMIT_KEY));
         }
+        if (configuration.has(KAFKA_RECORDS_SIZE_LIMIT_KEY)) {
+            localDataHandler.setKafkaRecordsSizeLimit(
+                    configuration.getInt(KAFKA_RECORDS_SIZE_LIMIT_KEY));
+        }
+
         if (configuration.has(SENDER_CONNECTION_TIMEOUT_KEY)) {
             localDataHandler.setSenderConnectionTimeout(
                     configuration.getLong(SENDER_CONNECTION_TIMEOUT_KEY));
