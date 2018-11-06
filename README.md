@@ -16,6 +16,7 @@ This library takes the following firebase parameters:
 | `unsafe_kafka_connection` | boolean | `false` | Whether to accept unsafe HTTPS certificates. Only meant to be set to `true` in development environments. |
 | `device_services_to_connect` | string | `<empty>` | A space-separated list of device service providers to connect. The `org.radarcns` prefix may be excluded. |
 | `kafka_records_send_limit` | int | 1000 | Number of records to send in a single request. |
+| `kafka_records_size_limit` | int (bytes) | 5000000 (= 5 MB)| Maximum size to read for a single request. |
 | `kafka_upload_rate` | int (s) | 50 | Rate after which to send data. In addition, after every `kafka_upload_rate` divided by 5 seconds, if more than `kafka_records_send_limit` are in the buffer, these are sent immediately. |
 | `database_commit_rate` | int (ms) | 10000 (= 10 seconds) | Rate of committing new data to disk. If the application crashes, at most this interval of data will be lost. |
 | `sender_connection_timeout` | int (s) | 120 | HTTP timeout setting for data uploading. |
