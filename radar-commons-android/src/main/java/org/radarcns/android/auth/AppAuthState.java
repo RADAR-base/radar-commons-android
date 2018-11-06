@@ -24,7 +24,7 @@ import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Base64;
-import okhttp3.Headers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +43,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import okhttp3.Headers;
 
 import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_UNKNOWN;
 
@@ -217,7 +219,7 @@ public final class AppAuthState {
                  ObjectInputStream si = new ObjectInputStream(bi)) {
                 return si.readObject();
             } catch (IOException | ClassNotFoundException ex) {
-                logger.warn("Failed to deserialize object {} from preferences", key);
+                logger.warn("Failed to deserialize object {} from preferences", key, ex);
             }
         }
         return null;
