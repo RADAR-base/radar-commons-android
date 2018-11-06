@@ -147,7 +147,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         this.useCompression = false;
         this.authState = authState;
         this.specificData = CacheStore.get().getSpecificData();
-        this.kafkaRecordsSizeLimit = KafkaDataSubmitter.DEFAULT_SIZE_LIMIT;
+        this.kafkaRecordsSizeLimit = KafkaDataSubmitter.SIZE_LIMIT_DEFAULT;
 
         dataRetention = new AtomicLong(DATA_RETENTION_DEFAULT);
 

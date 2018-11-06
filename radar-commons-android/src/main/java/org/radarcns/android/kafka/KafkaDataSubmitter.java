@@ -52,7 +52,7 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
  */
 public class KafkaDataSubmitter implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(KafkaDataSubmitter.class);
-    public static final int DEFAULT_SIZE_LIMIT = 5_000_000;  // 5 MB
+    public static final int SIZE_LIMIT_DEFAULT = 5_000_000;  // 5 MB
 
     private final DataHandler<?, ?> dataHandler;
     private final KafkaSender sender;
@@ -76,7 +76,7 @@ public class KafkaDataSubmitter implements Closeable {
         this.userId = userId;
         topicSenders = new HashMap<>();
         this.sendLimit = new AtomicInteger(sendLimit);
-        this.sizeLimit = new AtomicInteger(DEFAULT_SIZE_LIMIT);
+        this.sizeLimit = new AtomicInteger(SIZE_LIMIT_DEFAULT);
 
         mHandlerThread = new HandlerThread("data-submitter", THREAD_PRIORITY_BACKGROUND);
         mHandlerThread.start();

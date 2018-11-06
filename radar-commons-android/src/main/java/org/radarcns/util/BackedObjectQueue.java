@@ -120,7 +120,7 @@ public class BackedObjectQueue<S, T> implements Closeable {
         for (int i = 0; i < n && iter.hasNext(); i++) {
             try (InputStream in = iter.next()) {
                 curSize += in.available();
-                if (i > 0 && curSize >= sizeLimit) {
+                if (i > 0 && curSize > sizeLimit) {
                     break;
                 }
                 try {
