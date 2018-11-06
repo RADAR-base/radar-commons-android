@@ -35,7 +35,7 @@ repositories {
     jcenter()
 }
 dependencies {
-    api 'org.radarcns:radar-commons-android:0.8.0'
+    api 'org.radarcns:radar-commons-android:0.8.2'
 }
 ```
 
