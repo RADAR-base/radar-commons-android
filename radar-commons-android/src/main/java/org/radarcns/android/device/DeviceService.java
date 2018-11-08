@@ -264,7 +264,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     protected abstract T getDefaultState();
 
     public T startRecording(@NonNull Set<String> acceptableIds) {
-        DeviceManager localManager = getDeviceManager();
+        DeviceManager<T> localManager = getDeviceManager();
         if (key.getUserId() == null) {
             throw new IllegalStateException("Cannot start recording: user ID is not set.");
         }
@@ -280,7 +280,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
                 }
             }
         }
-        return getDeviceManager().getState();
+        localManager = getDeviceManager();
+        if (localManager != null) {
+            return localManager.getState();
+        } else {
+            return null;
+        }
     }
 
     public void stopRecording() {
