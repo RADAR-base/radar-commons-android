@@ -4,6 +4,10 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.support.annotation.NonNull;
 
+import com.google.android.gms.common.internal.safeparcel.SafeParcelable;
+
+import org.json.JSONObject;
+
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
@@ -137,6 +141,15 @@ public class AppSource implements Parcelable, Serializable {
                 + ", expectedSourceName='" + expectedSourceName + '\''
                 + ", attributes=" + attributes + '\''
                 + '}';
+    }
+
+    public String toJsonString() {
+        JSONObject json = new JSONObject();
+        json.put("sourceTypeId", (long)sourceTypeId);
+        json.put("sourceTypeProducer", sourceTypeProducer);
+        json.put("sourceTypeModel", sourceTypeModel);
+        json.put("sourceTypeCatalogVersion", sourceTypeCatalogVersion);
+
     }
 
     @Override
