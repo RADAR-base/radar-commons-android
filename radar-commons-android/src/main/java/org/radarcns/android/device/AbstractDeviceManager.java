@@ -23,6 +23,7 @@ import com.crashlytics.android.Crashlytics;
 
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
+import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.kafka.ObservationKey;
@@ -172,9 +173,15 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
 
     @Override
     @CallSuper
-    public void didRegister(SourceMetadata source) {
+    public void didRegister(AppSource source) {
         deviceName = source.getSourceName();
         getState().getId().setSourceId(source.getSourceId());
+    }
+
+    @Override
+    @CallSuper
+    public void didRegister(SourceMetadata source) {
+        didRegister(source.toAppSource());
     }
 
     /**

@@ -189,4 +189,14 @@ public class SourceMetadata {
     public long getSourceTypeId() {
         return sourceTypeId;
     }
+
+    @SuppressWarnings("deprecation")
+    public AppSource toAppSource() {
+        AppSource source = new AppSource(sourceTypeId, sourceTypeProducer, sourceTypeModel, sourceTypeCatalogVersion, dynamicRegistration);
+        source.setSourceId(sourceId);
+        source.setSourceName(sourceName);
+        source.setExpectedSourceName(expectedSourceName);
+        source.setAttributes(attributes);
+        return source;
+    }
 }

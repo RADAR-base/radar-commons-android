@@ -551,7 +551,7 @@ public class RadarService extends Service implements ServerStatusListener {
                 } else {
                     for (SourceMetadata source : sources) {
                         if (provider.matches(source, false)) {
-                            provider.setSource(source);
+                            provider.setSourceMetadata(source);
                             addProvider(provider);
                             didAddProvider = true;
                             break;
@@ -709,7 +709,7 @@ public class RadarService extends Service implements ServerStatusListener {
             }
 
             logger.info("Starting recording on connection {}", connection);
-            SourceMetadata source = provider.getSource();
+            SourceMetadata source = provider.getSourceMetadata();
             Set<String> filters;
             if (source != null && source.getExpectedSourceName() != null) {
                 String[] expectedIds = source.getExpectedSourceName().split(",");

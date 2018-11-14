@@ -38,6 +38,7 @@ import org.json.JSONException;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.android.auth.portal.ManagementPortalService;
 import org.radarcns.android.data.ReadableDataCache;
@@ -467,8 +468,13 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         return key;
     }
 
-    public SourceMetadata getSource() {
+    public SourceMetadata getSourceMetadata() {
         return source;
+    }
+
+    @Deprecated
+    public AppSource getSource() {
+        return source.toAppSource();
     }
 
     public void registerDevice(String name, Map<String, String> attributes) {

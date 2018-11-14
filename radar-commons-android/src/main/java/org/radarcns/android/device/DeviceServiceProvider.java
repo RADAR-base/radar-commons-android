@@ -28,6 +28,7 @@ import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.RadarService;
 import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.SourceMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -326,7 +327,12 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 || source.getSourceTypeCatalogVersion().equalsIgnoreCase(getVersion());
     }
 
-    public void setSource(SourceMetadata source) {
+    @Deprecated
+    public void setSource(AppSource source) {
+        setSourceMetadata(new SourceMetadata(source));
+    }
+
+    public void setSourceMetadata(SourceMetadata source) {
         this.source = source;
     }
 
@@ -339,7 +345,12 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     @NonNull
     public abstract String getVersion();
 
-    public SourceMetadata getSource() {
+    @Deprecated
+    public AppSource getSource() {
+        return source.toAppSource();
+    }
+
+    public SourceMetadata getSourceMetadata() {
         return source;
     }
 
