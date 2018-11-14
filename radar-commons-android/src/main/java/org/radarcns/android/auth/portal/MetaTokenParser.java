@@ -31,9 +31,9 @@ public class MetaTokenParser implements AuthStringParser {
         try {
             JSONObject json = new JSONObject(authString);
             return currentState.newBuilder()
-                    .property(MP_REFRESH_TOKEN_PROPERTY, json.getString("refreshToken"))
-                    .property(PRIVACY_POLICY_URL_PROPERTY, json.getString("privacyPolicyUrl"))
-                    .property(BASE_URL_PROPERTY, json.getString("baseUrl"))
+                    .attribute(MP_REFRESH_TOKEN_PROPERTY, json.getString("refreshToken"))
+                    .attribute(PRIVACY_POLICY_URL_PROPERTY, json.getString("privacyPolicyUrl"))
+                    .attribute(BASE_URL_PROPERTY, json.getString("baseUrl"))
                     .build();
         } catch (JSONException ex) {
             throw new IOException("Failed to parse json string " + authString, ex);

@@ -42,8 +42,8 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.widget.Toast;
 
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.LoginActivity;
+import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.android.auth.portal.ManagementPortalService;
 import org.radarcns.android.data.TableDataHandler;
 import org.radarcns.android.device.DeviceServiceConnection;
@@ -102,7 +102,6 @@ import static org.radarcns.android.RadarConfiguration.SEND_WITH_COMPRESSION;
 import static org.radarcns.android.RadarConfiguration.TOPICS_HIGH_PRIORITY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
-import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
 import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH_FAILED;
 import static org.radarcns.android.device.DeviceService.DEVICE_CONNECT_FAILED;
@@ -224,7 +223,7 @@ public class RadarService extends Service implements ServerStatusListener {
                 if (!isMakingRequest.compareAndSet(false, true)) {
                     return;
                 }
-                final String refreshToken = (String) authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
+                final String refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
                 if (ManagementPortalService.isEnabled(context) && refreshToken != null) {
                     authState.invalidate(RadarService.this);
                     logger.debug("Creating request to management portal");
@@ -340,7 +339,7 @@ public class RadarService extends Service implements ServerStatusListener {
 
         startForeground(1, createForegroundNotification());
 
-        if (authState.getProperty(SOURCES_PROPERTY) == null && ManagementPortalService.isEnabled(this)) {
+        if (authState.getSourceMetadata().isEmpty() && ManagementPortalService.isEnabled(this)) {
             ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
                 @Override
                 protected void onReceiveResult(int resultCode, Bundle resultData) {
@@ -545,9 +544,12 @@ public class RadarService extends Service implements ServerStatusListener {
                     continue;
                 }
                 @SuppressWarnings("unchecked")
-                List<AppSource> sources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
-                if (sources != null) {
-                    for (AppSource source : sources) {
+                List<SourceMetadata> sources = authState.getSourceMetadata();
+                if (!useMp) {
+                    addProvider(provider);
+                    didAddProvider = true;
+                } else {
+                    for (SourceMetadata source : sources) {
                         if (provider.matches(source, false)) {
                             provider.setSource(source);
                             addProvider(provider);
@@ -555,9 +557,6 @@ public class RadarService extends Service implements ServerStatusListener {
                             break;
                         }
                     }
-                } else if (!useMp) {
-                    addProvider(provider);
-                    didAddProvider = true;
                 }
             }
         }
@@ -710,7 +709,7 @@ public class RadarService extends Service implements ServerStatusListener {
             }
 
             logger.info("Starting recording on connection {}", connection);
-            AppSource source = provider.getSource();
+            SourceMetadata source = provider.getSource();
             Set<String> filters;
             if (source != null && source.getExpectedSourceName() != null) {
                 String[] expectedIds = source.getExpectedSourceName().split(",");

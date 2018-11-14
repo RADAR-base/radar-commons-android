@@ -35,7 +35,7 @@ public class ManagementPortalLoginManager implements LoginManager {
 
     public ManagementPortalLoginManager(LoginActivity listener, AppAuthState state) {
         this.listener = listener;
-        this.refreshToken = (String)state.getProperty(MP_REFRESH_TOKEN_PROPERTY);
+        this.refreshToken = state.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
         this.refreshResultReceiver = new ResultReceiver(new Handler(Looper.getMainLooper())) {
             @Override
             protected void onReceiveResult(int resultCode, Bundle resultData) {

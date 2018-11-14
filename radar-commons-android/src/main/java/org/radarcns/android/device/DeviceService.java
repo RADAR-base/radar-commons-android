@@ -34,10 +34,11 @@ import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
 
+import org.json.JSONException;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.AppSource;
+import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.android.auth.portal.ManagementPortalService;
 import org.radarcns.android.data.ReadableDataCache;
 import org.radarcns.android.data.TableDataHandler;
@@ -110,7 +111,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private DeviceManager<T> deviceScanner;
     private DeviceBinder mBinder;
     private boolean hasBluetoothPermission;
-    private AppSource source;
+    private SourceMetadata source;
 
     @CallSuper
     @Override
@@ -403,9 +404,14 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     @CallSuper
     protected void onInvocation(@NonNull Bundle bundle) {
-        source = bundle.getParcelable(SOURCE_KEY);
-        if (source == null) {
-            source = new AppSource(-1L, null, null, null, true);
+        String localSource = bundle.getString(SOURCE_KEY);
+        source = new SourceMetadata();
+        if (localSource != null) {
+            try {
+                source = new SourceMetadata(localSource);
+            } catch (JSONException e) {
+                logger.error("Failed to deserialze source metadata", e);
+            }
         }
         if (source.getSourceId() != null) {
             key.setSourceId(source.getSourceId());
@@ -461,7 +467,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         return key;
     }
 
-    public AppSource getSource() {
+    public SourceMetadata getSource() {
         return source;
     }
 
@@ -513,9 +519,16 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     private void updateRegistration(int resultCode, Bundle result, Handler handler) {
-        AppSource updatedSource = null;
+        SourceMetadata updatedSource = null;
         if (resultCode == MANAGEMENT_PORTAL_REGISTRATION && result != null && result.containsKey(SOURCE_KEY)) {
-            updatedSource = result.getParcelable(SOURCE_KEY);
+            String updatedSourceJson = result.getString(SOURCE_KEY);
+            if (updatedSourceJson != null) {
+                try {
+                    updatedSource = new SourceMetadata(updatedSourceJson);
+                } catch (JSONException ex) {
+                    logger.error("Failed to deserialize source after registration", ex);
+                }
+            }
         }
         if (updatedSource == null) {
             // try again in a minute

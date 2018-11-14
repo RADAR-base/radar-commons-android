@@ -21,7 +21,7 @@ public class AccessTokenParser implements AuthStringParser {
 
     @Override
     public AppAuthState parse(@NonNull String body) throws IOException {
-        String refreshToken = (String) state.getProperty(MP_REFRESH_TOKEN_PROPERTY);
+        String refreshToken = state.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
         try {
             JSONObject json = new JSONObject(body);
             String accessToken = json.getString("access_token");
@@ -30,7 +30,7 @@ public class AccessTokenParser implements AuthStringParser {
                     .token(accessToken)
                     .tokenType(AUTH_TYPE_BEARER)
                     .userId(json.getString("sub"))
-                    .property(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
+                    .attribute(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
                     .setHeader("Authorization", "Bearer " + accessToken)
                     .expiration(TimeUnit.SECONDS.toMillis(json.getLong("expires_in"))
                             + System.currentTimeMillis())

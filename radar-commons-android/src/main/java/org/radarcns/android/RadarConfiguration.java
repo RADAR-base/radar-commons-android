@@ -548,8 +548,7 @@ public class RadarConfiguration {
         if (appAuthState == null) {
             return false;
         }
-        String baseUrl = stripEndSlashes(
-                (String) appAuthState.getProperties().get(BASE_URL_PROPERTY));
+        String baseUrl = stripEndSlashes(appAuthState.getAttribute(BASE_URL_PROPERTY));
 
         String projectId = appAuthState.getProjectId();
         String userId = appAuthState.getUserId();
@@ -561,9 +560,11 @@ public class RadarConfiguration {
             put(BASE_URL_KEY, baseUrl);
             put(KAFKA_REST_PROXY_URL_KEY, baseUrl + "/kafka/");
             put(SCHEMA_REGISTRY_URL_KEY, baseUrl + "/schema/");
-            put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
-            put(OAUTH2_TOKEN_URL, baseUrl + "/managementportal/oauth/token");
-            put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
+            if (has(MANAGEMENT_PORTAL_URL_KEY)) {
+                put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
+                put(OAUTH2_TOKEN_URL, baseUrl + "/managementportal/oauth/token");
+                put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
+            }
             logger.info("Broadcast config changed based on base URL {}", baseUrl);
         }
 

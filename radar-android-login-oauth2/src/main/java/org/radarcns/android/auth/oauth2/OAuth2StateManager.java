@@ -45,10 +45,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.ref.WeakReference;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.radarcns.android.auth.oauth2.OAuth2LoginManager.LOGIN_REFRESH_TOKEN;
 
@@ -158,27 +154,24 @@ public class OAuth2StateManager {
     }
 
     private AuthorizationService.TokenResponseCallback processTokenResponse(@NonNull final LoginActivity context) {
-        return new AuthorizationService.TokenResponseCallback() {
-            @Override public void onTokenRequestCompleted(
-                    TokenResponse resp, AuthorizationException ex) {
-                if (resp != null) {
-                    updateAfterTokenResponse(resp, ex);
-                    Long expiration = mCurrentAuthState.getAccessTokenExpirationTime();
-                    if (expiration == null) {
-                        expiration = 0L;
-                    }
-                    AppAuthState state = new AppAuthState.Builder()
-                            .token(mCurrentAuthState.getAccessToken())
-                            .property(LOGIN_REFRESH_TOKEN, mCurrentAuthState.getRefreshToken())
-                            .tokenType(LoginManager.AUTH_TYPE_BEARER)
-                            .expiration(expiration)
-                            .header("Authorization",
-                                    "Bearer " + mCurrentAuthState.getAccessToken())
-                            .build();
-                    context.loginSucceeded(null, state);
-                } else {
-                    context.loginFailed(null, ex);
+        return (resp, ex) -> {
+            if (resp != null) {
+                updateAfterTokenResponse(resp, ex);
+                Long expiration = mCurrentAuthState.getAccessTokenExpirationTime();
+                if (expiration == null) {
+                    expiration = 0L;
                 }
+                AppAuthState state = new AppAuthState.Builder()
+                        .token(mCurrentAuthState.getAccessToken())
+                        .attribute(LOGIN_REFRESH_TOKEN, mCurrentAuthState.getRefreshToken())
+                        .tokenType(LoginManager.AUTH_TYPE_BEARER)
+                        .expiration(expiration)
+                        .header("Authorization",
+                                "Bearer " + mCurrentAuthState.getAccessToken())
+                        .build();
+                context.loginSucceeded(null, state);
+            } else {
+                context.loginFailed(null, ex);
             }
         };
     }

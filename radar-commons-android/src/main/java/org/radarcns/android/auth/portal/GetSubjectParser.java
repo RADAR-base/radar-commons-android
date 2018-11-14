@@ -2,12 +2,13 @@ package org.radarcns.android.auth.portal;
 
 import android.support.annotation.NonNull;
 import android.util.SparseArray;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
+import org.radarcns.android.auth.SourceMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,10 +16,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 public class GetSubjectParser implements AuthStringParser {
     private static final Logger logger = LoggerFactory.getLogger(GetSubjectParser.class);
-    private static final String MP_ATTRIBUTES = GetSubjectParser.class.getName() + ".attributes";
     private final AppAuthState state;
 
     public GetSubjectParser(AppAuthState state) {
@@ -32,10 +34,10 @@ public class GetSubjectParser implements AuthStringParser {
             JSONObject project = object.getJSONObject("project");
             JSONArray sources = object.getJSONArray("sources");
 
-            SparseArray<AppSource> sourceTypes = parseSourceTypes(project);
+            SparseArray<SourceMetadata> sourceTypes = parseSourceTypes(project);
 
             AppAuthState.Builder builder = state.newBuilder()
-                    .property(ManagementPortalClient.SOURCES_PROPERTY, parseSources(sourceTypes, sources))
+                    .sourceMetadata(parseSources(sourceTypes, sources))
                     .userId(parseUserId(object))
                     .projectId(parseProjectId(project));
 
@@ -50,12 +52,12 @@ public class GetSubjectParser implements AuthStringParser {
                             attributes.put(attrObject.getString("key"),
                                     attrObject.getString("value"));
                         }
-                        builder.property(MP_ATTRIBUTES, attributes);
+                        builder.attributes(attributes);
                     }
                 } else {
-                    HashMap<String, String> attributes = attributesToMap((JSONObject) attrObjects);
+                    Map<String, String> attributes = attributesToMap((JSONObject) attrObjects);
                     if (attributes != null) {
-                        builder.property(MP_ATTRIBUTES, attributes);
+                        builder.attributes(attributes);
                     }
                 }
             }
@@ -66,17 +68,17 @@ public class GetSubjectParser implements AuthStringParser {
         }
     }
 
-    static SparseArray<AppSource> parseSourceTypes(JSONObject project)
+    static SparseArray<SourceMetadata> parseSourceTypes(JSONObject project)
             throws JSONException {
         JSONArray sourceTypesArr = project.getJSONArray("sourceTypes");
         int numSources = sourceTypesArr.length();
 
-        SparseArray<AppSource> sources = new SparseArray<>(numSources);
+        SparseArray<SourceMetadata> sources = new SparseArray<>(numSources);
         for (int i = 0; i < numSources; i++) {
             JSONObject sourceTypeObj = sourceTypesArr.getJSONObject(i);
             int sourceTypeId = sourceTypeObj.getInt("id");
 
-            sources.put(sourceTypeId, new AppSource(
+            sources.put(sourceTypeId, new SourceMetadata(
                     sourceTypeId,
                     sourceTypeObj.getString("producer"),
                     sourceTypeObj.getString("model"),
@@ -86,10 +88,10 @@ public class GetSubjectParser implements AuthStringParser {
         return sources;
     }
 
-    static ArrayList<AppSource> parseSources(SparseArray<AppSource> sourceTypes,
+    static List<SourceMetadata> parseSources(SparseArray<SourceMetadata> sourceTypes,
             JSONArray sources) throws JSONException {
 
-        ArrayList<AppSource> actualSources = new ArrayList<>(sourceTypes.size());
+        ArrayList<SourceMetadata> actualSources = new ArrayList<>(sourceTypes.size());
 
         int numSources = sources.length();
         for (int i = 0; i < numSources; i++) {
@@ -99,7 +101,7 @@ public class GetSubjectParser implements AuthStringParser {
                 logger.debug("Skipping unassigned source {}", sourceId);
             }
             int sourceTypeId = sourceObj.getInt("sourceTypeId");
-            AppSource source = sourceTypes.get(sourceTypeId);
+            SourceMetadata source = sourceTypes.get(sourceTypeId);
             if (source == null) {
                 logger.error("Source {} type {} not recognized", sourceId, sourceTypeId);
                 continue;
@@ -114,7 +116,7 @@ public class GetSubjectParser implements AuthStringParser {
         }
 
         for (int i = 0; i < sourceTypes.size(); i++) {
-            AppSource source = sourceTypes.valueAt(i);
+            SourceMetadata source = sourceTypes.valueAt(i);
             if (source.hasDynamicRegistration()) {
                 actualSources.add(source);
             }
@@ -152,7 +154,7 @@ public class GetSubjectParser implements AuthStringParser {
 
     public static String getHumanReadableUserId(AppAuthState state) {
         @SuppressWarnings("unchecked")
-        HashMap<String, String> attr = (HashMap<String, String>) state.getProperty(MP_ATTRIBUTES);
+        Map<String, String> attr = state.getAttributes();
         if (attr != null) {
             for (String attrName : attr.keySet()) {
                 if (attrName.equalsIgnoreCase("Human-readable-identifier")) {

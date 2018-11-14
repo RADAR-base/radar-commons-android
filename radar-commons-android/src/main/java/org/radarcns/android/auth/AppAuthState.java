@@ -40,9 +40,11 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Headers;
@@ -64,6 +66,7 @@ public final class AppAuthState {
     private static final String LOGIN_ATTRIBUTES = "org.radarcns.android.auth.AppAuthState.attributes";
     private static final String LOGIN_HEADERS = "org.radarcns.android.auth.AppAuthState.headers";
     private static final String LOGIN_HEADERS_LIST = "org.radarcns.android.auth.AppAuthState.headerList";
+    private static final String LOGIN_APP_SOURCES_LIST = "org.radarcns.android.auth.AppAuthState.appSourcesList";
     private static final String LOGIN_PRIVACY_POLICY_ACCEPTED = "org.radarcns.android.auth.AppAuthState.isPrivacyPolicyAccepted";
     private static final Logger logger = LoggerFactory.getLogger(AppAuthState.class);
 
@@ -75,7 +78,7 @@ public final class AppAuthState {
     private long lastUpdate;
     private final Map<String, String> attributes;
     private final List<Map.Entry<String, String>> headers;
-    private final ArrayList<AppSource> appSources;
+    private final ArrayList<SourceMetadata> sourceMetadata;
     private Boolean isPrivacyPolicyAccepted;
 
     private AppAuthState(Builder builder) {
@@ -85,7 +88,7 @@ public final class AppAuthState {
         this.tokenType = builder.tokenType;
         this.expiration = builder.expiration;
         this.attributes = builder.attributes;
-        this.appSources = builder.appSources;
+        this.sourceMetadata = builder.sourceMetadata;
         this.headers = builder.headers;
         this.lastUpdate = builder.lastUpdate;
         this.isPrivacyPolicyAccepted = builder.isPrivacyPolicyAccepted;
@@ -114,7 +117,7 @@ public final class AppAuthState {
     @Nullable
     public Serializable getProperty(@NonNull String key) {
         if (key.equals(SOURCES_PROPERTY)) {
-            return appSources;
+            return sourceMetadata;
         } else {
             return attributes.get(key);
         }
@@ -126,8 +129,8 @@ public final class AppAuthState {
     }
 
     @NonNull
-    public ArrayList<AppSource> getAppSources() {
-        return appSources;
+    public ArrayList<SourceMetadata> getSourceMetadata() {
+        return sourceMetadata;
     }
 
     private String serializableAttributeList() {
@@ -216,7 +219,11 @@ public final class AppAuthState {
         bundle.putString(LOGIN_PROJECT_ID, projectId);
         bundle.putString(LOGIN_USER_ID, userId);
         bundle.putString(LOGIN_ATTRIBUTES, serializableAttributeList());
-        bundle.putParcelableArrayList(SOURCES_PROPERTY, appSources);
+        ArrayList<String> jsonSources = new ArrayList<>(sourceMetadata.size());
+        for (SourceMetadata source : sourceMetadata) {
+            jsonSources.add(source.toJsonString());
+        }
+        bundle.putStringArrayList(LOGIN_APP_SOURCES_LIST, jsonSources);
         bundle.putString(LOGIN_HEADERS_LIST, serializableHeaderList());
         bundle.putString(LOGIN_TOKEN, token);
         bundle.putInt(LOGIN_TOKEN_TYPE, tokenType);
@@ -228,17 +235,25 @@ public final class AppAuthState {
 
     public void addToPreferences(@NonNull Context context) {
         SharedPreferences prefs = context.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE);
+        Set<String> jsonSources = new HashSet<>(sourceMetadata.size());
+        for (SourceMetadata source : sourceMetadata) {
+            jsonSources.add(source.toJsonString());
+        }
+
         prefs.edit()
-                .put
                 .putString(LOGIN_PROJECT_ID, projectId)
                 .putString(LOGIN_USER_ID, userId)
                 .putString(LOGIN_TOKEN, token)
-                .putString(LOGIN_HEADERS, getSerialization(LOGIN_HEADERS, new ArrayList<>(headers)))
-                .putString(LOGIN_PROPERTIES, getSerialization(LOGIN_PROPERTIES, new HashMap<>(properties)))
+                .putString(LOGIN_HEADERS_LIST, serializableHeaderList())
+                .putString(LOGIN_ATTRIBUTES, serializableAttributeList())
                 .putInt(LOGIN_TOKEN_TYPE, tokenType)
                 .putLong(LOGIN_EXPIRATION, expiration)
                 .putLong(LOGIN_UPDATE, lastUpdate)
                 .putBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, isPrivacyPolicyAccepted)
+                .remove(LOGIN_PROPERTIES)
+                .remove(LOGIN_HEADERS)
+                .putStringSet(LOGIN_APP_SOURCES_LIST, jsonSources)
+                .remove(SOURCES_PROPERTY)
                 .apply();
     }
 
@@ -291,7 +306,7 @@ public final class AppAuthState {
                 .userId(userId)
                 .token(token)
                 .attributes(attributes)
-                .appSources(appSources)
+                .sourceMetadata(sourceMetadata)
                 .tokenType(tokenType)
                 .expiration(expiration)
                 .headers(headers)
@@ -299,9 +314,13 @@ public final class AppAuthState {
                 .privacyPolicyAccepted(isPrivacyPolicyAccepted);
     }
 
+    public Map<String, String> getAttributes() {
+        return attributes;
+    }
+
     public static class Builder {
         private final ArrayList<Map.Entry<String, String>> headers = new ArrayList<>();
-        private final ArrayList<AppSource> appSources = new ArrayList<>();
+        private final ArrayList<SourceMetadata> sourceMetadata = new ArrayList<>();
         private final Map<String, String> attributes = new HashMap<>();
 
         private String projectId;
@@ -312,12 +331,11 @@ public final class AppAuthState {
         private long lastUpdate = SystemClock.elapsedRealtime();
         private Boolean isPrivacyPolicyAccepted = false;
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "deprecation"})
         @NonNull
         public static Builder from(@NonNull Bundle bundle) {
             bundle.setClassLoader(AppAuthState.class.getClassLoader());
             Builder builder = new Builder();
-
 
             try {
                 builder.properties((Map<String, ? extends Serializable>)bundle.getSerializable(LOGIN_PROPERTIES));
@@ -333,6 +351,11 @@ public final class AppAuthState {
                 builder.appSources(bundle.getParcelableArrayList(SOURCES_PROPERTY));
             } catch (Exception ex) {
                 logger.warn("Cannot deserialize app sources", ex);
+            }
+            try {
+                builder.sourceMetadataJson(bundle.getStringArrayList(LOGIN_APP_SOURCES_LIST));
+            } catch (Exception ex) {
+                logger.warn("Cannot deserialize source metadata", ex);
             }
             return builder
                     .projectId(bundle.getString(LOGIN_PROJECT_ID, null))
@@ -362,6 +385,11 @@ public final class AppAuthState {
                 builder.headers((ArrayList<Map.Entry<String, String>>)readSerializable(prefs, LOGIN_HEADERS));
             } catch (Exception ex) {
                 logger.warn("Cannot read AppAuthState headers", ex);
+            }
+            try {
+                builder.sourceMetadataJson(prefs.getStringSet(LOGIN_APP_SOURCES_LIST, null));
+            } catch (JSONException ex) {
+                logger.warn("Cannot parse source metadata headers", ex);
             }
 
             return builder
@@ -401,7 +429,7 @@ public final class AppAuthState {
             if (value instanceof String) {
                 this.attributes.put(key, (String) value);
             } else {
-                throw new IllegalArgumentException("Cannot store non-string properties")
+                throw new IllegalArgumentException("Cannot store non-string properties");
             }
             return this;
         }
@@ -511,9 +539,32 @@ public final class AppAuthState {
             return this;
         }
 
+        @Deprecated
         public Builder appSources(List<AppSource> appSources) {
-            if (appSources != null) {
-                this.appSources.addAll(appSources);
+            if (appSources == null) {
+                return this;
+            }
+            List<SourceMetadata> metadata = new ArrayList<>(appSources.size());
+            for (AppSource source : appSources) {
+                metadata.add(new SourceMetadata(source));
+            }
+            return sourceMetadata(metadata);
+        }
+
+        public Builder sourceMetadata(List<SourceMetadata> sourceMetadata) {
+            if (sourceMetadata != null) {
+                this.sourceMetadata.clear();
+                this.sourceMetadata.addAll(sourceMetadata);
+            }
+            return this;
+        }
+
+        public Builder sourceMetadataJson(Collection<String> sourceJson) throws JSONException {
+            if (sourceJson != null) {
+                this.sourceMetadata.clear();
+                for (String s : sourceJson) {
+                    sourceMetadata.add(new SourceMetadata(s));
+                }
             }
             return this;
         }
@@ -532,7 +583,7 @@ public final class AppAuthState {
                 ", \nexpiration=" + expiration +
                 ", \nlastUpdate=" + lastUpdate +
                 ", \nattributes=" + attributes +
-                ", \nappSources=" + appSources +
+                ", \nsourceMetadata=" + sourceMetadata +
                 ", \nheaders=" + headers +
                 ", \nisPrivacyPolicyAccepted=" + isPrivacyPolicyAccepted +
                 "\n";

@@ -17,7 +17,8 @@
 package org.radarcns.android.device;
 
 import android.support.annotation.NonNull;
-import org.radarcns.android.auth.AppSource;
+
+import org.radarcns.android.auth.SourceMetadata;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -60,5 +61,5 @@ public interface DeviceManager<T> extends Closeable {
      * Called when a source registration succeeds.
      * @param source source metadata
      */
-    void didRegister(AppSource source);
+    void didRegister(SourceMetadata source);
 }

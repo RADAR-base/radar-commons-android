@@ -7,18 +7,17 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.AppSource;
+import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.config.ServerConfig;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 
 import static org.junit.Assert.assertEquals;
-import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 
 public class ManagementPortalClientTest {
     private static final String EXAMPLE_REQUEST = "{\n"
@@ -101,10 +100,10 @@ public class ManagementPortalClientTest {
         JSONObject project = object.getJSONObject("project");
         JSONArray sources = object.getJSONArray("sources");
 
-        SparseArray<AppSource> deviceTypes = GetSubjectParser.parseSourceTypes(project);
-        ArrayList<AppSource> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
+        SparseArray<SourceMetadata> deviceTypes = GetSubjectParser.parseSourceTypes(project);
+        List<SourceMetadata> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
 
-        AppSource expected = new AppSource(0, "p", "m", "v", true);
+        SourceMetadata expected = new SourceMetadata(0, "p", "m", "v", true);
         expected.setSourceId("i");
         expected.setExpectedSourceName("e");
         expected.setSourceName("s");
@@ -118,12 +117,12 @@ public class ManagementPortalClientTest {
         JSONObject object = new JSONObject(EXAMPLE_REQUEST);
         JSONObject project = object.getJSONObject("project");
 
-        SparseArray<AppSource> deviceTypes = GetSubjectParser.parseSourceTypes(project);
+        SparseArray<SourceMetadata> deviceTypes = GetSubjectParser.parseSourceTypes(project);
 
         JSONArray sources = new JSONArray();
-        ArrayList<AppSource> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
+        List<SourceMetadata> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
 
-        AppSource expected = new AppSource(0, "p", "m", "v", true);
+        SourceMetadata expected = new SourceMetadata(0, "p", "m", "v", true);
 
         assertEquals(Collections.singletonList(expected), sourceList);
     }
@@ -131,12 +130,12 @@ public class ManagementPortalClientTest {
 
     @Test
     public void parseNonDynamicSources() throws Exception {
-        SparseArray<AppSource> deviceTypes = new SparseArray<>(1);
+        SparseArray<SourceMetadata> deviceTypes = new SparseArray<>(1);
         deviceTypes.put(0,
-                new AppSource(0, "p", "m", "v", false));
+                new SourceMetadata(0, "p", "m", "v", false));
 
         JSONArray sources = new JSONArray();
-        ArrayList<AppSource> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
+        List<SourceMetadata> sourceList = GetSubjectParser.parseSources(deviceTypes, sources);
 
         assertEquals(Collections.emptyList(), sourceList);
     }
@@ -155,7 +154,7 @@ public class ManagementPortalClientTest {
     }
 
     @Test
-    public void requestSubject() throws IOException, InterruptedException {
+    public void requestSubject() throws IOException {
         try (MockWebServer server = new MockWebServer()) {
 
             // Schedule some responses.
@@ -172,13 +171,13 @@ public class ManagementPortalClientTest {
             AppAuthState authState = new AppAuthState.Builder().build();
             AppAuthState retAuthState = client.getSubject(authState, new GetSubjectParser(authState));
 
-            AppSource expected = new AppSource(0, "p", "m", "v", true);
+            SourceMetadata expected = new SourceMetadata(0, "p", "m", "v", true);
             expected.setSourceId("i");
             expected.setSourceName("s");
             expected.setExpectedSourceName("e");
             expected.setAttributes(Collections.singletonMap("k", "v"));
 
-            assertEquals(Collections.singletonList(expected), retAuthState.getProperty(SOURCES_PROPERTY));
+            assertEquals(Collections.singletonList(expected), retAuthState.getSourceMetadata());
             assertEquals("proj-name", retAuthState.getProjectId());
             assertEquals("sub-1", retAuthState.getUserId());
         }
@@ -186,7 +185,7 @@ public class ManagementPortalClientTest {
 
     @Test
     public void sourceRegistrationBody() throws JSONException {
-        AppSource source = new AppSource(0, "p", "m", "v", true);
+        SourceMetadata source = new SourceMetadata(0, "p", "m", "v", true);
         source.setSourceName("something");
         source.setAttributes(Collections.singletonMap("firmware", "0.11"));
 
@@ -202,7 +201,7 @@ public class ManagementPortalClientTest {
 
     @Test
     public void sourceRegistrationBodyWithSourceNameSanitizing() throws JSONException {
-        AppSource source = new AppSource(0, "p", "m", "v", true);
+        SourceMetadata source = new SourceMetadata(0, "p", "m", "v", true);
         source.setSourceName("something(With)_others+");
 
         String body = ManagementPortalClient.sourceRegistrationBody(source).toString();
@@ -214,7 +213,7 @@ public class ManagementPortalClientTest {
 
     @Test
     public void parseSourceRegistration() throws JSONException {
-        AppSource source = new AppSource(0, "p", "m", "v", true);
+        SourceMetadata source = new SourceMetadata(0, "p", "m", "v", true);
         source.setSourceName("something");
         String response = "{\"sourceName\": \"something_18131\", \"sourceId\": \"uuid-abcdef\", \"deviceTypeId\": 0, \"attributes\":{\"firmware\":\"0.11\"}, \"expectedSourceName\": \"abc\"}";
         ManagementPortalClient.parseSourceRegistration(response, source);
