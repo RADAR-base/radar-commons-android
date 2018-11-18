@@ -89,8 +89,12 @@ public class ManagementPortalClient {
         RequestBody body = RequestBody.create(APPLICATION_JSON_TYPE,
                 sourceRegistrationBody(source).toString());
 
-        Request request = client.requestBuilder(
-                "api/subjects/" + auth.getUserId() + "/sources")
+        String url = "api/subjects/" + auth.getUserId() + "/sources";
+        if (source.getSourceId() != null) {
+            url += '/' + source.getSourceId();
+        }
+
+        Request request = client.requestBuilder(url)
                 .post(body)
                 .headers(auth.getOkHttpHeaders())
                 .header("Content-Type", APPLICATION_JSON_UTF8)
