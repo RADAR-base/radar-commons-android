@@ -19,6 +19,7 @@ package org.radarcns.android.util;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.os.Build;
@@ -85,17 +86,14 @@ public class NetworkConnectedReceiver extends SpecificReceiver {
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     private void updateCapabilities(@NonNull ConnectivityManager cm) {
-        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        NetworkInfo activeNetworkInfo = cm.getActiveNetworkInfo();
+        isConnected = activeNetworkInfo != null && activeNetworkInfo.isConnected();
 
-        if (activeNetwork == null) {
-            isConnected = false;
-            hasWifiOrEthernet = false;
-        } else {
-            NetworkCapabilities capabilities = cm.getNetworkCapabilities(cm.getActiveNetwork());
-            isConnected = activeNetwork.isConnected();
-            hasWifiOrEthernet = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
-        }
+        Network activeNetwork = cm.getActiveNetwork();
+        NetworkCapabilities capabilities = activeNetwork != null ? cm.getNetworkCapabilities(activeNetwork) : null;
+        hasWifiOrEthernet = capabilities != null
+                && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
     }
 
     @Override
