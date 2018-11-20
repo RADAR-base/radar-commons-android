@@ -504,27 +504,25 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         source.setSourceName(name);
         source.setAttributes(attributes);
         // not yet registered
-        if (source.getSourceId() == null) {
-            if (ManagementPortalService.isEnabled(this)) {
-                // do registration with management portal
-                final Handler handler = new Handler(getMainLooper());
-                ManagementPortalService.registerSource(this, source,
-                        new ResultReceiver(handler) {
-                    @Override
-                    protected void onReceiveResult(int resultCode, Bundle result) {
-                        updateRegistration(resultCode, result, handler);
-                    }
-                });
-                return;
-            } else {
-                // self-register
-                if (sourceIdHint == null) {
-                    source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
-                } else {
-                    source.setSourceId(sourceIdHint);
+        if (ManagementPortalService.isEnabled(this)) {
+            // do registration with management portal
+            final Handler handler = new Handler(getMainLooper());
+            ManagementPortalService.registerSource(this, source,
+                    new ResultReceiver(handler) {
+                @Override
+                protected void onReceiveResult(int resultCode, Bundle result) {
+                    updateRegistration(resultCode, result, handler);
                 }
-                key.setSourceId(source.getSourceId());
+            });
+            return;
+        } else {
+            // self-register
+            if (sourceIdHint == null) {
+                source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
+            } else {
+                source.setSourceId(sourceIdHint);
             }
+            key.setSourceId(source.getSourceId());
         }
         DeviceManager<T> localManager = getDeviceManager();
         if (localManager != null) {
