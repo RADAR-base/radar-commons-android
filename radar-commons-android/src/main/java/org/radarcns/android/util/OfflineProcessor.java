@@ -195,7 +195,7 @@ public class OfflineProcessor implements Closeable {
             trigger();
             firstAlarm = SystemClock.elapsedRealtime() + intervalMillis;
         } else {
-            firstAlarm = SystemClock.elapsedRealtime();
+            firstAlarm = SystemClock.elapsedRealtime() + intervalMillis / 4;
         }
         int type = keepAwake ? AlarmManager.ELAPSED_REALTIME_WAKEUP : AlarmManager.ELAPSED_REALTIME;
         alarmManager.setInexactRepeating(type, firstAlarm, intervalMillis, pendingIntent);
