@@ -286,9 +286,11 @@ public class ManagementPortalService extends IntentService {
 
     private boolean registerSource(Bundle extras) {
         logger.debug("Handling source registration");
-        SourceMetadata source = extras.getParcelable(SOURCE_KEY);
-        if (source == null) {
-            throw new IllegalArgumentException("AppSource not set");
+        SourceMetadata source;
+        try {
+            source = new SourceMetadata(extras.getString(SOURCE_KEY));
+        } catch (JSONException ex) {
+            throw new IllegalArgumentException("Failed to deserialize SourceMetadata", ex);
         }
 
         SourceMetadata resultSource = sources.get((int)source.getSourceTypeId());
