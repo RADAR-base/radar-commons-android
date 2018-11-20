@@ -108,6 +108,8 @@ public class ManagementPortalClient {
                 throw new IOException("User " + auth.getUserId() + " is no longer registered with the ManagementPortal.");
             } else if (response.code() == 401) {
                 throw new AuthenticationException("Authentication failure with the ManagementPortal.");
+            } else if (response.code() == 403) {
+                throw new UnsupportedOperationException("Not allowed to update source data.");
             }
 
             String responseBody = RestClient.responseBody(response);

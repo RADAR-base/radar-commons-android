@@ -306,6 +306,10 @@ public class ManagementPortalService extends IntentService {
                 }
                 resultSource = client.registerSource(authState, source);
                 addSource(resultSource);
+            } catch (UnsupportedOperationException ex) {
+                logger.warn("ManagementPortal does not support updating the app source.");
+                resultSource = source;
+                addSource(resultSource);
             } catch (IllegalArgumentException ex) {
                 authState.invalidate(this);
                 logger.error("ManagementPortal error; firebase settings incomplete", ex);
