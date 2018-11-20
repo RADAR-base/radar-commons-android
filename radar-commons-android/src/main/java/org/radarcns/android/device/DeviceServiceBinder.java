@@ -18,6 +18,7 @@ package org.radarcns.android.device;
 
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.Pair;
 
 import org.radarcns.android.data.TableDataHandler;
@@ -33,23 +34,30 @@ public interface DeviceServiceBinder {
      * @param acceptableIds a set of source IDs that may be connected to.
      *                      If empty, no selection is made.
      */
+    @Nullable
     BaseDeviceState startRecording(@NonNull Set<String> acceptableIds);
     /** Stop scanning and recording */
     void stopRecording();
+    @Nullable
     RecordData<Object, Object> getRecords(@NonNull String topic, int limit) throws IOException;
     /** Get the current device status */
+    @Nullable
     BaseDeviceState getDeviceStatus();
     /** Get the current device name, or null if unknown. */
+    @Nullable
     String getDeviceName();
     /** Get the current server status */
+    @NonNull
     ServerStatusListener.Status getServerStatus();
     /** Get the last number of records sent */
+    @NonNull
     Map<String, Integer> getServerRecordsSent();
     /** Update the configuration of the service */
-    void updateConfiguration(Bundle bundle);
+    void updateConfiguration(@NonNull Bundle bundle);
     /** Number of records in cache [unsent] and [sent] */
+    @NonNull
     Pair<Long, Long> numberOfRecords();
     boolean needsBluetooth();
 
-    void setDataHandler(TableDataHandler dataHandler);
+    void setDataHandler(@NonNull TableDataHandler dataHandler);
 }

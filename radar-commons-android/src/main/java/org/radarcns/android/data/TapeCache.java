@@ -16,6 +16,8 @@
 
 package org.radarcns.android.data;
 
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.Pair;
 
 import com.crashlytics.android.Crashlytics;
@@ -35,6 +37,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -78,17 +81,19 @@ public class TapeCache<K, V> implements DataCache<K, V> {
      *                        from.
      * @throws IOException if a BackedObjectQueue cannot be created.
      */
-    public TapeCache(File file, AvroTopic<K, V> topic, AvroTopic<Object, Object> outputTopic,
-                     SingleThreadExecutorFactory executorFactory, GenericData inputFormat,
-                     GenericData outputFormat)
+    public TapeCache(@NonNull File file, @NonNull AvroTopic<K, V> topic,
+                     @NonNull AvroTopic<Object, Object> outputTopic,
+                     @NonNull SingleThreadExecutorFactory executorFactory,
+                     @NonNull GenericData inputFormat,
+                     @NonNull GenericData outputFormat)
             throws IOException {
-        this.topic = topic;
-        this.outputTopic = outputTopic;
+        this.topic = Objects.requireNonNull(topic);
+        this.outputTopic = Objects.requireNonNull(outputTopic);
         this.timeWindowMillis = 10_000L;
         this.maxBytes = 450_000_000;
         this.file = file;
         try {
-            queueFile = QueueFile.newMapped(file, maxBytes);
+            queueFile = QueueFile.newMapped(Objects.requireNonNull(file), maxBytes);
         } catch (IOException ex) {
             logger.error("TapeCache " + file + " was corrupted. Removing old cache.");
             if (file.delete()) {
@@ -99,12 +104,12 @@ public class TapeCache<K, V> implements DataCache<K, V> {
         }
         this.queueSize = new AtomicLong(queueFile.size());
 
-        this.executor = executorFactory.getScheduledExecutorService();
+        this.executor = Objects.requireNonNull(executorFactory).getScheduledExecutorService();
 
         this.measurementsToAdd = new ArrayList<>();
 
-        this.serializer = new TapeAvroSerializer<>(topic, inputFormat);
-        this.deserializer = new TapeAvroDeserializer<>(outputTopic, outputFormat);
+        this.serializer = new TapeAvroSerializer<>(topic, Objects.requireNonNull(inputFormat));
+        this.deserializer = new TapeAvroDeserializer<>(outputTopic, Objects.requireNonNull(outputFormat));
         this.queue = new BackedObjectQueue<>(queueFile, serializer, deserializer);
     }
 
@@ -153,6 +158,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
         return unsentRecords(limit, SIZE_LIMIT_DEFAULT);
     }
 
+    @NonNull
     @Override
     public Pair<Long, Long> numberOfRecords() {
         return new Pair<>(queueSize.get(), 0L);
@@ -203,7 +209,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
     }
 
     @Override
-    public synchronized void addMeasurement(final K key, final V value) {
+    public synchronized void addMeasurement(@Nullable final K key, @Nullable final V value) {
         measurementsToAdd.add(new Record<>(key, value));
 
         if (addMeasurementFuture == null) {
@@ -212,16 +218,19 @@ public class TapeCache<K, V> implements DataCache<K, V> {
         }
     }
 
+    @NonNull
     @Override
     public AvroTopic<Object, Object> getReadTopic() {
         return outputTopic;
     }
 
+    @NonNull
     @Override
     public File getFile() {
         return file;
     }
 
+    @NonNull
     @Override
     public AvroTopic<K, V> getTopic() {
         return topic;

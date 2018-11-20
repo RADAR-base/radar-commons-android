@@ -34,10 +34,12 @@ import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
 
+import org.json.JSONException;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
+import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.android.auth.portal.ManagementPortalService;
 import org.radarcns.android.data.ReadableDataCache;
 import org.radarcns.android.data.TableDataHandler;
@@ -110,7 +112,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     private DeviceManager<T> deviceScanner;
     private DeviceBinder mBinder;
     private boolean hasBluetoothPermission;
-    private AppSource source;
+    private SourceMetadata source;
 
     @CallSuper
     @Override
@@ -209,10 +211,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public void deviceStatusUpdated(DeviceManager deviceManager, DeviceStatusListener.Status status) {
         switch (status) {
             case DISCONNECTED:
-                stopDeviceManager(deviceManager);
                 synchronized (this) {
-                    deviceScanner = null;
+                    if (deviceScanner == deviceManager) {
+                        deviceScanner = null;
+                    }
                 }
+                stopDeviceManager(deviceManager);
                 break;
             default:
                 // do nothing
@@ -244,6 +248,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     protected abstract DeviceManager<T> createDeviceManager();
 
+    @NonNull
     protected T getState() {
         DeviceManager<T> localManager = getDeviceManager();
         if (localManager != null) {
@@ -261,8 +266,10 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     /**
      * Default state when no device manager is active.
      */
+    @NonNull
     protected abstract T getDefaultState();
 
+    @Nullable
     public T startRecording(@NonNull Set<String> acceptableIds) {
         DeviceManager<T> localManager = getDeviceManager();
         if (key.getUserId() == null) {
@@ -329,6 +336,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             DeviceService.this.stopRecording();
         }
 
+        @NonNull
         @Override
         public ServerStatusListener.Status getServerStatus() {
             TableDataHandler localDataHandler = getDataHandler();
@@ -338,6 +346,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             return localDataHandler.getStatus();
         }
 
+        @NonNull
         @Override
         public Map<String,Integer> getServerRecordsSent() {
             TableDataHandler localDataHandler = getDataHandler();
@@ -348,10 +357,11 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public void updateConfiguration(Bundle bundle) {
+        public void updateConfiguration(@NonNull Bundle bundle) {
             onInvocation(bundle);
         }
 
+        @NonNull
         @Override
         public Pair<Long, Long> numberOfRecords() {
             long unsent = -1L;
@@ -385,7 +395,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public void setDataHandler(TableDataHandler dataHandler) {
+        public void setDataHandler(@NonNull TableDataHandler dataHandler) {
             DeviceService.this.setDataHandler(dataHandler);
         }
 
@@ -403,9 +413,14 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     @CallSuper
     protected void onInvocation(@NonNull Bundle bundle) {
-        source = bundle.getParcelable(SOURCE_KEY);
-        if (source == null) {
-            source = new AppSource(-1L, null, null, null, true);
+        String localSource = bundle.getString(SOURCE_KEY);
+        source = new SourceMetadata();
+        if (localSource != null) {
+            try {
+                source = new SourceMetadata(localSource);
+            } catch (JSONException e) {
+                logger.error("Failed to deserialze source metadata", e);
+            }
         }
         if (source.getSourceId() != null) {
             key.setSourceId(source.getSourceId());
@@ -461,8 +476,13 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         return key;
     }
 
-    public AppSource getSource() {
+    public SourceMetadata getSourceMetadata() {
         return source;
+    }
+
+    @Deprecated
+    public AppSource getSource() {
+        return source.toAppSource();
     }
 
     public void registerDevice(String name, Map<String, String> attributes) {
@@ -470,38 +490,37 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     public void registerDevice(String sourceIdHint, String name, Map<String, String> attributes) {
-        logger.info("Registering source {} with attributes {}", source, attributes);
         if (source.getSourceId() != null) {
+            logger.info("Source already registered. Not registering again.");
             DeviceManager<T> localManager = getDeviceManager();
             if (localManager != null) {
                 localManager.didRegister(source);
             }
             return;
         }
+        logger.info("Registering source {} with attributes {}", source, attributes);
         source.setSourceName(name);
         source.setAttributes(attributes);
         // not yet registered
-        if (source.getSourceId() == null) {
-            if (ManagementPortalService.isEnabled(this)) {
-                // do registration with management portal
-                final Handler handler = new Handler(getMainLooper());
-                ManagementPortalService.registerSource(this, source,
-                        new ResultReceiver(handler) {
-                    @Override
-                    protected void onReceiveResult(int resultCode, Bundle result) {
-                        updateRegistration(resultCode, result, handler);
-                    }
-                });
-                return;
-            } else {
-                // self-register
-                if (sourceIdHint == null) {
-                    source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
-                } else {
-                    source.setSourceId(sourceIdHint);
+        if (ManagementPortalService.isEnabled(this)) {
+            // do registration with management portal
+            final Handler handler = new Handler(getMainLooper());
+            ManagementPortalService.registerSource(this, source,
+                    new ResultReceiver(handler) {
+                @Override
+                protected void onReceiveResult(int resultCode, Bundle result) {
+                    updateRegistration(resultCode, result, handler);
                 }
-                key.setSourceId(source.getSourceId());
+            });
+            return;
+        } else {
+            // self-register
+            if (sourceIdHint == null) {
+                source.setSourceId(RadarConfiguration.getOrSetUUID(this, SOURCE_ID_KEY));
+            } else {
+                source.setSourceId(sourceIdHint);
             }
+            key.setSourceId(source.getSourceId());
         }
         DeviceManager<T> localManager = getDeviceManager();
         if (localManager != null) {
@@ -510,9 +529,16 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     private void updateRegistration(int resultCode, Bundle result, Handler handler) {
-        AppSource updatedSource = null;
+        SourceMetadata updatedSource = null;
         if (resultCode == MANAGEMENT_PORTAL_REGISTRATION && result != null && result.containsKey(SOURCE_KEY)) {
-            updatedSource = result.getParcelable(SOURCE_KEY);
+            String updatedSourceJson = result.getString(SOURCE_KEY);
+            if (updatedSourceJson != null) {
+                try {
+                    updatedSource = new SourceMetadata(updatedSourceJson);
+                } catch (JSONException ex) {
+                    logger.error("Failed to deserialize source after registration", ex);
+                }
+            }
         }
         if (updatedSource == null) {
             // try again in a minute

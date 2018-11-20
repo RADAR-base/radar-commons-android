@@ -16,6 +16,8 @@
 
 package org.radarcns.android.data;
 
+import android.support.annotation.NonNull;
+
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -41,7 +43,7 @@ public class TapeAvroSerializer<K, V> implements BackedObjectQueue.Serializer<Re
     private K previousKey;
     private byte[] keyBytes;
 
-    public TapeAvroSerializer(AvroTopic<K, V> topic, GenericData specificData) {
+    public TapeAvroSerializer(@NonNull AvroTopic<K, V> topic, @NonNull GenericData specificData) {
         encoderFactory = EncoderFactory.get();
         keyWriter = specificData.createDatumWriter(topic.getKeySchema());
         valueWriter = specificData.createDatumWriter(topic.getValueSchema());

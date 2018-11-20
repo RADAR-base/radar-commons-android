@@ -5,8 +5,8 @@ import android.support.annotation.NonNull;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
+import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.android.util.Parser;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
@@ -84,13 +84,17 @@ public class ManagementPortalClient {
     }
 
     /** Register a source with the Management Portal. */
-    public AppSource registerSource(AppAuthState auth, AppSource source)
+    public SourceMetadata registerSource(AppAuthState auth, SourceMetadata source)
             throws IOException, JSONException {
         RequestBody body = RequestBody.create(APPLICATION_JSON_TYPE,
                 sourceRegistrationBody(source).toString());
 
-        Request request = client.requestBuilder(
-                "api/subjects/" + auth.getUserId() + "/sources")
+        String url = "api/subjects/" + auth.getUserId() + "/sources";
+        if (source.getSourceId() != null) {
+            url += '/' + source.getSourceId();
+        }
+
+        Request request = client.requestBuilder(url)
                 .post(body)
                 .headers(auth.getOkHttpHeaders())
                 .header("Content-Type", APPLICATION_JSON_UTF8)
@@ -104,6 +108,8 @@ public class ManagementPortalClient {
                 throw new IOException("User " + auth.getUserId() + " is no longer registered with the ManagementPortal.");
             } else if (response.code() == 401) {
                 throw new AuthenticationException("Authentication failure with the ManagementPortal.");
+            } else if (response.code() == 403) {
+                throw new UnsupportedOperationException("Not allowed to update source data.");
             }
 
             String responseBody = RestClient.responseBody(response);
@@ -125,7 +131,7 @@ public class ManagementPortalClient {
         }
     }
 
-    static JSONObject sourceRegistrationBody(AppSource source) throws JSONException {
+    static JSONObject sourceRegistrationBody(SourceMetadata source) throws JSONException {
         JSONObject requestBody = new JSONObject();
 
         if (source.getSourceName() != null) {
@@ -151,7 +157,7 @@ public class ManagementPortalClient {
      * @param source existing source to update with server information.
      * @throws JSONException if the provided body is not valid JSON with the correct properties
      */
-    static void parseSourceRegistration(@NonNull String body, @NonNull AppSource source)
+    static void parseSourceRegistration(@NonNull String body, @NonNull SourceMetadata source)
             throws JSONException {
         JSONObject responseObject = new JSONObject(body);
         source.setSourceId(responseObject.getString("sourceId"));
@@ -163,7 +169,7 @@ public class ManagementPortalClient {
     public AppAuthState refreshToken(AppAuthState authState, String clientId, String clientSecret,
             AuthStringParser parser) throws IOException {
         try {
-            String refreshToken = (String)authState.getProperty(MP_REFRESH_TOKEN_PROPERTY);
+            String refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
             if (refreshToken == null) {
                 throw new IllegalArgumentException("No refresh token found");
             }

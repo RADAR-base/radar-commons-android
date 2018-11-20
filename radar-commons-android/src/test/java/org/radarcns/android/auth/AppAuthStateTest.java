@@ -2,6 +2,7 @@ package org.radarcns.android.auth;
 
 import android.content.Context;
 import android.os.Bundle;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -17,18 +18,17 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.radarcns.android.auth.LoginManager.AUTH_TYPE_BEARER;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
-import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class AppAuthStateTest {
     private AppAuthState state;
-    private ArrayList<AppSource> sources;
+    private ArrayList<SourceMetadata> sources;
 
     @Before
     public void setUp() {
         sources = new ArrayList<>();
-        AppSource source = new AppSource(1, "radar", "test", "1.0", true);
+        SourceMetadata source = new SourceMetadata(1, "radar", "test", "1.0", true);
         source.setExpectedSourceName("something");
         sources.add(source);
 
@@ -37,8 +37,8 @@ public class AppAuthStateTest {
                 .tokenType(AUTH_TYPE_BEARER)
                 .projectId("p")
                 .userId("u")
-                .property(MP_REFRESH_TOKEN_PROPERTY, "efgh")
-                .property(SOURCES_PROPERTY, sources)
+                .attribute(MP_REFRESH_TOKEN_PROPERTY, "efgh")
+                .sourceMetadata(sources)
                 .header("Authorization", "Bearer abcd")
                 .expiration(System.currentTimeMillis() + 10_000L)
                 .build();
@@ -47,7 +47,7 @@ public class AppAuthStateTest {
     }
 
     @Test
-    public void addToPreferences() throws Exception {
+    public void addToPreferences() {
         Context context = RuntimeEnvironment.application.getApplicationContext();
         state.addToPreferences(context);
 
@@ -61,14 +61,14 @@ public class AppAuthStateTest {
 
     private void testProperties(AppAuthState state, String refreshToken) {
         assertEquals("abcd", state.getToken());
-        assertEquals(refreshToken, state.getProperty(MP_REFRESH_TOKEN_PROPERTY));
+        assertEquals(refreshToken, state.getAttribute(MP_REFRESH_TOKEN_PROPERTY));
         assertEquals("p", state.getProjectId());
         assertEquals("u", state.getUserId());
         assertTrue(state.isValidFor(9, TimeUnit.SECONDS));
         assertFalse(state.isValidFor(11, TimeUnit.SECONDS));
         assertEquals(AUTH_TYPE_BEARER, state.getTokenType());
         assertEquals("Bearer abcd", state.getHeaders().get(0).getValue());
-        assertEquals(sources, state.getProperty(SOURCES_PROPERTY));
+        assertEquals(sources, state.getSourceMetadata());
     }
 
     @Test
@@ -83,7 +83,7 @@ public class AppAuthStateTest {
     @Test
     public void newBuilder() {
         AppAuthState builtState = state.newBuilder()
-                .property(MP_REFRESH_TOKEN_PROPERTY, "else")
+                .attribute(MP_REFRESH_TOKEN_PROPERTY, "else")
                 .build();
 
         testProperties(builtState, "else");

@@ -29,6 +29,7 @@ import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.RadarService;
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.AppSource;
+import org.radarcns.android.auth.SourceMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +70,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     private RadarConfiguration config;
     private DeviceServiceConnection<T> connection;
     private boolean bound;
-    private AppSource source;
+    private SourceMetadata source;
 
     /**
      * Class of the service.
@@ -233,7 +234,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         bundle.putBoolean(NEEDS_BLUETOOTH_KEY, permissions.contains(BLUETOOTH) ||
                 permissions.contains(BLUETOOTH_ADMIN));
         AppAuthState.Builder.from(radarService).build().addToBundle(bundle);
-        bundle.putParcelable(SOURCE_KEY, source);
+        bundle.putString(SOURCE_KEY, source.toJsonString());
     }
 
     /** Get the MainActivity associated to the current connection. */
@@ -318,7 +319,7 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
      * @param source stored source
      * @param checkVersion whether to do a strict version check
      */
-    public boolean matches(AppSource source, boolean checkVersion) {
+    public boolean matches(SourceMetadata source, boolean checkVersion) {
         return source.getSourceTypeProducer().equalsIgnoreCase(getDeviceProducer())
                 && source.getSourceTypeModel().equalsIgnoreCase(getDeviceModel())
                 && !checkVersion
@@ -326,7 +327,12 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
                 || source.getSourceTypeCatalogVersion().equalsIgnoreCase(getVersion());
     }
 
+    @Deprecated
     public void setSource(AppSource source) {
+        setSourceMetadata(new SourceMetadata(source));
+    }
+
+    public void setSourceMetadata(SourceMetadata source) {
         this.source = source;
     }
 
@@ -339,7 +345,12 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
     @NonNull
     public abstract String getVersion();
 
+    @Deprecated
     public AppSource getSource() {
+        return source.toAppSource();
+    }
+
+    public SourceMetadata getSourceMetadata() {
         return source;
     }
 

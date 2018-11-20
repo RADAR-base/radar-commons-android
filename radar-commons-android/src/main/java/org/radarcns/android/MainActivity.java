@@ -263,12 +263,18 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     @Override
     protected void onResume() {
         super.onResume();
-        getHandler().post(mViewUpdater);
+        Handler localHandler = getHandler();
+        if (localHandler != null) {
+            localHandler.post(mViewUpdater);
+        }
     }
 
     @Override
     protected void onPause() {
-        getHandler().removeCallbacks(mViewUpdater);
+        Handler localHandler = getHandler();
+        if (localHandler != null) {
+            localHandler.removeCallbacks(mViewUpdater);
+        }
         super.onPause();
     }
 

@@ -16,6 +16,8 @@
 
 package org.radarcns.android.data;
 
+import android.support.annotation.NonNull;
+
 import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.topic.AvroTopic;
 
@@ -24,9 +26,11 @@ import java.util.List;
 public interface DataHandler<K, V> extends ServerStatusListener {
 
     /** Get all caches. */
+    @NonNull
     List<ReadableDataCache> getCaches();
 
     /** Get caches currently active for sending. */
+    @NonNull
     List<DataCacheGroup<?, ?>> getActiveCaches();
 
     /**
@@ -35,7 +39,7 @@ public interface DataHandler<K, V> extends ServerStatusListener {
      * @param key key of the measurement
      * @param value value of the measurement.
      */
-    <W extends V> void addMeasurement(AvroTopic<K, W> topic, K key, W value);
+    <W extends V> void addMeasurement(@NonNull AvroTopic<K, W> topic, K key, W value);
 
     /**
      * Set maximum number of bytes a single cache may contain.

@@ -17,8 +17,8 @@ import org.json.JSONException;
 import org.radarcns.android.RadarApplication;
 import org.radarcns.android.RadarConfiguration;
 import org.radarcns.android.auth.AppAuthState;
-import org.radarcns.android.auth.AppSource;
 import org.radarcns.android.auth.AuthStringParser;
+import org.radarcns.android.auth.SourceMetadata;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.producer.AuthenticationException;
 import org.slf4j.Logger;
@@ -37,7 +37,6 @@ import static org.radarcns.android.RadarConfiguration.OAUTH2_CLIENT_SECRET;
 import static org.radarcns.android.RadarConfiguration.RADAR_CONFIGURATION_CHANGED;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
-import static org.radarcns.android.auth.portal.ManagementPortalClient.SOURCES_PROPERTY;
 import static org.radarcns.android.device.DeviceServiceProvider.SOURCE_KEY;
 
 /**
@@ -68,9 +67,9 @@ public class ManagementPortalService extends IntentService {
     public static final int REQUEST_FAILED_REASON_CONFLICT = 4;
     public static final int REQUEST_FAILED_REASON_DISCONNECTED = 5;
 
-    private static SoftReference<SparseArray<AppSource>> staticSources = new SoftReference<>(null);
+    private static SoftReference<SparseArray<SourceMetadata>> staticSources = new SoftReference<>(null);
     private ManagementPortalClient client;
-    private SparseArray<AppSource> sources;
+    private SparseArray<SourceMetadata> sources;
     private String clientSecret;
     private String clientId;
     private AppAuthState authState;
@@ -214,7 +213,7 @@ public class ManagementPortalService extends IntentService {
             String refreshToken = extras.getString(REFRESH_TOKEN_KEY);
             if (refreshToken != null) {
                 authState = authState.newBuilder()
-                        .property(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
+                        .attribute(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
                         .build();
             }
             AuthStringParser parser;
@@ -254,40 +253,30 @@ public class ManagementPortalService extends IntentService {
     }
 
     private void updateSources() {
-        @SuppressWarnings("unchecked")
-        List<AppSource> existingSources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
-        if (existingSources != null) {
-            for (AppSource source : existingSources) {
-                if (source.getSourceId() != null) {
-                    sources.put((int) source.getSourceTypeId(), source);
-                }
+        for (SourceMetadata source : authState.getSourceMetadata()) {
+            if (source.getSourceId() != null) {
+                sources.put((int) source.getSourceTypeId(), source);
             }
         }
     }
 
-    private void addSource(AppSource source) {
+    private void addSource(SourceMetadata source) {
         sources.put((int) source.getSourceTypeId(), source);
-        @SuppressWarnings("unchecked")
-        List<AppSource> existingSources = (List<AppSource>) authState.getProperties().get(SOURCES_PROPERTY);
+        List<SourceMetadata> existingSources = authState.getSourceMetadata();
 
         boolean containsSource = false;
-        ArrayList<AppSource> updatedSources;
-        if (existingSources != null) {
-            updatedSources = new ArrayList<>(existingSources.size());
-            updatedSources.add(source);
-            for (AppSource existingSource : existingSources) {
-                if (existingSource.getSourceTypeId() != source.getSourceTypeId()) {
-                    updatedSources.add(existingSource);
-                } else if (Objects.equals(source.getSourceId(), existingSource.getSourceId())) {
-                    containsSource = true;
-                }
+        List<SourceMetadata> updatedSources;
+        updatedSources = new ArrayList<>(existingSources.size());
+        updatedSources.add(source);
+        for (SourceMetadata existingSource : existingSources) {
+            if (existingSource.getSourceTypeId() != source.getSourceTypeId()) {
+                updatedSources.add(existingSource);
+            } else if (Objects.equals(source.getSourceId(), existingSource.getSourceId())) {
+                containsSource = true;
             }
-        } else {
-            updatedSources = new ArrayList<>(1);
-            updatedSources.add(source);
         }
         authState = authState.newBuilder()
-                .property(SOURCES_PROPERTY, updatedSources)
+                .sourceMetadata(updatedSources)
                 .build();
 
         if (!containsSource) {
@@ -297,12 +286,14 @@ public class ManagementPortalService extends IntentService {
 
     private boolean registerSource(Bundle extras) {
         logger.debug("Handling source registration");
-        AppSource source = extras.getParcelable(SOURCE_KEY);
-        if (source == null) {
-            throw new IllegalArgumentException("AppSource not set");
+        SourceMetadata source;
+        try {
+            source = new SourceMetadata(extras.getString(SOURCE_KEY));
+        } catch (JSONException ex) {
+            throw new IllegalArgumentException("Failed to deserialize SourceMetadata", ex);
         }
 
-        AppSource resultSource = sources.get((int)source.getSourceTypeId());
+        SourceMetadata resultSource = sources.get((int)source.getSourceTypeId());
         ResultReceiver receiver = extras.getParcelable(RESULT_RECEIVER_PROPERTY);
         if (receiver == null) {
             throw new IllegalArgumentException("ResultReceiver not set");
@@ -311,12 +302,15 @@ public class ManagementPortalService extends IntentService {
         Bundle result = new Bundle();
 
         if (resultSource == null) {
-
             try {
                 if (!ensureClientConnectivity(receiver, result)) {
                     return false;
                 }
                 resultSource = client.registerSource(authState, source);
+                addSource(resultSource);
+            } catch (UnsupportedOperationException ex) {
+                logger.warn("ManagementPortal does not support updating the app source.");
+                resultSource = source;
                 addSource(resultSource);
             } catch (IllegalArgumentException ex) {
                 authState.invalidate(this);
@@ -360,7 +354,7 @@ public class ManagementPortalService extends IntentService {
         }
 
         authState.addToBundle(result);
-        result.putParcelable(SOURCE_KEY, resultSource);
+        result.putString(SOURCE_KEY, resultSource.toJsonString());
         receiver.send(MANAGEMENT_PORTAL_REGISTRATION, result);
         return true;
     }
@@ -396,11 +390,11 @@ public class ManagementPortalService extends IntentService {
     }
 
     /** Build an intent to create a request for the management portal. */
-    public static void registerSource(Context context, AppSource source, ResultReceiver receiver) {
+    public static void registerSource(Context context, SourceMetadata source, ResultReceiver receiver) {
         Intent intent = new Intent(context, ManagementPortalService.class);
         intent.setAction(REGISTER_SOURCE_ACTION);
         Bundle extras = new Bundle();
-        extras.putParcelable(SOURCE_KEY, source);
+        extras.putString(SOURCE_KEY, source.toJsonString());
         extras.putParcelable(RESULT_RECEIVER_PROPERTY, receiver);
         intent.putExtras(extras);
         context.startService(intent);

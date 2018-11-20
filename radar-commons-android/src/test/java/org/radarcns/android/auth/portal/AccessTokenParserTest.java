@@ -21,12 +21,11 @@ public class AccessTokenParserTest {
                         + "\"expires_in\":10}");
 
         assertEquals("abcd", parsedState.getToken());
-        assertEquals("efgh", parsedState.getProperty(MP_REFRESH_TOKEN_PROPERTY));
+        assertEquals("efgh", parsedState.getAttribute(MP_REFRESH_TOKEN_PROPERTY));
         assertEquals("u", parsedState.getUserId());
         assertTrue(parsedState.isValidFor(9, TimeUnit.SECONDS));
         assertFalse(parsedState.isValidFor(11, TimeUnit.SECONDS));
         assertEquals(AUTH_TYPE_BEARER, parsedState.getTokenType());
         assertEquals("Bearer abcd", parsedState.getHeaders().get(0).getValue());
     }
-
 }

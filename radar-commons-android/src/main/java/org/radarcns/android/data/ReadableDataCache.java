@@ -16,6 +16,7 @@
 
 package org.radarcns.android.data;
 
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Pair;
 
@@ -48,6 +49,7 @@ public interface ReadableDataCache extends Closeable {
     /**
      * Get a pair with the number of [unsent records], [sent records]
      */
+    @NonNull
     Pair<Long, Long> numberOfRecords();
 
     /**
@@ -58,7 +60,9 @@ public interface ReadableDataCache extends Closeable {
     int remove(int number) throws IOException;
 
     /** Get the topic the cache stores. */
+    @NonNull
     AvroTopic<Object, Object> getReadTopic();
 
+    @NonNull
     File getFile();
 }

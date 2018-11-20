@@ -24,6 +24,9 @@ import com.google.zxing.integration.android.IntentResult;
 
 import java.io.IOException;
 
+import static com.google.zxing.client.android.Intents.Scan.MODE;
+import static com.google.zxing.client.android.Intents.Scan.QR_CODE_MODE;
+
 /**
  * RADAR QR Login Manager.
  * Use it by passing a custom AuthStringParser. That parser should parse the string contained in
@@ -46,6 +49,7 @@ public class QrLoginManager implements LoginManager {
     @Override
     public void start() {
         IntentIntegrator qrIntegrator = new IntentIntegrator(activity);
+        qrIntegrator.addExtra(MODE, QR_CODE_MODE);
         qrIntegrator.initiateScan();
     }
 

@@ -1,17 +1,17 @@
 package org.radarcns.android.auth;
 
-import android.os.Parcel;
-import android.os.Parcelable;
 import android.support.annotation.NonNull;
 
-import java.io.Serializable;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
-@Deprecated
-public class AppSource implements Parcelable, Serializable {
+public class SourceMetadata {
     private final long sourceTypeId;
     private final String sourceTypeProducer;
     private final String sourceTypeModel;
@@ -22,31 +22,45 @@ public class AppSource implements Parcelable, Serializable {
     private String expectedSourceName;
     private Map<String, String> attributes;
 
-    public static final Creator<AppSource> CREATOR = new Creator<AppSource>() {
-        @Override
-        public AppSource createFromParcel(Parcel parcel) {
-            AppSource source = new AppSource(parcel.readLong(), parcel.readString(), parcel.readString(),
-                    parcel.readString(), parcel.readByte() == 1);
-            source.setSourceId(parcel.readString());
-            source.setSourceName(parcel.readString());
-            source.setExpectedSourceName(parcel.readString());
-            int len = parcel.readInt();
-            Map<String, String> attr = new HashMap<>(len * 4 / 3 + 1);
-            for (int i = 0; i < len; i++) {
-                attr.put(parcel.readString(), parcel.readString());
+    public SourceMetadata() {
+        this(-1L, null, null, null, true);
+    }
+
+    @SuppressWarnings("deprecation")
+    public SourceMetadata(AppSource appSource) {
+        this.sourceTypeId = appSource.getSourceTypeId();
+        this.sourceTypeProducer = appSource.getSourceTypeProducer();
+        this.sourceTypeModel = appSource.getSourceTypeModel();
+        this.sourceTypeCatalogVersion = appSource.getSourceTypeCatalogVersion();
+        this.dynamicRegistration = appSource.hasDynamicRegistration();
+        this.sourceId = appSource.getSourceId();
+        this.sourceName = appSource.getSourceName();
+        this.expectedSourceName = appSource.getExpectedSourceName();
+        this.attributes = new HashMap<>(appSource.getAttributes());
+    }
+
+    public SourceMetadata(String jsonString) throws JSONException {
+        JSONObject json = new JSONObject(jsonString);
+        this.sourceTypeId = json.getLong("sourceTypeId");
+        this.sourceTypeProducer = json.optString("sourceTypeProducer", null);
+        this.sourceTypeModel = json.optString("sourceTypeModel", null);
+        this.sourceTypeCatalogVersion = json.optString("sourceTypeCatalogVersion", null);
+        this.dynamicRegistration = json.getBoolean("dynamicRegistration");
+        this.sourceId = json.optString("sourceId", null);
+        this.sourceName = json.optString("sourceName", null);
+        this.expectedSourceName = json.optString("expectedSourceName", null);
+        this.attributes = new HashMap<>();
+        JSONObject attributesJson = json.optJSONObject("attributes");
+        if (attributesJson != null) {
+            for (Iterator<String> it = attributesJson.keys(); it.hasNext(); ) {
+                String key = it.next();
+                this.attributes.put(key, attributesJson.getString(key));
             }
-            source.setAttributes(attr);
-            return source;
         }
+    }
 
-        @Override
-        public AppSource[] newArray(int i) {
-            return new AppSource[i];
-        }
-    };
-
-    public AppSource(long deviceTypeId, String deviceProducer, String deviceModel, String catalogVersion,
-            boolean dynamicRegistration) {
+    public SourceMetadata(long deviceTypeId, String deviceProducer, String deviceModel, String catalogVersion,
+                          boolean dynamicRegistration) {
         this.sourceTypeId = deviceTypeId;
         this.sourceTypeProducer = deviceProducer;
         this.sourceTypeModel = deviceModel;
@@ -107,7 +121,7 @@ public class AppSource implements Parcelable, Serializable {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        AppSource appSource = (AppSource) o;
+        SourceMetadata appSource = (SourceMetadata) o;
         return sourceTypeId == appSource.sourceTypeId
                 && dynamicRegistration == appSource.dynamicRegistration
                 && Objects.equals(sourceTypeProducer, appSource.sourceTypeProducer)
@@ -127,7 +141,7 @@ public class AppSource implements Parcelable, Serializable {
 
     @Override
     public String toString() {
-        return "AppSource{"
+        return "SourceMetadata{"
                 + "sourceTypeId='" + sourceTypeId + '\''
                 + ", sourceTypeProducer='" + sourceTypeProducer + '\''
                 + ", sourceTypeModel='" + sourceTypeModel + '\''
@@ -140,25 +154,27 @@ public class AppSource implements Parcelable, Serializable {
                 + '}';
     }
 
-    @Override
-    public int describeContents() {
-        return 0;
-    }
+    public String toJsonString() {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("sourceTypeId", sourceTypeId);
+            json.put("sourceTypeProducer", sourceTypeProducer);
+            json.put("sourceTypeModel", sourceTypeModel);
+            json.put("sourceTypeCatalogVersion", sourceTypeCatalogVersion);
+            json.put("dynamicRegistration", dynamicRegistration);
+            json.put("sourceId", sourceId);
+            json.put("sourceName", sourceName);
+            json.put("expectedSourceName", expectedSourceName);
 
-    @Override
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeLong(sourceTypeId);
-        parcel.writeString(sourceTypeProducer);
-        parcel.writeString(sourceTypeModel);
-        parcel.writeString(sourceTypeCatalogVersion);
-        parcel.writeByte(dynamicRegistration ? (byte)1 : (byte)0);
-        parcel.writeString(sourceId);
-        parcel.writeString(sourceName);
-        parcel.writeString(expectedSourceName);
-        parcel.writeInt(attributes.size());
-        for (Map.Entry<String, String> entry : attributes.entrySet()) {
-            parcel.writeString(entry.getKey());
-            parcel.writeString(entry.getValue());
+            JSONObject attributeJson = new JSONObject();
+            for (Map.Entry<String, String> entry : attributes.entrySet()) {
+                attributeJson.put(entry.getKey(), entry.getValue());
+            }
+
+            json.put("attributes", attributeJson);
+            return json.toString();
+        } catch (JSONException ex) {
+            throw new IllegalStateException("Cannot serialize existing SourceMetadata");
         }
     }
 
@@ -172,5 +188,15 @@ public class AppSource implements Parcelable, Serializable {
 
     public long getSourceTypeId() {
         return sourceTypeId;
+    }
+
+    @SuppressWarnings("deprecation")
+    public AppSource toAppSource() {
+        AppSource source = new AppSource(sourceTypeId, sourceTypeProducer, sourceTypeModel, sourceTypeCatalogVersion, dynamicRegistration);
+        source.setSourceId(sourceId);
+        source.setSourceName(sourceName);
+        source.setExpectedSourceName(expectedSourceName);
+        source.setAttributes(attributes);
+        return source;
     }
 }

@@ -305,7 +305,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     @Override
-    public <W extends SpecificRecord> void addMeasurement(AvroTopic<ObservationKey, W> topic, ObservationKey key, W value) {
+    public <W extends SpecificRecord> void addMeasurement(@NonNull AvroTopic<ObservationKey, W> topic, ObservationKey key, W value) {
         checkRecord(topic, key, value);
         getCache(topic.getName()).addMeasurement(key, value);
     }
@@ -326,6 +326,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         }
     }
 
+    @NonNull
     public List<ReadableDataCache> getCaches() {
         List<ReadableDataCache> caches = new ArrayList<>(tables.size());
         for (DataCacheGroup<?, ?> table : tables.values()) {
@@ -335,6 +336,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         return caches;
     }
 
+    @NonNull
     public List<DataCacheGroup<?, ?>> getActiveCaches() {
         if (submitter == null) {
             return Collections.emptyList();
@@ -359,7 +361,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     @Override
-    public void updateServerStatus(ServerStatusListener.Status status) {
+    public void updateServerStatus(@NonNull ServerStatusListener.Status status) {
         synchronized (STATUS_SYNC) {
             if (statusListener != null) {
                 statusListener.updateServerStatus(status);
@@ -369,6 +371,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     }
 
     /** Get the latest server status. */
+    @NonNull
     public ServerStatusListener.Status getStatus() {
         synchronized (STATUS_SYNC) {
             return this.status;
