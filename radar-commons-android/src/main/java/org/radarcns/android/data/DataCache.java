@@ -16,15 +16,19 @@
 
 package org.radarcns.android.data;
 
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+
 import org.radarcns.topic.AvroTopic;
 
 import java.io.Flushable;
 
 public interface DataCache<K, V> extends Flushable, ReadableDataCache {
     /** Add a new measurement to the cache. */
-    void addMeasurement(K key, V value);
+    void addMeasurement(@Nullable K key, @Nullable V value);
 
     /** Get the topic the cache stores. */
+    @NonNull
     AvroTopic<K, V> getTopic();
 
     /** Set the time until data is committed to disk. */

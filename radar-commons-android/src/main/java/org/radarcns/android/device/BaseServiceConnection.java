@@ -82,7 +82,10 @@ public class BaseServiceConnection<S extends BaseDeviceState> implements Service
      */
     public void startRecording(@NonNull Set<String> acceptableIds) {
         try {
-            deviceStatus = serviceBinder.startRecording(acceptableIds).getStatus();
+            BaseDeviceState state = serviceBinder.startRecording(acceptableIds);
+            if (state != null) {
+                deviceStatus = state.getStatus();
+            }
         } catch (IllegalStateException ex) {
             logger.error("Cannot start service {}: {}", this, ex.getMessage());
         }

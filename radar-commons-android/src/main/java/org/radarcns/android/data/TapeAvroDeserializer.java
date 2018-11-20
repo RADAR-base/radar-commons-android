@@ -16,6 +16,8 @@
 
 package org.radarcns.android.data;
 
+import android.support.annotation.NonNull;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.io.BinaryDecoder;
@@ -42,7 +44,7 @@ public class TapeAvroDeserializer<K, V>
     private final Schema valueSchema;
     private BinaryDecoder decoder;
 
-    public TapeAvroDeserializer(AvroTopic<?, ?> topic, GenericData specificData) {
+    public TapeAvroDeserializer(@NonNull AvroTopic<?, ?> topic, @NonNull GenericData specificData) {
         this.specificData = specificData;
         topicName = topic.getName();
         decoderFactory = DecoderFactory.get();

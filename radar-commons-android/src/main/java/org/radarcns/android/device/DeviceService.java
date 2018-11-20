@@ -211,10 +211,12 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     public void deviceStatusUpdated(DeviceManager deviceManager, DeviceStatusListener.Status status) {
         switch (status) {
             case DISCONNECTED:
-                stopDeviceManager(deviceManager);
                 synchronized (this) {
-                    deviceScanner = null;
+                    if (deviceScanner == deviceManager) {
+                        deviceScanner = null;
+                    }
                 }
+                stopDeviceManager(deviceManager);
                 break;
             default:
                 // do nothing
@@ -246,6 +248,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
      */
     protected abstract DeviceManager<T> createDeviceManager();
 
+    @NonNull
     protected T getState() {
         DeviceManager<T> localManager = getDeviceManager();
         if (localManager != null) {
@@ -263,8 +266,10 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     /**
      * Default state when no device manager is active.
      */
+    @NonNull
     protected abstract T getDefaultState();
 
+    @Nullable
     public T startRecording(@NonNull Set<String> acceptableIds) {
         DeviceManager<T> localManager = getDeviceManager();
         if (key.getUserId() == null) {
@@ -331,6 +336,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             DeviceService.this.stopRecording();
         }
 
+        @NonNull
         @Override
         public ServerStatusListener.Status getServerStatus() {
             TableDataHandler localDataHandler = getDataHandler();
@@ -340,6 +346,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
             return localDataHandler.getStatus();
         }
 
+        @NonNull
         @Override
         public Map<String,Integer> getServerRecordsSent() {
             TableDataHandler localDataHandler = getDataHandler();
@@ -350,10 +357,11 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public void updateConfiguration(Bundle bundle) {
+        public void updateConfiguration(@NonNull Bundle bundle) {
             onInvocation(bundle);
         }
 
+        @NonNull
         @Override
         public Pair<Long, Long> numberOfRecords() {
             long unsent = -1L;
@@ -387,7 +395,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         }
 
         @Override
-        public void setDataHandler(TableDataHandler dataHandler) {
+        public void setDataHandler(@NonNull TableDataHandler dataHandler) {
             DeviceService.this.setDataHandler(dataHandler);
         }
 

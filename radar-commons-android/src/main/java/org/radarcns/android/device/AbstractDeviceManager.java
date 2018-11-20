@@ -155,6 +155,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     }
 
     /** Get the current device state. */
+    @NonNull
     @Override
     public T getState() {
         return deviceStatus;

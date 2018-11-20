@@ -51,6 +51,7 @@ public interface DeviceManager<T> extends Closeable {
      * status.
      * @return device state
      */
+    @NonNull
     T getState();
 
     /**
