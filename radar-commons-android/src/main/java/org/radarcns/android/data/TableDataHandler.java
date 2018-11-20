@@ -106,8 +106,11 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * Create a data handler. If kafkaConfig is null, data will only be stored to disk, not uploaded.
      */
     public TableDataHandler(Context context, ServerConfig kafkaUrl, SchemaRetriever schemaRetriever,
-                            int maxBytes, boolean sendOnlyWithWifi, boolean hasBinaryContent,
-                            boolean sendOverDataHighPriority, Set<String> highPriorityTopics,
+                            int maxBytes,
+                            boolean hasBinaryContent,
+                            boolean sendOnlyWithWifi,
+                            boolean sendOverDataHighPriority,
+                            Set<String> highPriorityTopics,
                             AppAuthState authState) {
         this.context =  context;
         this.kafkaConfig = kafkaUrl;
