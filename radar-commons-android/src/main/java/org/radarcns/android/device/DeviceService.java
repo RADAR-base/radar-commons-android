@@ -490,9 +490,7 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
     }
 
     public void registerDevice(String sourceIdHint, String name, Map<String, String> attributes) {
-        if (source.getSourceId() != null
-                && Objects.equals(name, source.getSourceName())
-                && Objects.equals(attributes, source.getAttributes())) {
+        if (source.getSourceId() != null) {
             logger.info("Source already registered. Not registering again.");
             DeviceManager<T> localManager = getDeviceManager();
             if (localManager != null) {
