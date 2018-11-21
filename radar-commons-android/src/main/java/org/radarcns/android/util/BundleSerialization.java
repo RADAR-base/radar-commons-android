@@ -24,6 +24,7 @@ import android.os.Parcel;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Base64;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
