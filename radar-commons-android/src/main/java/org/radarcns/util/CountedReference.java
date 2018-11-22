@@ -16,32 +16,48 @@
 
 package org.radarcns.util;
 
+import android.support.annotation.Nullable;
+
 /**
  * Reference that will close itself once its released.
  */
 public class CountedReference<T> {
-    private final T value;
+    private final ValueCreator<T> creator;
+    private final ValueDestroyer<T> destroyer;
+    private T value;
     private int count;
 
-    public CountedReference(T referent) {
-        value = referent;
+    public CountedReference(ValueCreator<T> creator, ValueDestroyer<T> destroyer) {
+        this.creator = creator;
+        this.destroyer = destroyer;
+        value = null;
         count = 0;
     }
 
     public synchronized T acquire() {
+        if (count == 0) {
+            value = creator.doCreate();
+        }
         count++;
         return value;
     }
 
-    public synchronized T release() {
+    public synchronized void release() {
         if (count <= 0) {
             throw new IllegalStateException("Cannot release object that was not acquired");
         }
         count--;
-        return value;
+        if (count == 0) {
+            destroyer.doDestroy(value);
+            value = null;
+        }
     }
 
-    public synchronized boolean isNotHeld() {
-        return count == 0;
+    public interface ValueCreator<T> {
+        @Nullable T doCreate();
+    }
+
+    public interface ValueDestroyer<T> {
+        void doDestroy(@Nullable T value);
     }
 }
