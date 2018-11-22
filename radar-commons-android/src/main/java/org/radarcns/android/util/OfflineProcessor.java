@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.util.Objects;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import static android.content.Context.ALARM_SERVICE;
@@ -73,12 +74,12 @@ public class OfflineProcessor implements Closeable {
     private final boolean keepAwake;
     private final Runnable runnable;
     private final Handler handler;
-    private final boolean doReleaseHandler;
+    private final CountedReference<HandlerThread> handlerReference;
 
-    private boolean doStop;
+    private boolean isClosed;
     private long intervalMillis;
     private volatile boolean isStarted;
-    private volatile boolean isRunning;
+    private final Semaphore isRunning;
 
     /**
      * Creates a processor that will register a BroadcastReceiver and alarm with the given context.
@@ -125,14 +126,14 @@ public class OfflineProcessor implements Closeable {
         this.keepAwake = builder.wake;
         this.runnable = builder.runnable;
         this.intervalMillis = builder.intervalMillis;
-        this.doStop = false;
+        this.isClosed = false;
         this.alarmManager = (AlarmManager) context.getSystemService(ALARM_SERVICE);
         if (builder.handler == null) {
-            this.handler = new Handler(DEFAULT_HANDLER_THREAD.acquire().getLooper());
-            doReleaseHandler = true;
+            this.handlerReference = builder.handlerReference;
+            this.handler = new Handler(handlerReference.acquire().getLooper());
         } else {
+            this.handlerReference = null;
             this.handler = builder.handler;
-            doReleaseHandler = false;
         }
         Intent intent = new Intent(requestName);
         pendingIntent = PendingIntent.getBroadcast(context, builder.requestCode, intent,
@@ -145,6 +146,7 @@ public class OfflineProcessor implements Closeable {
             }
         };
         isStarted = false;
+        isRunning = new Semaphore(1);
     }
 
     /** Start processing. */
@@ -155,11 +157,13 @@ public class OfflineProcessor implements Closeable {
     }
 
     /** Start up a new thread to process. */
-    public synchronized void trigger() {
-        if (doStop || isRunning) {
+    public void trigger() {
+        if (isDone()) {
             return;
         }
-        isRunning = true;
+        if (!isRunning.tryAcquire()) {
+            return;
+        }
         final PowerManager.WakeLock wakeLock;
         if (keepAwake) {
             wakeLock = acquireWakeLock(context, requestName);
@@ -169,12 +173,15 @@ public class OfflineProcessor implements Closeable {
         try {
             handler.post(() -> {
                 try {
+                    if (isDone()) {
+                        return;
+                    }
                     runnable.run();
                 } catch (RuntimeException ex) {
                     Crashlytics.logException(ex);
                     logger.error("OfflineProcessor task failed.", ex);
                 } finally {
-                    isRunning = false;
+                    isRunning.release();
                     if (wakeLock != null) {
                         wakeLock.release();
                     }
@@ -182,7 +189,7 @@ public class OfflineProcessor implements Closeable {
             });
         } catch (RuntimeException ex) {
             logger.error("Handler thread is no longer running.", ex);
-            isRunning = false;
+            isRunning.release();
             if (wakeLock != null) {
                 wakeLock.release();
             }
@@ -243,67 +250,132 @@ public class OfflineProcessor implements Closeable {
     /** Whether the processing Runnable should stop execution. */
     @SuppressWarnings("WeakerAccess")
     public synchronized boolean isDone() {
-        return doStop;
+        return isClosed;
     }
 
     /**
      * Closes the processor.
      *
      * This will deregister any BroadcastReceiver, remove pending alarms and signal the running thread to stop. If
-     * processing is currently taking place, it will block until that is actually done. The processing Runnable should
-     * query {@link #isDone()} very regularly to stop execution if that is the case.
+     * processing is currently taking place, it will block until that is actually done.
+     * The processing Runnable should query {@link #isDone()} very regularly to stop execution
+     * if that is the case.
      */
     @Override
     public void close() {
+        synchronized (this) {
+            if (isClosed) {
+                logger.info("OfflineProcessor attempted to be closed twice.");
+                return;
+            }
+            isClosed = true;
+        }
         alarmManager.cancel(pendingIntent);
         context.unregisterReceiver(receiver);
 
-        synchronized (this) {
-            doStop = true;
-        }
-        if (doReleaseHandler) {
-            DEFAULT_HANDLER_THREAD.release();
+        try {
+            isRunning.acquire();
+            if (handlerReference != null) {
+                handlerReference.release();
+            }
+        } catch (InterruptedException e) {
+            logger.error("Interrupted while waiting for processing to finish.");
+            Thread.currentThread().interrupt();
         }
     }
 
+    /**
+     * Builder for an OfflineProcessor that will register a BroadcastReceiver and alarm with the given context.
+     */
     public static class Builder {
         private final Context context;
         private final Runnable runnable;
         private long intervalMillis = -1;
         private boolean wake = true;
-        private int requestCode;
-        private String requestName;
+        private int requestCode = -1;
+        private String requestName = null;
         private Handler handler;
+        private CountedReference<HandlerThread> handlerReference = DEFAULT_HANDLER_THREAD;
 
+        /**
+         * OfflineProcessor builder.
+         * @param context context to register a BroadcastReceiver with
+         * @param runnable code to run in offline mode
+         */
         public Builder(@NonNull Context context, @NonNull Runnable runnable) {
             this.context = Objects.requireNonNull(context);
             this.runnable = Objects.requireNonNull(runnable);
         }
 
+        /**
+         * @param doWake wake the device for processing.
+         * @return builder
+         */
         public Builder wake(boolean doWake) {
             wake = doWake;
             return this;
         }
 
-        public Builder requestIdentifier(int code, String name) {
+        /**
+         * Set the request identifier for managing broadcasts.
+         * @param code a code unique to the application, used to identify the current processor.
+         *             May not be -1.
+         * @param name a name unique to the application, used to identify the current processor.
+         * @return builder
+         */
+        public Builder requestIdentifier(int code, @NonNull String name) {
+            if (code == -1) {
+                throw new IllegalArgumentException("Code cannot be -1");
+            }
             requestCode = code;
-            requestName = name;
+            requestName = Objects.requireNonNull(name);
             return this;
         }
 
+        /**
+         * @param duration interval to run the processor.
+         * @param unit interval unit
+         * @return builder
+         */
         public Builder interval(long duration, TimeUnit unit) {
             intervalMillis = unit.toMillis(duration);
             return this;
         }
 
+        /**
+         * Set the handler for processing the triggered events in. If this is not set,
+         * {@link #handlerReference(CountedReference)}  will be used.
+         * @param handler handler, preferably from a new thread.
+         * @return builder
+         */
         public Builder handler(Handler handler) {
             this.handler = handler;
             return this;
         }
 
+        /**
+         * Set the handler thread reference for processing the triggered events in. If this is not
+         * set, and {@link #handler(Handler)} is also not set, a global OfflineProcessor
+         * HandlerThread will be used.
+         * @param handlerReference reference to a HandlerThread.
+         * @return builder
+         */
+        public Builder handlerReference(@NonNull CountedReference<HandlerThread> handlerReference) {
+            this.handlerReference = Objects.requireNonNull(handlerReference);
+            return this;
+        }
+
+        /**
+         * Create a new OfflineProcessor.
+         * @return processor
+         * @throws IllegalStateException if interval or requestIdentifier were not called.
+         */
         public OfflineProcessor build() {
             if (intervalMillis == -1) {
                 throw new IllegalStateException("Cannot start offline processor without an interval");
+            }
+            if (requestCode == -1 || requestName == null) {
+                throw new IllegalStateException("Cannot start offline processor without request identifier");
             }
             return new OfflineProcessor(this);
         }
