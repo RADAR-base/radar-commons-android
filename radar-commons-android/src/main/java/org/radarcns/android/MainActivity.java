@@ -19,6 +19,7 @@ package org.radarcns.android;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -95,6 +96,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private boolean requestedBt;
 
     private IRadarBinder radarService;
+    private boolean radarServiceIsStarted;
 
     /** Defines callbacks for service binding, passed to bindService() */
     private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
@@ -192,6 +194,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             return;
         }
 
+        radarServiceIsStarted = false;
+
         networkReceiver = new NetworkConnectedReceiver(this, this);
         create();
     }
@@ -212,10 +216,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                         new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
 
         networkReceiver.register();
-
-        Bundle extras = new Bundle();
-        authState.addToBundle(extras);
-        startService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()).putExtras(extras));
 
         // Start the UI thread
         uiRefreshRate = configuration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
@@ -284,6 +284,17 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         if (!authState.isValid()) {
             startLogin(true);
         }
+        Class<? extends Service> radarServiceCls = ((RadarApplication) getApplication()).getRadarService();
+        if (!radarServiceIsStarted) {
+            Bundle extras = new Bundle();
+            authState.addToBundle(extras);
+            try {
+                startService(new Intent(this, radarServiceCls).putExtras(extras));
+                radarServiceIsStarted = true;
+            } catch (IllegalStateException ex) {
+                logger.error("Failed to start RadarService: activity is in background.", ex);
+            }
+        }
 
         mHandlerThread = new HandlerThread("Service connection", Process.THREAD_PRIORITY_BACKGROUND);
         mHandlerThread.start();
@@ -300,7 +311,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 }
             }
         }
-        bindService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()), radarServiceConnection, 0);
+        if (radarServiceIsStarted) {
+            bindService(new Intent(this, radarServiceCls), radarServiceConnection, 0);
+        }
         testBindBluetooth();
         bluetoothNeededReceiver = bluetoothNeededReceiverImpl;
         LocalBroadcastManager.getInstance(this)
@@ -335,7 +348,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     protected void onStop() {
         super.onStop();
 
-        unbindService(radarServiceConnection);
+        if (radarServiceIsStarted) {
+            unbindService(radarServiceConnection);
+        }
 
         synchronized (this) {
             mHandler = null;
