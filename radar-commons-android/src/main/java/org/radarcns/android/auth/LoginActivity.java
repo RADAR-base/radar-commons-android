@@ -43,6 +43,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
     private boolean startedFromActivity;
     private boolean refreshOnly;
     private AppAuthState appAuth;
+    private boolean isFirstStart;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
@@ -68,13 +69,7 @@ public abstract class LoginActivity extends Activity implements LoginListener {
             loginSucceeded(null, appAuth);
             return;
         }
-        for (LoginManager manager : loginManagers) {
-            AppAuthState localState = manager.refresh();
-            if (localState != null && localState.isValid()) {
-                loginSucceeded(manager, localState);
-                return;
-            }
-        }
+        isFirstStart = true;
 
         if (startedFromActivity) {
             Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
@@ -82,6 +77,21 @@ public abstract class LoginActivity extends Activity implements LoginListener {
 
         for (LoginManager manager : loginManagers) {
             manager.onActivityCreate();
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (isFirstStart) {
+            isFirstStart = false;
+            for (LoginManager manager : loginManagers) {
+                AppAuthState localState = manager.refresh();
+                if (localState != null && localState.isValid()) {
+                    loginSucceeded(manager, localState);
+                    return;
+                }
+            }
         }
     }
 
