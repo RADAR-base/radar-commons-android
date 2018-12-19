@@ -720,7 +720,8 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
             Set<String> filters;
             if (source != null
                     && source.getExpectedSourceName() != null
-                    && !source.getExpectedSourceName().trim().isEmpty()) {
+                    && !source.getExpectedSourceName().trim().isEmpty()
+                    && !source.getExpectedSourceName().equals("null")) {
                 String[] expectedIds = source.getExpectedSourceName().split(",");
                 filters = new HashSet<>();
                 for (String expectedId : expectedIds) {

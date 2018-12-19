@@ -27,6 +27,7 @@ public class SourceMetadata {
     }
 
     @SuppressWarnings("deprecation")
+    @Deprecated
     public SourceMetadata(AppSource appSource) {
         this.sourceTypeId = appSource.getSourceTypeId();
         this.sourceTypeProducer = appSource.getSourceTypeProducer();
@@ -191,6 +192,7 @@ public class SourceMetadata {
     }
 
     @SuppressWarnings("deprecation")
+    @Deprecated
     public AppSource toAppSource() {
         AppSource source = new AppSource(sourceTypeId, sourceTypeProducer, sourceTypeModel, sourceTypeCatalogVersion, dynamicRegistration);
         source.setSourceId(sourceId);

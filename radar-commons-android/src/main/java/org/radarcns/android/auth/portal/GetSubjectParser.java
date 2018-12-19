@@ -1,6 +1,7 @@
 package org.radarcns.android.auth.portal;
 
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.SparseArray;
 
 import org.json.JSONArray;
@@ -126,7 +127,7 @@ public class GetSubjectParser implements AuthStringParser {
         return actualSources;
     }
 
-    static HashMap<String, String> attributesToMap(JSONObject attrObj) throws JSONException {
+    static HashMap<String, String> attributesToMap(@Nullable JSONObject attrObj) throws JSONException {
         if (attrObj == null || attrObj.length() == 0) {
             return null;
         }

@@ -161,9 +161,10 @@ public class ManagementPortalClient {
             throws JSONException {
         JSONObject responseObject = new JSONObject(body);
         source.setSourceId(responseObject.getString("sourceId"));
-        source.setSourceName(responseObject.getString("sourceName"));
-        source.setExpectedSourceName(responseObject.getString("expectedSourceName"));
-        source.setAttributes(GetSubjectParser.attributesToMap(responseObject.optJSONObject("attributes")));
+        source.setSourceName(responseObject.optString("sourceName", source.getSourceId()));
+        source.setExpectedSourceName(responseObject.optString("expectedSourceName", null));
+        source.setAttributes(GetSubjectParser.attributesToMap(
+                responseObject.optJSONObject("attributes")));
     }
 
     public AppAuthState refreshToken(AppAuthState authState, String clientId, String clientSecret,
