@@ -718,11 +718,31 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
             logger.info("Starting recording on connection {}", connection);
             SourceMetadata source = provider.getSourceMetadata();
             Set<String> filters;
-            if (source != null && source.getExpectedSourceName() != null) {
+            if (source != null
+                    && source.getExpectedSourceName() != null
+                    && !source.getExpectedSourceName().trim().isEmpty()) {
                 String[] expectedIds = source.getExpectedSourceName().split(",");
-                filters = new HashSet<>(Arrays.asList(expectedIds));
+                filters = new HashSet<>();
+                for (String expectedId : expectedIds) {
+                    String trimmed = expectedId.trim();
+                    if (!trimmed.isEmpty()) {
+                        filters.add(trimmed);
+                    }
+                }
             } else {
                 filters = deviceFilters.get(connection);
+                if (filters == null) {
+                    filters = Collections.emptySet();
+                } else {
+                    filters = new HashSet<>(filters);
+                    Iterator<String> iterator = filters.iterator();
+                    while (iterator.hasNext()) {
+                        String filter = iterator.next();
+                        if (filter == null || filter.trim().isEmpty()) {
+                            iterator.remove();
+                        }
+                    }
+                }
             }
             connection.startRecording(filters);
         }
