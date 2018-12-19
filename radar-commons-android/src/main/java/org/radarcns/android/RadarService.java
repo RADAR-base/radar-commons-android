@@ -21,6 +21,10 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.arch.lifecycle.Lifecycle;
+import android.arch.lifecycle.LifecycleObserver;
+import android.arch.lifecycle.OnLifecycleEvent;
+import android.arch.lifecycle.ProcessLifecycleOwner;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -112,7 +116,7 @@ import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
 import static org.radarcns.android.util.NotificationHandler.NOTIFICATION_CHANNEL_INFO;
 
 @SuppressWarnings("unused")
-public class RadarService extends Service implements ServerStatusListener {
+public class RadarService extends Service implements ServerStatusListener, LifecycleObserver {
     private static final Logger logger = LoggerFactory.getLogger(RadarService.class);
 
     public static String RADAR_PACKAGE = "org.radarcns.android.";
@@ -179,6 +183,7 @@ public class RadarService extends Service implements ServerStatusListener {
     };
     private ProviderLoader providerLoader;
     private Map<String, String> previousConfiguration;
+    private final AtomicBoolean isInBackground = new AtomicBoolean(false);
 
     private void removeBluetoothNotification() {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -331,6 +336,8 @@ public class RadarService extends Service implements ServerStatusListener {
         logger.info("Auth state: {}", authState);
 
         configure();
+
+        ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
 
         new AsyncBindServices(false)
                 .execute(mConnections.toArray(new DeviceServiceProvider[0]));
@@ -782,6 +789,21 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }
         return true;
+    }
+
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
+    public void onAppBackgrounded() {
+        isInBackground.set(true);
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_START)
+    public void onAppForegrounded() {
+        isInBackground.set(false);
+    }
+
+    public boolean isInBackground() {
+        return isInBackground.get();
     }
 
     /** Disconnect from all services. */
