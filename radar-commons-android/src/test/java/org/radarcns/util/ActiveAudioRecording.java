@@ -239,6 +239,7 @@ public class ActiveAudioRecording extends org.apache.avro.specific.SpecificRecor
     private static final org.apache.avro.io.DatumWriter
             WRITER$ = new org.apache.avro.specific.SpecificDatumWriter(SCHEMA$);
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeExternal(java.io.ObjectOutput out)
             throws java.io.IOException {
@@ -248,6 +249,7 @@ public class ActiveAudioRecording extends org.apache.avro.specific.SpecificRecor
     private static final org.apache.avro.io.DatumReader
             READER$ = new org.apache.avro.specific.SpecificDatumReader(SCHEMA$);
 
+    @SuppressWarnings("unchecked")
     @Override
     public void readExternal(java.io.ObjectInput in)
             throws java.io.IOException {

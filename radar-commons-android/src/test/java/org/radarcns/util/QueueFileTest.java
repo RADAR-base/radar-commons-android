@@ -60,7 +60,7 @@ public class QueueFileTest {
             out.next();
             out.write(buffer);
             out.next();
-            exception.expect(IOException.class);
+            exception.expect(IllegalStateException.class);
             out.write(buffer);
         }
     }
@@ -83,7 +83,7 @@ public class QueueFileTest {
             out.next();
             out.write(buffer);
             out.next();
-            exception.expect(IOException.class);
+            exception.expect(IllegalStateException.class);
             out.write(buffer);
         } catch (IOException ex) {
             logger.info("Queue file cannot be written to {}", queue);
@@ -241,7 +241,7 @@ public class QueueFileTest {
         Exception actualException = null;
         try {
             writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH)*17 + QueueFileHeader.HEADER_LENGTH, buffer, queue);
-        } catch (IOException ex) {
+        } catch (IllegalStateException ex) {
             actualException = ex;
         }
         assertNotNull(actualException);
