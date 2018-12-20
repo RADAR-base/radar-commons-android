@@ -47,14 +47,14 @@ subprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.9.2-SNAPSHOT'
-    ext.versionCode = 26
+    version = '0.9.2'
+    ext.versionCode = 27
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
 
     ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
-    ext.website = 'http://radar-cns.org'
+    ext.website = 'http://radar-base.org'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
