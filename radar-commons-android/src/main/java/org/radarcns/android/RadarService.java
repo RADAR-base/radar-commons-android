@@ -183,7 +183,7 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
     };
     private ProviderLoader providerLoader;
     private Map<String, String> previousConfiguration;
-    private final AtomicBoolean isInBackground = new AtomicBoolean(false);
+    private volatile boolean isInBackground = false;
 
     private void removeBluetoothNotification() {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -220,53 +220,80 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
 
     private final BroadcastReceiver serverStatusReceiver = new BroadcastReceiver() {
         AtomicBoolean isMakingRequest = new AtomicBoolean(false);
+
         @Override
         public void onReceive(Context context, Intent intent) {
             serverStatus = Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, -1)];
             if (serverStatus == Status.UNAUTHORIZED) {
-                logger.debug("Status unauthorized");
-                if (!isMakingRequest.compareAndSet(false, true)) {
-                    return;
+                updateAuthorization(ManagementPortalService.isEnabled(context));
+            }
+        }
+
+        private void updateAuthorization(boolean useMp) {
+            logger.debug("Status unauthorized");
+            if (!isMakingRequest.compareAndSet(false, true)) {
+                return;
+            }
+
+            if (isInBackground) {
+                logger.warn("Cannot refresh token in background");
+                isMakingRequest.set(false);
+                return;
+            }
+
+            final String refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
+            if (useMp && refreshToken != null) {
+                authState.invalidate(RadarService.this);
+                logger.debug("Creating request to management portal");
+                try {
+                    refreshMPToken(refreshToken);
+                } catch (IllegalStateException ex) {
+                    logger.warn("Cannot refresh token in background");
                 }
-                final String refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
-                if (ManagementPortalService.isEnabled(context) && refreshToken != null) {
-                    authState.invalidate(RadarService.this);
-                    logger.debug("Creating request to management portal");
-                    ManagementPortalService.requestAccessToken(RadarService.this,
-                            refreshToken, false, new ResultReceiver(mHandler) {
-                        @Override
-                        protected void onReceiveResult(int resultCode, Bundle result) {
-                            if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
-                                authState = AppAuthState.Builder.from(result).build();
-                                if (dataHandler != null) {
-                                    dataHandler.setAuthState(authState);
-                                }
-                                isMakingRequest.set(false);
-                                dataHandler.checkConnection();
-                            } else if (resultCode == MANAGEMENT_PORTAL_REFRESH_FAILED && mHandler != null) {
-                                logger.error("Failed to log in to management portal");
-                                final ResultReceiver recv = this;
-                                long delay = ThreadLocalRandom.current().nextLong(1_000L, 120_000L);
-                                mHandler.postDelayed(() ->
-                                        ManagementPortalService.requestAccessToken(
-                                                RadarService.this, refreshToken, false, recv),
-                                        delay);
-                            } else {
-                                isMakingRequest.set(false);
-                            }
-                        }
-                    });
-                } else {
-                    synchronized (RadarService.this) {
-                        // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
-                        if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
-                            return;
-                        }
-                        authState.invalidate(RadarService.this);
+            } else {
+                synchronized (RadarService.this) {
+                    // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
+                    if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
+                        return;
                     }
+                    authState.invalidate(RadarService.this);
+                }
+                try {
                     startLogin();
+                } catch (IllegalStateException ex) {
+                    logger.warn("Cannot start login activity in background");
                 }
             }
+        }
+
+        private void refreshMPToken(String refreshToken) {
+            authState.invalidate(RadarService.this);
+            logger.debug("Creating request to management portal");
+
+            ResultReceiver receiver = new ResultReceiver(mHandler) {
+                @Override
+                protected void onReceiveResult(int resultCode, Bundle result) {
+                    if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
+                        authState = AppAuthState.Builder.from(result).build();
+                        if (dataHandler != null) {
+                            dataHandler.setAuthState(authState);
+                        }
+                        isMakingRequest.set(false);
+                        dataHandler.checkConnection();
+                    } else if (resultCode == MANAGEMENT_PORTAL_REFRESH_FAILED && mHandler != null) {
+                        logger.error("Failed to log in to management portal");
+                        final ResultReceiver recv = this;
+                        long delay = ThreadLocalRandom.current().nextLong(1_000L, 120_000L);
+                        mHandler.postDelayed(
+                                () -> updateAuthorization(true),
+                                delay);
+                    } else {
+                        isMakingRequest.set(false);
+                    }
+                }
+            };
+            ManagementPortalService.requestAccessToken(RadarService.this,
+                    refreshToken, false, receiver);
         }
     };
 
@@ -346,17 +373,23 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
 
         startForeground(1, createForegroundNotification());
 
-        if (authState.getSourceMetadata().isEmpty() && ManagementPortalService.isEnabled(this)) {
-            ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
-                @Override
-                protected void onReceiveResult(int resultCode, Bundle resultData) {
-                    super.onReceiveResult(resultCode, resultData);
-                    if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
-                        authState = AppAuthState.Builder.from(resultData).build();
-                        configure();
+        if (authState.getSourceMetadata().isEmpty()
+                && ManagementPortalService.isEnabled(this)
+                && !isInBackground) {
+            try {
+                ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
+                    @Override
+                    protected void onReceiveResult(int resultCode, Bundle resultData) {
+                        super.onReceiveResult(resultCode, resultData);
+                        if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
+                            authState = AppAuthState.Builder.from(resultData).build();
+                            configure();
+                        }
                     }
-                }
-            });
+                });
+            } catch (IllegalStateException ex) {
+                logger.warn("Cannot update access token from background");
+            }
         }
 
         return START_STICKY;
@@ -815,16 +848,16 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
 
     @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
     public void onAppBackgrounded() {
-        isInBackground.set(true);
+        isInBackground = true;
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_START)
     public void onAppForegrounded() {
-        isInBackground.set(false);
+        isInBackground = false;
     }
 
     public boolean isInBackground() {
-        return isInBackground.get();
+        return isInBackground;
     }
 
     /** Disconnect from all services. */
