@@ -35,10 +35,13 @@ import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.os.Process;
 import android.os.ResultReceiver;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
@@ -84,6 +87,7 @@ import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.ACCESS_NETWORK_STATE;
 import static android.Manifest.permission.INTERNET;
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
+import static android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
@@ -805,11 +809,20 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
                 }
             }
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && permission.equals(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)) {
+                PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+                String packageName = getApplicationContext().getPackageName();
+                if (powerManager != null
+                        && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                    needsPermissions.add(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                }
+            }
+
             if (permission.equals(PACKAGE_USAGE_STATS)) {
                 AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
                 if (appOps != null) {
                     int mode = appOps.checkOpNoThrow(
-                            "android:get_usage_stats", android.os.Process.myUid(), getPackageName());
+                            "android:get_usage_stats", Process.myUid(), getPackageName());
 
                     if (mode != AppOpsManager.MODE_ALLOWED) {
                         needsPermissions.add(permission);
@@ -829,7 +842,11 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
     }
 
     protected List<String> getServicePermissions() {
-        return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+        } else {
+            return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET);
+        }
     }
 
 

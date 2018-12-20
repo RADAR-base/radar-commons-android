@@ -17,6 +17,7 @@
 package org.radarcns.android;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Service;
@@ -38,6 +39,7 @@ import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 
@@ -52,6 +54,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import static android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED;
@@ -445,6 +448,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 && currentlyNeeded.contains(Manifest.permission.PACKAGE_USAGE_STATS)) {
             addRequestingPermissions(Manifest.permission.PACKAGE_USAGE_STATS);
             requestPackageUsageStats();
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            addRequestingPermissions(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            requestDisableBatteryOptimization();
         } else {
             addRequestingPermissions(currentlyNeeded);
             ActivityCompat.requestPermissions(this,
@@ -483,6 +489,25 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
     }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    @SuppressLint("BatteryLife")
+    private void requestDisableBatteryOptimization() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+        builder.setTitle(R.string.disable_battery_optimization_title)
+                .setMessage(R.string.disable_battery_optimization)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    dialog.cancel();
+                    Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    if (intent.resolveActivity(getPackageManager()) == null) {
+                        intent = new Intent(Settings.ACTION_SETTINGS);
+                    }
+                    startActivityForResult(intent, USAGE_REQUEST_CODE);
+                })
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .show();
+    }
+
 
     private void requestPackageUsageStats() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);

@@ -33,4 +33,6 @@
     <string name="channel_final_alert_description">Final warning about missed tasks or continuing anomalous behaviour.</string>
     <string name="notification_bluetooth_needed_text">Bluetooth is needed for data collection. Please enable it as soon as possible.</string>
     <string name="notification_bluetooth_needed_title">Enable Bluetooth for RADAR</string>
+    <string name="disable_battery_optimization">Disable battery optimization to keep a consistent connection with attached devices.</string>
+    <string name="disable_battery_optimization_title">Disable battery optimization</string>
 </resources>
