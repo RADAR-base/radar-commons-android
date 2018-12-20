@@ -282,6 +282,9 @@ public class TapeCache<K, V> implements DataCache<K, V> {
             logger.error("Failed to add records", ex);
             queueSize.set(queue.size());
             throw new RuntimeException(ex);
+        } catch (IllegalStateException ex) {
+            logger.error("Queue {} is full, not adding records", topic.getName());
+            queueSize.set(queue.size());
         } catch (IllegalArgumentException ex) {
             logger.error("Failed to validate all records; adding individual records instead: {}", ex.getMessage());
             try {
@@ -294,6 +297,9 @@ public class TapeCache<K, V> implements DataCache<K, V> {
                     }
                 }
                 queueSize.addAndGet(localList.size());
+            } catch (IllegalStateException illEx) {
+                logger.error("Queue {} is full, not adding records", topic.getName());
+                queueSize.set(queue.size());
             } catch (IOException ex2) {
                 logger.error("Failed to add record", ex);
                 queueSize.set(queue.size());
@@ -303,7 +309,7 @@ public class TapeCache<K, V> implements DataCache<K, V> {
     }
 
     private void fixCorruptQueue() throws IOException {
-        logger.error("Queue was corrupted. Removing cache.");
+        logger.error("Queue {} was corrupted. Removing cache.", topic.getName());
         try {
             queue.close();
         } catch (IOException ioex) {

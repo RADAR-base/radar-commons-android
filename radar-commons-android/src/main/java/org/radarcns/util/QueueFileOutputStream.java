@@ -128,7 +128,10 @@ public class QueueFileOutputStream extends OutputStream {
         return queue.usedBytes() + streamBytesUsed;
     }
 
-    /** Expands the storage if necessary, updating the queue length if needed. */
+    /**
+     * Expands the storage if necessary, updating the queue length if needed.
+     * @throws IllegalStateException if the queue is full.
+     */
     private void expandAndUpdate(long length) throws IOException {
         long newStreamBytesUsed = streamBytesUsed + length;
         long bytesNeeded = queue.usedBytes() + newStreamBytesUsed;
@@ -136,7 +139,7 @@ public class QueueFileOutputStream extends OutputStream {
         if (bytesNeeded > queue.getMaximumFileSize()) {
             // reset current element
             current.setLength(0);
-            throw new IOException("Data does not fit in queue");
+            throw new IllegalStateException("Data does not fit in queue");
         }
 
         streamBytesUsed = newStreamBytesUsed;

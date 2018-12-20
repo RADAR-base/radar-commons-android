@@ -64,9 +64,10 @@ public class BackedObjectQueue<S, T> implements Closeable {
     /**
      * Add a new element to the queue.
      * @param entry element to add
-     * @throws IOException if the backing file cannot be accessed, the queue is full, or the element
-     *                     cannot be converted.
+     * @throws IOException if the backing file cannot be accessed, or the element
+     * cannot be converted.
      * @throws IllegalArgumentException if given entry is not a valid object for serialization.
+     * @throws IllegalStateException if the queue is full
      */
     public void add(S entry) throws IOException {
         try (QueueFileOutputStream out = queueFile.elementOutputStream()) {
@@ -77,9 +78,10 @@ public class BackedObjectQueue<S, T> implements Closeable {
     /**
      * Add a collection of new element to the queue.
      * @param entries elements to add
-     * @throws IOException if the backing file cannot be accessed, the queue is full or the element
+     * @throws IOException if the backing file cannot be accessed or the element
      *                     cannot be converted.
      * @throws IllegalArgumentException if given entry is not a valid object for serialization.
+     * @throws IllegalStateException if the queue is full
      */
     public void addAll(Collection<? extends S> entries) throws IOException {
         try (QueueFileOutputStream out = queueFile.elementOutputStream()) {
@@ -174,6 +176,7 @@ public class BackedObjectQueue<S, T> implements Closeable {
          * Serialize an object to given output stream.
          * @param out output, which will not be closed after this call.
          * @throws IOException if a valid object could not be serialized to the stream
+         * @throws IllegalStateException if the underlying queue is full.
          */
         void serialize(S value, OutputStream out) throws IOException;
     }
