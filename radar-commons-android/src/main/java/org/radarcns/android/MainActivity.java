@@ -22,6 +22,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
+import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -42,6 +43,8 @@ import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
+
+import com.crashlytics.android.Crashlytics;
 
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.util.NetworkConnectedReceiver;
@@ -70,7 +73,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private static final int LOGIN_REQUEST_CODE = 232619693;
     private static final int LOCATION_REQUEST_CODE = 232619694;
     private static final int USAGE_REQUEST_CODE = 232619695;
-    private static final long REQUEST_PERMISSION_TIMEOUT_MS = 3_600_000L;
+    private static final int BATTERY_OPT_CODE = 232619696;
+    private static final long REQUEST_PERMISSION_TIMEOUT_MS = 86_400_000L; // 1 day
 
     private BroadcastReceiver configurationBroadcastReceiver;
 
@@ -400,6 +404,14 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 }
                 break;
             }
+            case BATTERY_OPT_CODE: {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    onPermissionRequestResult(
+                            Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            resultCode == RESULT_OK);
+                }
+                break;
+            }
         }
     }
 
@@ -502,7 +514,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                     if (intent.resolveActivity(getPackageManager()) == null) {
                         intent = new Intent(Settings.ACTION_SETTINGS);
                     }
-                    startActivityForResult(intent, USAGE_REQUEST_CODE);
+                    try {
+                        startActivityForResult(intent, BATTERY_OPT_CODE);
+                    } catch (ActivityNotFoundException ex) {
+                        logger.error("Failed to ask for battery optimization", ex);
+                        Crashlytics.logException(ex);
+                    }
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
@@ -519,7 +536,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                     if (intent.resolveActivity(getPackageManager()) == null) {
                         intent = new Intent(Settings.ACTION_SETTINGS);
                     }
-                    startActivityForResult(intent, USAGE_REQUEST_CODE);
+                    try {
+                        startActivityForResult(intent, USAGE_REQUEST_CODE);
+                    } catch (ActivityNotFoundException ex) {
+                        logger.error("Failed to ask for usage code", ex);
+                        Crashlytics.logException(ex);
+                    }
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
