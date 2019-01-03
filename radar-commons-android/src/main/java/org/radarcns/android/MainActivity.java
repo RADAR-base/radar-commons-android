@@ -17,9 +17,12 @@
 package org.radarcns.android;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
+import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -27,30 +30,38 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.os.Process;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
+
+import com.crashlytics.android.Crashlytics;
 
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
 import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
 import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED;
@@ -66,7 +77,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private static final int LOGIN_REQUEST_CODE = 232619693;
     private static final int LOCATION_REQUEST_CODE = 232619694;
     private static final int USAGE_REQUEST_CODE = 232619695;
-    private static final long REQUEST_PERMISSION_TIMEOUT_MS = 3_600_000L;
+    private static final int BATTERY_OPT_CODE = 232619696;
+    private static final long REQUEST_PERMISSION_TIMEOUT_MS = 86_400_000L; // 1 day
 
     private BroadcastReceiver configurationBroadcastReceiver;
 
@@ -95,6 +107,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private boolean requestedBt;
 
     private IRadarBinder radarService;
+    private boolean radarServiceIsStarted;
 
     /** Defines callbacks for service binding, passed to bindService() */
     private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
@@ -173,9 +186,25 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     }
 
     @Override
+    @CallSuper
+    protected void onSaveInstanceState(Bundle savedInstanceState) {
+        super.onSaveInstanceState(savedInstanceState);
+
+        savedInstanceState.putStringArrayList("isRequestingPermissions", new ArrayList<>(isRequestingPermissions));
+        savedInstanceState.putLong("isRequestingPermissionsTime", isRequestingPermissionsTime);
+    }
+
+    @Override
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         bluetoothReceiverIsEnabled = false;
+        if (savedInstanceState != null) {
+            List<String> isRequesting = savedInstanceState.getStringArrayList("isRequestingPermissions");
+            if (isRequesting != null) {
+                isRequestingPermissions.addAll(isRequesting);
+            }
+            isRequestingPermissionsTime = savedInstanceState.getLong("isRequestingPermissionsTime", Long.MAX_VALUE);
+        }
 
         configuration = ((RadarApplication)getApplication()).getConfiguration();
 
@@ -191,6 +220,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             startLogin(false);
             return;
         }
+
+        radarServiceIsStarted = false;
 
         networkReceiver = new NetworkConnectedReceiver(this, this);
         create();
@@ -212,10 +243,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                         new IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
 
         networkReceiver.register();
-
-        Bundle extras = new Bundle();
-        authState.addToBundle(extras);
-        startService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()).putExtras(extras));
 
         // Start the UI thread
         uiRefreshRate = configuration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
@@ -284,6 +311,17 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         if (!authState.isValid()) {
             startLogin(true);
         }
+        Class<? extends Service> radarServiceCls = ((RadarApplication) getApplication()).getRadarService();
+        if (!radarServiceIsStarted) {
+            Bundle extras = new Bundle();
+            authState.addToBundle(extras);
+            try {
+                startService(new Intent(this, radarServiceCls).putExtras(extras));
+                radarServiceIsStarted = true;
+            } catch (IllegalStateException ex) {
+                logger.error("Failed to start RadarService: activity is in background.", ex);
+            }
+        }
 
         mHandlerThread = new HandlerThread("Service connection", Process.THREAD_PRIORITY_BACKGROUND);
         mHandlerThread.start();
@@ -291,7 +329,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         synchronized (this) {
             mHandler = localHandler;
             if (!isRequestingPermissions.isEmpty()) {
-                long now = SystemClock.elapsedRealtime();
+                long now = System.currentTimeMillis();
                 long expires = isRequestingPermissionsTime + getRequestPermissionTimeoutMs();
                 if (expires <= now) {
                     resetRequestingPermission();
@@ -300,7 +338,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 }
             }
         }
-        bindService(new Intent(this, ((RadarApplication)getApplication()).getRadarService()), radarServiceConnection, 0);
+        if (radarServiceIsStarted) {
+            bindService(new Intent(this, radarServiceCls), radarServiceConnection, 0);
+        }
         testBindBluetooth();
         bluetoothNeededReceiver = bluetoothNeededReceiverImpl;
         LocalBroadcastManager.getInstance(this)
@@ -335,7 +375,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     protected void onStop() {
         super.onStop();
 
-        unbindService(radarServiceConnection);
+        if (radarServiceIsStarted) {
+            unbindService(radarServiceConnection);
+        }
 
         synchronized (this) {
             mHandler = null;
@@ -379,6 +421,17 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                     onPermissionRequestResult(
                             Manifest.permission.PACKAGE_USAGE_STATS,
                             resultCode == RESULT_OK);
+                }
+                break;
+            }
+            case BATTERY_OPT_CODE: {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+                    String packageName = getApplicationContext().getPackageName();
+                    boolean granted = resultCode == RESULT_OK
+                            || (powerManager != null
+                            && powerManager.isIgnoringBatteryOptimizations(packageName));
+                    onPermissionRequestResult(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, granted);
                 }
                 break;
             }
@@ -430,6 +483,10 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 && currentlyNeeded.contains(Manifest.permission.PACKAGE_USAGE_STATS)) {
             addRequestingPermissions(Manifest.permission.PACKAGE_USAGE_STATS);
             requestPackageUsageStats();
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && currentlyNeeded.contains(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)) {
+            addRequestingPermissions(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            requestDisableBatteryOptimization();
         } else {
             addRequestingPermissions(currentlyNeeded);
             ActivityCompat.requestPermissions(this,
@@ -445,7 +502,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         isRequestingPermissions.addAll(permissions);
 
         if (mHandler != null && isRequestingPermissionsTime != Long.MAX_VALUE) {
-            isRequestingPermissionsTime = SystemClock.elapsedRealtime();
+            isRequestingPermissionsTime = System.currentTimeMillis();
             mHandler.postDelayed(() -> {
                 resetRequestingPermission();
                 checkPermissions();
@@ -458,15 +515,24 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         builder.setTitle(R.string.enable_location_title)
                 .setMessage(R.string.enable_location)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                    if (intent.resolveActivity(getPackageManager()) == null) {
-                        intent = new Intent(Settings.ACTION_SETTINGS);
-                    }
-                    startActivityForResult(intent, LOCATION_REQUEST_CODE);
                     dialog.cancel();
+                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                    if (intent.resolveActivity(getPackageManager()) != null) {
+                        startActivityForResult(intent, LOCATION_REQUEST_CODE);
+                    }
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    @SuppressLint("BatteryLife")
+    private void requestDisableBatteryOptimization() {
+        Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+        intent.setData(Uri.parse("package:" + getApplicationContext().getPackageName()));
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            startActivityForResult(intent, BATTERY_OPT_CODE);
+        }
     }
 
     private void requestPackageUsageStats() {
@@ -479,7 +545,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                     if (intent.resolveActivity(getPackageManager()) == null) {
                         intent = new Intent(Settings.ACTION_SETTINGS);
                     }
-                    startActivityForResult(intent, USAGE_REQUEST_CODE);
+                    try {
+                        startActivityForResult(intent, USAGE_REQUEST_CODE);
+                    } catch (ActivityNotFoundException ex) {
+                        logger.error("Failed to ask for usage code", ex);
+                        Crashlytics.logException(ex);
+                    }
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();

@@ -21,6 +21,7 @@ import android.content.Intent;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Pair;
 
@@ -434,18 +435,22 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         updateUploadRate();
     }
 
-    public synchronized void setAuthState(AppAuthState state) {
+    public synchronized void setAuthState(@Nullable AppAuthState state) {
         boolean authStateWasNull = this.authState == null;
         this.authState = state;
-        logger.info("Updating data handler auth state to {}", authState.getOkHttpHeaders());
-        if (sender != null) {
-            sender.setHeaders(authState.getOkHttpHeaders());
-        }
-        if (submitter != null) {
-            submitter.setUserId(authState.getUserId());
-        }
-        if (authStateWasNull) {
-            start();
+        if (state != null) {
+            logger.info("Updating data handler auth state to {}", authState.getOkHttpHeaders());
+            if (sender != null) {
+                sender.setHeaders(authState.getOkHttpHeaders());
+            }
+            if (submitter != null) {
+                submitter.setUserId(authState.getUserId());
+            }
+            if (authStateWasNull) {
+                start();
+            }
+        } else if (!authStateWasNull) {
+            disableSubmitter();
         }
     }
 
@@ -538,7 +543,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         }
     }
 
-    public void registerTopic(AvroTopic<ObservationKey, ? extends SpecificRecord> topic) throws IOException {
+    public void registerTopic(@NonNull AvroTopic<ObservationKey, ? extends SpecificRecord> topic) throws IOException {
         if (tables.containsKey(topic.getName())) {
             return;
         }
@@ -548,7 +553,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         tables.put(topic.getName(), cache);
     }
 
-    public synchronized void setTopicsHighPriority(Set<String> topicsHighPriority) {
+    public synchronized void setTopicsHighPriority(@NonNull Set<String> topicsHighPriority) {
         if (!topicsHighPriority.equals(this.highPriorityTopics)) {
             this.highPriorityTopics.clear();
             this.highPriorityTopics.addAll(topicsHighPriority);

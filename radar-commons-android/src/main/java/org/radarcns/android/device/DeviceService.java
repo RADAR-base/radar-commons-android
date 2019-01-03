@@ -505,14 +505,20 @@ public abstract class DeviceService<T extends BaseDeviceState> extends Service i
         if (ManagementPortalService.isEnabled(this)) {
             // do registration with management portal
             final Handler handler = new Handler(getMainLooper());
-            ManagementPortalService.registerSource(this, source,
-                    new ResultReceiver(handler) {
-                @Override
-                protected void onReceiveResult(int resultCode, Bundle result) {
-                    updateRegistration(resultCode, result, handler);
-                }
-            });
-            return;
+            try {
+                ManagementPortalService.registerSource(this, source,
+                        new ResultReceiver(handler) {
+                            @Override
+                            protected void onReceiveResult(int resultCode, Bundle result) {
+                                updateRegistration(resultCode, result, handler);
+                            }
+                        });
+                return;
+            } catch (IllegalStateException ex) {
+                logger.warn("Cannot update source from background");
+                handler.postDelayed(() -> registerDevice(sourceIdHint, name, attributes),
+                        300_000L);
+            }
         } else {
             // self-register
             if (sourceIdHint == null) {

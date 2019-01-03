@@ -12,6 +12,8 @@ import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.auth.LoginManager;
 import org.radarcns.producer.AuthenticationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -27,6 +29,8 @@ import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_F
 
 @SuppressWarnings("unused")
 public class ManagementPortalLoginManager implements LoginManager {
+    private static final Logger logger = LoggerFactory.getLogger(ManagementPortalLoginManager.class);
+
     private String refreshToken;
     private String refreshTokenUrl;
     private final LoginActivity listener;
@@ -58,8 +62,12 @@ public class ManagementPortalLoginManager implements LoginManager {
         if (refreshTokenUrl != null
                 && ManagementPortalService.isEnabled(listener)
                 && isRefreshing.compareAndSet(false, true)) {
-            ManagementPortalService.requestRefreshToken(listener, refreshTokenUrl, true,
-                   refreshResultReceiver);
+            try {
+                ManagementPortalService.requestRefreshToken(listener, refreshTokenUrl, true,
+                        refreshResultReceiver);
+            } catch (IllegalStateException ex) {
+                listener.loginFailed(this, ex);
+            }
         }
     }
 
@@ -68,8 +76,12 @@ public class ManagementPortalLoginManager implements LoginManager {
         if (refreshToken != null
                 && ManagementPortalService.isEnabled(listener)
                 && isRefreshing.compareAndSet(false, true)) {
-            ManagementPortalService.requestAccessToken(listener, refreshToken, true,
-                    refreshResultReceiver);
+            try {
+                ManagementPortalService.requestAccessToken(listener, refreshToken, true,
+                        refreshResultReceiver);
+            } catch (IllegalStateException ex) {
+                listener.loginFailed(this, ex);
+            }
         }
         return null;
     }

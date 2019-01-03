@@ -21,6 +21,10 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.arch.lifecycle.Lifecycle;
+import android.arch.lifecycle.LifecycleObserver;
+import android.arch.lifecycle.OnLifecycleEvent;
+import android.arch.lifecycle.ProcessLifecycleOwner;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -31,10 +35,13 @@ import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.os.Process;
 import android.os.ResultReceiver;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
@@ -80,6 +87,7 @@ import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.ACCESS_NETWORK_STATE;
 import static android.Manifest.permission.INTERNET;
 import static android.Manifest.permission.PACKAGE_USAGE_STATS;
+import static android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
 import static org.radarcns.android.RadarConfiguration.DATABASE_COMMIT_RATE_KEY;
 import static org.radarcns.android.RadarConfiguration.DATA_RETENTION_KEY;
 import static org.radarcns.android.RadarConfiguration.KAFKA_RECORDS_SEND_LIMIT_KEY;
@@ -112,7 +120,7 @@ import static org.radarcns.android.device.DeviceService.SERVER_STATUS_CHANGED;
 import static org.radarcns.android.util.NotificationHandler.NOTIFICATION_CHANNEL_INFO;
 
 @SuppressWarnings("unused")
-public class RadarService extends Service implements ServerStatusListener {
+public class RadarService extends Service implements ServerStatusListener, LifecycleObserver {
     private static final Logger logger = LoggerFactory.getLogger(RadarService.class);
 
     public static String RADAR_PACKAGE = "org.radarcns.android.";
@@ -179,6 +187,7 @@ public class RadarService extends Service implements ServerStatusListener {
     };
     private ProviderLoader providerLoader;
     private Map<String, String> previousConfiguration;
+    private volatile boolean isInBackground = false;
 
     private void removeBluetoothNotification() {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -215,53 +224,80 @@ public class RadarService extends Service implements ServerStatusListener {
 
     private final BroadcastReceiver serverStatusReceiver = new BroadcastReceiver() {
         AtomicBoolean isMakingRequest = new AtomicBoolean(false);
+
         @Override
         public void onReceive(Context context, Intent intent) {
             serverStatus = Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, -1)];
             if (serverStatus == Status.UNAUTHORIZED) {
-                logger.debug("Status unauthorized");
-                if (!isMakingRequest.compareAndSet(false, true)) {
-                    return;
+                updateAuthorization(ManagementPortalService.isEnabled(context));
+            }
+        }
+
+        private void updateAuthorization(boolean useMp) {
+            logger.debug("Status unauthorized");
+            if (!isMakingRequest.compareAndSet(false, true)) {
+                return;
+            }
+
+            if (isInBackground) {
+                logger.warn("Cannot refresh token in background");
+                isMakingRequest.set(false);
+                return;
+            }
+
+            final String refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
+            if (useMp && refreshToken != null) {
+                authState.invalidate(RadarService.this);
+                logger.debug("Creating request to management portal");
+                try {
+                    refreshMPToken(refreshToken);
+                } catch (IllegalStateException ex) {
+                    logger.warn("Cannot refresh token in background");
                 }
-                final String refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
-                if (ManagementPortalService.isEnabled(context) && refreshToken != null) {
-                    authState.invalidate(RadarService.this);
-                    logger.debug("Creating request to management portal");
-                    ManagementPortalService.requestAccessToken(RadarService.this,
-                            refreshToken, false, new ResultReceiver(mHandler) {
-                        @Override
-                        protected void onReceiveResult(int resultCode, Bundle result) {
-                            if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
-                                authState = AppAuthState.Builder.from(result).build();
-                                if (dataHandler != null) {
-                                    dataHandler.setAuthState(authState);
-                                }
-                                isMakingRequest.set(false);
-                                dataHandler.checkConnection();
-                            } else if (resultCode == MANAGEMENT_PORTAL_REFRESH_FAILED && mHandler != null) {
-                                logger.error("Failed to log in to management portal");
-                                final ResultReceiver recv = this;
-                                long delay = ThreadLocalRandom.current().nextLong(1_000L, 120_000L);
-                                mHandler.postDelayed(() ->
-                                        ManagementPortalService.requestAccessToken(
-                                                RadarService.this, refreshToken, false, recv),
-                                        delay);
-                            } else {
-                                isMakingRequest.set(false);
-                            }
-                        }
-                    });
-                } else {
-                    synchronized (RadarService.this) {
-                        // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
-                        if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
-                            return;
-                        }
-                        authState.invalidate(RadarService.this);
+            } else {
+                synchronized (RadarService.this) {
+                    // login already started, or was finished up to 3 seconds ago (give time to propagate new auth state.)
+                    if (authState.isInvalidated() || authState.timeSinceLastUpdate() < 3_000L) {
+                        return;
                     }
+                    authState.invalidate(RadarService.this);
+                }
+                try {
                     startLogin();
+                } catch (IllegalStateException ex) {
+                    logger.warn("Cannot start login activity in background");
                 }
             }
+        }
+
+        private void refreshMPToken(String refreshToken) {
+            authState.invalidate(RadarService.this);
+            logger.debug("Creating request to management portal");
+
+            ResultReceiver receiver = new ResultReceiver(mHandler) {
+                @Override
+                protected void onReceiveResult(int resultCode, Bundle result) {
+                    if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
+                        authState = AppAuthState.Builder.from(result).build();
+                        if (dataHandler != null) {
+                            dataHandler.setAuthState(authState);
+                        }
+                        isMakingRequest.set(false);
+                        dataHandler.checkConnection();
+                    } else if (resultCode == MANAGEMENT_PORTAL_REFRESH_FAILED && mHandler != null) {
+                        logger.error("Failed to log in to management portal");
+                        final ResultReceiver recv = this;
+                        long delay = ThreadLocalRandom.current().nextLong(1_000L, 120_000L);
+                        mHandler.postDelayed(
+                                () -> updateAuthorization(true),
+                                delay);
+                    } else {
+                        isMakingRequest.set(false);
+                    }
+                }
+            };
+            ManagementPortalService.requestAccessToken(RadarService.this,
+                    refreshToken, false, receiver);
         }
     };
 
@@ -332,6 +368,8 @@ public class RadarService extends Service implements ServerStatusListener {
 
         configure();
 
+        ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
+
         new AsyncBindServices(false)
                 .execute(mConnections.toArray(new DeviceServiceProvider[0]));
 
@@ -339,17 +377,23 @@ public class RadarService extends Service implements ServerStatusListener {
 
         startForeground(1, createForegroundNotification());
 
-        if (authState.getSourceMetadata().isEmpty() && ManagementPortalService.isEnabled(this)) {
-            ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
-                @Override
-                protected void onReceiveResult(int resultCode, Bundle resultData) {
-                    super.onReceiveResult(resultCode, resultData);
-                    if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
-                        authState = AppAuthState.Builder.from(resultData).build();
-                        configure();
+        if (authState.getSourceMetadata().isEmpty()
+                && ManagementPortalService.isEnabled(this)
+                && !isInBackground) {
+            try {
+                ManagementPortalService.requestAccessToken(this, null, true, new ResultReceiver(mHandler) {
+                    @Override
+                    protected void onReceiveResult(int resultCode, Bundle resultData) {
+                        super.onReceiveResult(resultCode, resultData);
+                        if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
+                            authState = AppAuthState.Builder.from(resultData).build();
+                            configure();
+                        }
                     }
-                }
-            });
+                });
+            } catch (IllegalStateException ex) {
+                logger.warn("Cannot update access token from background");
+            }
         }
 
         return START_STICKY;
@@ -711,11 +755,32 @@ public class RadarService extends Service implements ServerStatusListener {
             logger.info("Starting recording on connection {}", connection);
             SourceMetadata source = provider.getSourceMetadata();
             Set<String> filters;
-            if (source != null && source.getExpectedSourceName() != null) {
+            if (source != null
+                    && source.getExpectedSourceName() != null
+                    && !source.getExpectedSourceName().trim().isEmpty()
+                    && !source.getExpectedSourceName().equals("null")) {
                 String[] expectedIds = source.getExpectedSourceName().split(",");
-                filters = new HashSet<>(Arrays.asList(expectedIds));
+                filters = new HashSet<>();
+                for (String expectedId : expectedIds) {
+                    String trimmed = expectedId.trim();
+                    if (!trimmed.isEmpty()) {
+                        filters.add(trimmed);
+                    }
+                }
             } else {
                 filters = deviceFilters.get(connection);
+                if (filters == null) {
+                    filters = Collections.emptySet();
+                } else {
+                    filters = new HashSet<>(filters);
+                    Iterator<String> iterator = filters.iterator();
+                    while (iterator.hasNext()) {
+                        String filter = iterator.next();
+                        if (filter == null || filter.trim().isEmpty()) {
+                            iterator.remove();
+                        }
+                    }
+                }
             }
             connection.startRecording(filters);
         }
@@ -744,11 +809,20 @@ public class RadarService extends Service implements ServerStatusListener {
                 }
             }
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && permission.equals(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)) {
+                PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+                String packageName = getApplicationContext().getPackageName();
+                if (powerManager != null
+                        && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                    needsPermissions.add(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                }
+            }
+
             if (permission.equals(PACKAGE_USAGE_STATS)) {
                 AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
                 if (appOps != null) {
                     int mode = appOps.checkOpNoThrow(
-                            "android:get_usage_stats", android.os.Process.myUid(), getPackageName());
+                            "android:get_usage_stats", Process.myUid(), getPackageName());
 
                     if (mode != AppOpsManager.MODE_ALLOWED) {
                         needsPermissions.add(permission);
@@ -782,6 +856,21 @@ public class RadarService extends Service implements ServerStatusListener {
             }
         }
         return true;
+    }
+
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
+    public void onAppBackgrounded() {
+        isInBackground = true;
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_START)
+    public void onAppForegrounded() {
+        isInBackground = false;
+    }
+
+    public boolean isInBackground() {
+        return isInBackground;
     }
 
     /** Disconnect from all services. */

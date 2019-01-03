@@ -165,6 +165,10 @@ public abstract class DeviceServiceProvider<T extends BaseDeviceState> {
         if (bound) {
             throw new IllegalStateException("Service is already bound");
         }
+        if (radarService.isInBackground()) {
+            logger.warn("App is in background. Cannot bind to any further providers.");
+            return;
+        }
         logger.debug("Binding {}", this);
         Intent intent = new Intent(radarService, getServiceClass());
         Bundle extras = new Bundle();

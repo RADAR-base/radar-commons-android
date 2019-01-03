@@ -174,6 +174,7 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
 
     @Override
     @CallSuper
+    @Deprecated
     public void didRegister(AppSource source) {
         deviceName = source.getSourceName();
         getState().getId().setSourceId(source.getSourceId());
@@ -182,7 +183,8 @@ public abstract class AbstractDeviceManager<S extends DeviceService<T>, T extend
     @Override
     @CallSuper
     public void didRegister(SourceMetadata source) {
-        didRegister(source.toAppSource());
+        deviceName = source.getSourceName();
+        getState().getId().setSourceId(source.getSourceId());
     }
 
     /**

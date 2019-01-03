@@ -16,38 +16,7 @@
 
 package org.radarcns.android.util;
 
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.support.annotation.NonNull;
-
-import java.util.Objects;
-
-public abstract class SpecificReceiver extends BroadcastReceiver {
-    protected final Context context;
-
-    public SpecificReceiver(@NonNull Context context) {
-        Objects.requireNonNull(context);
-        this.context = context;
-    }
-
-    protected abstract String getAction();
-    protected abstract void onSpecificReceive(@NonNull Intent intent);
-
-    public void onReceive(Context context, Intent intent) {
-        if (intent == null || !Objects.equals(intent.getAction(), getAction())) {
-            return;
-        }
-        onSpecificReceive(intent);
-    }
-
-    public void register() {
-        Intent init = context.registerReceiver(this, new IntentFilter(getAction()));
-        onReceive(context, init);
-    }
-
-    public void unregister() {
-        context.unregisterReceiver(this);
-    }
+public interface SpecificReceiver {
+    void register();
+    void unregister();
 }
