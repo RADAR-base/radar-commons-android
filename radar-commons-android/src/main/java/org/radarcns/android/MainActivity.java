@@ -30,11 +30,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.os.Process;
 import android.os.SystemClock;
 import android.provider.Settings;
@@ -51,9 +53,11 @@ import org.radarcns.android.util.NetworkConnectedReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -182,9 +186,25 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     }
 
     @Override
+    @CallSuper
+    protected void onSaveInstanceState(Bundle savedInstanceState) {
+        super.onSaveInstanceState(savedInstanceState);
+
+        savedInstanceState.putStringArrayList("isRequestingPermissions", new ArrayList<>(isRequestingPermissions));
+        savedInstanceState.putLong("isRequestingPermissionsTime", isRequestingPermissionsTime);
+    }
+
+    @Override
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         bluetoothReceiverIsEnabled = false;
+        if (savedInstanceState != null) {
+            List<String> isRequesting = savedInstanceState.getStringArrayList("isRequestingPermissions");
+            if (isRequesting != null) {
+                isRequestingPermissions.addAll(isRequesting);
+            }
+            isRequestingPermissionsTime = savedInstanceState.getLong("isRequestingPermissionsTime", Long.MAX_VALUE);
+        }
 
         configuration = ((RadarApplication)getApplication()).getConfiguration();
 
@@ -309,7 +329,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         synchronized (this) {
             mHandler = localHandler;
             if (!isRequestingPermissions.isEmpty()) {
-                long now = SystemClock.elapsedRealtime();
+                long now = System.currentTimeMillis();
                 long expires = isRequestingPermissionsTime + getRequestPermissionTimeoutMs();
                 if (expires <= now) {
                     resetRequestingPermission();
@@ -406,9 +426,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             }
             case BATTERY_OPT_CODE: {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    onPermissionRequestResult(
-                            Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                            resultCode == RESULT_OK);
+                    PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+                    String packageName = getApplicationContext().getPackageName();
+                    boolean granted = resultCode == RESULT_OK
+                            || (powerManager != null
+                            && powerManager.isIgnoringBatteryOptimizations(packageName));
+                    onPermissionRequestResult(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, granted);
                 }
                 break;
             }
@@ -460,7 +483,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                 && currentlyNeeded.contains(Manifest.permission.PACKAGE_USAGE_STATS)) {
             addRequestingPermissions(Manifest.permission.PACKAGE_USAGE_STATS);
             requestPackageUsageStats();
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && currentlyNeeded.contains(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)) {
             addRequestingPermissions(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
             requestDisableBatteryOptimization();
         } else {
@@ -478,7 +502,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         isRequestingPermissions.addAll(permissions);
 
         if (mHandler != null && isRequestingPermissionsTime != Long.MAX_VALUE) {
-            isRequestingPermissionsTime = SystemClock.elapsedRealtime();
+            isRequestingPermissionsTime = System.currentTimeMillis();
             mHandler.postDelayed(() -> {
                 resetRequestingPermission();
                 checkPermissions();
@@ -491,12 +515,11 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         builder.setTitle(R.string.enable_location_title)
                 .setMessage(R.string.enable_location)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                    if (intent.resolveActivity(getPackageManager()) == null) {
-                        intent = new Intent(Settings.ACTION_SETTINGS);
-                    }
-                    startActivityForResult(intent, LOCATION_REQUEST_CODE);
                     dialog.cancel();
+                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                    if (intent.resolveActivity(getPackageManager()) != null) {
+                        startActivityForResult(intent, LOCATION_REQUEST_CODE);
+                    }
                 })
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
@@ -505,26 +528,12 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint("BatteryLife")
     private void requestDisableBatteryOptimization() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
-        builder.setTitle(R.string.disable_battery_optimization_title)
-                .setMessage(R.string.disable_battery_optimization)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    dialog.cancel();
-                    Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                    if (intent.resolveActivity(getPackageManager()) == null) {
-                        intent = new Intent(Settings.ACTION_SETTINGS);
-                    }
-                    try {
-                        startActivityForResult(intent, BATTERY_OPT_CODE);
-                    } catch (ActivityNotFoundException ex) {
-                        logger.error("Failed to ask for battery optimization", ex);
-                        Crashlytics.logException(ex);
-                    }
-                })
-                .setIcon(android.R.drawable.ic_dialog_alert)
-                .show();
+        Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+        intent.setData(Uri.parse("package:" + getApplicationContext().getPackageName()));
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            startActivityForResult(intent, BATTERY_OPT_CODE);
+        }
     }
-
 
     private void requestPackageUsageStats() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);

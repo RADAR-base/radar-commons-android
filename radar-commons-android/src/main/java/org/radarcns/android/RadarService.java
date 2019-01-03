@@ -842,11 +842,7 @@ public class RadarService extends Service implements ServerStatusListener, Lifec
     }
 
     protected List<String> getServicePermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-        } else {
-            return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET);
-        }
+        return Arrays.asList(ACCESS_NETWORK_STATE, INTERNET);
     }
 
 
