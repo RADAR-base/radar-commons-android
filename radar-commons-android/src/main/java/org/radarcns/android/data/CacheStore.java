@@ -144,7 +144,7 @@ public class CacheStore {
                             Object.class, Object.class);
 
                     if (keySchema == null) {
-                        storeSchema(topic.getKeySchema(), valueSchemaFile);
+                        storeSchema(topic.getKeySchema(), keySchemaFile);
                     }
                     if (valueSchema == null) {
                         storeSchema(topic.getValueSchema(), valueSchemaFile);
