@@ -37,6 +37,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -72,7 +74,7 @@ public class OfflineProcessor implements Closeable {
     private final PendingIntent pendingIntent;
     private final AlarmManager alarmManager;
     private final boolean keepAwake;
-    private final Runnable runnable;
+    private final List<Runnable> runnables;
     private final Handler handler;
     private final CountedReference<HandlerThread> handlerReference;
 
@@ -94,7 +96,7 @@ public class OfflineProcessor implements Closeable {
     @Deprecated
     public OfflineProcessor(Context context, Runnable runnable, int requestCode, final String
             requestName, long interval, final boolean wake) {
-        this(new Builder(context, Objects.requireNonNull(runnable))
+        this(new Builder(context, runnable)
                 .requestIdentifier(requestCode, requestName)
                 .interval(interval, TimeUnit.SECONDS)
                 .wake(wake));
@@ -114,7 +116,7 @@ public class OfflineProcessor implements Closeable {
     @Deprecated
     public OfflineProcessor(Context context, Runnable runnable, int requestCode, final String
             requestName, long interval, TimeUnit intervalUnit, final boolean wake) {
-        this(new Builder(context, Objects.requireNonNull(runnable))
+        this(new Builder(context, runnable)
                 .requestIdentifier(requestCode, requestName)
                 .interval(interval, intervalUnit)
                 .wake(wake));
@@ -124,7 +126,7 @@ public class OfflineProcessor implements Closeable {
         this.context = builder.context;
         this.requestName = builder.requestName;
         this.keepAwake = builder.wake;
-        this.runnable = builder.runnable;
+        this.runnables = builder.runnables;
         this.intervalMillis = builder.intervalMillis;
         this.isClosed = false;
         this.alarmManager = (AlarmManager) context.getSystemService(ALARM_SERVICE);
@@ -171,20 +173,23 @@ public class OfflineProcessor implements Closeable {
             wakeLock = null;
         }
         try {
-            handler.post(() -> {
-                try {
+            for (Runnable runnable : runnables) {
+                handler.post(() -> {
                     if (isDone()) {
                         return;
                     }
-                    runnable.run();
-                } catch (RuntimeException ex) {
-                    Crashlytics.logException(ex);
-                    logger.error("OfflineProcessor task failed.", ex);
-                } finally {
-                    isRunning.release();
-                    if (wakeLock != null) {
-                        wakeLock.release();
+                    try {
+                        runnable.run();
+                    } catch (RuntimeException ex) {
+                        Crashlytics.logException(ex);
+                        logger.error("OfflineProcessor task failed.", ex);
                     }
+                });
+            }
+            handler.post(() -> {
+                isRunning.release();
+                if (wakeLock != null) {
+                    wakeLock.release();
                 }
             });
         } catch (RuntimeException ex) {
@@ -289,7 +294,7 @@ public class OfflineProcessor implements Closeable {
      */
     public static class Builder {
         private final Context context;
-        private final Runnable runnable;
+        private List<Runnable> runnables;
         private long intervalMillis = -1;
         private boolean wake = true;
         private int requestCode = -1;
@@ -300,11 +305,30 @@ public class OfflineProcessor implements Closeable {
         /**
          * OfflineProcessor builder.
          * @param context context to register a BroadcastReceiver with
+         */
+        public Builder(@NonNull Context context) {
+            this.context = Objects.requireNonNull(context);
+            this.runnables = new ArrayList<>();
+        }
+
+        /**
+         * OfflineProcessor builder.
+         * @param context context to register a BroadcastReceiver with
          * @param runnable code to run in offline mode
          */
         public Builder(@NonNull Context context, @NonNull Runnable runnable) {
-            this.context = Objects.requireNonNull(context);
-            this.runnable = Objects.requireNonNull(runnable);
+            this(context);
+            addProcess(runnable);
+        }
+
+        public Builder process(@NonNull List<Runnable> runnables) {
+            this.runnables.addAll(Objects.requireNonNull(runnables));
+            return this;
+        }
+
+        public Builder addProcess(@NonNull Runnable runnable) {
+            this.runnables.add(Objects.requireNonNull(runnable));
+            return this;
         }
 
         /**
@@ -376,6 +400,9 @@ public class OfflineProcessor implements Closeable {
             }
             if (requestCode == -1 || requestName == null) {
                 throw new IllegalStateException("Cannot start offline processor without request identifier");
+            }
+            if (runnables.isEmpty()) {
+                throw new IllegalStateException("Cannot run without a process");
             }
             return new OfflineProcessor(this);
         }

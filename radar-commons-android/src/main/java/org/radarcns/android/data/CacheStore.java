@@ -126,9 +126,9 @@ public class CacheStore {
         for (String fileBase : fileBases) {
             Schema.Parser parser = new Schema.Parser();
             File keySchemaFile = new File(fileBase + KEY_SCHEMA_EXTENSION);
-            Schema keySchema = keySchemaFile.isFile() ? parser.parse(keySchemaFile) : null;
             File valueSchemaFile = new File(fileBase + VALUE_SCHEMA_EXTENSION);
-            Schema valueSchema = valueSchemaFile.isFile() ? parser.parse(valueSchemaFile) : null;
+            Schema keySchema = loadSchema(parser, keySchemaFile);
+            Schema valueSchema = loadSchema(parser, valueSchemaFile);
 
             File tapeFile = new File(fileBase + TAPE_EXTENSION);
 
@@ -144,20 +144,10 @@ public class CacheStore {
                             Object.class, Object.class);
 
                     if (keySchema == null) {
-                        try (FileOutputStream out = new FileOutputStream(keySchemaFile);
-                             OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
-                            writer.write(topic.getKeySchema().toString(false));
-                        } catch (IOException ex) {
-                            logger.error("Cannot write key schema", ex);
-                        }
+                        storeSchema(topic.getKeySchema(), keySchemaFile);
                     }
                     if (valueSchema == null) {
-                        try (FileOutputStream out = new FileOutputStream(valueSchemaFile);
-                             OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
-                            writer.write(topic.getValueSchema().toString(false));
-                        } catch (IOException ex) {
-                            logger.error("Cannot write value schema", ex);
-                        }
+                        storeSchema(topic.getValueSchema(), valueSchemaFile);
                     }
 
                     logger.debug("Loading data store without schemas {}", tapeFile);
@@ -203,18 +193,8 @@ public class CacheStore {
                             topic.getKeySchema(), topic.getValueSchema(),
                             Object.class, Object.class);
 
-                    try (FileOutputStream out = new FileOutputStream(keySchemaFile);
-                         OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
-                        writer.write(topic.getKeySchema().toString(false));
-                    } catch (IOException ex) {
-                        logger.error("Cannot write key schema", ex);
-                    }
-                    try (FileOutputStream out = new FileOutputStream(valueSchemaFile);
-                         OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
-                        writer.write(topic.getValueSchema().toString(false));
-                    } catch (IOException ex) {
-                        logger.error("Cannot write value schema", ex);
-                    }
+                    storeSchema(topic.getKeySchema(), keySchemaFile);
+                    storeSchema(topic.getValueSchema(), valueSchemaFile);
 
                     logger.info("Creating new data store {}", tapeFile);
                     activeDataCache = new TapeCache<>(
@@ -230,6 +210,24 @@ public class CacheStore {
         }
 
         return new DataCacheGroup<>(activeDataCache, deprecatedDataCaches);
+    }
+
+    private static Schema loadSchema(Schema.Parser parser, File file) {
+        try {
+            return file.isFile() ? parser.parse(file) : null;
+        } catch (RuntimeException| IOException ex) {
+            logger.error("Failed to load schema", ex);
+            return null;
+        }
+    }
+
+    private static void storeSchema(Schema schema, File file) {
+        try (FileOutputStream out = new FileOutputStream(file);
+             OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
+            writer.write(schema.toString(false));
+        } catch (IOException ex) {
+            logger.error("Cannot write schema", ex);
+        }
     }
 
     private List<String> getFileBases(String base) {
