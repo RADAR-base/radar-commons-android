@@ -494,7 +494,7 @@ public class RadarConfiguration {
         if (value == null) {
             return defaultValue;
         } else {
-            return Boolean.parseBoolean(value);
+            return IS_TRUE.matcher(value).find() || (!IS_FALSE.matcher(value).find() && defaultValue);
         }
     }
 
