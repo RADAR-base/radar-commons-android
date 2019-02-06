@@ -38,7 +38,6 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.Process;
-import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
@@ -62,10 +61,9 @@ import java.util.Objects;
 import java.util.Set;
 
 import static android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
-import static org.radarcns.android.RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY;
-import static org.radarcns.android.RadarConfiguration.UNSAFE_KAFKA_CONNECTION;
 import static org.radarcns.android.RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED;
 import static org.radarcns.android.auth.LoginActivity.ACTION_LOGIN;
+import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
@@ -573,14 +571,36 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
         return !needsPermissions.contains(permissionName);
     }
 
+    /**
+     * Log out of the current application.
+     * @param force if {@code true}, also remove any refresh tokens; if {@code false}, just remove
+     *              the access token but allow the same user to automatically log in again if it is
+     *              still valid.
+     */
+    protected void logout(boolean force) {
+        IRadarBinder radarService = getRadarService();
+        if (radarService != null) {
+            authState = radarService.getAuthState();
+        }
+        authState.invalidate(this);
+        if (force) {
+            authState = authState.newBuilder()
+                    .removeAttribute(MP_REFRESH_TOKEN_PROPERTY)
+                    .build();
+            authState.addToPreferences(this);
+        }
+        startLogin(false);
+    }
 
+    /**
+     * Start the login activity. If the authentication can be automatically renewed, this will
+     * immediately return to the current activity.
+     * @param forResult if {@code true}, do not stop the current activity but wait for the result
+     *                  of logging in; if {@code false}, halt the current activity.
+     */
     protected void startLogin(boolean forResult) {
         Class<?> loginActivity = ((RadarApplication) getApplication()).getLoginActivity();
         Intent intent = new Intent(this, loginActivity);
-
-        Bundle extras = new Bundle();
-        configuration.putExtras(extras, MANAGEMENT_PORTAL_URL_KEY, UNSAFE_KAFKA_CONNECTION);
-        intent.putExtras(extras);
 
         if (forResult) {
             intent.setAction(ACTION_LOGIN);

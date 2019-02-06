@@ -1,49 +1,55 @@
 package org.radarcns.android.auth.portal;
 
+import android.content.ComponentName;
 import android.content.Intent;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.ResultReceiver;
-
-import com.google.firebase.remoteconfig.FirebaseRemoteConfigException;
+import android.content.ServiceConnection;
+import android.os.IBinder;
 
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.auth.LoginActivity;
 import org.radarcns.android.auth.LoginManager;
-import org.radarcns.producer.AuthenticationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.ConnectException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static android.content.Context.BIND_AUTO_CREATE;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY;
-import static org.radarcns.android.auth.portal.ManagementPortalService.MANAGEMENT_PORTAL_REFRESH;
-import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON;
-import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_CONFIGURATION;
-import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_DISCONNECTED;
-import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_IO;
-import static org.radarcns.android.auth.portal.ManagementPortalService.REQUEST_FAILED_REASON_UNAUTHORIZED;
 
 @SuppressWarnings("unused")
 public class ManagementPortalLoginManager implements LoginManager {
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalLoginManager.class);
+    private final ServiceConnection serviceConnection;
+    private boolean doRefresh;
+    private boolean doRetrieve;
 
     private String refreshToken;
     private String refreshTokenUrl;
     private final LoginActivity listener;
     private final AtomicBoolean isRefreshing = new AtomicBoolean(false);
-    private final ResultReceiver refreshResultReceiver;
+    private ManagementPortalService.ManagementPortalBinder managementPortalBinder;
 
     public ManagementPortalLoginManager(LoginActivity listener, AppAuthState state) {
         this.listener = listener;
         this.refreshToken = state.getAttribute(MP_REFRESH_TOKEN_PROPERTY);
-        this.refreshResultReceiver = new ResultReceiver(new Handler(Looper.getMainLooper())) {
+        this.managementPortalBinder = null;
+        this.doRetrieve = false;
+        this.doRefresh = false;
+        this.serviceConnection = new ServiceConnection() {
             @Override
-            protected void onReceiveResult(int resultCode, Bundle resultData) {
-                handleRefreshTokenResult(resultCode, resultData);
+            public void onServiceConnected(ComponentName name, IBinder service) {
+                managementPortalBinder = (ManagementPortalService.ManagementPortalBinder) service;
+                if (doRefresh) {
+                    retrieveRefreshToken();
+                }
+                if (doRetrieve) {
+                    refresh();
+                }
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                managementPortalBinder = null;
             }
         };
     }
@@ -62,12 +68,24 @@ public class ManagementPortalLoginManager implements LoginManager {
         if (refreshTokenUrl != null
                 && ManagementPortalService.isEnabled(listener)
                 && isRefreshing.compareAndSet(false, true)) {
-            try {
-                ManagementPortalService.requestRefreshToken(listener, refreshTokenUrl, true,
-                        refreshResultReceiver);
-            } catch (IllegalStateException ex) {
-                listener.loginFailed(this, ex);
+            if (managementPortalBinder != null) {
+                doRetrieve = false;
+                managementPortalBinder.initialize(refreshTokenUrl,
+                        auth -> listener.loginSucceeded(this, auth),
+                        ex -> listener.loginFailed(this, ex));
+            } else {
+                doRetrieve = true;
+                connect();
             }
+        }
+    }
+
+    private void connect() {
+        Intent intent = new Intent(listener, ManagementPortalService.class);
+        try {
+            listener.bindService(intent, serviceConnection, BIND_AUTO_CREATE);
+        } catch (IllegalStateException ex) {
+            logger.error("Cannot bind to ManagementPortalService");
         }
     }
 
@@ -76,11 +94,14 @@ public class ManagementPortalLoginManager implements LoginManager {
         if (refreshToken != null
                 && ManagementPortalService.isEnabled(listener)
                 && isRefreshing.compareAndSet(false, true)) {
-            try {
-                ManagementPortalService.requestAccessToken(listener, refreshToken, true,
-                        refreshResultReceiver);
-            } catch (IllegalStateException ex) {
-                listener.loginFailed(this, ex);
+            if (managementPortalBinder != null) {
+                doRefresh = false;
+                managementPortalBinder.refresh(refreshToken, false,
+                        auth -> listener.loginSucceeded(this, auth),
+                        ex -> listener.loginFailed(this, ex));
+            } else {
+                doRefresh = true;
+                connect();
             }
         }
         return null;
@@ -97,31 +118,5 @@ public class ManagementPortalLoginManager implements LoginManager {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
-    }
-
-    private void handleRefreshTokenResult(int resultCode, Bundle resultData) {
-        if (resultCode == MANAGEMENT_PORTAL_REFRESH) {
-            AppAuthState state = AppAuthState.Builder.from(resultData).build();
-            listener.loginSucceeded(ManagementPortalLoginManager.this, state);
-        } else {
-            int reason = resultData.getInt(REQUEST_FAILED_REASON, REQUEST_FAILED_REASON_IO);
-            Exception ex;
-            switch (reason) {
-                case REQUEST_FAILED_REASON_UNAUTHORIZED:
-                    ex = new AuthenticationException("Cannot authenticate");
-                    break;
-                case REQUEST_FAILED_REASON_CONFIGURATION:
-                    ex = new FirebaseRemoteConfigException();
-                    break;
-                case REQUEST_FAILED_REASON_DISCONNECTED:
-                    ex = new ConnectException();
-                    break;
-                default:
-                    ex = new IOException("Cannot reach management portal");
-                    break;
-            }
-            listener.loginFailed(ManagementPortalLoginManager.this, ex);
-        }
-        isRefreshing.set(false);
     }
 }

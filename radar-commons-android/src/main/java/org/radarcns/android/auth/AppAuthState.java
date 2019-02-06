@@ -321,7 +321,7 @@ public final class AppAuthState {
     public static class Builder {
         private final ArrayList<Map.Entry<String, String>> headers = new ArrayList<>();
         private final ArrayList<SourceMetadata> sourceMetadata = new ArrayList<>();
-        private final Map<String, String> attributes = new HashMap<>();
+        private final HashMap<String, String> attributes = new HashMap<>();
 
         private String projectId;
         private String userId;
@@ -473,6 +473,11 @@ public final class AppAuthState {
 
         public Builder attribute(@NonNull String key, @Nullable String value) {
             this.attributes.put(key, value);
+            return this;
+        }
+
+        public Builder removeAttribute(@NonNull String key) {
+            this.attributes.remove(key);
             return this;
         }
 
