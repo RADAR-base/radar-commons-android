@@ -81,6 +81,11 @@ public class OAuth2LoginManager implements LoginManager, LoginListener {
     }
 
     @Override
+    public void onDestroy() {
+        // noop
+    }
+
+    @Override
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         String token = appAuthState.getToken();
         if (token == null) {

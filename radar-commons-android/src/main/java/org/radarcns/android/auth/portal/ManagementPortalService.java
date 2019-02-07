@@ -51,11 +51,6 @@ public class ManagementPortalService extends Service {
     public static final int MANAGEMENT_PORTAL_REFRESH_FAILED = 5;
 
     private static final Logger logger = LoggerFactory.getLogger(ManagementPortalService.class);
-    public static final String REQUEST_FAILED_REASON = "org.radarcns.android.auth.ManagementPortalService.refreshFailedReason";
-    public static final int REQUEST_FAILED_REASON_IO = 1;
-    public static final int REQUEST_FAILED_REASON_UNAUTHORIZED = 2;
-    public static final int REQUEST_FAILED_REASON_CONFIGURATION = 3;
-    public static final int REQUEST_FAILED_REASON_DISCONNECTED = 5;
 
     private ManagementPortalClient client;
     private SparseArray<SourceMetadata> sources;

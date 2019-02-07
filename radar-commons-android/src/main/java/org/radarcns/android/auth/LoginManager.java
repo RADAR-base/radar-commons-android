@@ -57,4 +57,7 @@ public interface LoginManager {
      * control flow is not used.
      */
     void onActivityResult(int requestCode, int resultCode, Intent data);
+
+    /** Called on login activity destroy */
+    void onDestroy();
 }

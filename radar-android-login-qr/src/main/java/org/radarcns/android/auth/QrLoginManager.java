@@ -77,6 +77,11 @@ public class QrLoginManager implements LoginManager {
         }
     }
 
+    @Override
+    public void onDestroy() {
+        // do nothing
+    }
+
     @NonNull
     public LoginActivity getActivity() {
         return activity;
