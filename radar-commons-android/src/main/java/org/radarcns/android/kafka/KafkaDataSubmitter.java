@@ -16,8 +16,6 @@
 
 package org.radarcns.android.kafka;
 
-import android.os.Handler;
-import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 
 import org.apache.avro.Schema;
@@ -26,6 +24,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.radarcns.android.data.DataCacheGroup;
 import org.radarcns.android.data.DataHandler;
 import org.radarcns.android.data.ReadableDataCache;
+import org.radarcns.android.util.SafeHandler;
 import org.radarcns.data.RecordData;
 import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.KafkaSender;
@@ -59,11 +58,10 @@ public class KafkaDataSubmitter implements Closeable {
     private final Map<String, KafkaTopicSender<Object, Object>> topicSenders;
     private final KafkaConnectionChecker connection;
     private final AtomicInteger sendLimit;
-    private final HandlerThread mHandlerThread;
-    private final Handler mHandler;
+    private final SafeHandler mHandler;
 
-    private Runnable uploadFuture;
-    private Runnable uploadIfNeededFuture;
+    private SafeHandler.HandlerFuture uploadFuture;
+    private SafeHandler.HandlerFuture uploadIfNeededFuture;
     /** Upload rate in milliseconds. */
     private long uploadRate;
     private String userId;
@@ -78,9 +76,8 @@ public class KafkaDataSubmitter implements Closeable {
         this.sendLimit = new AtomicInteger(sendLimit);
         this.sizeLimit = new AtomicInteger(SIZE_LIMIT_DEFAULT);
 
-        mHandlerThread = new HandlerThread("data-submitter", THREAD_PRIORITY_BACKGROUND);
-        mHandlerThread.start();
-        mHandler = new Handler(mHandlerThread.getLooper());
+        mHandler = new SafeHandler("data-submitter", THREAD_PRIORITY_BACKGROUND);
+        mHandler.start();
 
         logger.debug("Started data submission executor");
 
@@ -115,49 +112,30 @@ public class KafkaDataSubmitter implements Closeable {
         }
         this.uploadRate = newUploadRate;
         if (uploadFuture != null) {
-            mHandler.removeCallbacks(uploadFuture);
-            mHandler.removeCallbacks(uploadIfNeededFuture);
+            uploadFuture.cancel();
+            uploadIfNeededFuture.cancel();
         }
         // Get upload frequency from system property
-        uploadFuture = new Runnable() {
+        uploadFuture = mHandler.postDelayed(() -> {
             final Set<String> topicsToSend = new HashSet<>();
-
-            @Override
-            public void run() {
-                if (connection.isConnected()) {
-                    if (topicsToSend.isEmpty()) {
-                        for (DataCacheGroup<?, ?> group : dataHandler.getActiveCaches()) {
-                            topicsToSend.add(group.getTopicName());
-                        }
-                    }
-                    uploadCaches(topicsToSend);
-                    // still more data to send, do that immediately
-                    if (!topicsToSend.isEmpty()) {
-                        mHandler.post(this);
-                        return;
-                    }
-                } else {
-                    topicsToSend.clear();
-                }
-                mHandler.postDelayed(this, uploadRate);
+            for (DataCacheGroup<?, ?> group : dataHandler.getActiveCaches()) {
+                topicsToSend.add(group.getTopicName());
             }
-        };
-        mHandler.postDelayed(uploadFuture, uploadRate);
-
-        uploadIfNeededFuture = new Runnable() {
-            @Override
-            public void run() {
-                if (connection.isConnected()) {
-                    boolean sendAgain = uploadCachesIfNeeded();
-                    if (sendAgain) {
-                        mHandler.post(this);
-                        return;
-                    }
-                }
-                mHandler.postDelayed(this, uploadRate / 5);
+            while (connection.isConnected() && !topicSenders.isEmpty()) {
+                uploadCaches(topicsToSend);
             }
-        };
-        mHandler.postDelayed(uploadIfNeededFuture, uploadRate / 5);
+            return true;
+        }, uploadRate);
+
+        uploadIfNeededFuture = mHandler.postDelayed(() -> {
+            while (connection.isConnected()) {
+                boolean sendAgain = uploadCachesIfNeeded();
+                if (!sendAgain) {
+                    break;
+                }
+            }
+            return true;
+        }, uploadRate / 5);
     }
 
     public void setSizeLimit(int limit) {
@@ -173,15 +151,12 @@ public class KafkaDataSubmitter implements Closeable {
      */
     @Override
     public synchronized void close() {
-        mHandler.post(() -> {
-            mHandler.removeCallbacks(uploadFuture);
-            mHandler.removeCallbacks(uploadIfNeededFuture);
-
+        mHandler.stop(() -> {
             for (Map.Entry<String, KafkaTopicSender<Object, Object>> topicSender : topicSenders.entrySet()) {
                 try {
                     topicSender.getValue().close();
                 } catch (IOException e) {
-                    logger.warn("failed to close topicSender for topic {}", topicSender.getKey(), e);
+                    logger.warn("failed to stop topicSender for topic {}", topicSender.getKey(), e);
                 }
             }
             topicSenders.clear();
@@ -192,7 +167,6 @@ public class KafkaDataSubmitter implements Closeable {
                 logger.warn("failed to addMeasurement latest batches", e1);
             }
         });
-        mHandlerThread.quitSafely();
     }
 
     /** Get a sender for a topic. Per topic, only ONE thread may use this. */

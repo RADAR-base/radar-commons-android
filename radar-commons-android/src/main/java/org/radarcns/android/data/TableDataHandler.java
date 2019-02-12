@@ -18,8 +18,6 @@ package org.radarcns.android.data;
 
 import android.content.Context;
 import android.content.Intent;
-import android.os.Handler;
-import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
@@ -33,6 +31,7 @@ import org.radarcns.android.kafka.ServerStatusListener;
 import org.radarcns.android.util.AtomicFloat;
 import org.radarcns.android.util.BatteryLevelReceiver;
 import org.radarcns.android.util.NetworkConnectedReceiver;
+import org.radarcns.android.util.SafeHandler;
 import org.radarcns.config.ServerConfig;
 import org.radarcns.kafka.ObservationKey;
 import org.radarcns.producer.rest.RestClient;
@@ -49,6 +48,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_SENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.CACHE_RECORDS_UNSENT_NUMBER;
 import static org.radarcns.android.device.DeviceService.CACHE_TOPIC;
@@ -81,8 +82,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
     private final AtomicBoolean sendOnlyWithWifi;
     private final Context context;
     private final SpecificData specificData;
-    private Handler handler;
-    private final HandlerThread handlerThread;
+    private final SafeHandler handler;
     private int maxBytes;
     private AppAuthState authState;
     private ServerConfig kafkaConfig;
@@ -123,26 +123,18 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
         this.kafkaRecordsSendLimit = SEND_LIMIT_DEFAULT;
         this.senderConnectionTimeout = SENDER_CONNECTION_TIMEOUT_DEFAULT;
         this.minimumBatteryLevel = new AtomicFloat(MINIMUM_BATTERY_LEVEL);
-        this.handlerThread = new HandlerThread("TableDataHandler");
-        this.handlerThread.start();
-        this.handler = new Handler(handlerThread.getLooper());
-        this.handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                for (ReadableDataCache cache : getCaches()) {
-                    Pair<Long, Long> records = cache.numberOfRecords();
-                    Intent numberCached = new Intent(CACHE_TOPIC);
-                    numberCached.putExtra(CACHE_TOPIC, cache.getReadTopic().getName());
-                    numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, records.first);
-                    numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, records.second);
-                    LocalBroadcastManager.getInstance(context).sendBroadcast(numberCached);
-                }
-                synchronized (TableDataHandler.this) {
-                    if (handler != null) {
-                        handler.postDelayed(this, 10_000);
-                    }
-                }
+        this.handler = new SafeHandler("TableDataHandler", THREAD_PRIORITY_BACKGROUND);
+        this.handler.start();
+        this.handler.postDelayed(() -> {
+            for (ReadableDataCache cache : getCaches()) {
+                Pair<Long, Long> records = cache.numberOfRecords();
+                Intent numberCached = new Intent(CACHE_TOPIC);
+                numberCached.putExtra(CACHE_TOPIC, cache.getReadTopic().getName());
+                numberCached.putExtra(CACHE_RECORDS_UNSENT_NUMBER, records.first);
+                numberCached.putExtra(CACHE_RECORDS_SENT_NUMBER, records.second);
+                LocalBroadcastManager.getInstance(context).sendBroadcast(numberCached);
             }
+            return true;
         }, 10_000L);
 
         this.batteryLevelReceiver = new BatteryLevelReceiver(context, this);
@@ -265,8 +257,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      * @throws IOException if the tables cannot be flushed
      */
     public synchronized void close() throws IOException {
-        handler = null;
-        handlerThread.quitSafely();
+        handler.stop(() -> {});
 
         if (status != Status.DISABLED) {
             networkConnectedReceiver.unregister();
@@ -305,7 +296,8 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
      */
     @SuppressWarnings("unchecked")
     public <V extends SpecificRecord> DataCache<ObservationKey, V> getCache(String topic) {
-        return (DataCache<ObservationKey, V>) tables.get(topic).getActiveDataCache();
+        return (DataCache<ObservationKey, V>) Objects.requireNonNull(tables.get(topic))
+                .getActiveDataCache();
     }
 
     @Override

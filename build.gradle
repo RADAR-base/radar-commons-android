@@ -14,25 +14,18 @@
  * limitations under the License.
  */
 buildscript {
+    ext.kotlin_version = '1.3.21'
     repositories {
         google()
         jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.3.0'
+        classpath 'com.android.tools.build:gradle:3.3.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.4'
-        classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.9.0'
-        classpath 'de.mobilej.unmock:UnMockPlugin:0.6.4'
+        classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.9.1'
+        classpath 'de.mobilej.unmock:UnMockPlugin:0.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.0'
-    }
-}
-
-allprojects {
-    repositories {
-        google()
-        jcenter()
-        // radar dev branches
-        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
     }
 }
 
@@ -42,6 +35,7 @@ subprojects {
     apply plugin: 'com.github.dcendents.android-maven'
     apply plugin: 'com.jfrog.artifactory'
     apply plugin: 'idea'
+    apply plugin: 'kotlin-android'
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
@@ -59,6 +53,17 @@ subprojects {
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
+
+    repositories {
+        google()
+        jcenter()
+        // radar dev branches
+        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+    }
+
+    dependencies {
+        implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    }
 
     idea {
         module {
@@ -81,5 +86,5 @@ subprojects {
 }
 
 wrapper {
-    gradleVersion '5.1.1'
+    gradleVersion '5.2.1'
 }

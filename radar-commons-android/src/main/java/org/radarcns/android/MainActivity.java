@@ -33,7 +33,6 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -49,6 +48,7 @@ import com.crashlytics.android.Crashlytics;
 
 import org.radarcns.android.auth.AppAuthState;
 import org.radarcns.android.util.NetworkConnectedReceiver;
+import org.radarcns.android.util.SafeHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,10 +90,9 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
      */
     private HandlerThread mHandlerThread;
     /** Hander in the background. It is set to null whenever the activity is not running. */
-    private Handler mHandler;
+    private SafeHandler mHandler;
 
     /** The UI to show the service data. */
-    private Runnable mViewUpdater;
     private MainActivityView mView;
 
     private AppAuthState authState;
@@ -154,14 +153,18 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     private final ServiceConnection radarServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
-            radarService = (IRadarBinder) service;
-            mView = createView();
+            synchronized (MainActivity.this) {
+                radarService = (IRadarBinder) service;
+                mView = createView();
+            }
             testBindBluetooth();
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
-            radarService = null;
+            synchronized (MainActivity.this) {
+                radarService = null;
+            }
         }
     };
 
@@ -195,6 +198,7 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     @Override
     protected final void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mHandler = new SafeHandler("Service connection", Process.THREAD_PRIORITY_BACKGROUND);
         bluetoothReceiverIsEnabled = false;
         if (savedInstanceState != null) {
             List<String> isRequesting = savedInstanceState.getStringArrayList("isRequestingPermissions");
@@ -244,20 +248,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
 
         // Start the UI thread
         uiRefreshRate = configuration.getLong(RadarConfiguration.UI_REFRESH_RATE_KEY);
-        mViewUpdater = () -> {
-            try {
-                // Update all rows in the UI with the data from the connections
-                MainActivityView localView = mView;
-                if (localView != null) {
-                    localView.update();
-                }
-            } finally {
-                Handler handler = getHandler();
-                if (handler != null) {
-                    handler.postDelayed(mViewUpdater, uiRefreshRate);
-                }
-            }
-        };
     }
 
     @Override
@@ -288,19 +278,26 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
     @Override
     protected void onResume() {
         super.onResume();
-        Handler localHandler = getHandler();
-        if (localHandler != null) {
-            localHandler.post(mViewUpdater);
-        }
+        mHandler.postDelayed(() -> {
+            if (getLifecycle().getCurrentState() != Lifecycle.State.RESUMED) {
+                return false;
+            }
+            try {
+                // Update all rows in the UI with the data from the connections
+                MainActivityView localView = getView();
+                if (localView != null) {
+                    localView.update();
+                }
+                return true;
+            } catch (Exception ex) {
+                logger.error("Failed to update view");
+                return true;
+            }
+        }, uiRefreshRate);
     }
 
-    @Override
-    protected void onPause() {
-        Handler localHandler = getHandler();
-        if (localHandler != null) {
-            localHandler.removeCallbacks(mViewUpdater);
-        }
-        super.onPause();
+    public final synchronized MainActivityView getView() {
+        return mView;
     }
 
     @Override
@@ -321,11 +318,8 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
             }
         }
 
-        mHandlerThread = new HandlerThread("Service connection", Process.THREAD_PRIORITY_BACKGROUND);
-        mHandlerThread.start();
-        Handler localHandler = new Handler(mHandlerThread.getLooper());
+        mHandler.start();
         synchronized (this) {
-            mHandler = localHandler;
             if (!isRequestingPermissions.isEmpty()) {
                 long now = System.currentTimeMillis();
                 long expires = isRequestingPermissionsTime + getRequestPermissionTimeoutMs();
@@ -450,11 +444,6 @@ public abstract class MainActivity extends Activity implements NetworkConnectedR
                         .putExtra(RadarService.EXTRA_GRANT_RESULTS, new int[]{result}));
 
         checkPermissions();
-    }
-
-    /** Get background handler. */
-    private synchronized Handler getHandler() {
-        return mHandler;
     }
 
     protected void checkPermissions() {

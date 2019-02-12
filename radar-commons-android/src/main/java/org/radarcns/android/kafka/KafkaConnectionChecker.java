@@ -16,8 +16,7 @@
 
 package org.radarcns.android.kafka;
 
-import android.os.Handler;
-
+import org.radarcns.android.util.SafeHandler;
 import org.radarcns.producer.AuthenticationException;
 import org.radarcns.producer.KafkaSender;
 import org.slf4j.Logger;
@@ -43,13 +42,13 @@ class KafkaConnectionChecker implements Runnable {
     private final ServerStatusListener listener;
     private final AtomicBoolean isConnected;
     private final Random random;
-    private final Handler mHandler;
+    private final SafeHandler mHandler;
+    private SafeHandler.HandlerFuture future;
     private final long heartbeatInterval;
     private long lastConnection;
     private int retries;
-    private boolean isPosted;
 
-    KafkaConnectionChecker(KafkaSender sender, Handler handler, ServerStatusListener listener,
+    KafkaConnectionChecker(KafkaSender sender, SafeHandler handler, ServerStatusListener listener,
                            long heartbeatSecondsInterval) {
         this.sender = sender;
         this.mHandler = handler;
@@ -59,7 +58,6 @@ class KafkaConnectionChecker implements Runnable {
         this.listener = listener;
         this.random = new Random();
         this.heartbeatInterval = heartbeatSecondsInterval * 1000L;
-        this.isPosted = false;
     }
 
     /**
@@ -68,7 +66,7 @@ class KafkaConnectionChecker implements Runnable {
     @Override
     public void run() {
         synchronized (this) {
-            isPosted = false;
+            future = null;
         }
         try {
             if (!isConnected.get()) {
@@ -94,12 +92,10 @@ class KafkaConnectionChecker implements Runnable {
     }
 
     private synchronized void post(long delay) {
-        if (isPosted) {
-            mHandler.removeCallbacks(this);
-        } else {
-            isPosted = true;
+        if (future != null) {
+            future.cancel();
         }
-        mHandler.postDelayed(this, delay);
+        future = mHandler.postDelayed(this, delay);
     }
 
     /** Check the connection as soon as possible. */
