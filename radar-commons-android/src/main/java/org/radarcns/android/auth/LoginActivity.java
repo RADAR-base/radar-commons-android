@@ -21,6 +21,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
+import android.support.v7.app.AppCompatActivity;
 import android.widget.Toast;
 
 import org.radarcns.android.R;
@@ -33,7 +34,7 @@ import java.util.List;
 import java.util.Objects;
 
 /** Activity to log in using a variety of login managers. */
-public abstract class LoginActivity extends Activity implements LoginListener {
+public abstract class LoginActivity extends AppCompatActivity implements LoginListener {
     private static final Logger logger = LoggerFactory.getLogger(LoginActivity.class);
     public static final String ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login";
     public static final String ACTION_REFRESH = "org.radarcns.auth.LoginActivity.refresh";

@@ -18,9 +18,9 @@ package org.radarcns.android;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Service;
+import android.arch.lifecycle.Lifecycle;
 import android.bluetooth.BluetoothAdapter;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -43,6 +43,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
+import android.support.v7.app.AppCompatActivity;
 
 import com.crashlytics.android.Crashlytics;
 
@@ -68,7 +69,7 @@ import static org.radarcns.android.auth.portal.ManagementPortalClient.MP_REFRESH
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods. */
 @SuppressWarnings({"unused", "WeakerAccess"})
-public abstract class MainActivity extends Activity implements NetworkConnectedReceiver.NetworkConnectedListener {
+public abstract class MainActivity extends AppCompatActivity implements NetworkConnectedReceiver.NetworkConnectedListener {
     private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
 
     private static final int REQUEST_ENABLE_PERMISSIONS = 2;
