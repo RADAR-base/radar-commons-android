@@ -25,6 +25,22 @@ class SafeHandler(val name: String, val priority: Int) {
         post(runnable, false)
     }
 
+    fun post(runnable: () -> Unit) {
+        post(Runnable { runnable() }, false)
+    }
+
+    fun postReentrant(runnable: () -> Unit) {
+        postReentrant(Runnable { runnable() })
+    }
+
+    fun postReentrant(runnable: Runnable) {
+        if (Thread.currentThread() == handlerThread) {
+            runnable.run()
+        } else {
+            post(runnable)
+        }
+    }
+
     fun post(runnable: Runnable, defaultToCurrentThread: Boolean) {
         val didRun = synchronized(this) {
             handler?.post(runnable)
@@ -45,27 +61,35 @@ class SafeHandler(val name: String, val priority: Int) {
 
     @Synchronized
     fun postDelayed(runnable: RepeatableRunnable, delay: Long): HandlerFuture? {
-        return handler?.let {
-            val r = Runnable {
-                if (runnable.runAndRepeat()) {
-                    postDelayed(runnable, delay)
-                }
-            }
-            it.postDelayed(r, delay)
-            HandlerFutureRef(r)
-        }
+        return postDelayed(Runnable {
+            if (runnable.runAndRepeat()) postDelayed(runnable, delay)
+        }, delay)
+    }
+
+    @Synchronized
+    fun postDelayed(runnable: () -> Boolean, delay: Long): HandlerFuture? {
+        return postDelayed(Runnable {
+            if (runnable()) postDelayed(runnable, delay)
+        }, delay)
+    }
+
+    fun stop(finalization: () -> Unit) {
+        stop(Runnable { finalization() })
     }
 
     @Synchronized
     fun stop(finalization: Runnable) {
-        if (handlerThread == null) {
-            logger.warn("Tried to stop SafeHandler multiple times.")
-            return
-        }
-        post(finalization, true)
-        handlerThread!!.quitSafely()
-        handlerThread = null
-        handler = null
+        handlerThread?.also { thread ->
+            val oldHandler = handler
+            handler = null
+            if (oldHandler == null) {
+                finalization.run()
+            } else {
+                oldHandler.post(finalization)
+            }
+            thread.quitSafely()
+            handlerThread = null
+        } ?: logger.warn("Tried to stop SafeHandler multiple times.")
     }
 
     interface RepeatableRunnable {
@@ -73,10 +97,19 @@ class SafeHandler(val name: String, val priority: Int) {
     }
 
     interface HandlerFuture {
+        fun postNow()
         fun cancel()
     }
 
     private inner class HandlerFutureRef(val runnable: Runnable): HandlerFuture {
+        override fun postNow() {
+            synchronized(this@SafeHandler) {
+                handler?.apply {
+                    removeCallbacks(runnable)
+                }
+                postReentrant(runnable)
+            }
+        }
         override fun cancel() {
             synchronized(this@SafeHandler) {
                 handler?.removeCallbacks(runnable)

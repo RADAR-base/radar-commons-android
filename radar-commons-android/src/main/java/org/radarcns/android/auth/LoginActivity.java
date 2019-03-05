@@ -16,7 +16,6 @@
 
 package org.radarcns.android.auth;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
@@ -30,7 +29,6 @@ import org.radarcns.android.util.Boast;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Objects;
 
 /** Activity to log in using a variety of login managers. */
@@ -40,11 +38,10 @@ public abstract class LoginActivity extends AppCompatActivity implements LoginLi
     public static final String ACTION_REFRESH = "org.radarcns.auth.LoginActivity.refresh";
     public static final String ACTION_LOGIN_SUCCESS = "org.radarcns.auth.LoginActivity.success";
 
-    private List<LoginManager> loginManagers;
     private boolean startedFromActivity;
     private boolean refreshOnly;
-    private AppAuthState appAuth;
-    private boolean isFirstStart;
+
+    protected AuthServiceConnection authConnection;
 
     @Override
     protected void onCreate(Bundle savedInstanceBundle) {
@@ -60,40 +57,36 @@ public abstract class LoginActivity extends AppCompatActivity implements LoginLi
             startedFromActivity = Objects.equals(action, ACTION_LOGIN);
         }
 
-        appAuth = AppAuthState.Builder.from(this).build();
-        loginManagers = createLoginManagers(appAuth);
-
-        if (loginManagers.isEmpty()) {
-            throw new IllegalStateException("Cannot use login managers, none are configured.");
-        }
-        if (appAuth.isValid()) {
-            loginSucceeded(null, appAuth);
-            return;
-        }
-        isFirstStart = true;
-
         if (startedFromActivity) {
             Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show();
         }
 
-        for (LoginManager manager : loginManagers) {
-            manager.onActivityCreate();
-        }
+        authConnection = new AuthServiceConnection(this, this);
+        authConnection.getOnBoundListeners().add(0, binder -> {
+                    binder.setInLoginActivity(true);
+                    return null;
+                });
+        authConnection.getOnBoundListeners().add(binder -> {
+            binder.refresh();
+            for (LoginManager manager : binder.getManagers()) {
+                if (manager.onActivityCreate(LoginActivity.this)) {
+                    binder.update(manager);
+                    break;
+                }
+            }
+            return null;
+        });
+        authConnection.getOnUnboundListeners().add(binder -> {
+            binder.setInLoginActivity(false);
+            return null;
+        });
+        authConnection.bind();
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        if (isFirstStart) {
-            isFirstStart = false;
-            for (LoginManager manager : loginManagers) {
-                AppAuthState localState = manager.refresh();
-                if (localState != null && localState.isValid()) {
-                    loginSucceeded(manager, localState);
-                    return;
-                }
-            }
-        }
+    protected void onDestroy() {
+        super.onDestroy();
+        authConnection.unbind();
     }
 
     @Override
@@ -103,25 +96,6 @@ public abstract class LoginActivity extends AppCompatActivity implements LoginLi
 
         // call superclass to save any view hierarchy
         super.onSaveInstanceState(outState);
-    }
-
-    /**
-     * Create your login managers here. Call {@link LoginManager#start()} for the login method that
-     * a user indicates.
-     * @param appAuth previous invalid authentication
-     * @return non-empty list of login managers to use
-     */
-    @NonNull
-    protected abstract List<LoginManager> createLoginManagers(AppAuthState appAuth);
-
-    @NonNull
-    protected abstract Class<? extends Activity> nextActivity();
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        for (LoginManager manager : loginManagers) {
-            manager.onActivityResult(requestCode, resultCode, data);
-        }
     }
 
     /** Call when part of the login procedure failed. */
@@ -135,25 +109,18 @@ public abstract class LoginActivity extends AppCompatActivity implements LoginLi
     public void loginSucceeded(LoginManager manager, @NonNull AppAuthState appAuthState) {
         logger.info("Login succeeded");
 
-        if (appAuthState.isValid()) {
-            this.appAuth = appAuthState;
-        }
-        this.appAuth.addToPreferences(this);
-
-        ((RadarApplication) getApplication()).getConfiguration()
-                .updateWithAuthState(this, appAuthState);
-
         LocalBroadcastManager.getInstance(this)
-                .sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS));
+                .sendBroadcast(appAuthState.toIntent().setAction(ACTION_LOGIN_SUCCESS));
 
         if (startedFromActivity) {
             logger.debug("Start next activity with result");
-            setResult(RESULT_OK, this.appAuth.toIntent());
+            setResult(RESULT_OK, appAuthState.toIntent());
         } else if (!refreshOnly) {
             logger.debug("Start next activity without result");
-            Intent next = new Intent(this, nextActivity());
+            Intent next = new Intent(this, ((RadarApplication)getApplication()).getMainActivity());
+            next.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_TASK_ON_HOME);
             Bundle extras = new Bundle();
-            this.appAuth.addToBundle(extras);
+            appAuthState.addToBundle(extras);
             next.putExtras(extras);
             startActivity(next);
         }

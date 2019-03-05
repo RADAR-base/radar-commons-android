@@ -66,6 +66,7 @@ public class OfflineProcessor implements Closeable {
                 if (handlerThread != null) {
                     handlerThread.quitSafely();
                 }
+                return null;
             });
 
     private final Context context;

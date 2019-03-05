@@ -22,6 +22,7 @@ task javadoc(type: Javadoc) {
     classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
     exclude '**/BuildConfig.java'
     exclude '**/R.java'
+    exclude '**/*.kt'
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {

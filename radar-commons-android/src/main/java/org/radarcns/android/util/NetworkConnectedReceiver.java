@@ -136,6 +136,11 @@ public class NetworkConnectedReceiver implements SpecificReceiver {
                 }
 
                 @Override
+                public void onUnavailable() {
+                    // nothing happened
+                }
+
+                @Override
                 public void onLost(Network network) {
                     isConnected = false;
                     hasWifiOrEthernet = false;

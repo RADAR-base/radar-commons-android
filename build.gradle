@@ -41,7 +41,7 @@ subprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.9.4-SNAPSHOT'
+    version = '0.10.0-SNAPSHOT'
     ext.versionCode = 29
     group = 'org.radarcns'
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
@@ -62,7 +62,7 @@ subprojects {
     }
 
     dependencies {
-        implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+        api "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     }
 
     idea {

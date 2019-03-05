@@ -200,7 +200,7 @@ public class TableDataHandler implements DataHandler<ObservationKey, SpecificRec
                 .httpClient(client)
                 .schemaRetriever(schemaRetriever)
                 .headers(authState.getOkHttpHeaders())
-                .hasBinaryContent(hasBinaryContent)
+                .useBinaryContent(hasBinaryContent)
                 .build();
         this.submitter = new KafkaDataSubmitter(this, sender, kafkaRecordsSendLimit,
                 getPreferredUploadRate(), authState.getUserId());

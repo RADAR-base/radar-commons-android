@@ -25,15 +25,18 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 
+import com.crashlytics.android.Crashlytics;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 
 import org.radarcns.android.auth.AppAuthState;
+import org.radarcns.android.auth.portal.GetSubjectParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,10 +48,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import static java.util.regex.Pattern.CASE_INSENSITIVE;
-import static org.radarcns.android.auth.portal.GetSubjectParser.getHumanReadableUserId;
 import static org.radarcns.android.auth.portal.ManagementPortalClient.BASE_URL_PROPERTY;
 
 @SuppressWarnings("WeakerAccess")
@@ -73,7 +76,6 @@ public class RadarConfiguration {
     public static final String UI_REFRESH_RATE_KEY = "ui_refresh_rate_millis";
     public static final String KAFKA_UPLOAD_RATE_KEY = "kafka_upload_rate";
     public static final String DATABASE_COMMIT_RATE_KEY = "database_commit_rate";
-    public static final String KAFKA_CLEAN_RATE_KEY = "kafka_clean_rate";
     public static final String KAFKA_RECORDS_SEND_LIMIT_KEY = "kafka_records_send_limit";
     public static final String KAFKA_RECORDS_SIZE_LIMIT_KEY = "kafka_records_size_limit";
     public static final String SENDER_CONNECTION_TIMEOUT_KEY = "sender_connection_timeout";
@@ -101,6 +103,8 @@ public class RadarConfiguration {
             "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE);
     private static final Pattern IS_FALSE = Pattern.compile(
             "^(0|false|f|no|n|off|)$", CASE_INSENSITIVE);
+    private final OnFailureListener onFailureListener;
+    private final AtomicBoolean hasChange;
 
     public FirebaseStatus getStatus() {
         return status;
@@ -124,6 +128,7 @@ public class RadarConfiguration {
 
         this.localConfiguration = new ConcurrentHashMap<>();
         this.handler = new Handler();
+        this.hasChange = new AtomicBoolean(false);
 
         this.onFetchCompleteHandler = task -> {
             if (task.isSuccessful()) {
@@ -137,9 +142,16 @@ public class RadarConfiguration {
                 LocalBroadcastManager.getInstance(context)
                         .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
             } else {
-                setStatus(status);
+                setStatus(FirebaseStatus.ERROR);
                 logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException());
             }
+        };
+
+        this.onFailureListener = ex -> {
+            logger.info("Failed to fetch Firebase config");
+            setStatus(FirebaseStatus.ERROR);
+            LocalBroadcastManager.getInstance(context)
+                    .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
         };
 
         final SharedPreferences prefs = context.getApplicationContext().getSharedPreferences(getClass().getName(), Context.MODE_PRIVATE);
@@ -156,6 +168,12 @@ public class RadarConfiguration {
                 editor.putString(entry.getKey(), entry.getValue());
             }
             editor.apply();
+
+            if (hasChange.compareAndSet(true, false)) {
+                logger.info("RADAR configuration changed: {}", RadarConfiguration.this);
+                LocalBroadcastManager.getInstance(context)
+                        .sendBroadcast(new Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED));
+            }
         };
 
         GoogleApiAvailability googleApi = GoogleApiAvailability.getInstance();
@@ -231,9 +249,16 @@ public class RadarConfiguration {
                     + " into RadarConfiguration");
         }
         String config = value instanceof String ? (String)value : value.toString();
-        String oldValue = localConfiguration.put(key, config);
-        persistChanges.run();
+        String oldValue = getRawString(key);
+        if (!oldValue.equals(config)) {
+            hasChange.set(true);
+        }
+        localConfiguration.put(key, config);
         return oldValue;
+    }
+
+    public void persistChanges() {
+        persistChanges.run();
     }
 
     /**
@@ -244,12 +269,18 @@ public class RadarConfiguration {
     public void reset(String... keys) {
         if (keys == null || keys.length == 0) {
             localConfiguration.clear();
+            hasChange.set(true);
         } else {
             for (String key : keys) {
+                String oldValue = getRawString(key);
                 localConfiguration.remove(key);
+                String newValue = getRawString(key);
+                if (!Objects.equals(oldValue, newValue)) {
+                    hasChange.set(true);
+                }
             }
         }
-        persistChanges.run();
+        persistChanges();
     }
 
     /**
@@ -279,6 +310,7 @@ public class RadarConfiguration {
         synchronized (this) {
             status = FirebaseStatus.FETCHING;
             task.addOnCompleteListener(onFetchCompleteHandler);
+            task.addOnFailureListener(onFailureListener);
         }
         return task;
     }
@@ -295,7 +327,7 @@ public class RadarConfiguration {
         if (localConfiguration.containsKey(key)) {
             return localConfiguration.get(key);
         } else {
-            return config.getString(key);
+            return config.getValue(key).asString();
         }
     }
 
@@ -473,7 +505,7 @@ public class RadarConfiguration {
     }
 
     public boolean has(String key) {
-        return localConfiguration.containsKey(key) || !config.getString(key).isEmpty();
+        return localConfiguration.containsKey(key) || !config.getValue(key).asString().isEmpty();
     }
 
     public static boolean hasExtra(Bundle bundle, String key) {
@@ -560,11 +592,9 @@ public class RadarConfiguration {
             put(BASE_URL_KEY, baseUrl);
             put(KAFKA_REST_PROXY_URL_KEY, baseUrl + "/kafka/");
             put(SCHEMA_REGISTRY_URL_KEY, baseUrl + "/schema/");
-            if (has(MANAGEMENT_PORTAL_URL_KEY)) {
-                put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
-                put(OAUTH2_TOKEN_URL, baseUrl + "/managementportal/oauth/token");
-                put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
-            }
+            put(MANAGEMENT_PORTAL_URL_KEY, baseUrl + "/managementportal/");
+            put(OAUTH2_TOKEN_URL, baseUrl + "/managementportal/oauth/token");
+            put(OAUTH2_AUTHORIZE_URL, baseUrl + "/managementportal/oauth/authorize");
             logger.info("Broadcast config changed based on base URL {}", baseUrl);
         }
 
@@ -573,7 +603,8 @@ public class RadarConfiguration {
         }
         if (userId != null) {
             put(USER_ID_KEY, userId);
-            put(READABLE_USER_ID_KEY, getHumanReadableUserId(appAuthState));
+            put(READABLE_USER_ID_KEY, Objects.requireNonNull(
+                    GetSubjectParser.Companion.getHumanReadableUserId(appAuthState)));
         }
 
         FirebaseAnalytics analytics = FirebaseAnalytics.getInstance(context);
@@ -581,6 +612,8 @@ public class RadarConfiguration {
         analytics.setUserProperty(USER_ID_KEY, maxCharacters(userId, 36));
         analytics.setUserProperty(PROJECT_ID_KEY, maxCharacters(projectId, 36));
         analytics.setUserProperty(BASE_URL_KEY, maxCharacters(baseUrl, 36));
+
+        Crashlytics.setUserIdentifier(userId);
 
         return baseUrlChanged;
     }
@@ -620,12 +653,14 @@ public class RadarConfiguration {
 
         Map<String, String> result = new HashMap<>((keys.size() + localConfiguration.size()) * 2);
         for (String key : keys) {
-            result.put(key, config.getString(key));
+            result.put(key, config.getValue(key).asString());
         }
         result.putAll(localConfiguration);
         return result;
     }
 
+    @NonNull
+    @Override
     public String toString() {
         Set<String> keys = new HashSet<>(config.getKeysByPrefix(null));
         keys.addAll(localConfiguration.keySet());
