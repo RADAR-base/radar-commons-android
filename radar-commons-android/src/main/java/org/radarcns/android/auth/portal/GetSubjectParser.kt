@@ -14,9 +14,9 @@ import java.util.*
 class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
-    override fun parse(bodyString: String): AppAuthState {
+    override fun parse(authString: String): AppAuthState {
         try {
-            val jsonObject = JSONObject(bodyString)
+            val jsonObject = JSONObject(authString)
             val project = jsonObject.getJSONObject("project")
             val sources = jsonObject.getJSONArray("sources")
 
@@ -47,7 +47,7 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
             }
         } catch (e: JSONException) {
             throw IOException(
-                    "ManagementPortal did not give a valid response: $bodyString", e)
+                    "ManagementPortal did not give a valid response: $authString", e)
         }
     }
 

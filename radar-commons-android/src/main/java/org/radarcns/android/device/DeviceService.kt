@@ -26,12 +26,13 @@ import android.os.Bundle
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.support.annotation.CallSuper
 import android.support.v4.content.LocalBroadcastManager
+import org.apache.avro.specific.SpecificRecord
 import org.radarcns.android.IRadarBinder
 import org.radarcns.android.RadarApplication
 import org.radarcns.android.RadarConfiguration
 import org.radarcns.android.auth.*
 import org.radarcns.android.auth.portal.SourceType
-import org.radarcns.android.data.TableDataHandler
+import org.radarcns.android.data.DataHandler
 import org.radarcns.android.device.DeviceServiceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarcns.android.util.BundleSerialization
 import org.radarcns.android.util.ManagedServiceConnection
@@ -63,7 +64,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
                 when (state) {
                     BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> {
                         logger.warn("Bluetooth is off")
-                        handler.post { stopDeviceManager(unsetDeviceManager()) }
+                        handler.execute { stopDeviceManager(unsetDeviceManager()) }
                     }
                     else -> logger.debug("Bluetooth is in state {}", state)
                 }
@@ -72,7 +73,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
     }
     @get:Synchronized
     @set:Synchronized
-    var dataHandler: TableDataHandler? = null
+    var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
     @get:Synchronized
     var deviceManager: DeviceManager<T>? = null
         private set
@@ -132,8 +133,8 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         radarConnection = ManagedServiceConnection(this, app.radarService)
         radarConnection.onBoundListeners.add { binder ->
             dataHandler = binder.dataHandler
-            handler.post {
-                startFuture?.postNow()
+            handler.execute {
+                startFuture?.runNow()
             }
         }
         radarConnection.bind()
@@ -216,12 +217,12 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
 
     override fun deviceStatusUpdated(deviceManager: DeviceManager<*>, status: DeviceStatusListener.Status) {
         if (status == DeviceStatusListener.Status.DISCONNECTED) {
-            handler.post(Runnable {
+            handler.execute(true) {
                 if (this.deviceManager === deviceManager) {
                     this.deviceManager = null
                 }
                 stopDeviceManager(deviceManager)
-            }, true)
+            }
         }
         broadcastDeviceStatus(deviceManager.name, status)
     }
@@ -260,12 +261,12 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         val actualIds = if (expectedNames.isEmpty()) acceptableIds else expectedNames
 
         handler.start()
-        handler.post {
+        handler.execute {
             val localManager = deviceManager
             if (localManager == null) {
                 if (isBluetoothConnectionRequired && BluetoothAdapter.getDefaultAdapter() != null && !BluetoothAdapter.getDefaultAdapter().isEnabled) {
                     logger.error("Cannot start recording without Bluetooth")
-                    return@post
+                    return@execute
                 }
                 if (radarConnection.binder != null && dataHandler != null) {
                     logger.info("Starting recording")
@@ -277,20 +278,19 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
                         }
                     }
                 } else {
-                    startFuture = handler.postDelayed({
-                        if (startFuture != null) {
+                    startFuture = handler.delay(100) {
+                        startFuture?.let {
                             startFuture = null
                             startRecording(acceptableIds)
                         }
-                        false
-                    }, 100)
+                    }
                 }
             }
         }
     }
 
     fun stopRecording() {
-        handler.post {
+        handler.execute {
             startFuture?.let {
                 it.cancel()
                 startFuture = null
@@ -300,9 +300,9 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         }
     }
 
-    override fun loginSucceeded(manager: LoginManager?, state: AppAuthState) {
-        key.setProjectId(state.projectId)
-        key.setUserId(state.userId)
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        key.setProjectId(authState.projectId)
+        key.setUserId(authState.userId)
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
@@ -352,17 +352,18 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         source.sourceName = name
         source.attributes = attributes
 
-        authConnection.binder?.registerSource(source, { authState, updatedSource ->
-            key.setProjectId(authState.projectId)
-            key.setUserId(authState.userId)
-            key.setSourceId(updatedSource.sourceId)
-            source.sourceId = updatedSource.sourceId
-            source.sourceName = updatedSource.sourceName
-            source.expectedSourceName = updatedSource.expectedSourceName
-            deviceManager?.didRegister(source)
-        }, {
-            handler.postDelayed(Runnable { registerDevice(type, name, attributes) }, 300_000L) })
-                ?: handler.postDelayed(Runnable { registerDevice(type, name, attributes) }, 300_000L)
+        authConnection.binder?.registerSource(source,
+                { authState, updatedSource ->
+                    key.setProjectId(authState.projectId)
+                    key.setUserId(authState.userId)
+                    key.setSourceId(updatedSource.sourceId)
+                    source.sourceId = updatedSource.sourceId
+                    source.sourceName = updatedSource.sourceName
+                    source.expectedSourceName = updatedSource.expectedSourceName
+                    deviceManager?.didRegister(source)
+                },
+                { handler.delay(300_000L) { registerDevice(type, name, attributes) } })
+                ?: handler.delay(300_000L) { registerDevice(type, name, attributes) }
     }
 
     open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>): Boolean {

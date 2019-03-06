@@ -9,7 +9,7 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.support.v4.content.LocalBroadcastManager
 import org.radarcns.android.RadarApplication
 import org.radarcns.android.RadarConfiguration
-import org.radarcns.android.auth.LoginActivity.ACTION_LOGIN_SUCCESS
+import org.radarcns.android.auth.LoginActivity.Companion.ACTION_LOGIN_SUCCESS
 import org.radarcns.android.util.NetworkConnectedReceiver
 import org.radarcns.android.util.SafeHandler
 import org.slf4j.LoggerFactory
@@ -37,11 +37,13 @@ abstract class AuthService : Service(), LoginListener {
         handler.start()
         loginManagers = createLoginManagers(appAuth)
         config = (application as RadarApplication).configuration
-        networkConnectedListener = NetworkConnectedReceiver(this, NetworkConnectedReceiver.NetworkConnectedListener { connected, _ ->
-            handler.post {
-                isConnected = connected
-                if (isConnected && !appAuth.isValidFor(5, TimeUnit.MINUTES)) {
-                    refresh()
+        networkConnectedListener = NetworkConnectedReceiver(this, object : NetworkConnectedReceiver.NetworkConnectedListener {
+            override fun onNetworkConnectionChanged(isConnected: Boolean, hasWifiOrEthernet: Boolean) {
+                handler.execute {
+                    this@AuthService.isConnected = isConnected
+                    if (isConnected && !appAuth.isValidFor(5, TimeUnit.MINUTES)) {
+                        refresh()
+                    }
                 }
             }
         })
@@ -52,7 +54,7 @@ abstract class AuthService : Service(), LoginListener {
                 // no action required
             }
 
-            override fun loginSucceeded(manager: LoginManager?, state: AppAuthState) {
+            override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 currentDelay = null
                 config.updateWithAuthState(this@AuthService, appAuth)
                 config.persistChanges()
@@ -68,7 +70,7 @@ abstract class AuthService : Service(), LoginListener {
      * this opens the login activity.
      */
     fun refresh() {
-        handler.post {
+        handler.execute {
             logger.info("Refreshing authentication state")
             if (appAuth.isValidFor(5, TimeUnit.MINUTES)) {
                 callListeners(sinceUpdate = appAuth.lastUpdate) {
@@ -89,7 +91,7 @@ abstract class AuthService : Service(), LoginListener {
      * client was online.
      */
     fun refreshIfOnline() {
-        handler.post {
+        handler.execute {
             if (isConnected) {
                 refresh()
             } else if (appAuth.isValid
@@ -122,7 +124,7 @@ abstract class AuthService : Service(), LoginListener {
     protected abstract fun showLoginNotification()
 
     override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
-        handler.postReentrant {
+        handler.executeReentrant {
             logger.info("Login failed: {}", ex?.toString())
             callListeners {
                 it.loginListener.loginFailed(manager, ex)
@@ -134,7 +136,7 @@ abstract class AuthService : Service(), LoginListener {
                 val actualDelay = Math.min(2 * (currentDelay ?: RETRY_MIN_DELAY), RETRY_MAX_DELAY)
                         .also { currentDelay = it }
                         .let { Random.nextLong(RETRY_MIN_DELAY, it) }
-                handler.postDelayed(Runnable { refresh() }, actualDelay)
+                handler.delay(actualDelay, this::refresh)
             } else {
                 if (networkConnectedListener.isConnected) {
                     startLogin()
@@ -172,10 +174,10 @@ abstract class AuthService : Service(), LoginListener {
                 loginManagers.filter { it.sourceTypes.contains(authSource) }
             } ?: loginManagers
 
-    override fun loginSucceeded(manager: LoginManager?, state: AppAuthState) {
-        handler.postReentrant {
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        handler.executeReentrant {
             logger.info("Log in succeeded.")
-            appAuth = state
+            appAuth = authState
 
             LocalBroadcastManager.getInstance(this)
                     .sendBroadcast(appAuth.toIntent().setAction(ACTION_LOGIN_SUCCESS))
@@ -196,7 +198,7 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     fun update(manager: LoginManager) {
-        handler.post {
+        handler.execute {
             logger.info("Refreshing manager {}", manager)
             manager.refresh(appAuth)
         }
@@ -225,19 +227,19 @@ abstract class AuthService : Service(), LoginListener {
     protected abstract fun createLoginManagers(appAuth: AppAuthState): List<LoginManager>
 
     private fun updateState(update: AppAuthState.Builder.() -> Unit) {
-        handler.postReentrant {
+        handler.executeReentrant {
             appAuth = appAuth.alter(update)
         }
     }
 
     private fun applyState(apply: (AppAuthState) -> Unit) {
-        handler.postReentrant {
+        handler.executeReentrant {
             apply(appAuth)
         }
     }
 
     fun invalidate(token: String?, disableRefresh: Boolean) {
-        handler.postReentrant {
+        handler.executeReentrant {
             logger.info("Invalidating authentication state")
             if (token?.let { it == appAuth.token } != false) {
                 appAuth = appAuth.alter { invalidate() }
@@ -254,21 +256,13 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     private fun registerSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) {
-        handler.post {
+        handler.execute {
             logger.info("Registering source with {}: {}", source.type, source.sourceId)
 
             relevantManagers.any {
                 it.registerSource(appAuth, source, success, failure)
             }
         }
-    }
-
-    interface ExceptionCallback {
-        fun failure(ex: Exception?)
-    }
-
-    interface SourceMetadataCallback {
-        fun sourceUpdated(authState: AppAuthState, source: SourceMetadata)
     }
 
     override fun onBind(intent: Intent?): IBinder? {

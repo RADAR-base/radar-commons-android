@@ -8,7 +8,11 @@ import android.content.IntentFilter
 import android.support.v4.content.LocalBroadcastManager
 import org.json.JSONException
 import org.radarcns.android.RadarApplication
-import org.radarcns.android.RadarConfiguration.*
+import org.radarcns.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
+import org.radarcns.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
+import org.radarcns.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
+import org.radarcns.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
+import org.radarcns.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarcns.android.auth.AppAuthState
 import org.radarcns.android.auth.AuthService
 import org.radarcns.android.auth.LoginManager

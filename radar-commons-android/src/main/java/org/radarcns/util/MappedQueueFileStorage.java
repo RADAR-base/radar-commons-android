@@ -245,11 +245,11 @@ public class MappedQueueFileStorage implements QueueStorage {
 
     @Override
     public void setMaximumLength(long newLength) {
-        if (newLength < MINIMUM_LENGTH || newLength > Integer.MAX_VALUE) {
+        if (newLength > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Maximum cache size out of range "
-                    + MINIMUM_LENGTH + " <= " + newLength + " <= " + Integer.MAX_VALUE);
+                    + newLength + " <= " + Integer.MAX_VALUE);
         }
-        this.maximumLength = (int)newLength;
+        this.maximumLength = Math.max(MINIMUM_LENGTH, (int)newLength);
     }
 
     @Override

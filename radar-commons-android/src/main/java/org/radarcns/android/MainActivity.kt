@@ -89,11 +89,11 @@ abstract class MainActivity : AppCompatActivity() {
     val radarService: IRadarBinder?
         get() = radarConnection.binder
 
-    val userId: String
-        get() = configuration.getString(RadarConfiguration.USER_ID_KEY, null)
+    val userId: String?
+        get() = configuration.optString(RadarConfiguration.USER_ID_KEY)
 
-    val projectId: String
-        get() = configuration.getString(RadarConfiguration.PROJECT_ID_KEY, null)
+    val projectId: String?
+        get() = configuration.optString(RadarConfiguration.PROJECT_ID_KEY)
 
     private val localBroadcastManager: LocalBroadcastManager
         get() = LocalBroadcastManager.getInstance(this)
@@ -197,7 +197,7 @@ abstract class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        mHandler.postDelayed({
+        mHandler.repeatWhile(uiRefreshRate) {
             try {
                 // Update all rows in the UI with the data from the connections
                 view?.update()
@@ -205,7 +205,7 @@ abstract class MainActivity : AppCompatActivity() {
                 logger.error("Failed to update view")
             }
             lifecycle.currentState == Lifecycle.State.RESUMED
-        }, uiRefreshRate)
+        }
     }
 
     public override fun onStart() {

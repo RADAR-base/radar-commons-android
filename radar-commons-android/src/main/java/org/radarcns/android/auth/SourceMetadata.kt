@@ -32,6 +32,7 @@ class SourceMetadata {
 
     @Deprecated("Use direct constructor instead")
     @SuppressWarnings("deprecation")
+    @Suppress("DEPRECATION")
     constructor(appSource: AppSource) {
         this.type = SourceType(
                 appSource.sourceTypeId.toInt(),

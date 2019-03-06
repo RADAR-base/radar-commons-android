@@ -22,6 +22,7 @@ import org.apache.avro.Schema
 import org.apache.avro.specific.SpecificRecord
 import org.radarcns.android.RadarConfiguration
 import org.radarcns.android.auth.SourceMetadata
+import org.radarcns.android.data.DataCache
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.topic.AvroTopic
 import org.slf4j.LoggerFactory
@@ -84,16 +85,15 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
      * @param <V> topic value type
      * @return created topic
     </V> */
-    protected fun <V : SpecificRecord> createTopic(
-            name: String, valueClass: Class<V>): AvroTopic<ObservationKey, V> {
+    protected fun <V : SpecificRecord> createCache(
+            name: String, valueClass: Class<V>): DataCache<ObservationKey, V> {
         try {
             val method = valueClass.getMethod("getClassSchema")
             val valueSchema = method.invoke(null) as Schema
             val topic = AvroTopic(name,
                     ObservationKey.getClassSchema(), valueSchema,
                     ObservationKey::class.java, valueClass)
-            service.dataHandler?.registerTopic(topic)
-            return topic
+            return dataHandler.registerCache(topic)
         } catch (e: ReflectiveOperationException) {
             logger.error("Error creating topic {}", name, e)
             throw RuntimeException(e)
@@ -110,15 +110,15 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
      * Send a single record, using the cache to persist the data.
      * If the current device is not registered when this is called, the data will NOT be sent.
      */
-    protected fun <V : SpecificRecord> send(topic: AvroTopic<ObservationKey, V>, value: V) {
+    protected fun <V : SpecificRecord> send(dataCache: DataCache<ObservationKey, V>, value: V) {
         val key = state.id
         if (key.getSourceId() != null) {
             try {
-                dataHandler.addMeasurement(topic, key, value)
+                dataCache.addMeasurement(key, value)
             } catch (ex: IllegalArgumentException) {
                 Crashlytics.log("Cannot send measurement for " + state.id)
                 Crashlytics.logException(ex)
-                logger.error("Cannot send to topic {}: {}", topic.name, ex.message)
+                logger.error("Cannot send to dataCache {}: {}", dataCache.topic.name, ex.message)
             }
 
         } else if (!didWarn) {
@@ -144,9 +144,7 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
         updateStatus(DeviceStatusListener.Status.DISCONNECTED)
     }
 
-    override fun toString(): String {
-        return "DeviceManager{name='$name', status=$state}"
-    }
+    override fun toString() = "DeviceManager{name='$name', status=$state}"
 
     companion object {
         private val logger = LoggerFactory.getLogger(AbstractDeviceManager::class.java)

@@ -34,7 +34,7 @@ class PermissionHandler(private val activity: AppCompatActivity, private val mHa
     var isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
 
     private fun onPermissionRequestResult(permission: String, granted: Boolean) {
-        mHandler.post {
+        mHandler.execute {
             needsPermissions.remove(permission)
 
             val result = if (granted) PackageManager.PERMISSION_GRANTED else PackageManager.PERMISSION_DENIED
@@ -50,7 +50,7 @@ class PermissionHandler(private val activity: AppCompatActivity, private val mHa
     }
 
     protected fun checkPermissions() {
-        mHandler.postReentrant {
+        mHandler.executeReentrant {
             val currentlyNeeded = needsPermissions - isRequestingPermissions
             when {
                 needsPermissions.isEmpty() -> {
@@ -105,10 +105,10 @@ class PermissionHandler(private val activity: AppCompatActivity, private val mHa
 
         if (isRequestingPermissionsTime != java.lang.Long.MAX_VALUE) {
             isRequestingPermissionsTime = System.currentTimeMillis()
-            mHandler.postDelayed(Runnable {
+            mHandler.delay(requestPermissionTimeoutMs) {
                 resetRequestingPermission()
                 checkPermissions()
-            }, requestPermissionTimeoutMs)
+            }
         }
     }
 
@@ -197,14 +197,14 @@ class PermissionHandler(private val activity: AppCompatActivity, private val mHa
     }
 
     fun invalidateCache() {
-        mHandler.post {
+        mHandler.execute {
             if (!isRequestingPermissions.isEmpty()) {
                 val now = System.currentTimeMillis()
                 val expires = isRequestingPermissionsTime + requestPermissionTimeoutMs
                 if (expires <= now) {
                     resetRequestingPermission()
                 } else {
-                    mHandler.postDelayed(this::resetRequestingPermission as Runnable, expires - now)
+                    mHandler.delay(expires - now, this::resetRequestingPermission)
                 }
             }
         }
@@ -212,7 +212,7 @@ class PermissionHandler(private val activity: AppCompatActivity, private val mHa
 
     fun replaceNeededPermissions(newPermissions: Array<out String>?) {
         newPermissions?.also { permissions ->
-            mHandler.post {
+            mHandler.execute {
                 needsPermissions = mutableSetOf(*permissions)
                 checkPermissions()
             }

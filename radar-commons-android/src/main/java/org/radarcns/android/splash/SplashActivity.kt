@@ -130,8 +130,8 @@ abstract class SplashActivity : AppCompatActivity() {
                 }
             }
 
-            override fun loginSucceeded(manager: LoginManager?, state: AppAuthState) {
-                if (state.isPrivacyPolicyAccepted) {
+            override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+                if (authState.isPrivacyPolicyAccepted) {
                     startActivity(app.mainActivity)
                 } else {
                     startActivity(app.loginActivity)

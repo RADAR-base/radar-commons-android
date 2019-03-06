@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package org.radarcns.android.data;
+package org.radarcns.android.data
 
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.util.Pair;
+import org.radarcns.data.RecordData
+import org.radarcns.topic.AvroTopic
+import java.io.Closeable
+import java.io.File
+import java.io.IOException
 
-import org.radarcns.data.RecordData;
-import org.radarcns.topic.AvroTopic;
+interface ReadableDataCache : Closeable {
+    /** Get the topic the cache stores.  */
+    val readTopic: AvroTopic<Any, Any>
 
-import java.io.Closeable;
-import java.io.File;
-import java.io.IOException;
-
-public interface ReadableDataCache extends Closeable {
+    val file: File
     /**
      * Get unsent records from the cache.
      *
@@ -35,34 +34,27 @@ public interface ReadableDataCache extends Closeable {
      * @param sizeLimit maximum serialized size of those records.
      * @return records or null if none are found.
      */
-    @Nullable
-    RecordData<Object, Object> unsentRecords(int limit, int sizeLimit) throws IOException;
+    @Throws(IOException::class)
+    fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any>?
 
     /**
      * Get latest records in the cache, from new to old.
      *
      * @return records or null if none are found.
      */
-    @Nullable
-    RecordData<Object, Object> getRecords(int limit) throws IOException;
+    @Throws(IOException::class)
+    fun getRecords(limit: Int): RecordData<Any, Any>?
 
     /**
-     * Get a pair with the number of [unsent records], [sent records]
+     * Get a pair with the number of unsent records
      */
-    @NonNull
-    Pair<Long, Long> numberOfRecords();
+    val numberOfRecords: Long
 
     /**
      * Remove oldest records.
      * @param number number of records (inclusive) to remove.
      * @return number of rows removed
      */
-    int remove(int number) throws IOException;
-
-    /** Get the topic the cache stores. */
-    @NonNull
-    AvroTopic<Object, Object> getReadTopic();
-
-    @NonNull
-    File getFile();
+    @Throws(IOException::class)
+    fun remove(number: Int): Int
 }

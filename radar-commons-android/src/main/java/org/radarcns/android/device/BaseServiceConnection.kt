@@ -20,7 +20,6 @@ import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
-import android.util.Pair
 import com.crashlytics.android.Crashlytics
 import org.radarcns.android.kafka.ServerStatusListener
 import org.radarcns.data.RecordData
@@ -112,8 +111,8 @@ open class BaseServiceConnection<S : BaseDeviceState>(private val serviceClassNa
         serviceBinder?.updateConfiguration(bundle)
     }
 
-    fun numberOfRecords(): Pair<Long, Long>? {
-        return serviceBinder?.numberOfRecords()
+    fun numberOfRecords(): Long? {
+        return serviceBinder?.numberOfRecords
     }
 
     /**

@@ -17,11 +17,8 @@
 package org.radarcns.android.device
 
 import android.os.Bundle
-import android.util.Pair
-
 import org.radarcns.android.kafka.ServerStatusListener
 import org.radarcns.data.RecordData
-
 import java.io.IOException
 
 interface DeviceServiceBinder<T : BaseDeviceState> {
@@ -49,8 +46,8 @@ interface DeviceServiceBinder<T : BaseDeviceState> {
     /** Update the configuration of the service  */
     fun updateConfiguration(bundle: Bundle)
 
-    /** Number of records in cache [unsent] and [sent]  */
-    fun numberOfRecords(): Pair<Long, Long>
+    /** Number of records in cache unsent  */
+    val numberOfRecords: Long?
 
     fun needsBluetooth(): Boolean
 

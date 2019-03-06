@@ -13,10 +13,10 @@ import java.util.concurrent.TimeUnit
 class AccessTokenParser(private val state: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
-    override fun parse(body: String): AppAuthState {
+    override fun parse(authString: String): AppAuthState {
         var refreshToken = state.getAttribute(MP_REFRESH_TOKEN_PROPERTY)
         try {
-            val json = JSONObject(body)
+            val json = JSONObject(authString)
             val accessToken = json.getString("access_token")
             refreshToken = json.optString("refresh_token", refreshToken)
             return state.alter {
@@ -31,7 +31,7 @@ class AccessTokenParser(private val state: AppAuthState) : AuthStringParser {
                 authenticationSource = SOURCE_TYPE
             }
         } catch (ex: JSONException) {
-            throw IOException("Failed to parse json string $body", ex)
+            throw IOException("Failed to parse json string $authString", ex)
         }
     }
 }

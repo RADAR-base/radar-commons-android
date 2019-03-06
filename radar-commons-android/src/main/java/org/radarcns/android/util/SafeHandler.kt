@@ -2,9 +2,12 @@ package org.radarcns.android.util
 
 import android.os.Handler
 import android.os.HandlerThread
+import com.google.android.gms.tasks.RuntimeExecutionException
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.SynchronousQueue
 
-class SafeHandler(val name: String, val priority: Int) {
+class SafeHandler(val name: String, private val priority: Int) {
     private var handlerThread: HandlerThread? = null
     private var handler: Handler? = null
 
@@ -21,71 +24,113 @@ class SafeHandler(val name: String, val priority: Int) {
         }
     }
 
-    fun post(runnable: Runnable) {
-        post(runnable, false)
-    }
+    @Throws(InterruptedException::class, ExecutionException::class)
+    fun await(runnable: Runnable) = compute { runnable.run() }
 
-    fun post(runnable: () -> Unit) {
-        post(Runnable { runnable() }, false)
-    }
+    @Throws(InterruptedException::class, ExecutionException::class)
+    fun await(runnable: () -> Unit) = compute(runnable)
 
-    fun postReentrant(runnable: () -> Unit) {
-        postReentrant(Runnable { runnable() })
-    }
-
-    fun postReentrant(runnable: Runnable) {
+    @Throws(InterruptedException::class, ExecutionException::class)
+    fun <T> compute(method: () -> T): T {
         if (Thread.currentThread() == handlerThread) {
-            runnable.run()
+            try {
+                return method()
+            } catch (ex: Exception) {
+                throw ExecutionException(ex)
+            }
         } else {
-            post(runnable)
+            val queue = SynchronousQueue<Any>()
+            execute {
+                try {
+                    queue.put(method())
+                } catch (ex: Exception) {
+                    queue.put(ExecutionException(ex))
+                }
+            }
+            val result = queue.take()
+            if (result is RuntimeExecutionException) {
+                throw result
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                return result as T
+            }
         }
     }
 
-    fun post(runnable: Runnable, defaultToCurrentThread: Boolean) {
+    private fun <T> doRun(callable: () -> T): T? {
+        return try {
+            callable()
+        } catch (ex: Exception) {
+            logger.error("Failed to run posted runnable", ex)
+            null
+        }
+    }
+
+    fun execute(runnable: Runnable) = execute(false, runnable::run)
+
+    fun execute(runnable: () -> Unit) = execute(false, runnable)
+
+    fun executeReentrant(runnable: () -> Unit) {
+        if (Thread.currentThread() == handlerThread) {
+            runnable()
+        } else {
+            execute(runnable)
+        }
+    }
+
+    fun executeReentrant(runnable: Runnable) = executeReentrant(runnable::run)
+
+    fun execute(defaultToCurrentThread: Boolean, runnable: Runnable) = execute(defaultToCurrentThread, runnable::run)
+
+    fun execute(defaultToCurrentThread: Boolean, runnable: () -> Unit) {
         val didRun = synchronized(this) {
-            handler?.post(runnable)
+            handler?.post { doRun(runnable) }
         } ?: false
 
         if (!didRun && defaultToCurrentThread) {
-            runnable.run()
+            doRun(runnable)
         }
     }
 
+    fun delay(delay: Long, runnable: Runnable): HandlerFuture? = delay(delay, runnable::run)
+
     @Synchronized
-    fun postDelayed(runnable: Runnable, delay: Long): HandlerFuture? {
+    fun delay(delay: Long, runnable: () -> Unit): HandlerFuture? {
         return handler?.let {
-            it.postDelayed(runnable, delay)
-            HandlerFutureRef(runnable)
+            val r = Runnable {
+                doRun(runnable)
+            }
+            it.postDelayed(r, delay)
+            HandlerFutureRef(r)
         }
     }
 
-    @Synchronized
-    fun postDelayed(runnable: RepeatableRunnable, delay: Long): HandlerFuture? {
-        return postDelayed(Runnable {
-            if (runnable.runAndRepeat()) postDelayed(runnable, delay)
-        }, delay)
+    fun repeatWhile(delay: Long, runnable: RepeatableRunnable): HandlerFuture? = repeatWhile(delay, runnable::runAndRepeat)
+
+    fun repeatWhile(delay: Long, runnable: () -> Boolean): HandlerFuture? {
+        return delay(delay) {
+            if (runnable()) repeatWhile(delay, runnable)
+        }
     }
 
-    @Synchronized
-    fun postDelayed(runnable: () -> Boolean, delay: Long): HandlerFuture? {
-        return postDelayed(Runnable {
-            if (runnable()) postDelayed(runnable, delay)
-        }, delay)
+    fun repeat(delay: Long, runnable: () -> Unit): HandlerFuture? {
+        return delay(delay) {
+            runnable()
+            repeat(delay, runnable)
+        }
     }
 
+    fun stop(finalization: Runnable) = stop(finalization::run)
+
+    @Synchronized
     fun stop(finalization: () -> Unit) {
-        stop(Runnable { finalization() })
-    }
-
-    @Synchronized
-    fun stop(finalization: Runnable) {
         handlerThread?.also { thread ->
             val oldHandler = handler
             handler = null
             if (oldHandler == null) {
-                finalization.run()
+                doRun(finalization)
             } else {
-                oldHandler.post(finalization)
+                oldHandler.post { doRun(finalization) }
             }
             thread.quitSafely()
             handlerThread = null
@@ -97,17 +142,27 @@ class SafeHandler(val name: String, val priority: Int) {
     }
 
     interface HandlerFuture {
-        fun postNow()
+        @Throws(InterruptedException::class, ExecutionException::class)
+        fun awaitNow()
+        fun runNow()
         fun cancel()
     }
 
     private inner class HandlerFutureRef(val runnable: Runnable): HandlerFuture {
-        override fun postNow() {
+        override fun awaitNow() {
             synchronized(this@SafeHandler) {
                 handler?.apply {
                     removeCallbacks(runnable)
                 }
-                postReentrant(runnable)
+                await(runnable)
+            }
+        }
+        override fun runNow() {
+            synchronized(this@SafeHandler) {
+                handler?.apply {
+                    removeCallbacks(runnable)
+                }
+                executeReentrant(runnable)
             }
         }
         override fun cancel() {

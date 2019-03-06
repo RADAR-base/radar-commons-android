@@ -90,6 +90,12 @@ public interface QueueStorage extends Closeable, Flushable {
     /** Maximum size of the storage in bytes. */
     long getMaximumLength();
 
+    /**
+     * Set maximum size of the storage. This is limited by the minimu
+     *
+     * @param newLength size in bytes
+     * @throws IllegalArgumentException if the length is larger than the storage medium allows.
+     */
     void setMaximumLength(long newLength);
 
     /** Whether the close function was called. */

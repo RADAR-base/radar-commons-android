@@ -14,24 +14,22 @@
  * limitations under the License.
  */
 
-package org.radarcns.android.auth;
+package org.radarcns.android.auth
 
-import android.support.annotation.NonNull;
+import org.radarcns.android.util.Parser
 
-import org.radarcns.android.util.Parser;
-
-import java.io.IOException;
+import java.io.IOException
 
 /** AuthStringProcessor to parse a string with some form of authentication and parse it to a
- * proper state. */
-public interface AuthStringParser extends Parser<String, AppAuthState> {
+ * proper state.  */
+interface AuthStringParser : Parser<String, AppAuthState> {
     /**
      * Parse an authentication state from a string.
      * @param authString string that contains some form of identification.
-     * @return authentication state or {@code null} if the authentication was passed for further
-     *         external processing.
+     * @return authentication state or `null` if the authentication was passed for further
+     * external processing.
      * @throws IllegalArgumentException if the string is not a valid authentication string
      */
-    @Override
-    AppAuthState parse(@NonNull String authString) throws IOException;
+    @Throws(IOException::class)
+    override fun parse(authString: String): AppAuthState
 }

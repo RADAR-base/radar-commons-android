@@ -48,7 +48,6 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.radarcns.android.kafka.KafkaDataSubmitter.SIZE_LIMIT_DEFAULT;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
@@ -57,8 +56,8 @@ public class TapeCacheTest {
     private TapeCache<ObservationKey, ApplicationUptime> tapeCache;
     private ObservationKey key;
     private ApplicationUptime value;
-    private SpecificData specificData = CacheStore.get().getSpecificData();
-    private GenericData genericData = CacheStore.get().getGenericData();
+    private SpecificData specificData = CacheStore.Companion.get().getSpecificData();
+    private GenericData genericData = CacheStore.Companion.get().getGenericData();
 
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
@@ -81,7 +80,7 @@ public class TapeCacheTest {
         executorFactory = new SharedSingleThreadExecutorFactory(
                 new AndroidThreadFactory("test", THREAD_PRIORITY_BACKGROUND));
         tapeCache = new TapeCache<>(folder.newFile(), topic,
-                outputTopic, executorFactory, specificData, genericData);
+                outputTopic, executorFactory, specificData, genericData, config);
         tapeCache.setMaximumSize(4096);
         tapeCache.setTimeWindow(100);
 
@@ -98,22 +97,22 @@ public class TapeCacheTest {
 
     @Test
     public void addMeasurement() throws Exception {
-        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
+        assertNull(tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT()));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
         assertNull(tapeCache.getRecords(100));
 
         tapeCache.addMeasurement(key, value);
 
-        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
+        assertNull(tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT()));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         Thread.sleep(100);
 
-        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
+        RecordData<Object, Object> unsent = tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT());
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
-        unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
+        unsent = tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT());
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());
@@ -121,7 +120,7 @@ public class TapeCacheTest {
         assertEquals(key.getSourceId(), ((GenericRecord)unsent.getKey()).get("sourceId"));
         assertEquals(value.getUptime(), actualValue.get("uptime"));
         tapeCache.remove(1);
-        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
+        assertNull(tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT()));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         tapeCache.addMeasurement(key, value);
@@ -129,7 +128,7 @@ public class TapeCacheTest {
 
         Thread.sleep(100);
 
-        unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
+        unsent = tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT());
         assertNotNull(unsent);
         assertEquals(2, unsent.size());
         assertEquals(new Pair<>(2L, 0L), tapeCache.numberOfRecords());
@@ -143,7 +142,7 @@ public class TapeCacheTest {
 
         localTapeCache.addMeasurement(key, localValue);
         localTapeCache.flush();
-        RecordData<Object, Object> records = localTapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
+        RecordData<Object, Object> records = localTapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT());
 
         assertNotNull(records);
         assertEquals(1, records.size());
@@ -169,7 +168,7 @@ public class TapeCacheTest {
                 Object.class, Object.class);
 
         TapeCache<ObservationKey, ActiveAudioRecording> localTapeCache = new TapeCache<>(
-                folder.newFile(), topic, outputTopic, executorFactory, specificData, genericData);
+                folder.newFile(), topic, outputTopic, executorFactory, specificData, genericData, config);
         localTapeCache.setTimeWindow(100L);
         return localTapeCache;
     }
@@ -183,33 +182,33 @@ public class TapeCacheTest {
         localTapeCache.addMeasurement(key, getRecording(100_000));
         localTapeCache.flush();
         // fit two times header (8) + key (13) + value (100,000)
-        RecordData<Object, Object> records = localTapeCache.unsentRecords(100, 200_042);
+        RecordData<Object, Object> records = localTapeCache.getUnsentRecords(100, 200_042);
         assertNotNull(records);
         assertEquals(2, records.size());
 
-        records = localTapeCache.unsentRecords(100, 200_041);
+        records = localTapeCache.getUnsentRecords(100, 200_041);
         assertNotNull(records);
         assertEquals(1, records.size());
 
-        records = localTapeCache.unsentRecords(100, 1);
+        records = localTapeCache.getUnsentRecords(100, 1);
         assertNotNull(records);
         assertEquals(1, records.size());
     }
 
     @Test
     public void flush() throws Exception {
-        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
+        assertNull(tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT()));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
         assertNull(tapeCache.getRecords(100));
 
         tapeCache.addMeasurement(key, value);
 
-        assertNull(tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT));
+        assertNull(tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT()));
         assertEquals(new Pair<>(0L, 0L), tapeCache.numberOfRecords());
 
         tapeCache.flush();
 
-        RecordData<Object, Object> unsent = tapeCache.unsentRecords(100, SIZE_LIMIT_DEFAULT);
+        RecordData<Object, Object> unsent = tapeCache.getUnsentRecords(100, Companion.getSIZE_LIMIT_DEFAULT());
         assertNotNull(unsent);
         assertEquals(1, unsent.size());
         assertEquals(new Pair<>(1L, 0L), tapeCache.numberOfRecords());

@@ -50,8 +50,8 @@ public class BackedObjectQueueTest {
     @Rule
     public ExpectedException exception = ExpectedException.none();
 
-    private static final SpecificData specificData = CacheStore.get().getSpecificData();
-    private static final GenericData genericData = CacheStore.get().getGenericData();
+    private static final SpecificData specificData = CacheStore.Companion.get().getSpecificData();
+    private static final GenericData genericData = CacheStore.Companion.get().getGenericData();
 
     @Test
     public void testBinaryObject() throws IOException {

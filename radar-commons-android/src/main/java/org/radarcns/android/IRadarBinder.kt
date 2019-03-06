@@ -17,12 +17,13 @@
 package org.radarcns.android
 
 import android.os.IBinder
-
-import org.radarcns.android.data.TableDataHandler
+import org.apache.avro.specific.SpecificRecord
+import org.radarcns.android.data.DataHandler
 import org.radarcns.android.device.DeviceServiceConnection
 import org.radarcns.android.device.DeviceServiceProvider
 import org.radarcns.android.kafka.ServerStatusListener
 import org.radarcns.data.TimedInt
+import org.radarcns.kafka.ObservationKey
 
 interface IRadarBinder : IBinder {
     val serverStatus: ServerStatusListener.Status
@@ -31,7 +32,7 @@ interface IRadarBinder : IBinder {
 
     val connections: List<DeviceServiceProvider<*>>
 
-    val dataHandler: TableDataHandler?
+    val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
 
     fun setAllowedDeviceIds(connection: DeviceServiceConnection<*>, allowedIds: Collection<String>)
 

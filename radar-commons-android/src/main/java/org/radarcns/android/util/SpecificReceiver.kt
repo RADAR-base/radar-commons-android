@@ -14,14 +14,10 @@
  * limitations under the License.
  */
 
-package org.radarcns.android.kafka;
+package org.radarcns.android.util
 
-public interface ServerStatusListener {
-    enum Status {
-        CONNECTING, CONNECTED, DISCONNECTED, UPLOADING, DISABLED, READY, UPLOADING_FAILED, UNAUTHORIZED
-    }
-
-    void updateServerStatus(Status status);
-
-    void updateRecordsSent(String topicName, int numberOfRecords);
+interface SpecificReceiver {
+    fun register()
+    fun notifyListener()
+    fun unregister()
 }

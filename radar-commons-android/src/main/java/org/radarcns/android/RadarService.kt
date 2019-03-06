@@ -30,11 +30,31 @@ import android.support.annotation.CallSuper
 import android.support.v4.content.ContextCompat
 import android.support.v4.content.LocalBroadcastManager
 import android.widget.Toast
-import org.radarcns.android.RadarConfiguration.*
+import org.apache.avro.specific.SpecificRecord
+import org.radarcns.android.RadarConfiguration.Companion.DATABASE_COMMIT_RATE_KEY
+import org.radarcns.android.RadarConfiguration.Companion.KAFKA_RECORDS_SEND_LIMIT_KEY
+import org.radarcns.android.RadarConfiguration.Companion.KAFKA_RECORDS_SIZE_LIMIT_KEY
+import org.radarcns.android.RadarConfiguration.Companion.KAFKA_REST_PROXY_URL_KEY
+import org.radarcns.android.RadarConfiguration.Companion.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL
+import org.radarcns.android.RadarConfiguration.Companion.KAFKA_UPLOAD_RATE_KEY
+import org.radarcns.android.RadarConfiguration.Companion.MAX_CACHE_SIZE
+import org.radarcns.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
+import org.radarcns.android.RadarConfiguration.Companion.SCHEMA_REGISTRY_URL_KEY
+import org.radarcns.android.RadarConfiguration.Companion.SENDER_CONNECTION_TIMEOUT_KEY
+import org.radarcns.android.RadarConfiguration.Companion.SEND_BINARY_CONTENT
+import org.radarcns.android.RadarConfiguration.Companion.SEND_BINARY_CONTENT_DEFAULT
+import org.radarcns.android.RadarConfiguration.Companion.SEND_ONLY_WITH_WIFI
+import org.radarcns.android.RadarConfiguration.Companion.SEND_ONLY_WITH_WIFI_DEFAULT
+import org.radarcns.android.RadarConfiguration.Companion.SEND_OVER_DATA_HIGH_PRIORITY
+import org.radarcns.android.RadarConfiguration.Companion.SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT
+import org.radarcns.android.RadarConfiguration.Companion.SEND_WITH_COMPRESSION
+import org.radarcns.android.RadarConfiguration.Companion.TOPICS_HIGH_PRIORITY
+import org.radarcns.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarcns.android.auth.AppAuthState
 import org.radarcns.android.auth.AuthServiceConnection
 import org.radarcns.android.auth.LoginListener
 import org.radarcns.android.auth.LoginManager
+import org.radarcns.android.data.DataHandler
 import org.radarcns.android.data.TableDataHandler
 import org.radarcns.android.device.DeviceService.Companion.DEVICE_CONNECT_FAILED
 import org.radarcns.android.device.DeviceService.Companion.DEVICE_STATUS_NAME
@@ -52,9 +72,9 @@ import org.radarcns.android.util.NotificationHandler.NOTIFICATION_CHANNEL_INFO
 import org.radarcns.android.util.SafeHandler
 import org.radarcns.config.ServerConfig
 import org.radarcns.data.TimedInt
+import org.radarcns.kafka.ObservationKey
 import org.radarcns.producer.rest.SchemaRetriever
 import org.slf4j.LoggerFactory
-import java.net.MalformedURLException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -67,7 +87,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     private var binder: IBinder? = null
 
-    var dataHandler: TableDataHandler? = null
+    var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
         private set
 
     private lateinit var mHandler: SafeHandler
@@ -245,7 +265,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     @CallSuper
     protected open fun configure() {
-        mHandler.postReentrant {
+        mHandler.executeReentrant {
             val newConfiguration = configuration.toMap()
             if (newConfiguration != previousConfiguration) {
                 previousConfiguration = newConfiguration
@@ -257,99 +277,47 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     @CallSuper
     protected open fun doConfigure() {
-        var kafkaConfig: ServerConfig? = null
-        var remoteSchemaRetriever: SchemaRetriever? = null
         val unsafeConnection = configuration.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
 
-        if (configuration.has(KAFKA_REST_PROXY_URL_KEY)) {
-            val urlString = configuration.getString(KAFKA_REST_PROXY_URL_KEY)
-            if (!urlString.isEmpty()) {
-                try {
-                    val schemaRegistry = ServerConfig(configuration.getString(SCHEMA_REGISTRY_URL_KEY)).apply {
-                        isUnsafe = unsafeConnection
-                    }
-                    remoteSchemaRetriever = SchemaRetriever(schemaRegistry, 30)
-                    kafkaConfig = ServerConfig(urlString).apply {
-                        isUnsafe = unsafeConnection
-                    }
-                } catch (ex: MalformedURLException) {
-                    logger.error("Malformed Kafka server URL {}", urlString)
-                    throw IllegalArgumentException(ex)
-                }
-            }
-        }
-
-        val sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, SEND_ONLY_WITH_WIFI_DEFAULT)
-        val sendBinaryContent = configuration.getBoolean(SEND_BINARY_CONTENT, SEND_BINARY_CONTENT_DEFAULT)
-        val sendOverDataPriority = configuration.getBoolean(SEND_OVER_DATA_HIGH_PRIORITY, SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT)
-
-        val priorityTopicList = HashSet(configuration.getString(TOPICS_HIGH_PRIORITY, "")
-                .split(providerSeparator)
-                .map { s -> s.trim { it <= ' ' } }
-                .filter { !it.isEmpty() })
-
-        val maxBytes = configuration.getInt(MAX_CACHE_SIZE, Integer.MAX_VALUE)
-
-        var newlyCreated: Boolean
-
         synchronized(this) {
-            newlyCreated = false
-            dataHandler ?: TableDataHandler(
-                    this, kafkaConfig, remoteSchemaRetriever, maxBytes,
-                    sendBinaryContent, sendOnlyWithWifi, sendOverDataPriority,
-                    priorityTopicList, null)
-                    .also { newlyCreated = true }
+            dataHandler ?: TableDataHandler(this)
                     .also { dataHandler = it }
+                    .also { it.statusListener = this }
         }.apply {
-            if (!newlyCreated) {
-                if (kafkaConfig == null) {
-                    disableSubmitter()
-                } else {
-                    setKafkaConfig(kafkaConfig)
-                    setSchemaRetriever(remoteSchemaRetriever!!)
+            handler {
+                sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, SEND_ONLY_WITH_WIFI_DEFAULT)
+                sendOverDataHighPriority = configuration.getBoolean(SEND_OVER_DATA_HIGH_PRIORITY, SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT)
+                highPriorityTopics = HashSet(configuration.getString(TOPICS_HIGH_PRIORITY, "")
+                        .split(providerSeparator)
+                        .map { s -> s.trim { it <= ' ' } }
+                        .filter { !it.isEmpty() })
+                minimumBatteryLevel = configuration.getFloat(KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL, minimumBatteryLevel)
+
+                submitter {
+                    uploadRate = configuration.getLong(KAFKA_UPLOAD_RATE_KEY, uploadRate)
+                    amountLimit = configuration.getInt(KAFKA_RECORDS_SEND_LIMIT_KEY, amountLimit)
+                    sizeLimit = configuration.getLong(KAFKA_RECORDS_SIZE_LIMIT_KEY, sizeLimit)
                 }
-                setHasBinaryContent(sendBinaryContent)
-                setMaximumCacheSize(maxBytes)
-                setSendOnlyWithWifi(sendOnlyWithWifi)
-                setSendOverDataHighPriority(sendOverDataPriority)
-                setTopicsHighPriority(priorityTopicList)
-            }
-
-            setCompression(configuration.getBoolean(SEND_WITH_COMPRESSION, false))
-
-            if (configuration.has(DATA_RETENTION_KEY)) {
-                setDataRetention(configuration.getLong(DATA_RETENTION_KEY))
-            }
-            if (configuration.has(KAFKA_UPLOAD_RATE_KEY)) {
-                setKafkaUploadRate(configuration.getLong(KAFKA_UPLOAD_RATE_KEY))
-            }
-            if (configuration.has(KAFKA_RECORDS_SEND_LIMIT_KEY)) {
-                setKafkaRecordsSendLimit(
-                        configuration.getInt(KAFKA_RECORDS_SEND_LIMIT_KEY))
-            }
-            if (configuration.has(KAFKA_RECORDS_SIZE_LIMIT_KEY)) {
-                setKafkaRecordsSizeLimit(
-                        configuration.getInt(KAFKA_RECORDS_SIZE_LIMIT_KEY))
-            }
-
-            if (configuration.has(SENDER_CONNECTION_TIMEOUT_KEY)) {
-                setSenderConnectionTimeout(
-                        configuration.getLong(SENDER_CONNECTION_TIMEOUT_KEY))
-            }
-            if (configuration.has(DATABASE_COMMIT_RATE_KEY)) {
-                setDatabaseCommitRate(
-                        configuration.getLong(DATABASE_COMMIT_RATE_KEY))
-            }
-            if (configuration.has(KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL)) {
-                setMinimumBatteryLevel(configuration.getFloat(
-                        KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL))
-            }
-
-            if (newlyCreated) {
-                setStatusListener(this@RadarService)
-                start()
-            } else if (kafkaConfig != null) {
-                enableSubmitter()
+                cache {
+                    maximumSize = configuration.getLong(MAX_CACHE_SIZE, Integer.MAX_VALUE.toLong())
+                    commitRate = configuration.getLong(DATABASE_COMMIT_RATE_KEY, commitRate)
+                }
+                rest {
+                    kafkaConfig = configuration.optString(KAFKA_REST_PROXY_URL_KEY)?.let {
+                        ServerConfig(it).apply {
+                            isUnsafe = unsafeConnection
+                        }
+                    }
+                    schemaRetriever = configuration.optString(SCHEMA_REGISTRY_URL_KEY)?.let {
+                        val schemaRegistry = ServerConfig(it).apply {
+                            isUnsafe = unsafeConnection
+                        }
+                        SchemaRetriever(schemaRegistry, 30)
+                    }
+                    hasBinaryContent = configuration.getBoolean(SEND_BINARY_CONTENT, SEND_BINARY_CONTENT_DEFAULT)
+                    useCompression = configuration.getBoolean(SEND_WITH_COMPRESSION, false)
+                    connectionTimeout = configuration.getLong(SENDER_CONNECTION_TIMEOUT_KEY, connectionTimeout)
+                }
             }
         }
 
@@ -402,7 +370,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     fun serviceConnected(connection: DeviceServiceConnection<*>) {
-        mHandler.post {
+        mHandler.execute {
             if (!isScanningEnabled) {
                 getConnectionProvider(connection)?.also { provider ->
                     if (!provider.mayBeConnectedInBackground) {
@@ -427,7 +395,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     fun serviceDisconnected(connection: DeviceServiceConnection<*>) {
-        mHandler.post {
+        mHandler.execute {
             getConnectionProvider(connection)?.also { provider ->
                 bindServices(listOf(provider), true)
             }
@@ -435,7 +403,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     private fun bindServices(providers: Collection<DeviceServiceProvider<*>>, unbindFirst: Boolean) {
-        mHandler.postReentrant {
+        mHandler.executeReentrant {
             if (unbindFirst) {
                 providers.filter { it.isBound }
                         .forEach { provider ->
@@ -448,14 +416,14 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    override fun updateServerStatus(serverStatus: ServerStatusListener.Status) {
-        if (serverStatus == this.serverStatus) {
+    override fun updateServerStatus(status: ServerStatusListener.Status) {
+        if (status == this.serverStatus) {
             return
         }
-        this.serverStatus = serverStatus
+        this.serverStatus = status
 
         val statusIntent = Intent(SERVER_STATUS_CHANGED).apply {
-            putExtra(SERVER_STATUS_CHANGED, serverStatus.ordinal)
+            putExtra(SERVER_STATUS_CHANGED, status.ordinal)
         }
         LocalBroadcastManager.getInstance(this).sendBroadcast(statusIntent)
     }
@@ -500,7 +468,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
 
     protected fun startScanning() {
-        mHandler.postReentrant {
+        mHandler.executeReentrant {
             mConnections
                     .filter { it.connection.hasService() && !it.connection.isRecording && checkPermissions(it) }
                     .forEach { provider ->
@@ -565,7 +533,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     /** Disconnect from given service.  */
     open fun disconnect(connection: DeviceServiceConnection<*>) {
-        mHandler.postReentrant {
+        mHandler.executeReentrant {
             if (connection.isRecording) {
                 connection.stopRecording()
             }
@@ -592,10 +560,16 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    override fun loginSucceeded(manager: LoginManager?, state: AppAuthState) {
-        mHandler.post {
-            val localDataHandler = dataHandler
-            localDataHandler?.setAuthState(state)
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        mHandler.execute {
+            dataHandler?.handler {
+                rest {
+                    headers = authState.okHttpHeaders
+                }
+                submitter {
+                    userId = authState.userId
+                }
+            }
 
             val connections = providerLoader.loadProviders(this, configuration)
 
@@ -620,7 +594,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                     .filter { provider ->
                         provider !in mConnections // new provider
                         && hasFeatures(provider, packageManager) // acceptable
-                        && provider.isAuthorizedFor(state, false) }
+                        && provider.isAuthorizedFor(authState, false) }
 
             providersToAdd.forEach { addProvider(it) }
 
@@ -655,7 +629,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         override fun setAllowedDeviceIds(connection: DeviceServiceConnection<*>, allowedIds: Collection<String>) {
             deviceFilters[connection] = sanitizedIds(allowedIds)
 
-            mHandler.post {
+            mHandler.execute {
                 val status = connection.deviceStatus
 
                 if (status == DeviceStatusListener.Status.READY
@@ -669,7 +643,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
         }
 
-        override val dataHandler: TableDataHandler?
+        override val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
                 get() = this@RadarService.dataHandler
 
         override fun needsBluetooth(): Boolean {
@@ -678,7 +652,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     private fun stopActiveScanning() {
-        mHandler.post {
+        mHandler.execute {
             isScanningEnabled = false
             mConnections
                     .filter { it.connected && it.connection.mayBeDisabledInBackground() }
@@ -687,7 +661,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     private fun startActiveScanning() {
-        mHandler.post {
+        mHandler.execute {
             isScanningEnabled = true
             bindServices(mConnections, false)
         }
