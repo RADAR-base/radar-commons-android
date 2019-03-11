@@ -1,11 +1,52 @@
 apply plugin: 'de.mobilej.unmock'
 
+android {
+    useLibrary 'android.test.runner'
+
+    useLibrary 'android.test.base'
+    useLibrary 'android.test.mock'
+}
+
+ext {
+    androidXCoreVersion = '1.1.0'
+    androidXExtVersion = '1.1.0'
+    androidXRunnerVersion = '1.1.1'
+    androidXEspressoVersion = '3.1.1'
+}
+
 dependencies {
     testImplementation 'junit:junit:4.12'
-    testImplementation 'org.robolectric:robolectric:3.4.2'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:3.9.1'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:3.13.1'
 
-    unmock 'org.robolectric:android-all:5.0.0_r2-robolectric-1'
+    // Core library
+    androidTestImplementation "androidx.test:core:$androidXCoreVersion"
+
+    // AndroidJUnitRunner and JUnit Rules
+    androidTestImplementation "androidx.test:runner:$androidXRunnerVersion"
+    androidTestImplementation "androidx.test:rules:$androidXRunnerVersion"
+
+    // Assertions
+    androidTestImplementation "androidx.test.ext:junit:1.1.0"
+    androidTestImplementation "androidx.test.ext:truth:1.1.0"
+    androidTestImplementation "com.google.truth:truth:0.42"
+
+    // Espresso dependencies
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidXEspressoVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-contrib:$androidXEspressoVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-intents:$androidXEspressoVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-accessibility:$androidXEspressoVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-web:$androidXEspressoVersion"
+    androidTestImplementation "androidx.test.espresso.idling:idling-concurrent:$androidXEspressoVersion"
+
+    // The following Espresso dependency can be either "implementation"
+    // or "androidTestImplementation", depending on whether you want the
+    // dependency to appear on your APK's compile classpath or the test APK
+    // classpath.
+    androidTestImplementation "androidx.test.espresso:espresso-idling-resource:$androidXEspressoVersion"
+
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidXEspressoVersion"
+
+    unmock 'org.robolectric:android-all:5.0.2_r3-robolectric-r0'
 }
 
 unMock {
@@ -44,6 +85,16 @@ unMock {
     keepStartingWith "org.json."
     keep 'android.os.SystemClock'
     keep 'android.os.RemoteException'
+    keep 'android.os.HandlerThread'
+    keep 'android.os.Handler'
+    keep 'android.os.IMessenger'
+    keep 'android.os.Process'
+    keep 'android.os.Looper'
+    keep 'android.os.ZygoteStartFailedEx'
+    keep 'android.system.Os'
+    keep 'android.os.Binder'
+    keep 'android.os.MessageQueue'
+    keep 'android.os.Message'
 
     keepAndRename "java.nio.charset.Charsets" to "xjava.nio.charset.Charsets"
 }

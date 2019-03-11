@@ -1,4 +1,4 @@
-<manifest package="org.radarcns.android.auth.oauth2">
+<manifest package="org.radarbase.android.auth.oauth2">
 
     <application>
 

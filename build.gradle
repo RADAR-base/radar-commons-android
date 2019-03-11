@@ -20,7 +20,7 @@ buildscript {
         jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.3.1'
+        classpath 'com.android.tools.build:gradle:3.3.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.4'
         classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:4.9.1'
@@ -43,7 +43,7 @@ subprojects {
 
     version = '0.10.0-SNAPSHOT'
     ext.versionCode = 29
-    group = 'org.radarcns'
+    group = 'org.radarbase'
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
 
     ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
@@ -57,6 +57,7 @@ subprojects {
     repositories {
         google()
         jcenter()
+        maven { url  'http://dl.bintray.com/radar-base/org.radarbase' }
         // radar dev branches
         maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
     }

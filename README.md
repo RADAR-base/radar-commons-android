@@ -14,7 +14,7 @@ This library takes the following firebase parameters:
 | `schema_registry_url` | URL | `<empty>` | URL of a Kafka Schema Registry to sync schemas with. |
 | `management_portal_url` | URL | `<empty>` | URL of the RADAR Management Portal. If empty, the Management Portal will not be used. |
 | `unsafe_kafka_connection` | boolean | `false` | Whether to accept unsafe HTTPS certificates. Only meant to be set to `true` in development environments. |
-| `device_services_to_connect` | string | `<empty>` | A space-separated list of device service providers to connect. The `org.radarcns` prefix may be excluded. |
+| `device_services_to_connect` | string | `<empty>` | A space-separated list of device service providers to connect. The `org.radarbase` prefix may be excluded. |
 | `kafka_records_send_limit` | int | 1000 | Number of records to send in a single request. |
 | `kafka_records_size_limit` | int (bytes) | 5000000 (= 5 MB)| Maximum size to read for a single request. |
 | `kafka_upload_rate` | int (s) | 50 | Rate after which to send data. In addition, after every `kafka_upload_rate` divided by 5 seconds, if more than `kafka_records_send_limit` are in the buffer, these are sent immediately. |
@@ -37,7 +37,7 @@ repositories {
     jcenter()
 }
 dependencies {
-    api 'org.radarcns:radar-commons-android:0.9.2'
+    api 'org.radarbase:radar-commons-android:0.9.2'
 }
 ```
 
@@ -52,11 +52,11 @@ First, create an Android Library project. Include RADAR Commons Android as a mod
     java -jar avro-tools-1.8.2.jar compile -string schema path/to/myschema.avsc path/to/plugin/src/main/java
     ```
     Once the schemas are published as part of the central schemas repository, you can remove the generated files again. Do not publish a non-alpha version of your plugin without the central schemas being published, otherwise there may be class conflicts later on.
-2. Create a new package `org.radarcns.mydevicetype`. In that package, create classes that:
-    - implement `org.radarcns.android.device.DeviceManager` to connect to a device and collect its data, register all Kafka topics in its constructor.
-    - implement a `org.radarcns.android.DeviceState` to keep the current state of the device or simply use `org.radarcns.android.BaseDeviceState`.
-    - subclass `org.radarcns.android.device.DeviceService` to run the device manager in.
-    - subclass a `org.radarcns.android.device.DeviceServiceProvider` that exposes the new service.
+2. Create a new package `org.radarbase.passive.mydevicetype`. In that package, create classes that:
+    - implement `org.radarbase.android.device.DeviceManager` to connect to a device and collect its data, register all Kafka topics in its constructor.
+    - implement a `org.radarbase.android.DeviceState` to keep the current state of the device or simply use `org.radarbase.android.BaseDeviceState`.
+    - subclass `org.radarbase.android.device.DeviceService` to run the device manager in.
+    - subclass a `org.radarbase.android.device.DeviceServiceProvider` that exposes the new service.
 3. Add a new service element to `AndroidManifest.xml`, referencing the newly created device service. Also add all the required permissions there. Set all features as optional.
 4. Add the `DeviceServiceProvider` you just created to the `device_services_to_connect` property in `app/src/main/res/xml/remote_config_defaults.xml`.
 
@@ -68,10 +68,10 @@ To create an Android App, follow the following steps:
 
 1. Include this module in the Gradle dependencies, and also all plugins that you would like to use
 2. Update your code with
-     - A main activity that extends `org.radarcns.android.MainActivity`.
-     - A main activity view that extends `org.radarcns.android.MainActivityView`. This should reference a layout and update its values based on the services that are connected to the main activity.
-     - An application class that extends `org.radarcns.android.RadarApplication`.
-     - A login activity that extends `org.radarcns.android.auth.LoginActivity`. Implement any `org.radarncs.android.auth.LoginManager` classes to be able to log in.
+     - A main activity that extends `org.radarbase.android.MainActivity`.
+     - A main activity view that extends `org.radarbase.android.MainActivityView`. This should reference a layout and update its values based on the services that are connected to the main activity.
+     - An application class that extends `org.radarbase.android.RadarApplication`.
+     - A login activity that extends `org.radarbase.android.auth.LoginActivity`. Implement any `org.radarncs.android.auth.LoginManager` classes to be able to log in.
      - If wanted, create a `BroadcastListener` that listens to the `ACTION_BOOT_COMPLETED` event and starts your `MainActivity` subclass. Configure it with the `MainActivity.configureRunAtBoot(Class)` method.
 3. In `AndroidManifest.xml`, add your application and service. If wanted add your boot-listener to listen to `ACTION_BOOT_COMPLETED` events and set `enabled` to `false`.
 4. Copy `src/main/res/xml/remote_config_defaults_template.xml` to `app/src/main/res/xml/remote_config_defaults.xml` and insert all needed values there.

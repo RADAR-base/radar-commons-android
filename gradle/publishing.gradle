@@ -1,5 +1,5 @@
 ext.sharedManifest = manifest {
-    attributes("Implementation-Title": moduleName,
+    attributes("Implementation-Title": name,
             "Implementation-Version": version)
 }
 
@@ -45,9 +45,9 @@ bintray {
     configurations = ['archives']
     pkg {
         repo = project.group
-        name = moduleName
+        name = project.name
         userOrg = 'radar-cns'
-        desc = description
+        desc = project.description
         licenses = ['Apache-2.0']
         websiteUrl = website
         issueTrackerUrl = issueUrl
@@ -56,7 +56,7 @@ bintray {
         githubReleaseNotesFile = 'README.md'
         version {
             name = project.version
-            desc = description
+            desc = project.description
             vcsTag = System.getenv('TRAVIS_TAG')
             released = new Date()
             gpg {
