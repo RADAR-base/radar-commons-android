@@ -70,7 +70,9 @@ public class BackedObjectQueueTest {
                 GenericRecord.class, GenericRecord.class);
 
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 450000000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData))) {
+                QueueFile.Companion.newMapped(file, 450000000),
+                new TapeAvroSerializer<>(topic, specificData),
+                new TapeAvroDeserializer<>(outputTopic, genericData))) {
 
             ByteBuffer buffer = ByteBuffer.wrap(data);
             Record<ObservationKey, ActiveAudioRecording> record = new Record<>(
@@ -80,7 +82,7 @@ public class BackedObjectQueueTest {
         }
 
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 450000000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData))) {
+                QueueFile.Companion.newMapped(file, 450000000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData))) {
             Record<GenericRecord, GenericRecord> result = queue.peek();
 
             assertArrayEquals(data, ((ByteBuffer) result.value.get("data")).array());
@@ -100,7 +102,9 @@ public class BackedObjectQueueTest {
 
         BackedObjectQueue<Record<ObservationKey, ObservationKey>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 10000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData));
+                QueueFile.Companion.newMapped(file, 10000),
+                new TapeAvroSerializer<>(topic, specificData),
+                new TapeAvroDeserializer<>(outputTopic, genericData));
 
         Record<ObservationKey, ObservationKey> record = new Record<>(
                 new ObservationKey("test", "a", "b"),
@@ -125,7 +129,7 @@ public class BackedObjectQueueTest {
 
         BackedObjectQueue<Record<ObservationKey, PhoneLight>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.newMapped(file, 10000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData));
+                QueueFile.Companion.newMapped(file, 10000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData));
 
         double now = System.currentTimeMillis() / 1000d;
         Record<ObservationKey, PhoneLight> record = new Record<>(

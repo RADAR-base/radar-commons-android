@@ -3,7 +3,6 @@ package org.radarbase.android.device
 import android.os.Binder
 import android.os.Bundle
 import android.os.Parcel
-import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
 import java.io.IOException

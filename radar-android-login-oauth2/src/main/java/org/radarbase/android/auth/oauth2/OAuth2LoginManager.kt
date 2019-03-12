@@ -19,29 +19,31 @@ package org.radarbase.android.auth.oauth2
 import android.app.Activity
 import org.json.JSONException
 import org.radarbase.android.auth.*
+import org.radarbase.android.radarApp
 import org.radarbase.producer.AuthenticationException
 
 /**
  * Authenticates against the RADAR Management Portal.
  */
 class OAuth2LoginManager(private val service: AuthService, private val projectIdClaim: String, private val userIdClaim: String) : LoginManager, LoginListener {
-    private val stateManager: org.radarbase.android.auth.oauth2.OAuth2StateManager = org.radarbase.android.auth.oauth2.OAuth2StateManager(service)
+    private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
 
     override fun refresh(authState: AppAuthState): Boolean {
         if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER) {
             return false
         }
-        return authState.getAttribute(org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN)
+        return authState.getAttribute(LOGIN_REFRESH_TOKEN)
                 ?.also { stateManager.refresh(service, it) } != null
     }
 
 
     override fun isRefreshable(authState: AppAuthState): Boolean =
-        authState.userId != null && authState.getAttribute(org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN) != null
+        authState.userId != null && authState.getAttribute(LOGIN_REFRESH_TOKEN) != null
 
     override fun start(authState: AppAuthState) {
-        val app = service.application as org.radarbase.android.RadarApplication
-        stateManager.login(service, app.loginActivity, app.configuration)
+        service.radarApp.let { app ->
+            stateManager.login(service, app.loginActivity, app.configuration)
+        }
     }
 
     override fun onActivityCreate(activity: Activity): Boolean {
@@ -53,14 +55,14 @@ class OAuth2LoginManager(private val service: AuthService, private val projectId
         return when {
             authState.tokenType != LoginManager.AUTH_TYPE_BEARER -> return null
             disableRefresh -> authState.alter {
-                attributes -= org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN
+                attributes -= LOGIN_REFRESH_TOKEN
                 isPrivacyPolicyAccepted = false
             }
             else -> authState
         }
     }
 
-    override val sourceTypes: List<String> = org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.OAUTH2_SOURCE_TYPES
+    override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
 
     @Throws(AuthenticationException::class)
     override fun registerSource(authState: AppAuthState, source: SourceMetadata,
@@ -93,7 +95,7 @@ class OAuth2LoginManager(private val service: AuthService, private val projectId
         val body = jwt.body
 
         return authState.alter {
-            authenticationSource = org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.OAUTH2_SOURCE_TYPE
+            authenticationSource = OAUTH2_SOURCE_TYPE
             needsRegisteredSources = false
             projectId = body.optString(projectIdClaim)
             userId = body.optString(userIdClaim)
@@ -105,7 +107,7 @@ class OAuth2LoginManager(private val service: AuthService, private val projectId
 
     companion object {
         private const val OAUTH2_SOURCE_TYPE = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
-        private val OAUTH2_SOURCE_TYPES = listOf(org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.OAUTH2_SOURCE_TYPE)
+        private val OAUTH2_SOURCE_TYPES = listOf(OAUTH2_SOURCE_TYPE)
         const val LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
     }
 }

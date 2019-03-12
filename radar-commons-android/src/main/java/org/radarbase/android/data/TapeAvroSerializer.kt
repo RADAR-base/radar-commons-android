@@ -22,6 +22,7 @@ import org.apache.avro.io.DatumWriter
 import org.apache.avro.io.EncoderFactory
 import org.radarbase.data.Record
 import org.radarbase.topic.AvroTopic
+import org.radarbase.util.BackedObjectQueue
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
@@ -29,7 +30,7 @@ import java.io.OutputStream
 /**
  * Converts records from an AvroTopic for Tape
  */
-class TapeAvroSerializer<K, V>(topic: AvroTopic<K, V>, specificData: GenericData) : org.radarbase.util.BackedObjectQueue.Serializer<Record<K, V>> {
+class TapeAvroSerializer<K, V>(topic: AvroTopic<K, V>, specificData: GenericData) : BackedObjectQueue.Serializer<Record<K, V>> {
     private val encoderFactory: EncoderFactory = EncoderFactory.get()
     @Suppress("UNCHECKED_CAST")
     private val keyWriter: DatumWriter<K> = specificData.createDatumWriter(topic.keySchema) as DatumWriter<K>
@@ -40,24 +41,24 @@ class TapeAvroSerializer<K, V>(topic: AvroTopic<K, V>, specificData: GenericData
     private var keyBytes: ByteArray? = ByteArray(0)
 
     @Throws(IOException::class)
-    override fun serialize(o: Record<K, V>, out: OutputStream) {
+    override fun serialize(value: Record<K, V>, output: OutputStream) {
         // for backwards compatibility
-        out.write(EMPTY_HEADER, 0, 8)
+        output.write(EMPTY_HEADER, 0, 8)
 
-        out.write(if (o.key == previousKey) {
+        output.write(if (value.key == previousKey) {
             keyBytes
         } else {
             val keyOut = ByteArrayOutputStream()
             encoder = encoderFactory.binaryEncoder(keyOut, encoder).also {
-                keyWriter.write(o.key, it)
+                keyWriter.write(value.key, it)
                 it.flush()
             }
-            previousKey = o.key
+            previousKey = value.key
             keyOut.toByteArray().also { keyBytes = it }
         })
 
-        encoder = encoderFactory.binaryEncoder(out, encoder).also {
-            valueWriter.write(o.value, it)
+        encoder = encoderFactory.binaryEncoder(output, encoder).also {
+            valueWriter.write(value.value, it)
             it.flush()
         }
     }

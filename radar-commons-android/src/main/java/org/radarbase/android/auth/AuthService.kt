@@ -7,10 +7,12 @@ import android.os.Binder
 import android.os.IBinder
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.LoginActivity.Companion.ACTION_LOGIN_SUCCESS
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.util.concurrent.TimeUnit
@@ -30,12 +32,15 @@ abstract class AuthService : Service(), LoginListener {
     @Volatile
     private var isInLoginActivity: Boolean = false
 
+    private lateinit var broadcaster: LocalBroadcastManager
+
     override fun onCreate() {
         super.onCreate()
+        broadcaster = LocalBroadcastManager.getInstance(this)
         appAuth = AppAuthState.from(this)
         handler.start()
         loginManagers = createLoginManagers(appAuth)
-        config = (application as org.radarbase.android.RadarApplication).configuration
+        config = (application as RadarApplication).configuration
         networkConnectedListener = NetworkConnectedReceiver(this, object : NetworkConnectedReceiver.NetworkConnectedListener {
             override fun onNetworkConnectionChanged(isConnected: Boolean, hasWifiOrEthernet: Boolean) {
                 handler.execute {
@@ -110,7 +115,7 @@ abstract class AuthService : Service(), LoginListener {
         if (!isInLoginActivity) {
             try {
                 logger.info("Starting login activity")
-                val intent = Intent(this, (application as org.radarbase.android.RadarApplication).loginActivity)
+                val intent = Intent(this, (application as RadarApplication).loginActivity)
                 intent.flags = FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_TASK_ON_HOME or FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP
                 startActivity(intent)
             } catch (ex: IllegalStateException) {
@@ -170,10 +175,7 @@ abstract class AuthService : Service(), LoginListener {
             logger.info("Log in succeeded.")
             appAuth = authState
 
-            androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
-                    .sendBroadcast(Intent().apply {
-                        action = ACTION_LOGIN_SUCCESS
-                    })
+            broadcaster.send(ACTION_LOGIN_SUCCESS)
 
             callListeners(sinceUpdate = appAuth.lastUpdate) {
                 it.loginListener.loginSucceeded(manager, appAuth)

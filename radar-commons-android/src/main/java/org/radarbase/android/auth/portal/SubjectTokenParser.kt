@@ -9,8 +9,8 @@ class SubjectTokenParser(private val client: ManagementPortalClient, state: AppA
     private val accessTokenParser: AccessTokenParser = AccessTokenParser(state)
 
     @Throws(IOException::class)
-    override fun parse(authString: String): AppAuthState {
-        val newState = this.accessTokenParser.parse(authString)
+    override fun parse(value: String): AppAuthState {
+        val newState = this.accessTokenParser.parse(value)
         return client.getSubject(newState, GetSubjectParser(newState))
     }
 }

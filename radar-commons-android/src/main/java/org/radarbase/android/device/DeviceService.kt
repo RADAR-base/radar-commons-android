@@ -32,8 +32,11 @@ import org.radarbase.android.auth.*
 import org.radarbase.android.auth.portal.SourceType
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.device.DeviceServiceProvider.Companion.NEEDS_BLUETOOTH_KEY
+import org.radarbase.android.radarApp
+import org.radarbase.android.util.BundleSerialization
 import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -47,7 +50,6 @@ import kotlin.collections.HashMap
  * Specific wearables should extend this class.
  */
 abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListener, LoginListener {
-
     val key = ObservationKey()
 
     /** Stops the device when bluetooth is disabled.  */
@@ -83,6 +85,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
     private lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
+    private lateinit var broadcaster: LocalBroadcastManager
 
     val state: T
         get() {
@@ -114,6 +117,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         super.onCreate()
         sources = HashSet()
         sourceTypes = HashSet()
+        broadcaster = LocalBroadcastManager.getInstance(this)
 
         mBinder = createBinder()
 
@@ -125,9 +129,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         authConnection = AuthServiceConnection(this, this)
         authConnection.bind()
 
-        val app = application as org.radarbase.android.RadarApplication
-
-        radarConnection = ManagedServiceConnection(this, app.radarService)
+        radarConnection = ManagedServiceConnection(this, radarApp.radarService)
         radarConnection.onBoundListeners.add { binder ->
             dataHandler = binder.dataHandler
             handler.execute {
@@ -137,7 +139,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         radarConnection.bind()
         handler = SafeHandler(javaClass.simpleName, THREAD_PRIORITY_BACKGROUND)
 
-        config = app.configuration
+        config = radarApp.configuration
 
         deviceManager = null
         startFuture = null
@@ -157,7 +159,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         }
         handler.stop { stopDeviceManager(unsetDeviceManager()) }
 
-        (applicationContext as org.radarbase.android.RadarApplication).onDeviceServiceDestroy(this)
+        radarApp.onDeviceServiceDestroy(this)
     }
 
     @CallSuper
@@ -182,11 +184,10 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
 
     private fun doBind(intent: Intent, firstBind: Boolean) {
         logger.debug("Received (re)bind in {}", this)
-        val extras = org.radarbase.android.util.BundleSerialization.getPersistentExtras(intent, this)
-        onInvocation(extras ?: Bundle())
+        val extras = BundleSerialization.getPersistentExtras(intent, this) ?: Bundle()
+        onInvocation(extras)
 
-        val application = applicationContext as org.radarbase.android.RadarApplication
-        application.onDeviceServiceInvocation(this, extras!!, firstBind)
+        radarApp.onDeviceServiceInvocation(this, extras, firstBind)
     }
 
     override fun onUnbind(intent: Intent): Boolean {
@@ -195,21 +196,18 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
     }
 
     override fun deviceFailedToConnect(name: String) {
-        val statusChanged = Intent(DEVICE_CONNECT_FAILED)
-        statusChanged.putExtra(DEVICE_SERVICE_CLASS, javaClass.name)
-        statusChanged.putExtra(DEVICE_STATUS_NAME, name)
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged)
+        broadcaster.send(DEVICE_CONNECT_FAILED) {
+            putExtra(DEVICE_SERVICE_CLASS, javaClass.name)
+            putExtra(DEVICE_STATUS_NAME, name)
+        }
     }
 
-
     private fun broadcastDeviceStatus(name: String?, status: DeviceStatusListener.Status) {
-        val statusChanged = Intent(DEVICE_STATUS_CHANGED)
-        statusChanged.putExtra(DEVICE_STATUS_CHANGED, status.ordinal)
-        statusChanged.putExtra(DEVICE_SERVICE_CLASS, javaClass.name)
-        if (name != null) {
-            statusChanged.putExtra(DEVICE_STATUS_NAME, name)
+        broadcaster.send(DEVICE_STATUS_CHANGED) {
+            putExtra(DEVICE_STATUS_CHANGED, status.ordinal)
+            putExtra(DEVICE_SERVICE_CLASS, javaClass.name)
+            name?.let { putExtra(DEVICE_STATUS_NAME, it) }
         }
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).sendBroadcast(statusChanged)
     }
 
     override fun deviceStatusUpdated(deviceManager: DeviceManager<*>, status: DeviceStatusListener.Status) {
@@ -345,9 +343,10 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
     private fun registerDevice(type: SourceType, name: String, attributes: Map<String, String>) {
         logger.info("Registering source {} with attributes {}", type, attributes)
 
-        val source = SourceMetadata(type)
-        source.sourceName = name
-        source.attributes = attributes
+        val source = SourceMetadata(type).apply {
+            sourceName = name
+            this.attributes = attributes
+        }
 
         authConnection.binder?.registerSource(source,
                 { authState, updatedSource ->

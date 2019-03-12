@@ -1,24 +1,25 @@
 package org.radarbase.android.splash
 
 import android.app.Activity
-import androidx.lifecycle.Lifecycle
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
 import android.content.Intent.*
-import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Handler
 import android.os.SystemClock
 import androidx.annotation.CallSuper
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.radarApp
+import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.NetworkConnectedReceiver
+import org.radarbase.android.util.register
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 
@@ -29,7 +30,7 @@ abstract class SplashActivity : AppCompatActivity() {
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var loginListener: LoginListener
     private lateinit var config: RadarConfiguration
-    private lateinit var receiveConfigUpdates: BroadcastReceiver
+    private var receiveConfigUpdates: BroadcastRegistration? = null
     private lateinit var networkReceiver: NetworkConnectedReceiver
 
     protected var configReceiver: Boolean = false
@@ -49,8 +50,7 @@ abstract class SplashActivity : AppCompatActivity() {
 
         loginListener = createLoginListener()
         authConnection = AuthServiceConnection(this@SplashActivity, loginListener)
-        receiveConfigUpdates = createConfigListener()
-        config = (application as org.radarbase.android.RadarApplication).configuration
+        config = (application as RadarApplication).configuration
         configReceiver = false
         handler = Handler(mainLooper)
         startedAt = SystemClock.elapsedRealtime()
@@ -104,36 +104,21 @@ abstract class SplashActivity : AppCompatActivity() {
         }
     }
 
-    protected open fun createConfigListener(): BroadcastReceiver {
-        return object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if ((lifecycle.currentState == Lifecycle.State.RESUMED
-                        || lifecycle.currentState == Lifecycle.State.STARTED)
-                        && config.status == RadarConfiguration.FirebaseStatus.FETCHED) {
-                    logger.info("Config has been fetched, checking authentication")
-                    stopConfigListener()
-                    startAuthConnection()
-                }
-            }
-        }
-    }
-
     protected open fun createLoginListener(): LoginListener {
-        val app = application as org.radarbase.android.RadarApplication
         return object : LoginListener {
             override fun loginFailed(manager: LoginManager?, ex: Exception?) {
                 if (ex is ConnectException) {
                     updateState(STATE_DISCONNECTED)
                 } else {
-                    startActivity(app.loginActivity)
+                    startActivity(radarApp.loginActivity)
                 }
             }
 
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 if (authState.isPrivacyPolicyAccepted) {
-                    startActivity(app.mainActivity)
+                    startActivity(radarApp.mainActivity)
                 } else {
-                    startActivity(app.loginActivity)
+                    startActivity(radarApp.loginActivity)
                 }
             }
         }
@@ -174,8 +159,16 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun startConfigReceiver() {
         updateState(STATE_FETCHING_CONFIG)
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
-                .registerReceiver(receiveConfigUpdates, IntentFilter(RadarConfiguration.RADAR_CONFIGURATION_CHANGED))
+        LocalBroadcastManager.getInstance(this)
+                .register(RadarConfiguration.RADAR_CONFIGURATION_CHANGED) { _, _ ->
+                    if ((lifecycle.currentState == Lifecycle.State.RESUMED
+                                    || lifecycle.currentState == Lifecycle.State.STARTED)
+                            && config.status == RadarConfiguration.FirebaseStatus.FETCHED) {
+                        logger.info("Config has been fetched, checking authentication")
+                        stopConfigListener()
+                        startAuthConnection()
+                    }
+                }
         config.fetch()
         configReceiver = true
     }
@@ -189,8 +182,7 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun stopConfigListener() {
         if (configReceiver) {
-            androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
-                    .unregisterReceiver(receiveConfigUpdates)
+            receiveConfigUpdates?.unregister()
             configReceiver = false
         }
     }

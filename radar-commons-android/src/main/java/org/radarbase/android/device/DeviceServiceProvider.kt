@@ -27,6 +27,7 @@ import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarService
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.portal.SourceType
+import org.radarbase.android.radarApp
 import org.slf4j.LoggerFactory
 
 /**
@@ -98,8 +99,7 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
 
     /** Get the RadarConfiguration currently set for the service provider.  */
     val config: RadarConfiguration
-        get() = (radarService?.application as org.radarbase.android.RadarApplication?)?.configuration
-                ?: throw IllegalStateException("Cannot get configuration without setting RadarService")
+        get() = radarService!!.radarApp.configuration
 
     abstract val sourceProducer: String
 
@@ -191,7 +191,7 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
     @CallSuper
     protected fun configure(bundle: Bundle) {
         // Add the default configuration parameters given to the service intents
-        (this.radarService!!.applicationContext as org.radarbase.android.RadarApplication).configureProvider(bundle)
+        radarService!!.radarApp.configureProvider(bundle)
         val permissions = permissionsNeeded
         bundle.putBoolean(NEEDS_BLUETOOTH_KEY,
                 BLUETOOTH in permissions || BLUETOOTH_ADMIN in permissions)

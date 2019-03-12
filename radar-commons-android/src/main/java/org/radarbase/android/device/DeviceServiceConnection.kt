@@ -16,35 +16,33 @@
 
 package org.radarbase.android.device
 
-import android.content.*
+import android.content.ComponentName
+import android.content.Context
 import android.os.IBinder
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarService
 import org.radarbase.android.device.DeviceService.Companion.DEVICE_SERVICE_CLASS
 import org.radarbase.android.device.DeviceService.Companion.DEVICE_STATUS_CHANGED
+import org.radarbase.android.util.BroadcastRegistration
+import org.radarbase.android.util.register
 import org.slf4j.LoggerFactory
 
 class DeviceServiceConnection<S : BaseDeviceState>(private val radarService: RadarService, val serviceClassName: String) : BaseServiceConnection<S>(serviceClassName) {
-    private val statusReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == DEVICE_STATUS_CHANGED) {
-                if (serviceClassName == intent.getStringExtra(DEVICE_SERVICE_CLASS)) {
-                    logger.info("AppSource status changed of device {}", deviceName)
-                    val statusOrdinal = intent.getIntExtra(DEVICE_STATUS_CHANGED, 0)
-                    deviceStatus = DeviceStatusListener.Status.values()[statusOrdinal]
-                            .also { logger.info("Updated device status to {}", it) }
-                            .also { radarService.deviceStatusUpdated(this@DeviceServiceConnection, it) }
-                }
-            }
-        }
-    }
-
     val context: Context
         get() = radarService
+    private val broadcaster = LocalBroadcastManager.getInstance(radarService)
+    private var statusReceiver: BroadcastRegistration? = null
 
     override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(radarService)
-                .registerReceiver(statusReceiver, IntentFilter(DEVICE_STATUS_CHANGED))
+        statusReceiver = broadcaster.register(DEVICE_STATUS_CHANGED) { _, intent ->
+            if (serviceClassName == intent.getStringExtra(DEVICE_SERVICE_CLASS)) {
+                logger.info("AppSource status changed of device {}", deviceName)
+                val statusOrdinal = intent.getIntExtra(DEVICE_STATUS_CHANGED, 0)
+                deviceStatus = DeviceStatusListener.Status.values()[statusOrdinal]
+                        .also { logger.info("Updated device status to {}", it) }
+                        .also { radarService.deviceStatusUpdated(this@DeviceServiceConnection, it) }
+            }
+        }
 
         if (!hasService()) {
             super.onServiceConnected(className, service)
@@ -59,7 +57,7 @@ class DeviceServiceConnection<S : BaseDeviceState>(private val radarService: Rad
         super.onServiceDisconnected(className)
 
         if (hadService) {
-            androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(radarService).unregisterReceiver(statusReceiver)
+            statusReceiver?.unregister()
             radarService.serviceDisconnected(this)
         }
     }

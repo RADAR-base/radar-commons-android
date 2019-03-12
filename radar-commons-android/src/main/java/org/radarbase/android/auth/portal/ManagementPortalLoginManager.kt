@@ -1,10 +1,6 @@
 package org.radarbase.android.auth.portal
 
 import android.app.Activity
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.json.JSONException
 import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
@@ -17,6 +13,9 @@ import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
+import org.radarbase.android.radarApp
+import org.radarbase.android.util.BroadcastRegistration
+import org.radarbase.android.util.register
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.rest.RestClient
@@ -27,23 +26,18 @@ import java.util.concurrent.locks.ReentrantLock
 
 class ManagementPortalLoginManager(private val listener: AuthService, state: AppAuthState) : LoginManager {
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
-    private val firebaseUpdateReceiver: BroadcastReceiver
+    private val firebaseUpdateReceiver: BroadcastRegistration
 
     private var client: ManagementPortalClient? = null
     private var restClient: RestClient? = null
     private val refreshLock: ReentrantLock
-    private val config = (listener.application as org.radarbase.android.RadarApplication).configuration
+    private val config = listener.radarApp.configuration
 
     init {
         ensureClientConnectivity()
 
-        firebaseUpdateReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                ensureClientConnectivity()
-            }
-        }
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(listener)
-                .registerReceiver(firebaseUpdateReceiver, IntentFilter(RADAR_CONFIGURATION_CHANGED))
+        firebaseUpdateReceiver = LocalBroadcastManager.getInstance(listener)
+                .register(RADAR_CONFIGURATION_CHANGED) { _, _ -> ensureClientConnectivity() }
         updateSources(state)
         refreshLock = ReentrantLock()
     }
@@ -196,7 +190,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     override fun onDestroy() {
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(listener).unregisterReceiver(firebaseUpdateReceiver)
+        firebaseUpdateReceiver.unregister()
     }
 
     @Synchronized

@@ -17,19 +17,18 @@
 package org.radarbase.android.auth
 
 import org.radarbase.android.util.Parser
-
 import java.io.IOException
 
 /** AuthStringProcessor to parse a string with some form of authentication and parse it to a
  * proper state.  */
-interface AuthStringParser : org.radarbase.android.util.Parser<String, AppAuthState> {
+interface AuthStringParser : Parser<String, AppAuthState> {
     /**
      * Parse an authentication state from a string.
-     * @param authString string that contains some form of identification.
+     * @param value string that contains some form of identification.
      * @return authentication state or `null` if the authentication was passed for further
      * external processing.
      * @throws IllegalArgumentException if the string is not a valid authentication string
      */
     @Throws(IOException::class)
-    override fun parse(authString: String): AppAuthState
+    override fun parse(value: String): AppAuthState
 }

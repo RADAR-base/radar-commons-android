@@ -35,7 +35,7 @@ interface ReadableDataCache : Closeable {
      * @return records or null if none are found.
      */
     @Throws(IOException::class)
-    fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any>?
+    fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any?>?
 
     /**
      * Get latest records in the cache, from new to old.

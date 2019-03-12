@@ -24,6 +24,8 @@ import org.radarbase.data.AvroRecordData
 import org.radarbase.data.Record
 import org.radarbase.data.RecordData
 import org.radarbase.topic.AvroTopic
+import org.radarbase.util.BackedObjectQueue
+import org.radarbase.util.QueueFile
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.IOException
@@ -56,11 +58,11 @@ constructor(override val file: File,
             config: DataCache.CacheConfiguration) : DataCache<K, V> {
 
     private val measurementsToAdd: MutableList<Record<K, V>>
-    private val serializer: org.radarbase.util.BackedObjectQueue.Serializer<Record<K, V>>
-    private val deserializer: org.radarbase.util.BackedObjectQueue.Deserializer<Record<Any, Any>>
-    private var queueFile: org.radarbase.util.QueueFile
+    private val serializer: BackedObjectQueue.Serializer<Record<K, V>>
+    private val deserializer: BackedObjectQueue.Deserializer<Record<Any, Any>>
+    private var queueFile: QueueFile
 
-    private var queue: org.radarbase.util.BackedObjectQueue<Record<K, V>, Record<Any, Any>>
+    private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
     private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
 
     private val queueSize: AtomicInteger
@@ -76,16 +78,16 @@ constructor(override val file: File,
             }
         }
 
-    private val maximumSize: Int
-        get() = config.maximumSize.let { if (it > Int.MAX_VALUE) Int.MAX_VALUE else it.toInt() }
+    private val maximumSize: Long
+        get() = config.maximumSize.let { if (it > Int.MAX_VALUE) Int.MAX_VALUE.toLong() else it }
 
     init {
         queueFile = try {
-            org.radarbase.util.QueueFile.newMapped(Objects.requireNonNull(file), maximumSize)
+            QueueFile.newMapped(Objects.requireNonNull(file), maximumSize)
         } catch (ex: IOException) {
             logger.error("TapeCache $file was corrupted. Removing old cache.")
             if (file.delete()) {
-                org.radarbase.util.QueueFile.newMapped(file, maximumSize)
+                QueueFile.newMapped(file, maximumSize)
             } else {
                 throw ex
             }
@@ -97,28 +99,19 @@ constructor(override val file: File,
 
         this.serializer = TapeAvroSerializer(topic, Objects.requireNonNull(inputFormat))
         this.deserializer = TapeAvroDeserializer(readTopic, Objects.requireNonNull(outputFormat))
-        this.queue = org.radarbase.util.BackedObjectQueue(queueFile, serializer, deserializer)
+        this.queue = BackedObjectQueue(queueFile, serializer, deserializer)
     }
 
     @Throws(IOException::class)
-    override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any>? {
+    override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any?>? {
         logger.debug("Trying to retrieve records from topic {}", topic)
         try {
             return executor.compute {
                 try {
-                    val records = queue.peek(limit, sizeLimit)
-                    if (records.isEmpty()) {
-                        return@compute null
-                    }
-                    val currentKey = records[0].key
-                    val values = ArrayList<Any>(records.size)
-                    for (record in records) {
-                        if (currentKey != record.key) {
-                            break
-                        }
-                        values.add(record.value)
-                    }
-                    return@compute AvroRecordData < Any, Any>(readTopic, currentKey, values)
+                    val (currentKey, values) = getValidUnsentRecords(limit, sizeLimit)
+                            ?: return@compute null
+
+                    return@compute AvroRecordData<Any, Any>(readTopic, currentKey, values)
                 } catch (ex: IOException) {
                     fixCorruptQueue()
                     return@compute null
@@ -140,12 +133,41 @@ constructor(override val file: File,
                 throw IOException("Unknown error occurred", ex)
             }
         }
+    }
 
+    private fun getValidUnsentRecords(limit: Int, sizeLimit: Long): Pair<Any, List<Any?>>? {
+        var currentKey: Any? = null
+        lateinit var records: List<Record<Any, Any>?>
+
+        while (currentKey == null) {
+            records = queue.peek(limit, sizeLimit)
+            if (records.isEmpty()) {
+                return null
+            }
+            var firstNonNull = records.indexOfFirst { it != null }
+            if (firstNonNull == -1) firstNonNull = records.size
+            if (firstNonNull > 0) {
+                queue.remove(firstNonNull)
+                if (firstNonNull < records.size) {
+                    records = records.subList(firstNonNull, records.size)
+                } else {
+                    continue
+                }
+            }
+            currentKey = records[0]!!.key
+        }
+
+        return Pair(currentKey, records.asSequence()
+                .takeWhile { it?.key == currentKey }
+                .map { it?.value }
+                .toList())
     }
 
     @Throws(IOException::class)
     override fun getRecords(limit: Int): RecordData<Any, Any>? {
-        return getUnsentRecords(limit, SIZE_LIMIT_DEFAULT)
+        return getUnsentRecords(limit, SIZE_LIMIT_DEFAULT)?.let { records ->
+            AvroRecordData<Any, Any>(records.topic, records.key, records.filterNotNull())
+        }
     }
 
     override val numberOfRecords: Long
@@ -155,13 +177,12 @@ constructor(override val file: File,
     override fun remove(number: Int): Int {
         try {
             return executor.compute {
-                val actualNumber = Math.min(number, queue.size())
-                if (actualNumber == 0) {
-                    return@compute 0
+                val actualNumber = Math.min(number, queue.size)
+                if (actualNumber > 0) {
+                    logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
+                    queue.remove(actualNumber)
+                    queueSize.addAndGet(-actualNumber)
                 }
-                logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
-                queue.remove(actualNumber)
-                queueSize.addAndGet(-actualNumber)
                 actualNumber
             }
         } catch (ex: InterruptedException) {
@@ -227,11 +248,11 @@ constructor(override val file: File,
             queueSize.addAndGet(measurementsToAdd.size)
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
-            queueSize.set(queue.size())
+            queueSize.set(queue.size)
             throw RuntimeException(ex)
         } catch (ex: IllegalStateException) {
             logger.error("Queue {} is full, not adding records", topic.name)
-            queueSize.set(queue.size())
+            queueSize.set(queue.size)
         } catch (ex: IllegalArgumentException) {
             logger.error("Failed to validate all records; adding individual records instead: {}", ex.message)
             try {
@@ -247,10 +268,10 @@ constructor(override val file: File,
                 queueSize.addAndGet(measurementsToAdd.size)
             } catch (illEx: IllegalStateException) {
                 logger.error("Queue {} is full, not adding records", topic.name)
-                queueSize.set(queue.size())
+                queueSize.set(queue.size)
             } catch (ex2: IOException) {
                 logger.error("Failed to add record", ex)
-                queueSize.set(queue.size())
+                queueSize.set(queue.size)
                 throw RuntimeException(ex)
             }
 
@@ -269,9 +290,9 @@ constructor(override val file: File,
         }
 
         if (file.delete()) {
-            queueFile = org.radarbase.util.QueueFile.newMapped(file, maximumSize)
+            queueFile = QueueFile.newMapped(file, maximumSize)
             queueSize.set(queueFile.size())
-            queue = org.radarbase.util.BackedObjectQueue(queueFile, serializer, deserializer)
+            queue = BackedObjectQueue(queueFile, serializer, deserializer)
         } else {
             throw IOException("Cannot create new cache.")
         }

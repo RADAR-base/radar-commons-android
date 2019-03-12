@@ -148,7 +148,7 @@ class TapeCacheTest {
         assertEquals(localValue.getData(), firstRecord.get("data"))
     }
 
-    private fun getRecording(size: Int): org.radarbase.util.ActiveAudioRecording {
+    private fun getRecording(size: Int): ActiveAudioRecording {
         val random = ThreadLocalRandom.current()
         val data = ByteArray(size)
         random.nextBytes(data)

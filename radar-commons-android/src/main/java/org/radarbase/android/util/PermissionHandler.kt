@@ -13,33 +13,27 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.appcompat.app.AppCompatActivity
 import com.crashlytics.android.Crashlytics
 import org.radarbase.android.R
 import org.radarbase.android.RadarService
 import org.slf4j.LoggerFactory
 
-class PermissionHandler(private val activity: AppCompatActivity, private val mHandler: SafeHandler, private val requestPermissionTimeoutMs: Long) {
-    private val localBroadcastManager: androidx.localbroadcastmanager.content.LocalBroadcastManager
-        get() = androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(activity)
+open class PermissionHandler(private val activity: AppCompatActivity, private val mHandler: SafeHandler, private val requestPermissionTimeoutMs: Long) {
+    private val broadcaster = LocalBroadcastManager.getInstance(activity)
 
-    private fun localBroadcast(intentApply: Intent.() -> Unit) {
-        localBroadcastManager.sendBroadcast(Intent().apply(intentApply))
-    }
-
-    var needsPermissions: MutableSet<String> = HashSet()
-    val isRequestingPermissions: MutableSet<String> = HashSet()
-    var isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
+    private var needsPermissions: MutableSet<String> = HashSet()
+    private val isRequestingPermissions: MutableSet<String> = HashSet()
+    private var isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
 
     private fun onPermissionRequestResult(permission: String, granted: Boolean) {
         mHandler.execute {
             needsPermissions.remove(permission)
 
             val result = if (granted) PackageManager.PERMISSION_GRANTED else PackageManager.PERMISSION_DENIED
-            localBroadcast {
-                action = RadarService.ACTION_PERMISSIONS_GRANTED
+            broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
                 putExtra(RadarService.EXTRA_PERMISSIONS, arrayOf(Context.LOCATION_SERVICE))
                 putExtra(RadarService.EXTRA_GRANT_RESULTS, intArrayOf(result))
             }
@@ -49,13 +43,12 @@ class PermissionHandler(private val activity: AppCompatActivity, private val mHa
         }
     }
 
-    protected fun checkPermissions() {
+    private fun checkPermissions() {
         mHandler.executeReentrant {
             val currentlyNeeded = needsPermissions - isRequestingPermissions
             when {
                 needsPermissions.isEmpty() -> {
-                    localBroadcast {
-                        action = RadarService.ACTION_PERMISSIONS_GRANTED
+                    broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
                         putExtra(RadarService.EXTRA_PERMISSIONS, arrayOfNulls<String>(0))
                         putExtra(RadarService.EXTRA_GRANT_RESULTS, IntArray(0))
                     }
@@ -220,13 +213,11 @@ class PermissionHandler(private val activity: AppCompatActivity, private val mHa
     }
 
     fun permissionsGranted(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        if (requestCode != REQUEST_ENABLE_PERMISSIONS) {
-            return
-        }
-        localBroadcast {
-            action = RadarService.ACTION_PERMISSIONS_GRANTED
-            putExtra(RadarService.EXTRA_PERMISSIONS, permissions)
-            putExtra(RadarService.EXTRA_GRANT_RESULTS, grantResults)
+        if (requestCode == REQUEST_ENABLE_PERMISSIONS) {
+            broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
+                putExtra(RadarService.EXTRA_PERMISSIONS, permissions)
+                putExtra(RadarService.EXTRA_GRANT_RESULTS, grantResults)
+            }
         }
     }
 

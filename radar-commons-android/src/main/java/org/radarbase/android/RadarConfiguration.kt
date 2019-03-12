@@ -17,7 +17,6 @@
 package org.radarbase.android
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -33,6 +32,7 @@ import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.portal.GetSubjectParser
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.BASE_URL_PROPERTY
+import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -55,6 +55,7 @@ class RadarConfiguration private constructor(context: Context,
     private val isInDevelopmentMode: Boolean
         get() = firebase.info.configSettings.isDeveloperModeEnabled
     private var firebaseKeys: Set<String> = HashSet(firebase.getKeysByPrefix(""))
+    private val broadcaster = LocalBroadcastManager.getInstance(context)
 
     enum class FirebaseStatus {
         UNAVAILABLE, ERROR, READY, FETCHING, FETCHED
@@ -70,8 +71,7 @@ class RadarConfiguration private constructor(context: Context,
 
                 // Set global properties.
                 logger.info("RADAR configuration changed: {}", this@RadarConfiguration)
-                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context)
-                        .sendBroadcast(Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED))
+                broadcaster.send(RADAR_CONFIGURATION_CHANGED)
             } else {
                 status = FirebaseStatus.ERROR
                 logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException())
@@ -81,8 +81,7 @@ class RadarConfiguration private constructor(context: Context,
         this.onFailureListener = OnFailureListener {
             logger.info("Failed to fetch Firebase config")
             status = FirebaseStatus.ERROR
-            androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context)
-                    .sendBroadcast(Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED))
+            broadcaster.send(RADAR_CONFIGURATION_CHANGED)
         }
 
         val prefs = context.applicationContext.getSharedPreferences(javaClass.name, Context.MODE_PRIVATE)
@@ -101,9 +100,7 @@ class RadarConfiguration private constructor(context: Context,
 
             if (hasChange.compareAndSet(true, false)) {
                 logger.info("RADAR configuration changed: {}", this@RadarConfiguration)
-                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context)
-                        .sendBroadcast(Intent(RadarConfiguration.RADAR_CONFIGURATION_CHANGED))
-            }
+                broadcaster.send(RADAR_CONFIGURATION_CHANGED)            }
         }
 
         val googleApi = GoogleApiAvailability.getInstance()

@@ -32,7 +32,7 @@ import java.io.InputStream
 /**
  * Converts records from an AvroTopic for Tape
  */
-class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val specificData: GenericData) : org.radarbase.util.BackedObjectQueue.Deserializer<Record<K, V>> {
+class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val specificData: GenericData) : BackedObjectQueue.Deserializer<Record<K, V>> {
     private val decoderFactory: DecoderFactory = DecoderFactory.get()
     private val keyReader: DatumReader<K>
     private val valueReader: DatumReader<V>
@@ -49,14 +49,14 @@ class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val specificDat
     }
 
     @Throws(IOException::class)
-    override fun deserialize(`in`: InputStream): Record<K, V> {
+    override fun deserialize(input: InputStream): Record<K, V> {
         // for backwards compatibility
         var numRead = 0L
         do {
-            numRead += `in`.skip(8L - numRead).toInt()
+            numRead += input.skip(8L - numRead).toInt()
         } while (numRead < 8L)
 
-        decoder = decoderFactory.binaryDecoder(`in`, decoder)
+        decoder = decoderFactory.binaryDecoder(input, decoder)
 
         val key: K
         val value: V

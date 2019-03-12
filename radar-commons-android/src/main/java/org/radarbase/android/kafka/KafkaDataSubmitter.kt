@@ -23,6 +23,7 @@ import org.apache.avro.generic.IndexedRecord
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.ReadableDataCache
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.data.AvroRecordData
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
 import org.radarbase.producer.KafkaTopicSender
@@ -248,7 +249,7 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
 
             try {
                 sender(topic).run {
-                    send(data)
+                    send(AvroRecordData<Any, Any>(data.topic, data.key, data.filterNotNull()))
                     flush()
                 }
             } catch (ex: AuthenticationException) {

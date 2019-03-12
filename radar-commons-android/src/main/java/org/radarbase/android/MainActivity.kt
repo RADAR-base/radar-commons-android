@@ -16,7 +16,6 @@
 
 package org.radarbase.android
 
-import androidx.lifecycle.Lifecycle
 import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -26,14 +25,19 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import androidx.annotation.CallSuper
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
+import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
+import org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY
+import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_BLUETOOTH_NEEDED_CHANGED
+import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
+import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AuthService
-import org.radarbase.android.util.ManagedServiceConnection
-import org.radarbase.android.util.PermissionHandler
-import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
@@ -48,21 +52,21 @@ abstract class MainActivity : AppCompatActivity() {
 
     /** The UI to show the service data.  */
     @get:Synchronized
-    var view: org.radarbase.android.MainActivityView? = null
+    var view: MainActivityView? = null
         private set
 
-    private lateinit var configurationBroadcastReceiver: BroadcastReceiver
+    private var configurationBroadcastReceiver: BroadcastRegistration? = null
     private lateinit var permissionHandler: PermissionHandler
     private var radarServiceIsStarted: Boolean = false
     protected lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
-    protected lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
+    protected lateinit var radarConnection: ManagedServiceConnection<IRadarBinder>
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
                 val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                org.radarbase.android.MainActivity.Companion.logger.debug("Bluetooth state {}", state)
+                logger.debug("Bluetooth state {}", state)
                 // Upon state change, restart ui handler and restart Scanning.
                 if (state == BluetoothAdapter.STATE_OFF) {
                     requestEnableBt()
@@ -70,33 +74,24 @@ abstract class MainActivity : AppCompatActivity() {
             }
         }
     }
-    private val bluetoothNeededReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == ACTION_BLUETOOTH_NEEDED_CHANGED) {
-                testBindBluetooth()
-            }
-        }
-    }
+    private var bluetoothNeededReceiver: BroadcastRegistration? = null
 
     @Volatile
     private var bluetoothReceiverIsEnabled: Boolean = false
-    protected lateinit var configuration: org.radarbase.android.RadarConfiguration
-    private lateinit var connectionsUpdatedReceiver: BroadcastReceiver
+    protected lateinit var configuration: RadarConfiguration
+    private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
     protected open val requestPermissionTimeoutMs: Long
-        get() = org.radarbase.android.MainActivity.Companion.REQUEST_PERMISSION_TIMEOUT_MS
+        get() = REQUEST_PERMISSION_TIMEOUT_MS
 
-    val radarService: org.radarbase.android.IRadarBinder?
+    val radarService: IRadarBinder?
         get() = radarConnection.binder
 
     val userId: String?
-        get() = configuration.optString(org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY)
+        get() = configuration.optString(USER_ID_KEY)
 
     val projectId: String?
-        get() = configuration.optString(org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY)
-
-    private val localBroadcastManager: androidx.localbroadcastmanager.content.LocalBroadcastManager
-        get() = androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
+        get() = configuration.optString(PROJECT_ID_KEY)
 
     /**
      * Sends an intent to request bluetooth to be turned on.
@@ -143,44 +138,32 @@ abstract class MainActivity : AppCompatActivity() {
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
-        radarConnection = ManagedServiceConnection(this@MainActivity, org.radarbase.android.RadarService::class.java)
+        radarConnection = ManagedServiceConnection(this@MainActivity, RadarService::class.java)
         radarConnection.bindFlags = Context.BIND_ABOVE_CLIENT
-        radarConnection.onBoundListeners += org.radarbase.android.IRadarBinder::startScanning
-        radarConnection.onUnboundListeners += org.radarbase.android.IRadarBinder::stopScanning
+        radarConnection.onBoundListeners += IRadarBinder::startScanning
+        radarConnection.onUnboundListeners += IRadarBinder::stopScanning
 
-        connectionsUpdatedReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                synchronized(this@MainActivity) {
-                    view = createView()
-                }
-            }
-        }
-        configuration = (application as org.radarbase.android.RadarApplication).configuration
+        configuration = radarApp.configuration
         authConnection = ManagedServiceConnection(this, AuthService::class.java)
-        configurationBroadcastReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                onConfigChanged()
-            }
-        }
         create()
     }
 
     @CallSuper
     protected fun create() {
-        org.radarbase.android.MainActivity.Companion.logger.info("RADAR configuration at create: {}", configuration)
+        logger.info("RADAR configuration at create: {}", configuration)
         onConfigChanged()
 
-        localBroadcastManager.registerReceiver(configurationBroadcastReceiver,
-                        IntentFilter(org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED))
+        configurationBroadcastReceiver = LocalBroadcastManager.getInstance(this)
+                .register(RADAR_CONFIGURATION_CHANGED) { _, _ -> onConfigChanged() }
 
         // Start the UI thread
-        uiRefreshRate = configuration.getLong(org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY)
+        uiRefreshRate = configuration.getLong(UI_REFRESH_RATE_KEY)
     }
 
     override fun onDestroy() {
         super.onDestroy()
 
-        localBroadcastManager.unregisterReceiver(configurationBroadcastReceiver)
+        configurationBroadcastReceiver?.unregister()
     }
 
     /**
@@ -193,7 +176,7 @@ abstract class MainActivity : AppCompatActivity() {
     }
 
     /** Create a view to show the data of this activity.  */
-    protected abstract fun createView(): org.radarbase.android.MainActivityView
+    protected abstract fun createView(): MainActivityView
 
     override fun onResume() {
         super.onResume()
@@ -202,7 +185,7 @@ abstract class MainActivity : AppCompatActivity() {
                 // Update all rows in the UI with the data from the connections
                 view?.update()
             } catch (ex: Exception) {
-                org.radarbase.android.MainActivity.Companion.logger.error("Failed to update view")
+                logger.error("Failed to update view")
             }
             lifecycle.currentState == Lifecycle.State.RESUMED
         }
@@ -216,7 +199,7 @@ abstract class MainActivity : AppCompatActivity() {
 
         permissionHandler.invalidateCache()
 
-        val radarServiceCls = (application as org.radarbase.android.RadarApplication).radarService
+        val radarServiceCls = (application as RadarApplication).radarService
         if (!radarServiceIsStarted) {
             try {
                 val intent = Intent(this, radarServiceCls)
@@ -227,7 +210,7 @@ abstract class MainActivity : AppCompatActivity() {
                 }
                 radarServiceIsStarted = true
             } catch (ex: IllegalStateException) {
-                org.radarbase.android.MainActivity.Companion.logger.error("Failed to start RadarService: activity is in background.", ex)
+                logger.error("Failed to start RadarService: activity is in background.", ex)
             }
         }
         if (radarServiceIsStarted) {
@@ -236,15 +219,21 @@ abstract class MainActivity : AppCompatActivity() {
 
         testBindBluetooth()
 
-        localBroadcastManager.apply {
-            registerReceiver(bluetoothNeededReceiver, IntentFilter(ACTION_BLUETOOTH_NEEDED_CHANGED))
-            registerReceiver(connectionsUpdatedReceiver, IntentFilter(ACTION_PROVIDERS_UPDATED))
+        LocalBroadcastManager.getInstance(this).apply {
+            bluetoothNeededReceiver = register(ACTION_BLUETOOTH_NEEDED_CHANGED) { _, _ ->
+                testBindBluetooth()
+            }
+            connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
+                synchronized(this@MainActivity) {
+                    view = createView()
+                }
+            }
         }
     }
 
     override fun onNewIntent(intent: Intent) {
-        if (org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS == intent.action) {
-            permissionHandler.replaceNeededPermissions(intent.getStringArrayExtra(org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS))
+        if (ACTION_CHECK_PERMISSIONS == intent.action) {
+            permissionHandler.replaceNeededPermissions(intent.getStringArrayExtra(EXTRA_PERMISSIONS))
         }
 
         super.onNewIntent(intent)
@@ -261,10 +250,8 @@ abstract class MainActivity : AppCompatActivity() {
 
         authConnection.unbind()
 
-        localBroadcastManager.apply {
-            unregisterReceiver(bluetoothNeededReceiver)
-            unregisterReceiver(connectionsUpdatedReceiver)
-        }
+        bluetoothNeededReceiver?.unregister()
+        connectionsUpdatedReceiver?.unregister()
 
         if (bluetoothReceiverIsEnabled) {
             bluetoothReceiverIsEnabled = false
@@ -293,7 +280,7 @@ abstract class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(org.radarbase.android.MainActivity::class.java)
+        private val logger = LoggerFactory.getLogger(MainActivity::class.java)
 
         private const val REQUEST_PERMISSION_TIMEOUT_MS = 86_400_000L // 1 day
     }

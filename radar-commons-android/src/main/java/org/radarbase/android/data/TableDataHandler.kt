@@ -17,7 +17,6 @@
 package org.radarbase.android.data
 
 import android.content.Context
-import android.content.Intent
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificData
@@ -29,10 +28,11 @@ import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
-import org.radarcns.kafka.ObservationKey
+import org.radarbase.android.util.send
 import org.radarbase.producer.rest.RestClient
 import org.radarbase.producer.rest.RestSender
 import org.radarbase.topic.AvroTopic
+import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.*
@@ -53,6 +53,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     private val networkConnectedReceiver: NetworkConnectedReceiver
     private val specificData: SpecificData
     private val handler: SafeHandler = SafeHandler("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
+    private val broadcaster = LocalBroadcastManager.getInstance(context)
 
     private var config = DataHandler.DataHandlerConfiguration()
     private var submitterConfig = KafkaDataSubmitter.SubmitterConfiguration()
@@ -131,13 +132,12 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     }
 
     private fun broadcastNumberOfRecords() {
-        val broadcaster = androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context)
         caches.forEach { cache ->
             val records = cache.numberOfRecords
-            broadcaster.sendBroadcast(Intent(CACHE_TOPIC).apply {
+            broadcaster.send(CACHE_TOPIC) {
                 putExtra(CACHE_TOPIC, cache.readTopic.name)
                 putExtra(CACHE_RECORDS_UNSENT_NUMBER, records)
-            })
+            }
         }
     }
 

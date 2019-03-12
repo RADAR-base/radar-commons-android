@@ -2,13 +2,14 @@ package org.radarcns.android.auth;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import androidx.annotation.NonNull;
 
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import androidx.annotation.NonNull;
 
 @Deprecated
 public class AppSource implements Parcelable, Serializable {

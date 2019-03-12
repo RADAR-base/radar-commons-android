@@ -29,12 +29,12 @@ class CountedReference<T>(private val creator: () -> T, private val destroyer: (
     }
 
     @Synchronized
-    fun acquire(): T? {
+    fun acquire(): T {
         if (count == 0) {
             value = creator()
         }
         count++
-        return value
+        return value!!
     }
 
     @Synchronized
@@ -44,7 +44,7 @@ class CountedReference<T>(private val creator: () -> T, private val destroyer: (
         }
         count--
         if (count == 0) {
-            value?.also(destroyer)
+            value?.let(destroyer)
             value = null
         }
     }

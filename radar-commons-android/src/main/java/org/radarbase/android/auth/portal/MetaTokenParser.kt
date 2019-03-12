@@ -17,9 +17,9 @@ import java.io.IOException
 class MetaTokenParser(private val currentState: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
-    override fun parse(authString: String): AppAuthState {
+    override fun parse(value: String): AppAuthState {
         try {
-            val json = JSONObject(authString)
+            val json = JSONObject(value)
             return currentState.alter {
                 attributes[MP_REFRESH_TOKEN_PROPERTY] = json.getString("refreshToken")
                 attributes[PRIVACY_POLICY_URL_PROPERTY] = json.getString("privacyPolicyUrl")
@@ -28,7 +28,7 @@ class MetaTokenParser(private val currentState: AppAuthState) : AuthStringParser
                 authenticationSource = SOURCE_TYPE
             }
         } catch (ex: JSONException) {
-            throw IOException("Failed to parse json string $authString", ex)
+            throw IOException("Failed to parse json string $value", ex)
         }
     }
 }

@@ -17,8 +17,11 @@
 package org.radarbase.android
 
 import android.Manifest.permission.*
-import android.app.*
+import android.app.AppOpsManager
 import android.app.AppOpsManager.MODE_ALLOWED
+import android.app.Notification
+import android.app.PendingIntent
+import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.content.*
 import android.content.pm.PackageManager
@@ -26,10 +29,10 @@ import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.location.LocationManager
 import android.os.*
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
+import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import android.widget.Toast
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration.Companion.DATABASE_COMMIT_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.KAFKA_RECORDS_SEND_LIMIT_KEY
@@ -66,8 +69,8 @@ import org.radarbase.android.device.DeviceServiceProvider
 import org.radarbase.android.device.DeviceStatusListener
 import org.radarbase.android.device.ProviderLoader
 import org.radarbase.android.kafka.ServerStatusListener
-import org.radarbase.android.util.NotificationHandler.NOTIFICATION_CHANNEL_INFO
-import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.*
+import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarbase.config.ServerConfig
 import org.radarbase.data.TimedInt
 import org.radarbase.producer.rest.SchemaRetriever
@@ -77,12 +80,6 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
 open class RadarService : Service(), ServerStatusListener, LoginListener {
-    private val permissionsBroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            onPermissionsGranted(intent.getStringArrayExtra(EXTRA_PERMISSIONS), intent.getIntArrayExtra(EXTRA_GRANT_RESULTS))
-        }
-    }
-
     private var binder: IBinder? = null
 
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
@@ -97,6 +94,8 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private val bluetoothReceiver = object : BroadcastReceiver() {
+        private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
+
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action
 
@@ -105,10 +104,14 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                 logger.info("Bluetooth state {}", state)
                 // Upon state change, restart ui handler and restart Scanning.
                 if (state == BluetoothAdapter.STATE_ON) {
-                    removeBluetoothNotification()
+                    bluetoothNotification?.cancel()
                     startScanning()
                 } else if (state == BluetoothAdapter.STATE_OFF) {
-                    createBluetoothNotification()
+                    bluetoothNotification = RadarApplication.getNotificationHandler(context)
+                            .notify(BLUETOOTH_NOTIFICATION, NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false) {
+                                setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                                setContentText(getString(R.string.notification_bluetooth_needed_text))
+                            }
                 }
             }
         }
@@ -116,39 +119,14 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     private lateinit var providerLoader: ProviderLoader
     private var previousConfiguration: Map<String, String>? = null
     private lateinit var authConnection: AuthServiceConnection
+    private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
+    private lateinit var deviceFailedReceiver: BroadcastRegistration
+    private lateinit var serverStatusReceiver: BroadcastRegistration
 
-    private val deviceFailedReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == DEVICE_CONNECT_FAILED) {
-                org.radarbase.android.util.Boast.makeText(this@RadarService,
-                        "Cannot connect to device " + intent.getStringExtra(DEVICE_STATUS_NAME),
-                        Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
 
-    private val serverStatusReceiver = object : BroadcastReceiver() {
-        var isMakingRequest = AtomicBoolean(false)
+    private val isMakingAuthRequest = AtomicBoolean(false)
 
-        override fun onReceive(context: Context, intent: Intent) {
-            serverStatus = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
-            if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
-                logger.debug("Status unauthorized")
-                authConnection.applyBinder { authBinder ->
-                    if (isMakingRequest.compareAndSet(false, true)) {
-                        authBinder.invalidate(null, false)
-                        authBinder.refresh()
-                    }
-                }
-            }
-        }
-    }
-
-    private val configChangedReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            configure()
-        }
-    }
+    private lateinit var configChangedReceiver: BroadcastRegistration
 
     /** Connections.  */
     private val mConnections = ArrayList<DeviceServiceProvider<*>>()
@@ -165,32 +143,14 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     protected open val servicePermissions: List<String>
         get() = listOf(ACCESS_NETWORK_STATE, INTERNET)
 
-    private fun removeBluetoothNotification() {
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)?.run {
-            cancel(BLUETOOTH_NOTIFICATION)
-        }
-    }
-
-    private fun createBluetoothNotification() {
-        val notification = org.radarbase.android.RadarApplication.getNotificationHandler(this)
-                .builder(org.radarbase.android.util.NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false).apply {
-            setContentTitle(getString(R.string.notification_bluetooth_needed_title))
-            setContentText(getString(R.string.notification_bluetooth_needed_text))
-        }.build()
-
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)?.run {
-            notify(BLUETOOTH_NOTIFICATION, notification)
-        }
-    }
-
     override fun onBind(intent: Intent?): IBinder? {
         return binder
     }
 
+    private lateinit var broadcaster: LocalBroadcastManager
+
     override fun onCreate() {
         super.onCreate()
-
-        val app = application as org.radarbase.android.RadarApplication
 
         serverStatus = ServerStatusListener.Status.DISABLED
         binder = createBinder()
@@ -198,15 +158,35 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         mHandler.start()
 
         needsBluetooth = false
-        configuration = app.configuration
+        configuration = radarApp.configuration
         providerLoader = ProviderLoader()
         previousConfiguration = null
+        broadcaster = LocalBroadcastManager.getInstance(this)
 
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).apply {
-            registerReceiver(permissionsBroadcastReceiver, IntentFilter(ACTION_PERMISSIONS_GRANTED))
-            registerReceiver(deviceFailedReceiver, IntentFilter(DEVICE_CONNECT_FAILED))
-            registerReceiver(serverStatusReceiver, IntentFilter(SERVER_STATUS_CHANGED))
-            registerReceiver(configChangedReceiver, IntentFilter(RADAR_CONFIGURATION_CHANGED))
+        broadcaster.apply {
+            permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
+                onPermissionsGranted(
+                        intent.getStringArrayExtra(EXTRA_PERMISSIONS),
+                        intent.getIntArrayExtra(EXTRA_GRANT_RESULTS))
+            }
+            deviceFailedReceiver = register(DEVICE_CONNECT_FAILED) { context, intent ->
+                Boast.makeText(context,
+                        "Cannot connect to device " + intent.getStringExtra(DEVICE_STATUS_NAME),
+                        Toast.LENGTH_SHORT).show()
+            }
+            serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
+                serverStatus = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
+                if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
+                    logger.debug("Status unauthorized")
+                    authConnection.applyBinder { authBinder ->
+                        if (isMakingAuthRequest.compareAndSet(false, true)) {
+                            authBinder.invalidate(null, false)
+                            authBinder.refresh()
+                        }
+                    }
+                }
+            }
+            configChangedReceiver = register(RADAR_CONFIGURATION_CHANGED) { _, _ -> configure() }
         }
 
         authConnection = AuthServiceConnection(this, this)
@@ -226,26 +206,23 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     protected fun createForegroundNotification(): Notification {
-        val app = application as org.radarbase.android.RadarApplication
-        val mainIntent = Intent(this, app.mainActivity)
-        return org.radarbase.android.RadarApplication.getNotificationHandler(this)
-                .builder(NOTIFICATION_CHANNEL_INFO, true).apply {
+        val mainIntent = Intent(this, radarApp.mainActivity)
+        return RadarApplication.getNotificationHandler(this)
+                .create(NOTIFICATION_CHANNEL_INFO, true) {
                     setContentText(getText(R.string.service_notification_text))
                     setContentTitle(getText(R.string.service_notification_title))
                     setContentIntent(PendingIntent.getActivity(this@RadarService, 0, mainIntent, 0))
-                }.build()
+                }
     }
 
     override fun onDestroy() {
         if (needsBluetooth) {
             unregisterReceiver(bluetoothReceiver)
         }
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).apply {
-            unregisterReceiver(permissionsBroadcastReceiver)
-            unregisterReceiver(deviceFailedReceiver)
-            unregisterReceiver(serverStatusReceiver)
-            unregisterReceiver(configChangedReceiver)
-        }
+        permissionsBroadcastReceiver.unregister()
+        deviceFailedReceiver.unregister()
+        serverStatusReceiver.unregister()
+        configChangedReceiver.unregister()
 
         mHandler.stop { }
         authConnection.unbind()
@@ -344,8 +321,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     protected fun requestPermissions(permissions: Array<String>) {
-        val cls = (application as org.radarbase.android.RadarApplication).mainActivity
-        startActivity(Intent(this, cls).apply {
+        startActivity(Intent(this, radarApp.mainActivity).apply {
             action = ACTION_CHECK_PERMISSIONS
             addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -384,9 +360,9 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                 needsBluetooth = true
                 registerReceiver(bluetoothReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
 
-                val intent = Intent(ACTION_BLUETOOTH_NEEDED_CHANGED)
-                intent.putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NEEDED)
-                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+                broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
+                    putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NEEDED)
+                }
             }
             startScanning()
         }
@@ -420,20 +396,19 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
         this.serverStatus = status
 
-        val statusIntent = Intent(SERVER_STATUS_CHANGED).apply {
+        broadcaster.send(SERVER_STATUS_CHANGED) {
             putExtra(SERVER_STATUS_CHANGED, status.ordinal)
         }
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).sendBroadcast(statusIntent)
     }
 
     override fun updateRecordsSent(topicName: String, numberOfRecords: Int) {
         this.latestNumberOfRecordsSent.set(numberOfRecords)
-        val recordsIntent = Intent(SERVER_RECORDS_SENT_TOPIC).apply {
+
+        broadcaster.send(SERVER_RECORDS_SENT_TOPIC) {
             // Signal that a certain topic changed, the key of the map retrieved by getRecordsSent().
             putExtra(SERVER_RECORDS_SENT_TOPIC, topicName)
             putExtra(SERVER_RECORDS_SENT_NUMBER, numberOfRecords)
         }
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).sendBroadcast(recordsIntent)
     }
 
     fun deviceStatusUpdated(connection: DeviceServiceConnection<*>, status: DeviceStatusListener.Status) {
@@ -450,7 +425,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                     R.string.device_disconnected
                 }
             }
-            org.radarbase.android.util.Boast.makeText(this@RadarService, showRes).show()
+            Boast.makeText(this@RadarService, showRes).show()
         }
     }
 
@@ -581,10 +556,9 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                 unregisterReceiver(bluetoothReceiver)
                 needsBluetooth = false
 
-                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
-                        .sendBroadcast(Intent(ACTION_BLUETOOTH_NEEDED_CHANGED).apply {
-                            putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NOT_NEEDED)
-                        })
+                broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
+                    putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NOT_NEEDED)
+                }
             }
 
             val packageManager = packageManager
@@ -599,8 +573,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             if (!providersToAdd.isEmpty()) {
                 checkPermissions()
                 bindServices(mConnections, false)
-                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
-                        .sendBroadcast(Intent(ACTION_PROVIDERS_UPDATED))
+                broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
 
             configure()

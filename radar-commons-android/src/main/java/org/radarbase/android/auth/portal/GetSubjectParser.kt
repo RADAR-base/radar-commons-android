@@ -14,9 +14,9 @@ import java.util.*
 class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
-    override fun parse(authString: String): AppAuthState {
+    override fun parse(value: String): AppAuthState {
         try {
-            val jsonObject = JSONObject(authString)
+            val jsonObject = JSONObject(value)
             val project = jsonObject.getJSONObject("project")
             val sources = jsonObject.getJSONArray("sources")
 
@@ -47,7 +47,7 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
             }
         } catch (e: JSONException) {
             throw IOException(
-                    "ManagementPortal did not give a valid response: $authString", e)
+                    "ManagementPortal did not give a valid response: $value", e)
         }
     }
 
@@ -102,21 +102,15 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
         @Throws(JSONException::class)
         internal fun attributesToMap(attrObj: JSONObject?): Map<String, String> {
-            return attrObj?.let {
-                mutableMapOf<String, String>().apply {
-                    val iterator = it.keys()
-                    while (iterator.hasNext()) {
-                        val key = iterator.next()
-                        put(key, attrObj.getString(key))
-                    }
-                }
-            } ?: mapOf()
+            return attrObj?.keys()
+                    ?.asSequence()
+                    ?.map { Pair(it, attrObj.getString(it)) }
+                    ?.toMap()
+                    ?: emptyMap()
         }
 
         @Throws(JSONException::class)
-        internal fun parseProjectId(project: JSONObject): String {
-            return project.getString("projectName")
-        }
+        internal fun parseProjectId(project: JSONObject): String = project.getString("projectName")
 
         /**
          * Parse the user ID from a subject response jsonObject.

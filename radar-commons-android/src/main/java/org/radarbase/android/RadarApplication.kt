@@ -26,12 +26,13 @@ import androidx.annotation.CallSuper
 import com.crashlytics.android.Crashlytics
 import io.fabric.sdk.android.Fabric
 import org.radarbase.android.device.DeviceService
+import org.radarbase.android.util.NotificationHandler
 import org.slf4j.impl.HandroidLoggerAdapter
 
 /** Provides the name and some metadata of the main activity  */
 abstract class RadarApplication : Application() {
-    private lateinit var notificationHandler: org.radarbase.android.util.NotificationHandler
-    lateinit var configuration: org.radarbase.android.RadarConfiguration
+    private lateinit var notificationHandler: NotificationHandler
+    lateinit var configuration: RadarConfiguration
         private set
 
     /** Large icon bitmap.  */
@@ -46,7 +47,7 @@ abstract class RadarApplication : Application() {
     abstract val authService: Class<out Service>
 
     open val radarService: Class<out Service>
-        get() = org.radarbase.android.RadarService::class.java
+        get() = RadarService::class.java
 
     open fun configureProvider(bundle: Bundle) {}
     open fun onDeviceServiceInvocation(service: DeviceService<*>, bundle: Bundle, isNew: Boolean) {}
@@ -57,7 +58,7 @@ abstract class RadarApplication : Application() {
         super.onCreate()
         setupLogging()
         configuration = createConfiguration()
-        notificationHandler = org.radarbase.android.util.NotificationHandler(this)
+        notificationHandler = NotificationHandler(this)
     }
 
     protected open fun setupLogging() {
@@ -74,17 +75,20 @@ abstract class RadarApplication : Application() {
      *
      * @return configured RadarConfiguration
      */
-    protected abstract fun createConfiguration(): org.radarbase.android.RadarConfiguration
+    protected abstract fun createConfiguration(): RadarConfiguration
 
     companion object {
         /** Get a notification handler.  */
-        fun getNotificationHandler(context: Context): org.radarbase.android.util.NotificationHandler {
+        fun getNotificationHandler(context: Context): NotificationHandler {
             val applicationContext = context.applicationContext
-            return if (applicationContext is org.radarbase.android.RadarApplication) {
+            return if (applicationContext is RadarApplication) {
                 applicationContext.notificationHandler
             } else {
-                org.radarbase.android.util.NotificationHandler(applicationContext)
+                NotificationHandler(applicationContext)
             }
         }
     }
 }
+
+val Context.radarApp: RadarApplication
+    get() = applicationContext as RadarApplication

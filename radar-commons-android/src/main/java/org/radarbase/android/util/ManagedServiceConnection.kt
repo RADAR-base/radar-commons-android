@@ -17,7 +17,7 @@ open class ManagedServiceConnection<T: IBinder>(val context: Context, private va
     val onUnboundListeners: MutableList<(T) -> Unit> = mutableListOf()
     var bindFlags: Int = BIND_AUTO_CREATE
 
-    private val app = context.applicationContext as org.radarbase.android.RadarApplication
+    private val app = context.applicationContext as RadarApplication
     private val connection: ServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             service?.let { b ->

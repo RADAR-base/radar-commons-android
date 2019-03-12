@@ -29,6 +29,7 @@ import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN
 import org.slf4j.LoggerFactory
 
 class OAuth2StateManager(context: Context) {
@@ -36,7 +37,7 @@ class OAuth2StateManager(context: Context) {
     private var mCurrentAuthState: AuthState? = null
 
     init {
-        mPrefs = context.getSharedPreferences(org.radarbase.android.auth.oauth2.OAuth2StateManager.Companion.STORE_NAME, Context.MODE_PRIVATE)
+        mPrefs = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
         mCurrentAuthState = readState()
     }
 
@@ -60,7 +61,7 @@ class OAuth2StateManager(context: Context) {
         service.performAuthorizationRequest(
                 authRequestBuilder.build(),
                 PendingIntent.getActivity(context,
-                        org.radarbase.android.auth.oauth2.OAuth2StateManager.Companion.OAUTH_INTENT_HANDLER_REQUEST_CODE,
+                        OAUTH_INTENT_HANDLER_REQUEST_CODE,
                         Intent(context, activityClass),
                         PendingIntent.FLAG_ONE_SHOT))
     }
@@ -100,7 +101,7 @@ class OAuth2StateManager(context: Context) {
                 json.put("refreshToken", refreshToken)
                 mCurrentAuthState = AuthState.jsonDeserialize(json)
             } catch (e: JSONException) {
-                org.radarbase.android.auth.oauth2.OAuth2StateManager.Companion.logger.error("Failed to update refresh token")
+                logger.error("Failed to update refresh token")
             }
 
         }
@@ -123,7 +124,7 @@ class OAuth2StateManager(context: Context) {
                                 .also { addHeader("Authorization","Bearer $it") }
                         tokenType = LoginManager.AUTH_TYPE_BEARER
                         this.expiration = expiration
-                        attributes[org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN] = authState.refreshToken!!
+                        attributes[LOGIN_REFRESH_TOKEN] = authState.refreshToken!!
                     })
                 }
             } else {
@@ -144,12 +145,12 @@ class OAuth2StateManager(context: Context) {
     @AnyThread
     @Synchronized
     private fun readState(): AuthState {
-        val currentState = mPrefs.getString(org.radarbase.android.auth.oauth2.OAuth2StateManager.Companion.KEY_STATE, null) ?: return AuthState()
+        val currentState = mPrefs.getString(KEY_STATE, null) ?: return AuthState()
 
         return try {
             AuthState.jsonDeserialize(currentState)
         } catch (ex: JSONException) {
-            org.radarbase.android.auth.oauth2.OAuth2StateManager.Companion.logger.warn("Failed to deserialize stored auth state - discarding", ex)
+            logger.warn("Failed to deserialize stored auth state - discarding", ex)
             writeState(null)
             AuthState()
         }
@@ -160,16 +161,16 @@ class OAuth2StateManager(context: Context) {
     @Synchronized
     private fun writeState(state: AuthState?) {
         if (state != null) {
-            mPrefs.edit().putString(org.radarbase.android.auth.oauth2.OAuth2StateManager.Companion.KEY_STATE, state.jsonSerializeString()).apply()
+            mPrefs.edit().putString(KEY_STATE, state.jsonSerializeString()).apply()
         } else {
-            mPrefs.edit().remove(org.radarbase.android.auth.oauth2.OAuth2StateManager.Companion.KEY_STATE).apply()
+            mPrefs.edit().remove(KEY_STATE).apply()
         }
     }
 
     companion object {
         private const val OAUTH_INTENT_HANDLER_REQUEST_CODE = 8422341
 
-        private val logger = LoggerFactory.getLogger(org.radarbase.android.auth.oauth2.OAuth2StateManager::class.java)
+        private val logger = LoggerFactory.getLogger(OAuth2StateManager::class.java)
 
         private const val STORE_NAME = "AuthState"
         private const val KEY_STATE = "state"

@@ -23,8 +23,8 @@ import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.data.DataCache
-import org.radarcns.kafka.ObservationKey
 import org.radarbase.topic.AvroTopic
+import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
 

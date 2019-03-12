@@ -6,6 +6,7 @@ import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
+import org.radarbase.android.util.Parser
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.rest.RestClient
@@ -125,7 +126,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
     }
 
     @Throws(IOException::class)
-    private fun <T> handleRequest(request: Request, parser: org.radarbase.android.util.Parser<String, T>): T {
+    private fun <T> handleRequest(request: Request, parser: Parser<String, T>): T {
         return client.request(request).use { response ->
             val body = RestClient.responseBody(response) ?: ""
 

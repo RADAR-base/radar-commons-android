@@ -18,10 +18,13 @@ package org.radarbase.android.auth
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.appcompat.app.AppCompatActivity
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
+import org.radarbase.android.radarApp
+import org.radarbase.android.util.Boast
+import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 
 /** Activity to log in using a variety of login managers.  */
@@ -45,7 +48,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
         }
 
         if (startedFromActivity) {
-            org.radarbase.android.util.Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show()
+            Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show()
         }
 
         authConnection = AuthServiceConnection(this, this)
@@ -81,8 +84,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
         logger.error("Failed to log in with {}", manager, ex)
         runOnUiThread {
-            org.radarbase.android.util.Boast.makeText(
-                    this@LoginActivity, R.string.login_failed, Toast.LENGTH_LONG).show()
+            Boast.makeText(this@LoginActivity, R.string.login_failed, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -90,11 +92,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         logger.info("Login succeeded")
 
-        val intent = Intent().apply {
-            action = ACTION_LOGIN_SUCCESS
-        }
-        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
-                .sendBroadcast(intent)
+        LocalBroadcastManager.getInstance(this).send(ACTION_LOGIN_SUCCESS)
 
         if (startedFromActivity) {
             logger.debug("Start next activity with result")
@@ -102,7 +100,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
         } else if (!refreshOnly) {
             logger.debug("Start next activity without result")
             startActivity(intent.apply {
-                setClass(this@LoginActivity, (application as org.radarbase.android.RadarApplication).mainActivity)
+                setClass(this@LoginActivity, radarApp.mainActivity)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME
             })
         }
