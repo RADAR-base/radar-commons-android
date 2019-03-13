@@ -551,7 +551,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             mConnections -= oldConnections
             oldConnections.forEach(DeviceServiceProvider<*>::unbind)
 
-            val anyNeedsBluetooth = mConnections.any { it.connected && it.connection.needsBluetooth() }
+            val anyNeedsBluetooth = mConnections.any { it.isConnected && it.connection.needsBluetooth() }
             if (!anyNeedsBluetooth && needsBluetooth) {
                 unregisterReceiver(bluetoothReceiver)
                 needsBluetooth = false
@@ -626,7 +626,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         mHandler.execute {
             isScanningEnabled = false
             mConnections
-                    .filter { it.connected && it.connection.mayBeDisabledInBackground() }
+                    .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
                     .forEach { it.unbind() }
         }
     }

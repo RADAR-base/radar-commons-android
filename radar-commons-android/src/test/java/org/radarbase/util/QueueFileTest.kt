@@ -33,7 +33,7 @@ class QueueFileTest {
 
     @Rule
     @JvmField
-    var exception = ExpectedException.none()
+    var exception: ExpectedException = ExpectedException.none()
 
     @Test
     @Throws(Exception::class)
@@ -86,7 +86,7 @@ class QueueFileTest {
     private fun createQueue(): QueueFile {
         val file = folder.newFile()
         assertTrue(file.delete())
-        return QueueFile.newMapped(file, MAX_SIZE.toLong())
+        return QueueFile.newMapped(file, MAX_SIZE)
     }
 
     @Test
@@ -326,7 +326,7 @@ class QueueFileTest {
                     readLength += newlyRead
                     newlyRead = `in`.read(buffer, readLength, buffer.size - readLength)
                 }
-                assertEquals(expectedElement.length.toLong(), readLength.toLong())
+                assertEquals(expectedElement.length, readLength.toLong())
             } catch (ex: Throwable) {
                 logger.error("Inputstream {} of queuefile {} does not match element {}",
                         `in`, queue, expectedElement)

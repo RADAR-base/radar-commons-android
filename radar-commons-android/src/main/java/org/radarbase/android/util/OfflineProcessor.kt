@@ -80,11 +80,12 @@ class OfflineProcessor(private val context: Context,
     }
 
     /** Start processing.  */
-    fun start() {
+    fun start(initializer: (() -> Unit)? = null) {
         context.registerReceiver(this.receiver, IntentFilter(config.requestName))
         handler.post {
             schedule()
             isStarted = true
+            initializer?.let { it() }
         }
     }
 
@@ -107,7 +108,7 @@ class OfflineProcessor(private val context: Context,
                         return@post
                     }
                     try {
-                        runnable.run()
+                        runnable()
                     } catch (ex: RuntimeException) {
                         Crashlytics.logException(ex)
                         logger.error("OfflineProcessor task failed.", ex)
@@ -188,7 +189,7 @@ class OfflineProcessor(private val context: Context,
     data class ProcessorConfiguration(
             var requestCode: Int? = null,
             var requestName: String? = null,
-            var process: List<Runnable> = emptyList(),
+            var process: List<() -> Unit> = emptyList(),
             var intervalMillis: Long = -1,
             var wake: Boolean = true,
             var handler: Handler? = null,

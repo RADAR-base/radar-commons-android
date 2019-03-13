@@ -1,3 +1,9 @@
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'com.jfrog.artifactory'
+apply plugin: 'maven-publish'
+apply plugin: 'digital.wup.android-maven-publish'
+apply plugin: 'org.jetbrains.dokka-android'
+
 ext.sharedManifest = manifest {
     attributes("Implementation-Title": name,
             "Implementation-Version": version)
@@ -9,40 +15,76 @@ task sourcesJar(type: Jar) {
     manifest.from sharedManifest
 }
 
-
 task javadoc(type: Javadoc) {
     source = android.sourceSets.main.java.srcDirs
-    // this is new
     android.libraryVariants.all { variant ->
         if (variant.name == 'release') {
             owner.classpath += variant.javaCompileProvider.get().classpath
         }
     }
-    // end of new
     classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
     exclude '**/BuildConfig.java'
     exclude '**/R.java'
     exclude '**/*.kt'
 }
 
-task javadocJar(type: Jar, dependsOn: javadoc) {
+dokka {
+    outputFormat = 'html'
+    outputDirectory = javadoc.destinationDir
+}
+
+task javadocJar(type: Jar, dependsOn: [dokka, javadoc]) {
     archiveClassifier.set('javadoc')
     from javadoc.destinationDir
     manifest.from sharedManifest
 }
 
-// add javadoc/source jar tasks as artifacts
-artifacts {
-    archives javadocJar
-    archives sourcesJar
-}
+publishing {
+    publications {
+        mavenAar(MavenPublication) {
+            from components.android
+            artifact sourcesJar
+            artifact javadocJar
 
+            pom {
+                description = project.description
+                licenses {
+                    license {
+                        name = 'The Apache Software License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'blootsvoets'
+                        name = 'Joris Borgdorff'
+                        email = 'joris@thehyve.nl'
+                        organization = 'The Hyve'
+                    }
+                }
+                issueManagement {
+                    system = 'GitHub'
+                    url = githubUrl + '/issues'
+                }
+                organization {
+                    name = 'RADAR-base'
+                    url = website
+                }
+                scm {
+                    connection = 'scm:git:' + githubUrl
+                    url = githubUrl
+                }
+            }
+        }
+    }
+}
 
 bintray {
     user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
     key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
     override = false
-    configurations = ['archives']
+    publications 'mavenAar'
     pkg {
         repo = project.group
         name = project.name
@@ -77,10 +119,13 @@ artifactory {
             password = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
             maven = true
         }
+        defaults {
+            publications ('mavenAar')
+            publishArtifacts = true
+            publishPom = true
+            properties = ['qa.level': 'basic', 'q.os': 'android']
+        }
     }
 }
 
-artifactoryPublish {
-    publishConfigs 'archives'
-    dependsOn 'assembleRelease'
-}
+artifactoryPublish.dependsOn 'assembleRelease'

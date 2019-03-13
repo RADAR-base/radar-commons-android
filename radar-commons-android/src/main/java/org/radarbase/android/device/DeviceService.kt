@@ -108,7 +108,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
                 .map { it.expectedSourceName }
                 .filter { it != null })
 
-    val isBluetoothConnectionRequired: Boolean
+    open val isBluetoothConnectionRequired: Boolean
         get() = hasBluetoothPermission()
 
     @CallSuper
@@ -232,7 +232,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
 
     private fun stopDeviceManager(deviceManager: DeviceManager<*>?) {
         if (deviceManager != null) {
-            if (!deviceManager.closed) {
+            if (!deviceManager.isClosed) {
                 try {
                     deviceManager.close()
                 } catch (e: IOException) {

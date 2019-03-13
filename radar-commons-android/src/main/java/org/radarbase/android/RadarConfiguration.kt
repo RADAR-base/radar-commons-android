@@ -16,6 +16,7 @@
 
 package org.radarbase.android
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import android.os.Handler
@@ -538,12 +539,16 @@ class RadarConfiguration private constructor(context: Context,
             return java.lang.Float.parseFloat(bundle.getString(RADAR_PREFIX + key)!!)
         }
 
+        @SuppressLint("ApplySharedPref")
         fun getOrSetUUID(context: Context, key: String): String {
             val prefs = context.getSharedPreferences("global", Context.MODE_PRIVATE)
             return synchronized(RadarConfiguration::class.java) {
                 prefs.getString(key, null)
                         ?:  UUID.randomUUID().toString()
-                                .also { prefs.edit().putString(key, it).apply() }
+                                .also { prefs.edit()
+                                        .putString(key, it)
+                                        .commit() // commit immediately to avoid races
+                                }
             }
         }
 

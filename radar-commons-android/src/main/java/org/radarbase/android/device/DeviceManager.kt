@@ -25,7 +25,7 @@ import java.io.IOException
 interface DeviceManager<T> : Closeable {
 
     /** Whether the device manager was already closed.  */
-    val closed: Boolean
+    val isClosed: Boolean
 
     /**
      * Get the state of a wearable device.

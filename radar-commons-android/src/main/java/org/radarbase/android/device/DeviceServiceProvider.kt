@@ -58,8 +58,6 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
             if (connectionBacking == null) {
                 val radarService = radarService
                         ?: throw IllegalStateException("#setRadarService(RadarService) needs to be set before #getConnection() is called.")
-                val serviceClass = serviceClass
-                        ?: throw UnsupportedOperationException("RadarServiceProvider " + javaClass.simpleName + " does not provide service class")
 
                 connectionBacking = DeviceServiceConnection(radarService, serviceClass.name)
             }
@@ -75,9 +73,9 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
 
     /**
      * Class of the service.
-     * @return non-null DeviceService
+     * @return DeviceService
      */
-    abstract val serviceClass: Class<*>?
+    abstract val serviceClass: Class<out DeviceService<*>>
 
     /** Display name of the service.  */
     abstract val displayName: String
@@ -198,7 +196,7 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
     }
 
     /** Whether [.getConnection] has already been called.  */
-    val connected: Boolean
+    val isConnected: Boolean
         get() = connectionBacking != null
 
     override fun toString(): String {
@@ -219,12 +217,12 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
     open val featuresNeeded: List<String> = emptyList()
 
     /** Whether the current service can meaningfully be displayed.  */
-    open val displayable: Boolean = true
+    open val isDisplayable: Boolean = true
 
     /**
      * Whether the device name should be checked with given filters before a connection is allowed
      */
-    open val filterable: Boolean = false
+    open val isFilterable: Boolean = false
 
     /**
      * Match device type.

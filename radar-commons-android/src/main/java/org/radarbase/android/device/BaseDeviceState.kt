@@ -24,7 +24,7 @@ open class BaseDeviceState {
 
     @get:Synchronized
     @set:Synchronized
-    var status: DeviceStatusListener.Status = DeviceStatusListener.Status.DISCONNECTED
+    open var status: DeviceStatusListener.Status = DeviceStatusListener.Status.DISCONNECTED
 
     /**
      * Get the battery level, between 0 (empty) and 1 (full).

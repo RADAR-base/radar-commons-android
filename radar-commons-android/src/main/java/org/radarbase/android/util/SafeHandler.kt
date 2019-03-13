@@ -9,7 +9,10 @@ import java.util.concurrent.SynchronousQueue
 
 class SafeHandler(val name: String, private val priority: Int) {
     private var handlerThread: HandlerThread? = null
-    private var handler: Handler? = null
+
+    @get:Synchronized
+    var handler: Handler? = null
+        private set
 
     @Synchronized
     fun start() {
@@ -123,14 +126,12 @@ class SafeHandler(val name: String, private val priority: Int) {
     fun stop(finalization: Runnable) = stop(finalization::run)
 
     @Synchronized
-    fun stop(finalization: () -> Unit) {
-        handlerThread?.also { thread ->
+    fun stop(finalization: (() -> Unit)? = null) {
+        handlerThread?.let { thread ->
             val oldHandler = handler
             handler = null
-            if (oldHandler == null) {
-                doRun(finalization)
-            } else {
-                oldHandler.post { doRun(finalization) }
+            finalization?.let {
+                oldHandler?.post { doRun(it) } ?: doRun(it)
             }
             thread.quitSafely()
             handlerThread = null

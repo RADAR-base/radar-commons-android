@@ -21,6 +21,7 @@ import com.crashlytics.android.Crashlytics
 import org.apache.avro.Schema
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.RadarConfiguration.Companion.SOURCE_ID_KEY
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.data.DataCache
 import org.radarbase.topic.AvroTopic
@@ -40,18 +41,18 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
     /** Get the current device state.  */
     override val state: T = service.state
 
-    @get:Synchronized
-    @set:Synchronized
-    protected var currentName: String = android.os.Build.MODEL
     protected val dataHandler = service.dataHandler ?: throw IllegalStateException(
             "Cannot start device manager without data handler")
 
     /** Get the name of the device.  */
     /** Set the device name. Be sure to do this as soon as possible.  */
-    override val name: String
-        get() = currentName
+    @get:Synchronized
+    @set:Synchronized
+    override var name: String = android.os.Build.MODEL
+        protected set
+
     /** Whether this device manager has been closed.  */
-    override val closed: Boolean
+    override val isClosed: Boolean
         get() = hasClosed
 
     @get:Synchronized
@@ -78,13 +79,23 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
         this.service.deviceStatusUpdated(this, status)
     }
 
+    protected fun register(
+            physicalId: String? = null,
+            name: String = this.name,
+            attributes: Map<String, String> = emptyMap()): Boolean {
+        this.name = name
+        return service.ensureRegistration(
+                physicalId ?: RadarConfiguration.getOrSetUUID(service, SOURCE_ID_KEY),
+                name, attributes)
+    }
+
     /**
      * Creates and registers an Avro topic
      * @param name The name of the topic
      * @param valueClass The value class
      * @param <V> topic value type
      * @return created topic
-    </V> */
+     */
     protected fun <V : SpecificRecord> createCache(
             name: String, valueClass: Class<V>): DataCache<ObservationKey, V> {
         try {
@@ -102,9 +113,6 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
             throw RuntimeException(e)
         }
     }
-
-    protected val appLocalId: String
-        get() = RadarConfiguration.getOrSetUUID(service, RadarConfiguration.SOURCE_ID_KEY)
 
     /**
      * Send a single record, using the cache to persist the data.
@@ -129,7 +137,7 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
 
     @CallSuper
     override fun didRegister(source: SourceMetadata) {
-        currentName = source.sourceName!!
+        name = source.sourceName!!
         state.id.setSourceId(source.sourceId)
     }
 
