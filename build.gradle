@@ -18,6 +18,7 @@ buildscript {
     repositories {
         google()
         jcenter()
+        mavenCentral()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.3.2'
@@ -56,9 +57,7 @@ subprojects {
     repositories {
         google()
         jcenter()
-        maven { url  'http://dl.bintray.com/radar-base/org.radarbase' }
-        // radar dev branches
-        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+        mavenCentral()
     }
 
     dependencies {
