@@ -29,7 +29,7 @@ android:
     - extra-android-m2repository
     - extra-google-google_play_services
     - extra-google-m2repository
-    - sys-img-armeabi-v7a-21
+    - sys-img-armeabi-v7a-android-21
 
 # bug https://github.com/travis-ci/travis-ci/issues/8874
 before_install:
