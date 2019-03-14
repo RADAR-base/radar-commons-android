@@ -29,6 +29,7 @@ import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.monitor.application.ApplicationUptime
+import org.radarcns.util.ActiveAudioRecording
 import org.slf4j.impl.HandroidLoggerAdapter
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -45,14 +46,14 @@ class TapeCacheTest {
     @Rule @JvmField
     var folder = TemporaryFolder()
 
-    private val audioCache: TapeCache<ObservationKey, org.radarbase.util.ActiveAudioRecording>
+    private val audioCache: TapeCache<ObservationKey, ActiveAudioRecording>
         @Throws(IOException::class)
         get() {
             val topic = AvroTopic("test",
-                    ObservationKey.getClassSchema(), org.radarbase.util.ActiveAudioRecording.getClassSchema(),
-                    ObservationKey::class.java, org.radarbase.util.ActiveAudioRecording::class.java)
+                    ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
+                    ObservationKey::class.java, ActiveAudioRecording::class.java)
             val outputTopic = AvroTopic("test",
-                    ObservationKey.getClassSchema(), org.radarbase.util.ActiveAudioRecording.getClassSchema(),
+                    ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
                     Any::class.java, Any::class.java)
 
             return TapeCache(
@@ -153,7 +154,7 @@ class TapeCacheTest {
         val data = ByteArray(size)
         random.nextBytes(data)
         val buffer = ByteBuffer.wrap(data)
-        return org.radarbase.util.ActiveAudioRecording(buffer)
+        return ActiveAudioRecording(buffer)
     }
 
 

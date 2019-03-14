@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.util;
+package org.radarcns.util;
 
 import org.apache.avro.specific.SpecificData;
 
