@@ -199,9 +199,7 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
     val isConnected: Boolean
         get() = connectionBacking != null
 
-    override fun toString(): String {
-        return javaClass.simpleName + "<" + serviceClass?.simpleName + ">"
-    }
+    override fun toString(): String = "${javaClass.simpleName}<${serviceClass.simpleName}>"
 
     open val mayBeConnectedInBackground: Boolean = true
 
