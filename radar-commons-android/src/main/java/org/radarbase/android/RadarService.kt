@@ -224,13 +224,8 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         mHandler.stop { }
         authConnection.unbind()
 
-        for (provider in mConnections) {
-            if (provider.isBound) {
-                provider.unbind()
-            } else {
-                logger.debug("Already unbound: {}", provider)
-            }
-        }
+        mConnections.filter(DeviceServiceProvider<*>::isBound)
+                .forEach(DeviceServiceProvider<*>::unbind)
 
         super.onDestroy()
     }
@@ -240,9 +235,11 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         mHandler.executeReentrant {
             configuration.toMap()
                     .takeIf { it != previousConfiguration }
-                    ?.also { previousConfiguration = it }
-                    ?.let { doConfigure() }
-        }
+                    ?.let {
+                        previousConfiguration = it
+                        doConfigure()
+                    }
+       }
     }
 
     @CallSuper
@@ -251,8 +248,10 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
         synchronized(this) {
             dataHandler ?: TableDataHandler(this)
-                    .also { dataHandler = it }
-                    .also { it.statusListener = this }
+                    .also {
+                        dataHandler = it
+                        it.statusListener = this
+                    }
         }.apply {
             handler {
                 sendOnlyWithWifi = configuration.getBoolean(SEND_ONLY_WITH_WIFI, SEND_ONLY_WITH_WIFI_DEFAULT)
@@ -297,45 +296,40 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
         }
 
-        for (provider in mConnections) {
-            provider.updateConfiguration()
-        }
+        mConnections.forEach(DeviceServiceProvider<*>::updateConfiguration)
     }
 
     private fun hasFeatures(provider: DeviceServiceProvider<*>, packageManager: PackageManager?): Boolean {
         return packageManager?.let { manager ->
             provider.featuresNeeded.all { manager.hasSystemFeature(it) }
-        } ?: true
+        } != false
     }
 
-    private fun addProvider(provider: DeviceServiceProvider<*>) {
-        mConnections.add(provider)
-        val connection = provider.connection
-        deviceFilters[connection] = emptySet()
-        provider.updateConfiguration()
-    }
-
-    protected fun requestPermissions(permissions: Array<String>) {
+    protected fun requestPermissions(permissions: Collection<String>) {
         startActivity(Intent(this, radarApp.mainActivity).apply {
             action = ACTION_CHECK_PERMISSIONS
             addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra(EXTRA_PERMISSIONS, permissions)
+            putExtra(EXTRA_PERMISSIONS, permissions.toTypedArray())
         })
     }
 
     protected fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
-        for (i in permissions.indices) {
-            if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                logger.info("Granted permission {}", permissions[i])
-                needsPermissions.remove(permissions[i])
-            } else {
-                logger.info("Denied permission {}", permissions[i])
-                return
-            }
+        val grantedPermissions = permissions.indices
+                .filter {
+                    if (grantResults[it] == PackageManager.PERMISSION_GRANTED) {
+                        true
+                    } else {
+                        logger.info("Denied permission {}", it)
+                        false
+                    }
+                }
+
+        if (grantedPermissions.isNotEmpty()) {
+            logger.info("Granted permissions {}", grantedPermissions.map(permissions::get))
+            // Permission granted.
+            startScanning()
         }
-        // Permission granted.
-        startScanning()
     }
 
     fun serviceConnected(connection: DeviceServiceConnection<*>) {
@@ -349,7 +343,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
             connection.serverStatus
                     ?.also { logger.debug("Initial server status: {}", it) }
-                    ?.also { updateServerStatus(it) }
+                    ?.also(this::updateServerStatus)
 
             if (!needsBluetooth && connection.needsBluetooth()) {
                 needsBluetooth = true
@@ -424,14 +418,8 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    fun getConnectionProvider(connection: DeviceServiceConnection<*>): DeviceServiceProvider<*>? {
-        for (provider in mConnections) {
-            if (provider.connection == connection) {
-                return provider
-            }
-        }
-        logger.warn("DeviceServiceConnection no longer enabled")
-        return null
+    protected fun getConnectionProvider(connection: DeviceServiceConnection<*>): DeviceServiceProvider<*>? {
+        return mConnections.find { it.connection == connection }
     }
 
     protected fun startScanning() {
@@ -462,9 +450,9 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         needsPermissions.clear()
         needsPermissions += permissions.filterNot(this::isPermissionGranted)
 
-        if (!needsPermissions.isEmpty()) {
+        if (needsPermissions.isNotEmpty()) {
             logger.debug("Requesting permission for {}", needsPermissions)
-            requestPermissions(needsPermissions.toTypedArray())
+            requestPermissions(needsPermissions)
         }
     }
 
@@ -488,14 +476,12 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
 
     protected open fun checkPermissions(provider: DeviceServiceProvider<*>): Boolean {
-        return provider.permissionsNeeded.all { it !in needsPermissions }
+        return provider.permissionsNeeded.none(needsPermissions::contains)
     }
 
     /** Disconnect from all services.  */
     protected open fun disconnect() {
-        for (provider in mConnections) {
-            disconnect(provider.connection)
-        }
+        mConnections.forEach { disconnect(it.connection) }
     }
 
     /** Disconnect from given service.  */
@@ -556,19 +542,25 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
 
             val packageManager = packageManager
-            val providersToAdd= connections
+
+            connections
                     .filter { provider ->
                         provider !in mConnections // new provider
                         && hasFeatures(provider, packageManager) // acceptable
                         && provider.isAuthorizedFor(authState, false) }
+                    .takeIf(List<DeviceServiceProvider<*>>::isNotEmpty)
+                    ?.let { providersToAdd ->
+                        mConnections += providersToAdd
 
-            providersToAdd.forEach { addProvider(it) }
+                        providersToAdd.forEach { provider ->
+                            deviceFilters[provider.connection] = emptySet()
+                            provider.updateConfiguration()
+                        }
 
-            if (!providersToAdd.isEmpty()) {
-                checkPermissions()
-                bindServices(mConnections, false)
-                broadcaster.send(ACTION_PROVIDERS_UPDATED)
-            }
+                        checkPermissions()
+                        bindServices(mConnections, false)
+                        broadcaster.send(ACTION_PROVIDERS_UPDATED)
+                    }
 
             configure()
         }
@@ -621,7 +613,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             isScanningEnabled = false
             mConnections
                     .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
-                    .forEach { it.unbind() }
+                    .forEach(DeviceServiceProvider<*>::unbind)
         }
     }
 
@@ -634,9 +626,9 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     companion object {
         private val logger = LoggerFactory.getLogger(RadarService::class.java)
-        const val ACTION_PROVIDERS_UPDATED = "org.radarcns.android.RadarService.ACTION_PROVIDERS_UPDATED"
+        private const val RADAR_PACKAGE = "org.radarbase.android."
 
-        private const val RADAR_PACKAGE = "org.radarcns.android."
+        const val ACTION_PROVIDERS_UPDATED = RADAR_PACKAGE + "ACTION_PROVIDERS_UPDATED"
 
         const val ACTION_BLUETOOTH_NEEDED_CHANGED = RADAR_PACKAGE + "BLUETOOTH_NEEDED_CHANGED"
         const val BLUETOOTH_NEEDED = 1
@@ -656,6 +648,6 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
         fun sanitizedIds(ids: Collection<String>): Set<String> = HashSet(ids
                 .map { s -> s.trim { it <= ' ' } }
-                .filter { !it.isEmpty() })
+                .filter(String::isNotEmpty))
     }
 }
