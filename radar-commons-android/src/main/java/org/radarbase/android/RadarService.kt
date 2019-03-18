@@ -59,15 +59,11 @@ import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.TableDataHandler
+import org.radarbase.android.device.*
 import org.radarbase.android.device.DeviceService.Companion.DEVICE_CONNECT_FAILED
-import org.radarbase.android.device.DeviceService.Companion.DEVICE_STATUS_NAME
 import org.radarbase.android.device.DeviceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.device.DeviceService.Companion.SERVER_RECORDS_SENT_TOPIC
 import org.radarbase.android.device.DeviceService.Companion.SERVER_STATUS_CHANGED
-import org.radarbase.android.device.DeviceServiceConnection
-import org.radarbase.android.device.DeviceServiceProvider
-import org.radarbase.android.device.DeviceStatusListener
-import org.radarbase.android.device.ProviderLoader
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
@@ -163,7 +159,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         previousConfiguration = null
         broadcaster = LocalBroadcastManager.getInstance(this)
 
-        broadcaster.apply {
+        broadcaster.run {
             permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
                 onPermissionsGranted(
                         intent.getStringArrayExtra(EXTRA_PERMISSIONS),
@@ -171,7 +167,8 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
             deviceFailedReceiver = register(DEVICE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
-                        "Cannot connect to device " + intent.getStringExtra(DEVICE_STATUS_NAME),
+                        getString(R.string.cannot_connect_device,
+                                intent.getStringExtra(DeviceService.DEVICE_STATUS_NAME)),
                         Toast.LENGTH_SHORT).show()
             }
             serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
@@ -193,7 +190,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         authConnection.bind()
     }
 
-    protected fun createBinder(): IBinder {
+    protected open fun createBinder(): IBinder {
         return RadarBinder()
     }
 
@@ -205,7 +202,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         return Service.START_STICKY
     }
 
-    protected fun createForegroundNotification(): Notification {
+    protected open fun createForegroundNotification(): Notification {
         val mainIntent = Intent(this, radarApp.mainActivity)
         return RadarApplication.getNotificationHandler(this)
                 .create(NOTIFICATION_CHANNEL_INFO, true) {
@@ -241,12 +238,10 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     @CallSuper
     protected open fun configure() {
         mHandler.executeReentrant {
-            val newConfiguration = configuration.toMap()
-            if (newConfiguration != previousConfiguration) {
-                previousConfiguration = newConfiguration
-                doConfigure()
-            }
-            previousConfiguration = newConfiguration
+            configuration.toMap()
+                    .takeIf { it != previousConfiguration }
+                    ?.also { previousConfiguration = it }
+                    ?.let { doConfigure() }
         }
     }
 
@@ -429,7 +424,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    protected fun getConnectionProvider(connection: DeviceServiceConnection<*>): DeviceServiceProvider<*>? {
+    fun getConnectionProvider(connection: DeviceServiceConnection<*>): DeviceServiceProvider<*>? {
         for (provider in mConnections) {
             if (provider.connection == connection) {
                 return provider
@@ -438,7 +433,6 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         logger.warn("DeviceServiceConnection no longer enabled")
         return null
     }
-
 
     protected fun startScanning() {
         mHandler.executeReentrant {
@@ -466,7 +460,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
 
         needsPermissions.clear()
-        needsPermissions += permissions.filter { !isPermissionGranted(it) }
+        needsPermissions += permissions.filterNot(this::isPermissionGranted)
 
         if (!needsPermissions.isEmpty()) {
             logger.debug("Requesting permission for {}", needsPermissions)
