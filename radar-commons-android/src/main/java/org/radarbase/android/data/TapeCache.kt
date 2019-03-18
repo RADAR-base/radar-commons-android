@@ -31,7 +31,6 @@ import java.io.File
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.ExecutionException
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
@@ -65,8 +64,6 @@ constructor(override val file: File,
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
     private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
 
-    private val queueSize: AtomicInteger
-
     override var config = config
         get() = executor.compute { field }
         set(value) = executor.execute {
@@ -92,8 +89,6 @@ constructor(override val file: File,
                 throw ex
             }
         }
-
-        this.queueSize = AtomicInteger(queueFile.size())
 
         this.measurementsToAdd = mutableListOf()
 
@@ -171,7 +166,7 @@ constructor(override val file: File,
     }
 
     override val numberOfRecords: Long
-        get() = queueSize.get().toLong()
+        get() = executor.compute { queue.size.toLong() }
 
     @Throws(IOException::class)
     override fun remove(number: Int): Int {
@@ -181,7 +176,6 @@ constructor(override val file: File,
                 if (actualNumber > 0) {
                     logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
                     queue.remove(actualNumber)
-                    queueSize.addAndGet(-actualNumber)
                 }
                 actualNumber
             }
@@ -245,14 +239,11 @@ constructor(override val file: File,
         try {
             logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
             queue.addAll(measurementsToAdd)
-            queueSize.addAndGet(measurementsToAdd.size)
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
-            queueSize.set(queue.size)
             throw RuntimeException(ex)
         } catch (ex: IllegalStateException) {
             logger.error("Queue {} is full, not adding records", topic.name)
-            queueSize.set(queue.size)
         } catch (ex: IllegalArgumentException) {
             logger.error("Failed to validate all records; adding individual records instead: {}", ex.message)
             try {
@@ -265,13 +256,10 @@ constructor(override val file: File,
                     }
 
                 }
-                queueSize.addAndGet(measurementsToAdd.size)
             } catch (illEx: IllegalStateException) {
                 logger.error("Queue {} is full, not adding records", topic.name)
-                queueSize.set(queue.size)
             } catch (ex2: IOException) {
                 logger.error("Failed to add record", ex)
-                queueSize.set(queue.size)
                 throw RuntimeException(ex)
             }
 
@@ -291,7 +279,6 @@ constructor(override val file: File,
 
         if (file.delete()) {
             queueFile = QueueFile.newMapped(file, maximumSize)
-            queueSize.set(queueFile.size())
             queue = BackedObjectQueue(queueFile, serializer, deserializer)
         } else {
             throw IOException("Cannot create new cache.")

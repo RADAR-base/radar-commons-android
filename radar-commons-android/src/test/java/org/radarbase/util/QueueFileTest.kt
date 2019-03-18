@@ -56,6 +56,7 @@ class QueueFileTest {
     @Throws(Exception::class)
     fun elementOutputStreamCircular() {
         val queue = createQueue()
+        assertEquals(0, queue.size())
         val buffer = ByteArray((MAX_SIZE / 4).toInt())
         queue.elementOutputStream().use { out ->
             out.write(buffer)
@@ -65,7 +66,9 @@ class QueueFileTest {
             out.write(buffer)
             out.next()
         }
+        assertEquals(3, queue.size())
         queue.remove(2)
+        assertEquals(1, queue.size())
         try {
             queue.elementOutputStream().use { out ->
                 out.write(buffer)
@@ -97,15 +100,15 @@ class QueueFileTest {
         val value = 1
         queueFile.elementOutputStream().use { out -> out.write(value) }
         assertFalse(queueFile.isEmpty)
-        assertEquals(1, queueFile.size().toLong())
+        assertEquals(1, queueFile.size())
         val `in` = queueFile.peek()
         assertNotNull(`in`)
         `in`!!.close()
         assertFalse(queueFile.isEmpty)
-        assertEquals(1, queueFile.size().toLong())
+        assertEquals(1, queueFile.size())
         queueFile.remove(1)
         assertTrue(queueFile.isEmpty)
-        assertEquals(0, queueFile.size().toLong())
+        assertEquals(0, queueFile.size())
     }
 
     @Test
@@ -127,29 +130,29 @@ class QueueFileTest {
             out.next()
             out.write(buffer)
         }
-        assertEquals(3, queueFile.size().toLong())
+        assertEquals(3, queueFile.size())
         queueFile.peek()!!.use { `in` ->
             assertNotNull(`in`)
-            assertEquals(1, `in`.available().toLong())
-            assertEquals(v1.toLong(), `in`.read().toLong())
+            assertEquals(1, `in`.available())
+            assertEquals(v1, `in`.read())
         }
         queueFile.peek()!!.use { `in` ->
             assertNotNull(`in`)
-            assertEquals(1, `in`.available().toLong())
-            assertEquals(v1.toLong(), `in`.read().toLong())
-        }
-        queueFile.remove(1)
-        queueFile.peek()!!.use { `in` ->
-            assertNotNull(`in`)
-            assertEquals(1, `in`.available().toLong())
-            assertEquals(v2.toLong(), `in`.read().toLong())
+            assertEquals(1, `in`.available())
+            assertEquals(v1, `in`.read())
         }
         queueFile.remove(1)
         queueFile.peek()!!.use { `in` ->
             assertNotNull(`in`)
-            assertEquals(16, `in`.available().toLong())
+            assertEquals(1, `in`.available())
+            assertEquals(v2, `in`.read())
+        }
+        queueFile.remove(1)
+        queueFile.peek()!!.use { `in` ->
+            assertNotNull(`in`)
+            assertEquals(16, `in`.available())
             val actualBuffer = ByteArray(20)
-            assertEquals(16, `in`.read(actualBuffer).toLong())
+            assertEquals(16, `in`.read(actualBuffer))
             val actualBufferShortened = ByteArray(16)
             System.arraycopy(actualBuffer, 0, actualBufferShortened, 0, 16)
             assertArrayEquals(expectedBuffer, actualBufferShortened)
@@ -170,9 +173,9 @@ class QueueFileTest {
         }
         val iter = queueFile.iterator()
         assertTrue(iter.hasNext())
-        iter.next().use { `in` -> assertEquals(1, `in`.read().toLong()) }
+        iter.next().use { `in` -> assertEquals(1, `in`.read()) }
         assertTrue(iter.hasNext())
-        iter.next().use { `in` -> assertEquals(2, `in`.read().toLong()) }
+        iter.next().use { `in` -> assertEquals(2, `in`.read()) }
         assertFalse(iter.hasNext())
 
         exception.expect(NoSuchElementException::class.java)
@@ -188,7 +191,7 @@ class QueueFileTest {
             out.next()
             out.write(2)
         }
-        assertEquals(2, queue.size().toLong())
+        assertEquals(2, queue.size())
         queue.clear()
         assertTrue(queue.isEmpty)
     }
@@ -243,7 +246,7 @@ class QueueFileTest {
         queue.remove(1)
         writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 16 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
         queue.remove(14)
-        assertEquals(2, queue.size().toLong())
+        assertEquals(2, queue.size())
         assertEquals((bufSize + QueueFileElement.HEADER_LENGTH) * 2 + QueueFileHeader.HEADER_LENGTH, queue.usedBytes)
         assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH * 2, queue.fileSize())
     }
@@ -281,7 +284,7 @@ class QueueFileTest {
                     bytesUsed += write(list, queue, buffer, random, size)
                 }
                 assertEquals(bytesUsed, queue.usedBytes)
-                assertEquals(list.size.toLong(), queue.size().toLong())
+                assertEquals(list.size, queue.size())
             }
         } catch (ex: Throwable) {
             logger.error("Current list: {} with used bytes {}; QueueFile {}", list, bytesUsed, queue)

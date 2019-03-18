@@ -37,6 +37,7 @@ import java.nio.ByteBuffer;
 import java.util.Random;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -79,8 +80,8 @@ public class BackedObjectQueueTest {
                     new ObservationKey("test", "a", "b"), new ActiveAudioRecording(buffer));
 
             queue.add(record);
+            assertEquals(1, queue.getSize());
         }
-
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
                 QueueFile.Companion.newMapped(file, 450000000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData))) {
             Record<GenericRecord, GenericRecord> result = queue.peek();
@@ -112,6 +113,7 @@ public class BackedObjectQueueTest {
 
         queue.add(record);
         queue.peek();
+        assertEquals(1, queue.getSize());
     }
 
     @Test
@@ -137,6 +139,7 @@ public class BackedObjectQueueTest {
                 new PhoneLight(now, now, Float.NaN));
 
         queue.add(record);
+        assertEquals(1, queue.getSize());
         exception.expect(IllegalArgumentException.class);
         queue.peek();
     }

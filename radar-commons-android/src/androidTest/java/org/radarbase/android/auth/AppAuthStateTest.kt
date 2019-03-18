@@ -2,14 +2,17 @@ package org.radarbase.android.auth
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_BEARER
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.auth.portal.SourceType
 import java.util.concurrent.TimeUnit
 
+@RunWith(AndroidJUnit4::class)
 class AppAuthStateTest {
     private lateinit var state: AppAuthState
     private lateinit var sources: List<SourceMetadata>

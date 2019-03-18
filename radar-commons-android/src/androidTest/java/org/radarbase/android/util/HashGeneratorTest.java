@@ -19,6 +19,7 @@ import android.content.SharedPreferences;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -26,11 +27,13 @@ import java.util.Random;
 import java.util.UUID;
 
 import androidx.test.core.app.ApplicationProvider;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 /**
  * Test that all hashes are unique for different values and the same for the same values.
  * Also test that all hashes are unique for different keys but with the same values.
  */
+@RunWith(AndroidJUnit4.class)
 public class HashGeneratorTest {
 
     private SharedPreferences getPrefs(String name) {

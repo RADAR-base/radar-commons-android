@@ -2,7 +2,6 @@ package org.radarbase.android.util
 
 import android.os.Handler
 import android.os.HandlerThread
-import com.google.android.gms.tasks.RuntimeExecutionException
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.SynchronousQueue
@@ -45,18 +44,18 @@ class SafeHandler(val name: String, private val priority: Int) {
             val queue = SynchronousQueue<Any>()
             execute {
                 try {
-                    queue.put(method())
+                    queue.put(method() ?: nullMarker)
                 } catch (ex: Exception) {
                     queue.put(ExecutionException(ex))
                 }
             }
             val result = queue.take()
-            if (result is RuntimeExecutionException) {
-                throw result
-            } else {
-                @Suppress("UNCHECKED_CAST")
-                return result as T
-            }
+            @Suppress("UNCHECKED_CAST")
+            return when {
+                result === nullMarker -> null
+                result is ExecutionException -> throw result
+                else -> result
+            } as T
         }
     }
 
@@ -175,5 +174,6 @@ class SafeHandler(val name: String, private val priority: Int) {
 
     companion object {
         private val logger = LoggerFactory.getLogger(SafeHandler::class.java)
+        private val nullMarker = object : Any() {}
     }
 }

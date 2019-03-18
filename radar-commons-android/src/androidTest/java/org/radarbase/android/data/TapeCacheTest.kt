@@ -17,6 +17,7 @@
 package org.radarbase.android.data
 
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.apache.avro.generic.GenericRecord
 import org.junit.After
 import org.junit.Assert.*
@@ -24,6 +25,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
 import org.radarbase.android.kafka.KafkaDataSubmitter.Companion.SIZE_LIMIT_DEFAULT
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
@@ -35,6 +37,7 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.ThreadLocalRandom
 
+@RunWith(AndroidJUnit4::class)
 class TapeCacheTest {
     private lateinit var handler: SafeHandler
     private lateinit var tapeCache: TapeCache<ObservationKey, ApplicationUptime>
@@ -105,29 +108,29 @@ class TapeCacheTest {
 
         Thread.sleep(100)
 
-        var unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)
-        assertNotNull(unsent)
-        assertEquals(1, unsent!!.size().toLong())
+        var unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
+        assertEquals(1, unsent.size().toLong())
         assertEquals(1L, tapeCache.numberOfRecords)
-        unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)
-        assertNotNull(unsent)
-        assertEquals(1, unsent!!.size().toLong())
+        unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
+        assertEquals(1, unsent.size().toLong())
         assertEquals(1L, tapeCache.numberOfRecords)
         val actualValue = unsent.iterator().next() as GenericRecord
         assertEquals(key.getSourceId(), (unsent.key as GenericRecord).get("sourceId"))
         assertEquals(value.getUptime(), actualValue.get("uptime"))
-        tapeCache.remove(1)
-        assertNull(tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT))
+        assertEquals(1, tapeCache.remove(1))
         assertEquals(0L, tapeCache.numberOfRecords)
+        val emptyRecords = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)
+        if (emptyRecords != null) {
+            assertTrue("Contains ${emptyRecords.key}-${emptyRecords.toList()}", false)
+        }
 
         tapeCache.addMeasurement(key, value)
         tapeCache.addMeasurement(key, value)
 
         Thread.sleep(100)
 
-        unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)
-        assertNotNull(unsent)
-        assertEquals(2, unsent!!.size().toLong())
+        unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
+        assertEquals(2, unsent.size().toLong())
         assertEquals(2L, tapeCache.numberOfRecords)
     }
 
@@ -167,17 +170,14 @@ class TapeCacheTest {
         localTapeCache.addMeasurement(key, getRecording(100000))
         localTapeCache.flush()
         // fit two times header (8) + key (13) + value (100,000)
-        var records = localTapeCache.getUnsentRecords(100, 200042)
-        assertNotNull(records)
-        assertEquals(2, records!!.size().toLong())
+        var records = localTapeCache.getUnsentRecords(100, 200042)!!
+        assertEquals(2, records.size().toLong())
 
-        records = localTapeCache.getUnsentRecords(100, 200041)
-        assertNotNull(records)
-        assertEquals(1, records!!.size().toLong())
+        records = localTapeCache.getUnsentRecords(100, 200041)!!
+        assertEquals(1, records.size().toLong())
 
-        records = localTapeCache.getUnsentRecords(100, 1)
-        assertNotNull(records)
-        assertEquals(1, records!!.size().toLong())
+        records = localTapeCache.getUnsentRecords(100, 1)!!
+        assertEquals(1, records.size().toLong())
     }
 
     @Test

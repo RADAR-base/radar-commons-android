@@ -1,8 +1,9 @@
 apply plugin: 'de.mobilej.unmock'
 
 android {
-    useLibrary 'android.test.runner'
+    defaultConfig.testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
+    useLibrary 'android.test.runner'
     useLibrary 'android.test.base'
     useLibrary 'android.test.mock'
 }
@@ -26,8 +27,8 @@ dependencies {
     androidTestImplementation "androidx.test:rules:$androidXRunnerVersion"
 
     // Assertions
-    androidTestImplementation "androidx.test.ext:junit:1.1.0"
-    androidTestImplementation "androidx.test.ext:truth:1.1.0"
+    androidTestImplementation "androidx.test.ext:junit:$androidXExtVersion"
+    androidTestImplementation "androidx.test.ext:truth:$androidXExtVersion"
     androidTestImplementation "com.google.truth:truth:0.42"
 
     // Espresso dependencies

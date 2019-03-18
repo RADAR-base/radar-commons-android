@@ -42,7 +42,8 @@ class BackedObjectQueue<S, T>(
         get() = size == 0
 
     /** Number of elements in the queue.  */
-    val size: Int = queueFile.size()
+    val size: Int
+        get() = queueFile.size()
 
     /**
      * Add a new element to the queue.
