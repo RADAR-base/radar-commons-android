@@ -32,13 +32,11 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                 needsRegisteredSources = true
                 authenticationSource = SOURCE_TYPE
 
-                jsonObject.opt("attributes")?.also { attrObjects ->
+                jsonObject.opt("attributes")?.let { attrObjects ->
                     if (attrObjects is JSONArray) {
-                        if (attrObjects.length() > 0) {
-                            for (i in 0 until attrObjects.length()) {
-                                val attrObject = attrObjects.getJSONObject(i)
-                                attributes[attrObject.getString("key")] = attrObject.getString("value")
-                            }
+                        for (i in 0 until attrObjects.length()) {
+                            val attrObject = attrObjects.getJSONObject(i)
+                            attributes[attrObject.getString("key")] = attrObject.getString("value")
                         }
                     } else {
                         attributes += attributesToMap(attrObjects as JSONObject)
@@ -125,8 +123,9 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
         fun getHumanReadableUserId(state: AppAuthState): String? {
             return state.attributes.entries
-                    .find { e -> e.key.equals("Human-readable-identifier", ignoreCase = true) && !e.value.isBlank() }
-                    ?.let { it.value }
+                    .find { e -> e.key.equals("Human-readable-identifier", ignoreCase = true) }
+                    ?.let { entry -> entry.value.trim { it <= ' ' } }
+                    ?.takeIf(String::isNotEmpty)
                     ?: state.userId
         }
     }
