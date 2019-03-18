@@ -185,8 +185,11 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
 
     private fun updateSources(authState: AppAuthState) {
         authState.sourceMetadata
-                .filter { it.sourceId != null }
-                .forEach { sources[it.sourceId!!] = it }
+                .forEach { sourceMetadata ->
+                    sourceMetadata.sourceId?.let {
+                        sources[it] = sourceMetadata
+                    }
+                }
     }
 
     override fun onDestroy() {
@@ -214,21 +217,22 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     private fun addSource(authState: AppAuthState, source: SourceMetadata): AppAuthState {
-        if (source.sourceId == null) {
+        val sourceId = source.sourceId
+        return if (sourceId == null) {
             logger.error("Cannot add source {} without ID", source)
-            return authState
-        }
+            authState
+        } else {
+            sources[sourceId] = source
 
-        sources[source.sourceId!!] = source
-
-        return authState.alter {
-            val existing = sourceMetadata.filter { it.sourceId == source.sourceId }
-            if (existing.isEmpty()) {
-                invalidate()
-            } else {
-                sourceMetadata -= existing
+            authState.alter {
+                val existing = sourceMetadata.filter { it.sourceId == source.sourceId }
+                if (existing.isEmpty()) {
+                    invalidate()
+                } else {
+                    sourceMetadata -= existing
+                }
+                sourceMetadata += source
             }
-            sourceMetadata += source
         }
     }
 
