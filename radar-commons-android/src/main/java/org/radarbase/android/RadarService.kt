@@ -139,9 +139,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     protected open val servicePermissions: List<String>
         get() = listOf(ACCESS_NETWORK_STATE, INTERNET)
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return binder
-    }
+    override fun onBind(intent: Intent?): IBinder? = binder
 
     private lateinit var broadcaster: LocalBroadcastManager
 
@@ -440,15 +438,16 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     protected fun checkPermissions() {
-        val permissions = HashSet(servicePermissions
-                + mConnections.flatMap { it.permissionsNeeded })
-
-        if (ACCESS_FINE_LOCATION in permissions || ACCESS_COARSE_LOCATION in permissions) {
-            permissions += LOCATION_SERVICE
-        }
-
         needsPermissions.clear()
-        needsPermissions += permissions.filterNot(this::isPermissionGranted)
+        needsPermissions += HashSet<String>()
+                .apply {
+                    this += servicePermissions
+                    this += mConnections.flatMap { it.permissionsNeeded }
+                    if (ACCESS_FINE_LOCATION in this || ACCESS_COARSE_LOCATION in this) {
+                        this += LOCATION_SERVICE
+                    }
+                }
+                .filterNot(this::isPermissionGranted)
 
         if (needsPermissions.isNotEmpty()) {
             logger.debug("Requesting permission for {}", needsPermissions)
@@ -480,9 +479,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     /** Disconnect from all services.  */
-    protected open fun disconnect() {
-        mConnections.forEach { disconnect(it.connection) }
-    }
+    protected open fun disconnect() = mConnections.forEach { disconnect(it.connection) }
 
     /** Disconnect from given service.  */
     open fun disconnect(connection: DeviceServiceConnection<*>) {
@@ -601,11 +598,9 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
 
         override val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
-                get() = this@RadarService.dataHandler
+            get() = this@RadarService.dataHandler
 
-        override fun needsBluetooth(): Boolean {
-            return needsBluetooth
-        }
+        override fun needsBluetooth(): Boolean = needsBluetooth
     }
 
     private fun stopActiveScanning() {
@@ -626,19 +621,19 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     companion object {
         private val logger = LoggerFactory.getLogger(RadarService::class.java)
-        private const val RADAR_PACKAGE = "org.radarbase.android."
+        private const val RADAR_PACKAGE = "org.radarbase.android"
 
-        const val ACTION_PROVIDERS_UPDATED = RADAR_PACKAGE + "ACTION_PROVIDERS_UPDATED"
+        const val ACTION_PROVIDERS_UPDATED = "$RADAR_PACKAGE.ACTION_PROVIDERS_UPDATED"
 
-        const val ACTION_BLUETOOTH_NEEDED_CHANGED = RADAR_PACKAGE + "BLUETOOTH_NEEDED_CHANGED"
+        const val ACTION_BLUETOOTH_NEEDED_CHANGED = "$RADAR_PACKAGE.BLUETOOTH_NEEDED_CHANGED"
         const val BLUETOOTH_NEEDED = 1
         const val BLUETOOTH_NOT_NEEDED = 2
 
-        const val ACTION_CHECK_PERMISSIONS = RADAR_PACKAGE + "ACTION_CHECK_PERMISSIONS"
-        const val EXTRA_PERMISSIONS = RADAR_PACKAGE + "EXTRA_PERMISSIONS"
+        const val ACTION_CHECK_PERMISSIONS = "$RADAR_PACKAGE.ACTION_CHECK_PERMISSIONS"
+        const val EXTRA_PERMISSIONS = "$RADAR_PACKAGE.EXTRA_PERMISSIONS"
 
-        const val ACTION_PERMISSIONS_GRANTED = RADAR_PACKAGE + "ACTION_PERMISSIONS_GRANTED"
-        const val EXTRA_GRANT_RESULTS = RADAR_PACKAGE + "EXTRA_GRANT_RESULTS"
+        const val ACTION_PERMISSIONS_GRANTED = "$RADAR_PACKAGE.ACTION_PERMISSIONS_GRANTED"
+        const val EXTRA_GRANT_RESULTS = "$RADAR_PACKAGE.EXTRA_GRANT_RESULTS"
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
