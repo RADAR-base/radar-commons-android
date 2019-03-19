@@ -22,12 +22,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.CallSuper
-import org.radarbase.android.MainActivity
-import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.RadarService
+import org.radarbase.android.*
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.portal.SourceType
-import org.radarbase.android.radarApp
 import org.slf4j.LoggerFactory
 
 /**
@@ -97,7 +94,7 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
 
     /** Get the RadarConfiguration currently set for the service provider.  */
     val config: RadarConfiguration
-        get() = radarService!!.radarApp.configuration
+        get() = radarService!!.radarConfig
 
     abstract val sourceProducer: String
 

@@ -92,3 +92,6 @@ abstract class RadarApplication : Application() {
 
 val Context.radarApp: RadarApplication
     get() = applicationContext as RadarApplication
+
+val Context.radarConfig: RadarConfiguration
+    get() = radarApp.configuration

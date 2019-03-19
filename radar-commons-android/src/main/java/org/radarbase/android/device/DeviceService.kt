@@ -33,6 +33,7 @@ import org.radarbase.android.auth.portal.SourceType
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.device.DeviceServiceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarbase.android.radarApp
+import org.radarbase.android.radarConfig
 import org.radarbase.android.util.BundleSerialization
 import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.SafeHandler
@@ -139,7 +140,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         radarConnection.bind()
         handler = SafeHandler(javaClass.simpleName, THREAD_PRIORITY_BACKGROUND)
 
-        config = radarApp.configuration
+        config = radarConfig
 
         deviceManager = null
         startFuture = null

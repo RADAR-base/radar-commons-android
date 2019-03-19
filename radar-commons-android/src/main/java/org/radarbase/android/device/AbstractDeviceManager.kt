@@ -156,5 +156,8 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
 
     companion object {
         private val logger = LoggerFactory.getLogger(AbstractDeviceManager::class.java)
+
+        val currentTime: Double
+            get() = System.currentTimeMillis() / 1000.0
     }
 }

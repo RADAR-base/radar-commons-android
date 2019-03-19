@@ -152,7 +152,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         mHandler.start()
 
         needsBluetooth = false
-        configuration = radarApp.configuration
+        configuration = radarConfig
         providerLoader = ProviderLoader()
         previousConfiguration = null
         broadcaster = LocalBroadcastManager.getInstance(this)

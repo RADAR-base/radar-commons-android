@@ -143,7 +143,7 @@ abstract class MainActivity : AppCompatActivity() {
         radarConnection.onBoundListeners += IRadarBinder::startScanning
         radarConnection.onUnboundListeners += IRadarBinder::stopScanning
 
-        configuration = radarApp.configuration
+        configuration = radarConfig
         authConnection = ManagedServiceConnection(this, AuthService::class.java)
         create()
     }

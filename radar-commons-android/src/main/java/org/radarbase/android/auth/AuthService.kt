@@ -10,6 +10,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.LoginActivity.Companion.ACTION_LOGIN_SUCCESS
+import org.radarbase.android.radarConfig
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.send
@@ -38,9 +39,10 @@ abstract class AuthService : Service(), LoginListener {
         super.onCreate()
         broadcaster = LocalBroadcastManager.getInstance(this)
         appAuth = AppAuthState.from(this)
+        config = radarConfig
+        config.updateWithAuthState(this, appAuth)
         handler.start()
         loginManagers = createLoginManagers(appAuth)
-        config = (application as RadarApplication).configuration
         networkConnectedListener = NetworkConnectedReceiver(this, object : NetworkConnectedReceiver.NetworkConnectedListener {
             override fun onNetworkConnectionChanged(isConnected: Boolean, hasWifiOrEthernet: Boolean) {
                 handler.execute {

@@ -13,7 +13,7 @@ import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.radarApp
+import org.radarbase.android.radarConfig
 import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.register
 import org.radarbase.config.ServerConfig
@@ -31,7 +31,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     private var client: ManagementPortalClient? = null
     private var restClient: RestClient? = null
     private val refreshLock: ReentrantLock
-    private val config = listener.radarApp.configuration
+    private val config = listener.radarConfig
 
     init {
         ensureClientConnectivity()

@@ -10,13 +10,13 @@ import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.radarApp
+import org.radarbase.android.radarConfig
 import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.register
@@ -50,7 +50,7 @@ abstract class SplashActivity : AppCompatActivity() {
 
         loginListener = createLoginListener()
         authConnection = AuthServiceConnection(this@SplashActivity, loginListener)
-        config = (application as RadarApplication).configuration
+        config = radarConfig
         configReceiver = false
         handler = Handler(mainLooper)
         startedAt = SystemClock.elapsedRealtime()
@@ -163,7 +163,8 @@ abstract class SplashActivity : AppCompatActivity() {
                 .register(RadarConfiguration.RADAR_CONFIGURATION_CHANGED) { _, _ ->
                     if ((lifecycle.currentState == Lifecycle.State.RESUMED
                                     || lifecycle.currentState == Lifecycle.State.STARTED)
-                            && config.status == RadarConfiguration.FirebaseStatus.FETCHED) {
+                            && config.status == RadarConfiguration.FirebaseStatus.FETCHED
+                            && state != STATE_AUTHORIZING) {
                         logger.info("Config has been fetched, checking authentication")
                         stopConfigListener()
                         startAuthConnection()

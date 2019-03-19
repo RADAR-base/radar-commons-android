@@ -43,24 +43,31 @@ class ProviderLoader {
      * Loads the service providers specified in given whitespace-delimited String.
      */
     private fun loadProviders(deviceServices: String): List<DeviceServiceProvider<*>> {
-        val providers = ArrayList<DeviceServiceProvider<*>>()
-        val scanner = Scanner(deviceServices)
-        while (scanner.hasNext()) {
-            var className = scanner.next()
-            if (className[0] == '.') {
-                className = "org.radarcns$className"
-            }
-            try {
-                val providerClass = Class.forName(className)
-                val serviceProvider = providerClass.getConstructor().newInstance() as DeviceServiceProvider<*>
-                providers.add(serviceProvider)
-            } catch (ex: ReflectiveOperationException) {
-                logger.warn("Provider {} is not a legal DeviceServiceProvider: {}", className,
-                        ex.toString())
-                Crashlytics.logException(ex)
-            }
-        }
-        return providers
+        return Scanner(deviceServices).asSequence()
+                .flatMap {
+                    if (it[0] == '.') {
+                        sequenceOf("org.radarcns$it", "org.radarbase$it")
+                    } else sequenceOf(it)
+                }
+                .map { className ->
+                    try {
+                        Class.forName(className)
+                                .getConstructor()
+                                .newInstance() as DeviceServiceProvider<*>
+                    } catch (ex: ReflectiveOperationException) {
+                        logger.warn("Provider {} is not a legal DeviceServiceProvider: {}", className,
+                                ex.toString())
+                        Crashlytics.logException(ex)
+                        null
+                    } catch (ex: ClassCastException) {
+                        logger.warn("Provider {} is not a DeviceServiceProvider: {}", className,
+                                ex.toString())
+                        Crashlytics.logException(ex)
+                        null
+                    }
+                }
+                .filterNotNull()
+                .toList()
     }
 
     companion object {
