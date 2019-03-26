@@ -49,7 +49,7 @@ before_script:
   - emulator -avd test -no-audio -no-window &
 
 script:
-  - ./gradlew build
+  - ./gradlew assembleDebug lintDebug testDebug
   - android-wait-for-emulator
   - adb shell input keyevent 82 &
   - ./gradlew connectedCheck

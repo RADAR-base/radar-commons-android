@@ -13,6 +13,14 @@ android {
             path 'src/main/jni/Android.mk'
         }
     }
+
+    buildTypes {
+        debug {
+            ndk {
+                abiFilters 'armeabi-v7a'
+            }
+        }
+    }
 }
 
 //---------------------------------------------------------------------------//
