@@ -40,7 +40,7 @@ android:
 # bug https://github.com/travis-ci/travis-ci/issues/8874
 before_install:
   - yes | sdkmanager "platforms;android-28"
-  - yes | sdkmanager "ndk-bundle"
+  - echo y | sdkmanager "ndk-bundle"
 
 # Emulator Management: Create, Start and Wait
 before_script:
