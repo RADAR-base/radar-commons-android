@@ -25,8 +25,10 @@ import android.content.Context.ALARM_SERVICE
 import android.content.Context.POWER_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.*
+import android.os.Debug
+import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
+import android.os.SystemClock
 import com.crashlytics.android.Crashlytics
 import org.radarbase.util.CountedReference
 import org.slf4j.LoggerFactory
@@ -49,7 +51,7 @@ class OfflineProcessor(private val context: Context,
     private val receiver: BroadcastReceiver
     private val pendingIntent: PendingIntent
     private val alarmManager: AlarmManager
-    private val handler: Handler
+    private val handler: SafeHandler
 
     /** Whether the processing Runnable should stop execution.  */
     @get:Synchronized
@@ -65,7 +67,7 @@ class OfflineProcessor(private val context: Context,
         this.isDone = false
         this.alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
 
-        handler = config.handler ?: Handler(config.handlerReference.acquire().looper)
+        handler = config.handlerReference.acquire()
         val intent = Intent(config.requestName)
         pendingIntent = PendingIntent.getBroadcast(context, config.requestCode!!, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT)
@@ -81,8 +83,13 @@ class OfflineProcessor(private val context: Context,
 
     /** Start processing.  */
     fun start(initializer: (() -> Unit)? = null) {
+        handler.compute {
+            if (config.intervalMillis <= 0) {
+                throw IllegalStateException("Cannot start processing without an interval")
+            }
+        }
         context.registerReceiver(this.receiver, IntentFilter(config.requestName))
-        handler.post {
+        handler.execute {
             schedule()
             isStarted = true
             initializer?.let { it() }
@@ -103,28 +110,25 @@ class OfflineProcessor(private val context: Context,
 
         try {
             for (runnable in config.process) {
-                handler.post {
-                    if (isDone) {
-                        return@post
-                    }
-                    try {
-                        runnable()
-                    } catch (ex: RuntimeException) {
-                        Crashlytics.logException(ex)
-                        logger.error("OfflineProcessor task failed.", ex)
+                handler.execute {
+                    if (!isDone) {
+                        try {
+                            runnable()
+                        } catch (ex: RuntimeException) {
+                            Crashlytics.logException(ex)
+                            logger.error("OfflineProcessor task failed.", ex)
+                        }
                     }
                 }
             }
-            handler.post {
+        } catch (ex: RuntimeException) {
+            logger.error("Handler thread is no longer running.", ex)
+        } finally {
+            handler.execute(true) {
                 isRunning.release()
                 wakeLock?.release()
             }
-        } catch (ex: RuntimeException) {
-            logger.error("Handler thread is no longer running.", ex)
-            isRunning.release()
-            wakeLock?.release()
         }
-
     }
 
     /**
@@ -136,7 +140,7 @@ class OfflineProcessor(private val context: Context,
         if (duration <= 0L) {
             throw IllegalArgumentException("Duration must be positive")
         }
-        handler.post {
+        handler.execute(true) {
             if (config.interval(duration, timeUnit) && isStarted) {
                 schedule()
             }
@@ -177,9 +181,7 @@ class OfflineProcessor(private val context: Context,
 
         try {
             isRunning.acquire()
-            if (config.handler == null) {
-                config.handlerReference.release()
-            }
+            config.handlerReference.release()
         } catch (e: InterruptedException) {
             logger.error("Interrupted while waiting for processing to finish.")
             Thread.currentThread().interrupt()
@@ -190,23 +192,21 @@ class OfflineProcessor(private val context: Context,
             var requestCode: Int? = null,
             var requestName: String? = null,
             var process: List<() -> Unit> = emptyList(),
+            @get:Synchronized
             var intervalMillis: Long = -1,
             var wake: Boolean = true,
-            var handler: Handler? = null,
-            var handlerReference: CountedReference<HandlerThread> = DEFAULT_HANDLER_THREAD) {
+            var handlerReference: CountedReference<SafeHandler> = DEFAULT_HANDLER_THREAD) {
 
         fun validate() {
             if (requestCode == null || requestName == null) {
                 throw IllegalArgumentException("Cannot start processor without request code or name")
-            }
-            if (intervalMillis < 0L) {
-                throw IllegalArgumentException("Cannot start offline processor without an interval")
             }
             if (process.isEmpty()) {
                 throw IllegalArgumentException("Cannot run without a process")
             }
         }
 
+        @Synchronized
         fun interval(duration: Long, unit: TimeUnit): Boolean {
             if (duration <= 0L) {
                 throw IllegalArgumentException("Duration must be positive")
@@ -215,15 +215,26 @@ class OfflineProcessor(private val context: Context,
             intervalMillis = unit.toMillis(duration)
             return oldInterval != intervalMillis
         }
+
+        fun handler(value: SafeHandler) {
+            handlerReference = CountedReference({
+                value.apply { start() }
+            }, {
+                stop { }
+            })
+        }
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(OfflineProcessor::class.java)
+        private val safeHandler = SafeHandler("OfflineProcessor", THREAD_PRIORITY_BACKGROUND)
         private val DEFAULT_HANDLER_THREAD = CountedReference({
-            HandlerThread("OfflineProcessor", THREAD_PRIORITY_BACKGROUND).also {
-                it.start()
+            safeHandler.apply {
+                start()
             }
-        }, { it.quitSafely() })
+        }, {
+            stop { }
+        })
 
         @SuppressLint("WakelockTimeout")
         private fun acquireWakeLock(context: Context, requestName: String?): PowerManager.WakeLock? {

@@ -1,8 +1,6 @@
-apply plugin: 'com.jfrog.bintray'
-apply plugin: 'com.jfrog.artifactory'
 apply plugin: 'maven-publish'
 apply plugin: 'digital.wup.android-maven-publish'
-apply plugin: 'org.jetbrains.dokka-android'
+//apply plugin: 'org.jetbrains.dokka-android'
 
 ext.sharedManifest = manifest {
     attributes("Implementation-Title": name,
@@ -28,12 +26,13 @@ task javadoc(type: Javadoc) {
     exclude '**/*.kt'
 }
 
-dokka {
-    outputFormat = 'html'
-    outputDirectory = javadoc.destinationDir
-}
+//dokka {
+//    outputFormat = 'html'
+//    outputDirectory = javadoc.destinationDir
+//}
 
-task javadocJar(type: Jar, dependsOn: [dokka, javadoc]) {
+//task javadocJar(type: Jar, dependsOn: [dokka, javadoc]) {
+task javadocJar(type: Jar, dependsOn: javadoc) {
     archiveClassifier.set('javadoc')
     from javadoc.destinationDir
     manifest.from sharedManifest
@@ -79,53 +78,3 @@ publishing {
         }
     }
 }
-
-bintray {
-    user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
-    key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
-    override = false
-    publications 'mavenAar'
-    pkg {
-        repo = project.group
-        name = project.name
-        userOrg = 'radar-cns'
-        desc = project.description
-        licenses = ['Apache-2.0']
-        websiteUrl = website
-        issueTrackerUrl = issueUrl
-        vcsUrl = githubUrl
-        githubRepo = githubRepoName
-        githubReleaseNotesFile = 'README.md'
-        version {
-            name = project.version
-            desc = project.description
-            vcsTag = System.getenv('TRAVIS_TAG')
-            released = new Date()
-            gpg {
-                sign = true //Determines whether to GPG sign the files. The default is false
-            }
-        }
-    }
-}
-
-bintrayUpload.dependsOn 'assembleRelease'
-
-artifactory {
-    contextUrl = 'https://oss.jfrog.org/artifactory'
-    publish {
-        repository {
-            repoKey = 'oss-snapshot-local'
-            username = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
-            password = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
-            maven = true
-        }
-        defaults {
-            publications ('mavenAar')
-            publishArtifacts = true
-            publishPom = true
-            properties = ['qa.level': 'basic', 'q.os': 'android']
-        }
-    }
-}
-
-artifactoryPublish.dependsOn 'assembleRelease'

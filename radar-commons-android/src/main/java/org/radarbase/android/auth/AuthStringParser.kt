@@ -16,11 +16,13 @@
 
 package org.radarbase.android.auth
 
+import androidx.annotation.Keep
 import org.radarbase.android.util.Parser
 import java.io.IOException
 
 /** AuthStringProcessor to parse a string with some form of authentication and parse it to a
  * proper state.  */
+@Keep
 interface AuthStringParser : Parser<String, AppAuthState> {
     /**
      * Parse an authentication state from a string.

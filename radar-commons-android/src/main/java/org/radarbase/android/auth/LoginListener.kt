@@ -16,10 +16,13 @@
 
 package org.radarbase.android.auth
 
+import androidx.annotation.Keep
+
 /**
  * Created by joris on 19/06/2017.
  */
 
+@Keep
 interface LoginListener {
     /** Callback for when a login succeeds.  */
     fun loginSucceeded(manager: LoginManager?, authState: AppAuthState)

@@ -9,8 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 
+@Keep
 @Deprecated
 public class AppSource implements Parcelable, Serializable {
     private final long sourceTypeId;

@@ -19,6 +19,7 @@ package org.radarbase.android.auth
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
+import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
@@ -28,6 +29,7 @@ import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 
 /** Activity to log in using a variety of login managers.  */
+@Keep
 abstract class LoginActivity : AppCompatActivity(), LoginListener {
     private var startedFromActivity: Boolean = false
     private var refreshOnly: Boolean = false

@@ -40,6 +40,7 @@ import org.radarbase.android.RadarConfiguration.Companion.KAFKA_RECORDS_SIZE_LIM
 import org.radarbase.android.RadarConfiguration.Companion.KAFKA_REST_PROXY_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL
 import org.radarbase.android.RadarConfiguration.Companion.KAFKA_UPLOAD_RATE_KEY
+import org.radarbase.android.RadarConfiguration.Companion.KAFKA_UPLOAD_REDUCED_BATTERY_LEVEL
 import org.radarbase.android.RadarConfiguration.Companion.MAX_CACHE_SIZE
 import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
 import org.radarbase.android.RadarConfiguration.Companion.SCHEMA_REGISTRY_URL_KEY
@@ -74,6 +75,7 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.ArrayList
 
 open class RadarService : Service(), ServerStatusListener, LoginListener {
     private var binder: IBinder? = null
@@ -113,7 +115,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
     private lateinit var providerLoader: ProviderLoader
-    private var previousConfiguration: Map<String, String>? = null
+    private lateinit var configurationCache: ChangeRunner<Map<String, String>>
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var deviceFailedReceiver: BroadcastRegistration
@@ -125,7 +127,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     private lateinit var configChangedReceiver: BroadcastRegistration
 
     /** Connections.  */
-    private val mConnections = ArrayList<DeviceServiceProvider<*>>()
+    private var mConnections: List<DeviceServiceProvider<*>> = emptyList()
     private var isScanningEnabled = false
 
     /** An overview of how many records have been sent throughout the application.  */
@@ -151,10 +153,10 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         mHandler = SafeHandler("RadarService", THREAD_PRIORITY_BACKGROUND)
         mHandler.start()
 
+        configurationCache = ChangeRunner()
         needsBluetooth = false
         configuration = radarConfig
         providerLoader = ProviderLoader()
-        previousConfiguration = null
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         broadcaster.run {
@@ -230,13 +232,8 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     @CallSuper
     protected open fun configure() {
-        mHandler.executeReentrant {
-            configuration.toMap()
-                    .takeIf { it != previousConfiguration }
-                    ?.let {
-                        previousConfiguration = it
-                        doConfigure()
-                    }
+       mHandler.executeReentrant {
+            configurationCache.runIfChanged(configuration.toMap()) { doConfigure() }
        }
     }
 
@@ -256,10 +253,12 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                 sendOverDataHighPriority = configuration.getBoolean(SEND_OVER_DATA_HIGH_PRIORITY, SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT)
                 highPriorityTopics = HashSet(configuration.getString(TOPICS_HIGH_PRIORITY, "")
                         .split(providerSeparator)
-                        .map { s -> s.trim { it <= ' ' } }
-                        .filter { !it.isEmpty() })
-                minimumBatteryLevel = configuration.getFloat(KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL, minimumBatteryLevel)
+                        .mapNotNull(String::takeTrimmedIfNotEmpty))
 
+                batteryLevel {
+                    minimum = configuration.getFloat(KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL, minimum)
+                    reduced = configuration.getFloat(KAFKA_UPLOAD_REDUCED_BATTERY_LEVEL, reduced)
+                }
                 submitter {
                     uploadRate = configuration.getLong(KAFKA_UPLOAD_RATE_KEY, uploadRate)
                     amountLimit = configuration.getInt(KAFKA_RECORDS_SEND_LIMIT_KEY, amountLimit)
@@ -294,7 +293,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
         }
 
-        mConnections.forEach(DeviceServiceProvider<*>::updateConfiguration)
+        mConnections.forEach { it.updateConfiguration() }
     }
 
     private fun hasFeatures(provider: DeviceServiceProvider<*>, packageManager: PackageManager?): Boolean {
@@ -341,7 +340,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
             connection.serverStatus
                     ?.also { logger.debug("Initial server status: {}", it) }
-                    ?.also(this::updateServerStatus)
+                    ?.also(::updateServerStatus)
 
             if (!needsBluetooth && connection.needsBluetooth()) {
                 needsBluetooth = true
@@ -365,15 +364,20 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     private fun bindServices(providers: Collection<DeviceServiceProvider<*>>, unbindFirst: Boolean) {
         mHandler.executeReentrant {
-            if (unbindFirst) {
-                providers.filter { it.isBound }
-                        .forEach { provider ->
-                            logger.info("Rebinding {} after disconnect", provider)
-                            provider.unbind()
-                        }
+            val authBinder = authConnection.binder
+            if (authBinder == null) {
+                mHandler.delay(1000) { bindServices(providers, unbindFirst) }
+            } else {
+                if (unbindFirst) {
+                    providers.filter { it.isBound }
+                            .forEach { provider ->
+                                logger.info("Rebinding {} after disconnect", provider)
+                                provider.unbind()
+                            }
+                }
+                providers.filter { !it.isBound && (isScanningEnabled || it.mayBeConnectedInBackground) }
+                        .forEach(DeviceServiceProvider<*>::bind)
             }
-            providers.filter { !it.isBound && (isScanningEnabled || it.mayBeConnectedInBackground) }
-                    .forEach { it.bind() }
         }
     }
 
@@ -447,7 +451,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                         this += LOCATION_SERVICE
                     }
                 }
-                .filterNot(this::isPermissionGranted)
+                .filterNot(::isPermissionGranted)
 
         if (needsPermissions.isNotEmpty()) {
             logger.debug("Requesting permission for {}", needsPermissions)
@@ -513,6 +517,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         mHandler.execute {
             dataHandler?.handler {
+                logger.info("Setting data submission authentication")
                 rest {
                     headers = authState.okHttpHeaders
                 }
@@ -523,10 +528,10 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
             val connections = providerLoader.loadProviders(this, configuration)
 
-            val oldConnections = mConnections.filter { it !in connections }
-
-            mConnections -= oldConnections
-            oldConnections.forEach(DeviceServiceProvider<*>::unbind)
+            val oldConnections = ArrayList(mConnections)
+            val providersToRemove = mConnections.filter { it !in connections }
+            mConnections = mConnections.filterNot(providersToRemove::contains)
+            providersToRemove.forEach(DeviceServiceProvider<*>::unbind)
 
             val anyNeedsBluetooth = mConnections.any { it.isConnected && it.connection.needsBluetooth() }
             if (!anyNeedsBluetooth && needsBluetooth) {
@@ -540,24 +545,26 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
             val packageManager = packageManager
 
-            connections
+            val providersToAdd = connections
                     .filter { provider ->
                         provider !in mConnections // new provider
                         && hasFeatures(provider, packageManager) // acceptable
                         && provider.isAuthorizedFor(authState, false) }
-                    .takeIf(List<DeviceServiceProvider<*>>::isNotEmpty)
-                    ?.let { providersToAdd ->
-                        mConnections += providersToAdd
 
-                        providersToAdd.forEach { provider ->
-                            deviceFilters[provider.connection] = emptySet()
-                            provider.updateConfiguration()
-                        }
+            if (providersToAdd.isNotEmpty()) {
+                mConnections = mConnections + providersToAdd
 
-                        checkPermissions()
-                        bindServices(mConnections, false)
-                        broadcaster.send(ACTION_PROVIDERS_UPDATED)
-                    }
+                deviceFilters += providersToAdd.map { Pair(it.connection, emptySet<String>()) }
+
+                checkPermissions()
+                bindServices(mConnections, false)
+            }
+
+            mConnections.forEach { it.updateConfiguration() }
+
+            if (mConnections != oldConnections) {
+                broadcaster.send(ACTION_PROVIDERS_UPDATED)
+            }
 
             configure()
         }
@@ -567,7 +574,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
 
     }
 
-    protected inner class RadarBinder : Binder(), org.radarbase.android.IRadarBinder {
+    protected inner class RadarBinder : Binder(), IRadarBinder {
         override fun startScanning() = this@RadarService.startActiveScanning()
         override fun stopScanning() = this@RadarService.stopActiveScanning()
 
@@ -578,7 +585,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                 get() = this@RadarService.latestNumberOfRecordsSent
 
         override val connections: List<DeviceServiceProvider<*>>
-                get() = Collections.unmodifiableList(mConnections)
+                get() = mConnections
 
         override fun setAllowedDeviceIds(connection: DeviceServiceConnection<*>, allowedIds: Collection<String>) {
             deviceFilters[connection] = sanitizedIds(allowedIds)
@@ -642,7 +649,6 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         private val providerSeparator = ",".toRegex()
 
         fun sanitizedIds(ids: Collection<String>): Set<String> = HashSet(ids
-                .map { s -> s.trim { it <= ' ' } }
-                .filter(String::isNotEmpty))
+                .mapNotNull(String::takeTrimmedIfNotEmpty))
     }
 }

@@ -16,43 +16,7 @@
 
 apply plugin: 'kotlin-android-extensions'
 
-android {
-    compileSdkVersion 28
-    buildToolsVersion '28.0.3'
-
-    defaultConfig {
-        minSdkVersion 21
-        targetSdkVersion 28
-        versionCode versionCode
-        versionName version
-    }
-    lintOptions {
-        abortOnError false
-    }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    libraryVariants.all { variant ->
-        variant.outputs.all {
-            if (variant.name == 'release') {
-                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}.aar"
-            } else {
-                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}-${variant.name}.aar"
-            }
-        }
-    }
-    packagingOptions {
-        exclude 'META-INF/ASL2.0'
-        exclude 'META-INF/LICENSE'
-    }
-    compileOptions {
-        targetCompatibility 1.8
-        sourceCompatibility 1.8
-    }
-}
+apply from: "$rootDir/gradle/android.gradle"
 
 description = 'Kafka backend for processing device data.'
 
@@ -64,11 +28,13 @@ dependencies {
     api "androidx.appcompat:appcompat:1.0.2"
 
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
-    implementation 'com.google.firebase:firebase-config:16.4.0'
+    implementation 'com.google.firebase:firebase-config:16.4.1'
     implementation 'com.google.firebase:firebase-core:16.0.8'
     implementation 'com.crashlytics.sdk.android:crashlytics:2.9.9'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.27'
 }
 
-apply from: '../gradle/test.gradle'
-apply from: '../gradle/publishing.gradle'
+apply from: "$rootDir/gradle/test.gradle"
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/bintray.gradle"
+apply from: "$rootDir/gradle/artifactory.gradle"

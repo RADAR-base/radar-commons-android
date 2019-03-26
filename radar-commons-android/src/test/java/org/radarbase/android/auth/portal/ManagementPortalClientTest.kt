@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceMetadata
+import org.radarbase.android.auth.SourceType
 import org.radarbase.config.ServerConfig
 import java.io.IOException
 import java.util.*

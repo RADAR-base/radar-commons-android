@@ -1,0 +1,8 @@
+<resources>
+    <string name="phone_log_description">Collects call and sms logs. Only the call and sms length
+        are recorded, not their contents. Phone numbers are completely anonymised so they cannot be
+        traced or linked to other people.
+    </string>
+    <string name="call_log_service_name">%1$s call log</string>
+    <string name="phoneLogServiceDisplayName">Call/SMS</string>
+</resources>

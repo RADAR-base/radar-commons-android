@@ -21,4 +21,5 @@ interface MainActivityView {
      * Update the user interface.
      */
     fun update()
+    fun onRadarServiceBound(binder: IRadarBinder)
 }

@@ -26,7 +26,6 @@ import android.os.Bundle
 import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.Lifecycle
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
 import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
@@ -57,7 +56,6 @@ abstract class MainActivity : AppCompatActivity() {
 
     private var configurationBroadcastReceiver: BroadcastRegistration? = null
     private lateinit var permissionHandler: PermissionHandler
-    private var radarServiceIsStarted: Boolean = false
     protected lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     protected lateinit var radarConnection: ManagedServiceConnection<IRadarBinder>
 
@@ -138,10 +136,12 @@ abstract class MainActivity : AppCompatActivity() {
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
-        radarConnection = ManagedServiceConnection(this@MainActivity, RadarService::class.java)
-        radarConnection.bindFlags = Context.BIND_ABOVE_CLIENT
-        radarConnection.onBoundListeners += IRadarBinder::startScanning
-        radarConnection.onUnboundListeners += IRadarBinder::stopScanning
+        radarConnection = ManagedServiceConnection<IRadarBinder>(this@MainActivity, RadarService::class.java).apply {
+            bindFlags = Context.BIND_ABOVE_CLIENT or Context.BIND_AUTO_CREATE
+            onBoundListeners += IRadarBinder::startScanning
+            onBoundListeners += { binder -> view?.onRadarServiceBound(binder) }
+            onUnboundListeners += IRadarBinder::stopScanning
+        }
 
         configuration = radarConfig
         authConnection = ManagedServiceConnection(this, AuthService::class.java)
@@ -160,6 +160,7 @@ abstract class MainActivity : AppCompatActivity() {
         uiRefreshRate = configuration.getLong(UI_REFRESH_RATE_KEY)
     }
 
+    @CallSuper
     override fun onDestroy() {
         super.onDestroy()
 
@@ -178,44 +179,51 @@ abstract class MainActivity : AppCompatActivity() {
     /** Create a view to show the data of this activity.  */
     protected abstract fun createView(): MainActivityView
 
+    private var uiUpdater: SafeHandler.HandlerFuture? = null
+
     override fun onResume() {
         super.onResume()
-        mHandler.repeatWhile(uiRefreshRate) {
+        uiUpdater = mHandler.repeat(uiRefreshRate) {
             try {
                 // Update all rows in the UI with the data from the connections
                 view?.update()
             } catch (ex: Exception) {
-                logger.error("Failed to update view")
+                logger.error("Failed to update view", ex)
             }
-            lifecycle.currentState == Lifecycle.State.RESUMED
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        uiUpdater?.let {
+            it.cancel()
+            uiUpdater = null
+        }
+    }
+
+    @CallSuper
     public override fun onStart() {
         super.onStart()
         mHandler.start()
 
+
         authConnection.bind()
 
-        permissionHandler.invalidateCache()
-
         val radarServiceCls = (application as RadarApplication).radarService
-        if (!radarServiceIsStarted) {
-            try {
-                val intent = Intent(this, radarServiceCls)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(intent)
-                } else {
-                    startService(intent)
-                }
-                radarServiceIsStarted = true
-            } catch (ex: IllegalStateException) {
-                logger.error("Failed to start RadarService: activity is in background.", ex)
+        try {
+            val intent = Intent(this, radarServiceCls)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
             }
+        } catch (ex: IllegalStateException) {
+            logger.error("Failed to start RadarService: activity is in background.", ex)
         }
-        if (radarServiceIsStarted) {
-            radarConnection.bind()
-        }
+
+        radarConnection.bind()
+
+        permissionHandler.invalidateCache()
 
         testBindBluetooth()
 
@@ -239,15 +247,13 @@ abstract class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
     }
 
+    @CallSuper
     public override fun onStop() {
         super.onStop()
 
         mHandler.stop { view = null }
 
-        if (radarServiceIsStarted) {
-            radarConnection.unbind()
-        }
-
+        radarConnection.unbind()
         authConnection.unbind()
 
         bluetoothNeededReceiver?.unregister()

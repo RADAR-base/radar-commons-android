@@ -20,12 +20,12 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.SystemClock
 import android.util.Base64
+import androidx.annotation.Keep
 import okhttp3.Headers
 import org.json.JSONArray
 import org.json.JSONException
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCES_PROPERTY
-import org.radarbase.android.auth.portal.SourceType
 import org.radarcns.android.auth.AppSource
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.collections.HashMap
 
 /** Authentication state of the application.  */
+@Keep
 @Suppress("unused")
 class AppAuthState private constructor(builder: Builder) {
     val projectId: String?

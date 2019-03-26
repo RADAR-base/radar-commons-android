@@ -20,6 +20,7 @@ import org.apache.avro.generic.GenericData
 import org.apache.avro.io.BinaryEncoder
 import org.apache.avro.io.DatumWriter
 import org.apache.avro.io.EncoderFactory
+import org.radarbase.android.util.ChangeApplier
 import org.radarbase.data.Record
 import org.radarbase.topic.AvroTopic
 import org.radarbase.util.BackedObjectQueue
@@ -30,37 +31,33 @@ import java.io.OutputStream
 /**
  * Converts records from an AvroTopic for Tape
  */
-class TapeAvroSerializer<K, V>(topic: AvroTopic<K, V>, specificData: GenericData) : BackedObjectQueue.Serializer<Record<K, V>> {
+class TapeAvroSerializer<K: Any, V: Any>(topic: AvroTopic<K, V>, specificData: GenericData) : BackedObjectQueue.Serializer<Record<K, V>> {
     private val encoderFactory: EncoderFactory = EncoderFactory.get()
     @Suppress("UNCHECKED_CAST")
     private val keyWriter: DatumWriter<K> = specificData.createDatumWriter(topic.keySchema) as DatumWriter<K>
     @Suppress("UNCHECKED_CAST")
     private val valueWriter: DatumWriter<V> = specificData.createDatumWriter(topic.valueSchema) as DatumWriter<V>
     private var encoder: BinaryEncoder? = null
-    private var previousKey: K? = null
-    private var keyBytes: ByteArray? = ByteArray(0)
+    private val cachedKey = ChangeApplier(::serializeKey)
 
     @Throws(IOException::class)
     override fun serialize(value: Record<K, V>, output: OutputStream) {
         // for backwards compatibility
         output.write(EMPTY_HEADER, 0, 8)
-
-        output.write(if (value.key == previousKey) {
-            keyBytes
-        } else {
-            val keyOut = ByteArrayOutputStream()
-            encoder = encoderFactory.binaryEncoder(keyOut, encoder).also {
-                keyWriter.write(value.key, it)
-                it.flush()
-            }
-            previousKey = value.key
-            keyOut.toByteArray().also { keyBytes = it }
-        })
-
+        output.write(cachedKey.applyIfChanged(value.key))
         encoder = encoderFactory.binaryEncoder(output, encoder).also {
             valueWriter.write(value.value, it)
             it.flush()
         }
+    }
+
+    private fun serializeKey(key: K): ByteArray {
+        val keyOut = ByteArrayOutputStream()
+        encoder = encoderFactory.binaryEncoder(keyOut, encoder).also {
+            keyWriter.write(key, it)
+            it.flush()
+        }
+        return keyOut.toByteArray()
     }
 
     companion object {

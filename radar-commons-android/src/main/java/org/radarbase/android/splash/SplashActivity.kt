@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.SystemClock
 import androidx.annotation.CallSuper
+import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -26,6 +27,7 @@ import java.net.ConnectException
 /**
  * Ensure that settings and authentication is loaded
  */
+@Keep
 abstract class SplashActivity : AppCompatActivity() {
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var loginListener: LoginListener
@@ -77,7 +79,7 @@ abstract class SplashActivity : AppCompatActivity() {
             }
             else -> {
                 logger.info("Starting listening for configuration updates")
-                if (!networkReceiver.isConnected) {
+                if (!networkReceiver.state.isConnected) {
                     updateState(STATE_DISCONNECTED)
                 }
                 startConfigReceiver()
@@ -192,6 +194,7 @@ abstract class SplashActivity : AppCompatActivity() {
         authConnection.unbind()
     }
 
+    @Keep
     companion object {
         private val logger = LoggerFactory.getLogger(SplashActivity::class.java)
 

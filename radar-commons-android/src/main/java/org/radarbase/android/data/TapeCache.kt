@@ -41,7 +41,7 @@ import java.util.concurrent.ExecutionException
  * @param <K> measurement key type
  * @param <V> measurement value type
 </V></K> */
-class TapeCache<K, V>
+class TapeCache<K: Any, V: Any>
 /**
  * TapeCache to cache measurements with
  * @param topic Kafka Avro topic to write data for.
@@ -92,8 +92,8 @@ constructor(override val file: File,
 
         this.measurementsToAdd = mutableListOf()
 
-        this.serializer = TapeAvroSerializer(topic, Objects.requireNonNull(inputFormat))
-        this.deserializer = TapeAvroDeserializer(readTopic, Objects.requireNonNull(outputFormat))
+        this.serializer = TapeAvroSerializer(topic, inputFormat)
+        this.deserializer = TapeAvroDeserializer(readTopic, outputFormat)
         this.queue = BackedObjectQueue(queueFile, serializer, deserializer)
     }
 
@@ -206,7 +206,7 @@ constructor(override val file: File,
             measurementsToAdd.add(Record<K, V>(key, value))
 
             if (addMeasurementFuture == null) {
-                addMeasurementFuture = executor.delay(config.commitRate, this::doFlush)
+                addMeasurementFuture = executor.delay(config.commitRate, ::doFlush)
             }
         }
     }

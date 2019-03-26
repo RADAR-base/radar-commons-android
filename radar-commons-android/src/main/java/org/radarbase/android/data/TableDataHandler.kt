@@ -56,9 +56,6 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     private val broadcaster = LocalBroadcastManager.getInstance(context)
 
     private var config = DataHandler.DataHandlerConfiguration()
-    private var submitterConfig = KafkaDataSubmitter.SubmitterConfiguration()
-    private var restConfig = DataHandler.RestConfiguration()
-    private var cacheConfig = DataCache.CacheConfiguration()
 
     override var status: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
         get() = synchronized(statusSync) { field }
@@ -78,9 +75,9 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
 
     init {
         this.handler.start()
-        this.handler.repeat(10_000L, this::broadcastNumberOfRecords)
+        this.handler.repeat(10_000L, ::broadcastNumberOfRecords)
 
-        this.batteryLevelReceiver = BatteryStageReceiver(context, config.minimumBatteryLevel, config.reducedBatteryLevel) { stage ->
+        this.batteryLevelReceiver = BatteryStageReceiver(context, config.batteryStageLevels) { stage ->
             when (stage) {
                 BatteryStageReceiver.BatteryStage.FULL -> {
                     handler {
@@ -107,9 +104,9 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
                 }
             }
         }
-        this.networkConnectedReceiver = NetworkConnectedReceiver(context) { isConnected, hasWifiOrEthernet ->
+        this.networkConnectedReceiver = NetworkConnectedReceiver(context) { state ->
             if (isStarted) {
-                if (!isConnected || (!hasWifiOrEthernet && config.sendOnlyWithWifi)) {
+                if (!state.hasConnection(config.sendOnlyWithWifi)) {
                     logger.info("Network was disconnected, stopping data sending")
                     stop()
                 }
@@ -124,7 +121,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
         submitter = null
         sender = null
 
-        if (restConfig.kafkaConfig != null) {
+        if (config.restConfig.kafkaConfig != null) {
             doEnableSubmitter()
         } else {
             updateServerStatus(ServerStatusListener.Status.DISABLED)
@@ -150,31 +147,33 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     @Synchronized
     fun start() {
         if (isStarted
-                || submitterConfig.userId == null
+                || config.submitterConfig.userId == null
                 || status === ServerStatusListener.Status.DISABLED
                 || !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi)
                 || batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY) {
             return
         }
 
+        val kafkaConfig = config.restConfig.kafkaConfig ?: return
+
         updateServerStatus(ServerStatusListener.Status.CONNECTING)
 
         val client = RestClient.global()
-                .server(restConfig.kafkaConfig!!)
-                .gzipCompression(restConfig.useCompression)
-                .timeout(restConfig.connectionTimeout, TimeUnit.SECONDS)
+                .server(kafkaConfig)
+                .gzipCompression(config.restConfig.useCompression)
+                .timeout(config.restConfig.connectionTimeout, TimeUnit.SECONDS)
                 .build()
 
         val sender = RestSender.Builder().apply {
             httpClient(client)
-            schemaRetriever(restConfig.schemaRetriever)
-            headers(restConfig.headers)
-            useBinaryContent(restConfig.hasBinaryContent)
+            schemaRetriever(config.restConfig.schemaRetriever)
+            headers(config.restConfig.headers)
+            useBinaryContent(config.restConfig.hasBinaryContent)
         }.build().also {
             sender = it
         }
 
-        this.submitter = KafkaDataSubmitter(this, sender, submitterConfig)
+        this.submitter = KafkaDataSubmitter(this, sender, config.submitterConfig)
     }
 
     /**
@@ -280,7 +279,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
         get() {
             return if (submitter == null) {
                 emptyList()
-            } else if (networkConnectedReceiver.hasWifiOrEthernet || !config.sendOverDataHighPriority) {
+            } else if (networkConnectedReceiver.state.hasWifiOrEthernet || !config.sendOverDataHighPriority) {
                 ArrayList<DataCacheGroup<*, *>>(tables.values)
             } else {
                 tables.values.filter { it.topicName in config.highPriorityTopics }
@@ -316,7 +315,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     @Throws(IOException::class)
     override fun <V: SpecificRecord> registerCache(topic: AvroTopic<ObservationKey, V>): DataCache<ObservationKey, V> {
         return CacheStore.get()
-                .getOrCreateCaches(context.applicationContext, topic, cacheConfig)
+                .getOrCreateCaches(context.applicationContext, topic, config.cacheConfig)
                 .also { tables[topic.name] = it }
                 .let { it.activeDataCache }
     }
@@ -324,56 +323,53 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     @Synchronized
     override fun handler(build: DataHandler.DataHandlerConfiguration.() -> Unit) {
         val oldConfig = config
-        val newConfig = config.copy().apply(build)
-        if (newConfig == oldConfig) {
+
+        config = config.copy().apply(build)
+        if (config == oldConfig) {
             return
         }
-        if (newConfig.restConfig.kafkaConfig != null
-                && newConfig.restConfig.schemaRetriever != null
-                && newConfig.submitterConfig.userId != null) {
+
+        if (config.restConfig.kafkaConfig != null
+                && config.restConfig.schemaRetriever != null
+                && config.submitterConfig.userId != null) {
             enableSubmitter()
         } else {
             disableSubmitter()
         }
 
-        config = newConfig
-
-        if (newConfig.cacheConfig != oldConfig.cacheConfig) {
-            tables.values.forEach { it.activeDataCache.config = newConfig.cacheConfig }
+        if (config.cacheConfig != oldConfig.cacheConfig) {
+            tables.values.forEach { it.activeDataCache.config = config.cacheConfig }
         }
 
-        if (newConfig.submitterConfig != oldConfig.submitterConfig) {
+        if (config.submitterConfig != oldConfig.submitterConfig) {
             when {
-                newConfig.submitterConfig.userId == null -> disableSubmitter()
+                config.submitterConfig.userId == null -> disableSubmitter()
                 oldConfig.submitterConfig.userId == null -> enableSubmitter()
-                else -> submitter?.apply {
-                    config = newConfig.submitterConfig
-                }
+                else -> submitter?.config = config.submitterConfig
             }
         }
 
-        if (newConfig.restConfig != oldConfig.restConfig) {
-            val newRest = newConfig.restConfig
+        if (config.restConfig != oldConfig.restConfig) {
+            val newRest = config.restConfig
             newRest.kafkaConfig?.let { kafkaConfig ->
                 sender?.apply {
                     setCompression(newRest.useCompression)
                     setConnectionTimeout(newRest.connectionTimeout, TimeUnit.SECONDS)
                     if (oldConfig.restConfig.hasBinaryContent != newRest.hasBinaryContent) {
-                        if (newConfig.restConfig.hasBinaryContent) {
+                        if (config.restConfig.hasBinaryContent) {
                             useLegacyEncoding(RestSender.KAFKA_REST_ACCEPT_ENCODING, RestSender.KAFKA_REST_BINARY_ENCODING, true)
                         } else {
                             useLegacyEncoding(RestSender.KAFKA_REST_ACCEPT_ENCODING, RestSender.KAFKA_REST_AVRO_ENCODING, false)
                         }
                     }
-                    headers = newConfig.restConfig.headers
+                    headers = config.restConfig.headers
                     setKafkaConfig(kafkaConfig)
+                    resetConnection()
                 }
             }
         }
 
-        batteryLevelReceiver.minimumLevel = newConfig.minimumBatteryLevel
-        batteryLevelReceiver.reducedLevel = newConfig.reducedBatteryLevel
-        batteryLevelReceiver.notifyListener()
+        batteryLevelReceiver.stageLevels = config.batteryStageLevels
 
         networkConnectedReceiver.notifyListener()
         start()

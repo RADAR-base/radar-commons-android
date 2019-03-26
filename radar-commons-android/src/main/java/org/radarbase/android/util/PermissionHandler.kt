@@ -197,7 +197,7 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
                 if (expires <= now) {
                     resetRequestingPermission()
                 } else {
-                    mHandler.delay(expires - now, this::resetRequestingPermission)
+                    mHandler.delay(expires - now, ::resetRequestingPermission)
                 }
             }
         }

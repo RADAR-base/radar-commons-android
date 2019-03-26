@@ -3,7 +3,7 @@ package org.radarbase.android.auth
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.RadarService.Companion.sanitizedIds
-import org.radarbase.android.auth.portal.SourceType
+import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.util.Strings
 import org.radarcns.android.auth.AppSource
 import java.util.*
@@ -15,10 +15,8 @@ class SourceMetadata {
     var sourceName: String? = null
     var expectedSourceName: String? = null
         set(value) {
-            field = value?.let {
-                val name = it.trim()
-                if (name.isEmpty() || name == "null") null else name
-            }
+            field = value?.takeTrimmedIfNotEmpty()
+                    ?.takeUnless { it == "null" }
         }
     var attributes: Map<String, String> = mapOf()
         set(value) {

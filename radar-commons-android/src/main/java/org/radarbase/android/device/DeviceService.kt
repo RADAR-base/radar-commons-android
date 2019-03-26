@@ -25,13 +25,15 @@ import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.CallSuper
+import androidx.annotation.Keep
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.*
-import org.radarbase.android.auth.portal.SourceType
 import org.radarbase.android.data.DataHandler
+import org.radarbase.android.device.DeviceServiceProvider.Companion.MODEL_KEY
 import org.radarbase.android.device.DeviceServiceProvider.Companion.NEEDS_BLUETOOTH_KEY
+import org.radarbase.android.device.DeviceServiceProvider.Companion.PRODUCER_KEY
 import org.radarbase.android.radarApp
 import org.radarbase.android.radarConfig
 import org.radarbase.android.util.BundleSerialization
@@ -50,6 +52,7 @@ import kotlin.collections.HashMap
  *
  * Specific wearables should extend this class.
  */
+@Keep
 abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListener, LoginListener {
     val key = ObservationKey()
 
@@ -87,6 +90,8 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
     private lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
     private lateinit var broadcaster: LocalBroadcastManager
+    private lateinit var sourceModel: String
+    private lateinit var sourceProducer: String
 
     val state: T
         get() {
@@ -165,10 +170,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
 
     @CallSuper
     protected open fun configure(configuration: RadarConfiguration) {
-        val localManager = deviceManager
-        if (localManager != null) {
-            configureDeviceManager(localManager, configuration)
-        }
+        deviceManager?.let { configureDeviceManager(it, configuration) }
     }
 
     protected open fun configureDeviceManager(manager: DeviceManager<T>, configuration: RadarConfiguration) {}
@@ -253,32 +255,39 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
         if (key.getUserId() == null) {
             throw IllegalStateException("Cannot start recording: user ID is not set.")
         }
+
+        if (!handler.isStarted) {
+            handler.start()
+        }
+        handler.execute {
+            doStart(acceptableIds)
+        }
+    }
+
+    private fun doStart(acceptableIds: Set<String>) {
         val expectedNames = expectedSourceNames
         val actualIds = if (expectedNames.isEmpty()) acceptableIds else expectedNames
 
-        handler.start()
-        handler.execute {
-            val localManager = deviceManager
-            if (localManager == null) {
-                if (isBluetoothConnectionRequired && BluetoothAdapter.getDefaultAdapter() != null && !BluetoothAdapter.getDefaultAdapter().isEnabled) {
-                    logger.error("Cannot start recording without Bluetooth")
-                    return@execute
-                }
-                if (radarConnection.binder != null && dataHandler != null) {
-                    logger.info("Starting recording")
-                    if (deviceManager == null) {
-                        createDeviceManager().also { manager ->
-                            deviceManager = manager
-                            configureDeviceManager(manager, config)
-                            manager.start(actualIds)
-                        }
+        val localManager = deviceManager
+        if (localManager == null) {
+            if (isBluetoothConnectionRequired && BluetoothAdapter.getDefaultAdapter() != null && !BluetoothAdapter.getDefaultAdapter().isEnabled) {
+                logger.error("Cannot start recording without Bluetooth")
+                return
+            }
+            if (dataHandler != null) {
+                logger.info("Starting recording")
+                if (deviceManager == null) {
+                    createDeviceManager().also { manager ->
+                        deviceManager = manager
+                        configureDeviceManager(manager, config)
+                        manager.start(actualIds)
                     }
-                } else {
-                    startFuture = handler.delay(100) {
-                        startFuture?.let {
-                            startFuture = null
-                            startRecording(acceptableIds)
-                        }
+                }
+            } else if (startFuture == null) {
+                startFuture = handler.delay(100) {
+                    startFuture?.let {
+                        startFuture = null
+                        doStart(acceptableIds)
                     }
                 }
             }
@@ -299,6 +308,7 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         key.setProjectId(authState.projectId)
         key.setUserId(authState.userId)
+        sourceTypes = HashSet(authState.sourceTypes)
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
@@ -314,7 +324,10 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
     @CallSuper
     fun onInvocation(bundle: Bundle) {
         setHasBluetoothPermission(bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false))
-
+        sourceProducer = bundle.getString(PRODUCER_KEY)
+                ?: throw IllegalArgumentException("Missing source producer")
+        sourceModel = bundle.getString(MODEL_KEY)
+                ?: throw IllegalArgumentException("Missing source model")
         configure(config)
     }
 
@@ -349,6 +362,11 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
             this.attributes = attributes
         }
 
+        val onFail: (Exception?) -> Unit = {
+            logger.warn("Failed to register source: {}", it.toString())
+            handler.delay(300_000L) { registerDevice(type, name, attributes) }
+        }
+
         authConnection.binder?.registerSource(source,
                 { authState, updatedSource ->
                     key.setProjectId(authState.projectId)
@@ -358,29 +376,29 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
                     source.sourceName = updatedSource.sourceName
                     source.expectedSourceName = updatedSource.expectedSourceName
                     deviceManager?.didRegister(source)
-                },
-                { handler.delay(300_000L) { registerDevice(type, name, attributes) } })
-                ?: handler.delay(300_000L) { registerDevice(type, name, attributes) }
+                }, onFail)
+                ?: onFail(null)
     }
 
     open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>): Boolean {
+        if (sourceTypes.isEmpty()) {
+            handler.delay(5_000L) { ensureRegistration(id, name, attributes) }
+        }
+
         val fullAttributes = HashMap(attributes).apply {
-            put("physicalId", id ?: "")
-            put("physicalName", name)
+            this["physicalId"] = id ?: ""
+            this["physicalName"] = name
         }
         return if (sources.isEmpty()) {
             matchingSourceType?.let { registerDevice(it, name, fullAttributes) } != null
         } else {
             val matchingSource = sources
                     .find { source ->
-                        if (source.matches(id, name)) {
-                            true
-                        } else if (id != null && source.attributes["physicalId"]?.isEmpty() == false) {
-                            source.attributes["physicalId"] == id
-                        } else if (source.attributes["physicalName"]?.isEmpty() == false) {
-                            source.attributes["physicalName"] == name
-                        } else {
-                            false
+                        when {
+                            source.matches(id, name) -> true
+                            id != null && source.attributes["physicalId"]?.isEmpty() == false -> source.attributes["physicalId"] == id
+                            source.attributes["physicalName"]?.isEmpty() == false -> source.attributes["physicalName"] == name
+                            else -> false
                         }
                     }
 
@@ -395,9 +413,9 @@ abstract class DeviceService<T : BaseDeviceState> : Service(), DeviceStatusListe
 
     private val matchingSourceType: SourceType?
         get() = sourceTypes
-                    .filter { it.hasDynamicRegistration }
-                    .sortedBy { it.catalogVersion }
-                    .firstOrNull()
+                .filter { it.producer == sourceProducer && it.model == sourceModel }
+                .sortedBy { if (it.catalogVersion[0] == 'v') it.catalogVersion.substring(1) else it.catalogVersion }
+                .lastOrNull()
 
     override fun toString(): String {
         val localManager = deviceManager

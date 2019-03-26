@@ -22,15 +22,17 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.CallSuper
+import androidx.annotation.Keep
 import org.radarbase.android.*
 import org.radarbase.android.auth.AppAuthState
-import org.radarbase.android.auth.portal.SourceType
+import org.radarbase.android.auth.SourceType
 import org.slf4j.LoggerFactory
 
 /**
  * RADAR service provider, to bind and configure to a service. It is not thread-safe.
  * @param <T> state that the Service will provide.
 </T> */
+@Keep
 abstract class DeviceServiceProvider<T : BaseDeviceState> {
 
     /** Get the MainActivity associated to the current connection.  */
@@ -39,27 +41,24 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
      * @throws NullPointerException if given context is null
      * @throws IllegalStateException if the connection has already been started.
      */
-    var radarService: RadarService? = null
+    private var _radarService: RadarService? = null
+    var radarService: RadarService
+        get() = _radarService
+                    ?: throw IllegalStateException("Cannot use provider without RadarService")
         set(radarService) {
-            if (connectionBacking != null) {
+            if (_connection != null) {
                 throw IllegalStateException(
                         "Cannot change the RadarService after a connection has been started.")
             }
-            field = radarService
+            _radarService = radarService
         }
 
-    private var connectionBacking: DeviceServiceConnection<T>? = null
+    private var _connection: DeviceServiceConnection<T>? = null
 
     val connection: DeviceServiceConnection<T>
-        get() {
-            if (connectionBacking == null) {
-                val radarService = radarService
-                        ?: throw IllegalStateException("#setRadarService(RadarService) needs to be set before #getConnection() is called.")
-
-                connectionBacking = DeviceServiceConnection(radarService, serviceClass.name)
-            }
-            return connectionBacking!!
-        }
+        get() = _connection
+                ?: DeviceServiceConnection<T>(radarService, serviceClass.name)
+                        .also { _connection = it }
 
     /**
      * Whether [.bind] has been called and [.unbind] has not been called since then.
@@ -94,7 +93,7 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
 
     /** Get the RadarConfiguration currently set for the service provider.  */
     val config: RadarConfiguration
-        get() = radarService!!.radarConfig
+        get() = radarService.radarConfig
 
     abstract val sourceProducer: String
 
@@ -124,10 +123,6 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
      * if the service is already bound.
      */
     fun bind() {
-        if (this.radarService == null) {
-            throw IllegalStateException(
-                    "#setRadarService(RadarService) needs to be set before #bind() is called.")
-        }
         if (isBound) {
             throw IllegalStateException("Service is already bound")
         }
@@ -136,12 +131,12 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
             val extras = Bundle()
             configure(extras)
 
-            val intent = Intent(this.radarService, serviceClass).apply {
+            val intent = Intent(radarService, serviceClass).apply {
                 putExtras(extras)
             }
 
-            this.radarService!!.startService(intent)
-            this.radarService!!.bindService(intent, connection, Context.BIND_ABOVE_CLIENT)
+            radarService.startService(intent)
+            radarService.bindService(intent, connection, Context.BIND_ABOVE_CLIENT)
 
             isBound = true
         } catch (ex: IllegalStateException) {
@@ -155,15 +150,12 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
      * called.
      */
     fun unbind() {
-        if (this.radarService == null) {
-            throw IllegalStateException("#setRadarService(RadarService) needs to be set before #unbind() is called.")
-        }
         if (!isBound) {
             throw IllegalStateException("Service is not bound")
         }
         logger.debug("Unbinding {}", this)
         isBound = false
-        this.radarService!!.unbindService(connection)
+        radarService.unbindService(connection)
         connection.onServiceDisconnected(null)
     }
 
@@ -186,15 +178,17 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
     @CallSuper
     protected fun configure(bundle: Bundle) {
         // Add the default configuration parameters given to the service intents
-        radarService!!.radarApp.configureProvider(bundle)
+        radarService.radarApp.configureProvider(bundle)
         val permissions = permissionsNeeded
         bundle.putBoolean(NEEDS_BLUETOOTH_KEY,
                 BLUETOOTH in permissions || BLUETOOTH_ADMIN in permissions)
+        bundle.putString(PRODUCER_KEY, sourceProducer)
+        bundle.putString(MODEL_KEY, sourceModel)
     }
 
     /** Whether [.getConnection] has already been called.  */
     val isConnected: Boolean
-        get() = connectionBacking != null
+        get() = _connection != null
 
     override fun toString(): String = "${javaClass.simpleName}<${serviceClass.simpleName}>"
 
@@ -251,8 +245,14 @@ abstract class DeviceServiceProvider<T : BaseDeviceState> {
         return other != null && other.javaClass == javaClass
     }
 
+    open val actions: List<Action> = emptyList()
+
+    data class Action(val name: String, val activate: (MainActivity) -> Unit)
+
     companion object {
         const val NEEDS_BLUETOOTH_KEY = "org.radarcns.android.device.DeviceServiceProvider.needsBluetooth"
+        const val PRODUCER_KEY = "org.radarcns.android.device.DeviceServiceProvider.sourceProducer"
+        const val MODEL_KEY = "org.radarcns.android.device.DeviceServiceProvider.sourceModel"
         private val logger = LoggerFactory.getLogger(DeviceServiceProvider::class.java)
     }
 }

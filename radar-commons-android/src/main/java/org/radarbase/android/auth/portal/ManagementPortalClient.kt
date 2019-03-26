@@ -65,15 +65,10 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
     fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
-        val body = RequestBody.create(APPLICATION_JSON_TYPE,
-                sourceRegistrationBody(source).toString())
+        val bodyString = sourceRegistrationBody(source).toString()
+        val body = RequestBody.create(APPLICATION_JSON_TYPE, bodyString)
 
-        var url = "api/subjects/${auth.userId}/sources"
-        source.sourceId?.let {
-            url += "/$it"
-        }
-
-        val request = client.requestBuilder(url)
+        val request = client.requestBuilder("api/subjects/${auth.userId}/sources")
                 .post(body)
                 .headers(auth.okHttpHeaders)
                 .header("Content-Type", APPLICATION_JSON_UTF8)
@@ -84,13 +79,48 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
             when (response.code()) {
                 401 -> throw AuthenticationException("Authentication failure with the ManagementPortal.")
                 403 -> throw UnsupportedOperationException("Not allowed to update source data.")
-                404 -> throw IOException("User " + auth.userId + " is no longer registered with the ManagementPortal.")
+                404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal.")
                 409 -> throw ConflictException()
                 else -> {
                     val responseBody = RestClient.responseBody(response) ?: ""
 
                     if (!response.isSuccessful) {
-                        throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody")
+                        throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $bodyString")
+                    } else if (responseBody.isEmpty()) {
+                        throw IOException("Source registration with the ManagementPortal did not yield result.")
+                    } else {
+                        parseSourceRegistration(responseBody, source)
+                        return source
+                    }
+                }
+            }
+        }
+    }
+
+
+    /** Register a source with the Management Portal.  */
+    @Throws(IOException::class, JSONException::class)
+    fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
+        val bodyString = sourceUpdateBody(source).toString()
+        val body = RequestBody.create(APPLICATION_JSON_TYPE, bodyString)
+
+        val request = client.requestBuilder("api/subjects/${auth.userId}/sources/${source.sourceName}")
+                .post(body)
+                .headers(auth.okHttpHeaders)
+                .header("Content-Type", APPLICATION_JSON_UTF8)
+                .header("Accept", APPLICATION_JSON)
+                .build()
+
+        client.request(request).use { response ->
+            when (response.code()) {
+                401 -> throw AuthenticationException("Authentication failure with the ManagementPortal.")
+                403 -> throw UnsupportedOperationException("Not allowed to update source data.")
+                404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal or the source no longer exists.")
+                else -> {
+                    val responseBody = RestClient.responseBody(response) ?: ""
+
+                    if (!response.isSuccessful) {
+                        throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $bodyString")
                     } else if (responseBody.isEmpty()) {
                         throw IOException("Source registration with the ManagementPortal did not yield result.")
                     } else {
@@ -144,8 +174,6 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
 
         const val SOURCES_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.sources"
         const val MP_REFRESH_TOKEN_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.refreshToken"
-        const val PRIVACY_POLICY_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.privacyPolicyUrl"
-        const val BASE_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.baseUrl"
         private const val APPLICATION_JSON = "application/json"
         private const val APPLICATION_JSON_UTF8 = "$APPLICATION_JSON; charset=utf-8"
         private val APPLICATION_JSON_TYPE = MediaType.parse(APPLICATION_JSON_UTF8)
@@ -175,6 +203,15 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
             return requestBody
         }
 
+        @Throws(JSONException::class)
+        internal fun sourceUpdateBody(source: SourceMetadata): JSONObject {
+            return JSONObject().apply {
+                for ((key, value) in source.attributes) {
+                    put(key, value)
+                }
+            }
+        }
+
         /**
          * Parse the response of a subject/source registration.
          * @param body registration response body
@@ -183,6 +220,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
          */
         @Throws(JSONException::class)
         internal fun parseSourceRegistration(body: String, source: SourceMetadata) {
+            logger.debug("Parsing source from {}", body)
             val responseObject = JSONObject(body)
             source.sourceId = responseObject.getString("sourceId")
             source.sourceName = responseObject.optString("sourceName", source.sourceId)

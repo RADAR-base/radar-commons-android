@@ -11,21 +11,22 @@ import org.radarbase.android.RadarApplication
 import org.slf4j.LoggerFactory
 
 open class ManagedServiceConnection<T: IBinder>(val context: Context, private val cls: Class<out Service>) {
-    var isBound: Boolean = false
+    @Volatile
+    var isBound = false
+    @Volatile
     var binder: T? = null
     val onBoundListeners: MutableList<(T) -> Unit> = mutableListOf()
     val onUnboundListeners: MutableList<(T) -> Unit> = mutableListOf()
-    var bindFlags: Int = BIND_AUTO_CREATE
+    var bindFlags = BIND_AUTO_CREATE
 
     private val app = context.applicationContext as RadarApplication
     private val connection: ServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             service?.let { b ->
                 @Suppress("UNCHECKED_CAST")
-                (b as? T)
-                        ?.also { binder = it }
-                        ?.also { bound -> onBoundListeners.forEach { it(bound) } }
-                        ?: throw java.lang.IllegalStateException("Cannot cast binder to type T")
+                (b as? T ?: throw java.lang.IllegalStateException("Cannot cast binder to type T"))
+                        .also { binder = it }
+                        .also { bound -> onBoundListeners.forEach { it(bound) } }
             }
         }
 
@@ -39,7 +40,14 @@ open class ManagedServiceConnection<T: IBinder>(val context: Context, private va
             context.bindService(Intent(context, cls), connection, bindFlags)
         } catch (ex: IllegalStateException) {
             false
-        }.also { bound -> isBound = bound }
+        }.also {
+            isBound = it
+            if (it) {
+                logger.debug("Bound service {}", cls.simpleName)
+            } else {
+                logger.warn("Failed to bind to {}", cls.simpleName)
+            }
+        }
     }
 
     open fun applyBinder(callback: (T) -> Unit) {
@@ -48,8 +56,10 @@ open class ManagedServiceConnection<T: IBinder>(val context: Context, private va
 
     fun unbind(): Boolean {
         if (isBound) {
-            binder?.also { bound -> onUnboundListeners.forEach { it(bound) } }
-            binder = null
+            binder?.also { bound ->
+                onUnboundListeners.forEach { it(bound) }
+                binder = null
+            }
             isBound = false
             try {
                 context.unbindService(connection)
@@ -62,6 +72,8 @@ open class ManagedServiceConnection<T: IBinder>(val context: Context, private va
         }
         return false
     }
+
+    override fun toString(): String = "ManagedServiceConnection<${cls.simpleName}>"
 
     companion object {
         private val logger = LoggerFactory.getLogger(ManagedServiceConnection::class.java)

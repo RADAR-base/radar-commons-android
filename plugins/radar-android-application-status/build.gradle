@@ -1,0 +1,18 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = 'Application statistics plugin for RADAR passive remote monitoring app'
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+dependencies {
+    api project(':radar-commons-android')
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/bintray.gradle"

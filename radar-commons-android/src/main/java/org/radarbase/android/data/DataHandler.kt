@@ -19,6 +19,7 @@ package org.radarbase.android.data
 import okhttp3.Headers
 import org.radarbase.android.kafka.KafkaDataSubmitter
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.rest.SchemaRetriever
 import org.radarbase.topic.AvroTopic
@@ -54,9 +55,8 @@ interface DataHandler<K, V> : ServerStatusListener {
 
     data class DataHandlerConfiguration(
             /** Minimum battery level to send data. */
-            var minimumBatteryLevel: Float = MINIMUM_BATTERY_LEVEL,
-            /** Battery level below which to reduce data sending. */
-            var reducedBatteryLevel: Float = REDUCED_BATTERY_LEVEL,
+            var batteryStageLevels: BatteryStageReceiver.StageLevels =
+                    BatteryStageReceiver.StageLevels(MINIMUM_BATTERY_LEVEL, REDUCED_BATTERY_LEVEL),
             /** Data sending reduction if a reduced battery level is detected. */
             var reducedUploadMultiplier: Int = 5,
             /** Whether to send only if Wifi or Ethernet is enabled. */
@@ -69,6 +69,9 @@ interface DataHandler<K, V> : ServerStatusListener {
             var cacheConfig: DataCache.CacheConfiguration = DataCache.CacheConfiguration(),
             var submitterConfig: KafkaDataSubmitter.SubmitterConfiguration = KafkaDataSubmitter.SubmitterConfiguration()
     ) {
+        fun batteryLevel(builder: BatteryStageReceiver.StageLevels.() -> Unit) {
+            batteryStageLevels = batteryStageLevels.copy().apply(builder)
+        }
         fun cache(builder: DataCache.CacheConfiguration.() -> Unit) {
             cacheConfig = cacheConfig.copy().apply(builder)
         }

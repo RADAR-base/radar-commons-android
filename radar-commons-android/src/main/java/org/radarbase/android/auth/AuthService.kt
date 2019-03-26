@@ -6,6 +6,7 @@ import android.content.Intent.*
 import android.os.Binder
 import android.os.IBinder
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
+import androidx.annotation.Keep
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarConfiguration
@@ -19,6 +20,7 @@ import java.net.ConnectException
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
+@Keep
 abstract class AuthService : Service(), LoginListener {
     private lateinit var appAuth: AppAuthState
     lateinit var loginManagers: List<LoginManager>
@@ -44,9 +46,9 @@ abstract class AuthService : Service(), LoginListener {
         handler.start()
         loginManagers = createLoginManagers(appAuth)
         networkConnectedListener = NetworkConnectedReceiver(this, object : NetworkConnectedReceiver.NetworkConnectedListener {
-            override fun onNetworkConnectionChanged(isConnected: Boolean, hasWifiOrEthernet: Boolean) {
+            override fun onNetworkConnectionChanged(state: NetworkConnectedReceiver.NetworkState) {
                 handler.execute {
-                    this@AuthService.isConnected = isConnected
+                    isConnected = state.isConnected
                     if (isConnected && !appAuth.isValidFor(5, TimeUnit.MINUTES)) {
                         refresh()
                     }
@@ -142,9 +144,9 @@ abstract class AuthService : Service(), LoginListener {
                 val actualDelay = Math.min(2 * (currentDelay ?: RETRY_MIN_DELAY), RETRY_MAX_DELAY)
                         .also { currentDelay = it }
                         .let { Random.nextLong(RETRY_MIN_DELAY, it) }
-                handler.delay(actualDelay, this::refresh)
+                handler.delay(actualDelay, ::refresh)
             } else {
-                if (networkConnectedListener.isConnected) {
+                if (networkConnectedListener.state.isConnected) {
                     startLogin()
                 }
             }
@@ -306,5 +308,7 @@ abstract class AuthService : Service(), LoginListener {
         private val logger = LoggerFactory.getLogger(AuthService::class.java)
         private const val RETRY_MIN_DELAY = 300L
         private const val RETRY_MAX_DELAY = 86400L
+        const val PRIVACY_POLICY_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.privacyPolicyUrl"
+        const val BASE_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.baseUrl"
     }
 }

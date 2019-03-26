@@ -31,21 +31,22 @@ import org.slf4j.LoggerFactory
 /**
  * Keeps track of whether there is a network connection (e.g., WiFi or Ethernet).
  */
-class NetworkConnectedReceiver(private val context: Context, private val listener: ((isConnected: Boolean, hasWifiOrEthernet: Boolean) -> Unit)? = null) : SpecificReceiver {
+class NetworkConnectedReceiver(private val context: Context, private val listener: ((NetworkState) -> Unit)? = null) : SpecificReceiver {
     private val connectivityManager: ConnectivityManager? = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    var hasWifiOrEthernet: Boolean = true
-        private set
-    var isConnected: Boolean = true
-        private set
     private var isReceiverRegistered: Boolean = false
     private var receiver: BroadcastReceiver? = null
     private var callback: ConnectivityManager.NetworkCallback? = null
 
     constructor(context: Context, listener: NetworkConnectedListener) : this(context, listener::onNetworkConnectionChanged)
 
-    fun hasConnection(wifiOrEthernetOnly: Boolean): Boolean {
-        return isConnected && (hasWifiOrEthernet || !wifiOrEthernetOnly)
-    }
+    private val _state = ChangeRunner(NetworkState(isConnected = false, hasWifiOrEthernet = false))
+    var state: NetworkState
+        get() = _state.value
+        private set(value) {
+            _state.applyIfChanged(value) { notifyListener() }
+        }
+
+    fun hasConnection(wifiOrEthernetOnly: Boolean) = state.hasConnection(wifiOrEthernetOnly)
 
     override fun register() {
         if (connectivityManager == null) {
@@ -60,7 +61,7 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
     }
 
     override fun notifyListener() {
-        listener?.let { it(isConnected, hasWifiOrEthernet) }
+        listener?.let { it(state) }
     }
 
     @Suppress("DEPRECATION")
@@ -68,17 +69,11 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
         val localReceiver = receiver ?: object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent?) {
                 if (intent?.action == CONNECTIVITY_ACTION) {
-                    val activeNetwork = cm.activeNetworkInfo
-                    if (activeNetwork == null) {
-                        isConnected = false
-                        hasWifiOrEthernet = false
-                    } else {
-                        isConnected = activeNetwork.isConnected
-                        val networkType = activeNetwork.type
-                        hasWifiOrEthernet = networkType == TYPE_WIFI || networkType == TYPE_ETHERNET
-                    }
+                    state = cm.activeNetworkInfo?.let {
+                        val networkType = it.type
+                        NetworkState(it.isConnected, networkType == TYPE_WIFI || networkType == TYPE_ETHERNET)
+                    } ?: NetworkState(isConnected = false, hasWifiOrEthernet = false)
 
-                    notifyListener()
                 }
             }
         }.also { receiver = it }
@@ -93,12 +88,11 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
         if (callback == null) {
             callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    isConnected = true
+                    state = NetworkState(isConnected = true, hasWifiOrEthernet = state.hasWifiOrEthernet)
                 }
 
                 override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                    hasWifiOrEthernet = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                    notifyListener()
+                    state = NetworkState(state.isConnected, capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
                 }
 
                 override fun onUnavailable() {
@@ -106,9 +100,7 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
                 }
 
                 override fun onLost(network: Network) {
-                    isConnected = false
-                    hasWifiOrEthernet = false
-                    notifyListener()
+                    state = NetworkState(isConnected = false, hasWifiOrEthernet = false)
                 }
             }
         }
@@ -117,16 +109,14 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
 
         val network = cm.activeNetwork
         val networkInfo = network?.let { cm.getNetworkInfo(it) }
-        if (networkInfo?.isConnected == true) {
-            isConnected = true
+        state = if (networkInfo?.isConnected == true) {
             val capabilities = cm.getNetworkCapabilities(network)
-            hasWifiOrEthernet = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-                    || capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
+            NetworkState(true,
+                    capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+                            || capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true)
         } else {
-            isConnected = false
-            hasWifiOrEthernet = false
+            NetworkState(isConnected = false, hasWifiOrEthernet = false)
         }
-        notifyListener()
     }
 
     override fun unregister() {
@@ -141,8 +131,14 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
         isReceiverRegistered = false
     }
 
+    data class NetworkState(val isConnected: Boolean, val hasWifiOrEthernet: Boolean) {
+        fun hasConnection(wifiOrEthernetOnly: Boolean): Boolean {
+            return isConnected && (hasWifiOrEthernet || !wifiOrEthernetOnly)
+        }
+    }
+
     interface NetworkConnectedListener {
-        fun onNetworkConnectionChanged(isConnected: Boolean, hasWifiOrEthernet: Boolean)
+        fun onNetworkConnectionChanged(state: NetworkState)
     }
 
     companion object {

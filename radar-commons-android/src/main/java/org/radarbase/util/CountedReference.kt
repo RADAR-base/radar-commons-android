@@ -19,7 +19,7 @@ package org.radarbase.util
 /**
  * Reference that will close itself once its released.
  */
-class CountedReference<T>(private val creator: () -> T, private val destroyer: (T) -> Unit) {
+class CountedReference<T>(private val creator: () -> T, private val destroyer: T.() -> Unit) {
     private var value: T? = null
     private var count: Int = 0
 
@@ -44,8 +44,10 @@ class CountedReference<T>(private val creator: () -> T, private val destroyer: (
         }
         count--
         if (count == 0) {
-            value?.let(destroyer)
-            value = null
+            value?.let {
+                it.destroyer()
+                value = null
+            }
         }
     }
 }

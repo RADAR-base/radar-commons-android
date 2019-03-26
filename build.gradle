@@ -28,20 +28,20 @@ buildscript {
         classpath 'de.mobilej.unmock:UnMockPlugin:0.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.0'
         classpath 'digital.wup:android-maven-publish:3.6.2'
-        classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.17"
+        classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.18"
     }
 }
 
 subprojects {
     apply plugin: 'com.android.library'
-    apply plugin: 'idea'
     apply plugin: 'kotlin-android'
+    apply plugin: 'idea'
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '0.10.0-SNAPSHOT'
+    version = '1.0.0-SNAPSHOT'
     ext.versionCode = 29
     group = 'org.radarbase'
     ext.githubRepoName = 'RADAR-base/radar-commons-android'

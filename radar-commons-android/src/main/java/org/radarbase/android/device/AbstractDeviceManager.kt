@@ -17,8 +17,8 @@
 package org.radarbase.android.device
 
 import androidx.annotation.CallSuper
+import androidx.annotation.Keep
 import com.crashlytics.android.Crashlytics
-import org.apache.avro.Schema
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.SOURCE_ID_KEY
@@ -35,6 +35,7 @@ import java.io.IOException
  * @param <S> service type the manager is started by
  * @param <T> state type that the manager will update.
  */
+@Keep
 abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(val service: S)
         : DeviceManager<T> {
 
@@ -97,13 +98,11 @@ abstract class AbstractDeviceManager<S : DeviceService<T>, T : BaseDeviceState>(
      * @return created topic
      */
     protected fun <V : SpecificRecord> createCache(
-            name: String, valueClass: Class<V>): DataCache<ObservationKey, V> {
+            name: String, valueClass: V): DataCache<ObservationKey, V> {
         try {
-            val method = valueClass.getMethod("getClassSchema")
-            val valueSchema = method.invoke(null) as Schema
             val topic = AvroTopic(name,
-                    ObservationKey.getClassSchema(), valueSchema,
-                    ObservationKey::class.java, valueClass)
+                    ObservationKey.getClassSchema(), valueClass.schema,
+                    ObservationKey::class.java, valueClass::class.java)
             return dataHandler.registerCache(topic)
         } catch (e: ReflectiveOperationException) {
             logger.error("Error creating topic {}", name, e)

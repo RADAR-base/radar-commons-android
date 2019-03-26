@@ -52,7 +52,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
     /**
      * Check whether the connection was closed and try to reconnect.
      */
-    private fun run() {
+    private fun makeCheck() {
         future = null
         try {
             if (!isConnected) {
@@ -80,7 +80,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
     private fun post(delay: Long) {
         mHandler.executeReentrant {
             future?.cancel()
-            future = mHandler.delay(delay, this::run)
+            future = mHandler.delay(delay, ::makeCheck)
         }
     }
 

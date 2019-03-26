@@ -6,7 +6,9 @@ import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
+import org.radarbase.android.auth.SourceType
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE
+import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.*
@@ -60,6 +62,7 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
             val sources = ArrayList<SourceType>(numSources)
             for (i in 0 until numSources) {
                 sources += sourceTypesArr.getJSONObject(i).run {
+                    logger.debug("Parsing source type {}", this)
                     SourceType(
                             getInt("id"),
                             getString("producer"),
@@ -124,8 +127,7 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
         fun getHumanReadableUserId(state: AppAuthState): String? {
             return state.attributes.entries
                     .find { e -> e.key.equals("Human-readable-identifier", ignoreCase = true) }
-                    ?.let { entry -> entry.value.trim { it <= ' ' } }
-                    ?.takeIf(String::isNotEmpty)
+                    ?.let { entry -> entry.value.takeTrimmedIfNotEmpty() }
                     ?: state.userId
         }
     }

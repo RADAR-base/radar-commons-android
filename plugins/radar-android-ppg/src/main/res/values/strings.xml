@@ -1,0 +1,12 @@
+<resources>
+    <string name="ppg_app">PPG measurement</string>
+    <string name="action_settings">Settings</string>
+    <string name="start">Start</string>
+    <string name="ppg_not_started">Press start when ready</string>
+    <string name="ppg_camera_and_flashlight">Camera and flashlight</string>
+    <string name="ppg_finger">Finger</string>
+    <string name="ppg_done">Measurement done, thank you.</string>
+    <string name="ppg_stop">Stop</string>
+    <string name="ppg_display_name">PPG</string>
+    <string name="startPpgMeasurement">PPG measurement</string>
+</resources>

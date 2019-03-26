@@ -17,9 +17,11 @@
 package org.radarbase.android.auth
 
 import android.app.Activity
+import androidx.annotation.Keep
 import org.radarbase.producer.AuthenticationException
 
 /** Manage a single login method.  */
+@Keep
 interface LoginManager {
     /**
      * Types of authentication sources that the current login manager can handle.

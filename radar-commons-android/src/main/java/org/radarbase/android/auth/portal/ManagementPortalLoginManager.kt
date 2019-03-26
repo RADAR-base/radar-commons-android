@@ -139,9 +139,20 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
 
         client?.let { client ->
             try {
-                client.registerSource(authState, source).let { source ->
-                    success(addSource(authState, source), source)
+                val updatedSource = if (source.sourceId == null) {
+                    // temporary measure to reuse existing source IDs if they exist
+                    source.type?.id
+                            ?.let { sourceType -> sources.values.find { it.type?.id == sourceType } }
+                            ?.let {
+                                source.sourceId = it.sourceId
+                                source.sourceName = it.sourceName
+                                client.updateSource(authState, source)
+                            }
+                            ?: client.registerSource(authState, source)
+                } else {
+                    client.updateSource(authState, source)
                 }
+                success(addSource(authState, updatedSource), updatedSource)
             } catch (ex: UnsupportedOperationException) {
                 logger.warn("ManagementPortal does not support updating the app source.")
                 success(addSource(authState, source), source)
@@ -151,8 +162,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                         updateSources(authState)
                         sources[source.sourceId]?.let { source ->
                             success(authState, source)
-                        }
-                                ?: failure(IllegalStateException("Source was not added to ManagementPortal, even though conflict was reported."))
+                        } ?: failure(IllegalStateException("Source was not added to ManagementPortal, even though conflict was reported."))
                     }
                 } catch (ioex: IOException) {
                     logger.error("Failed to register source {} with {}: already registered",

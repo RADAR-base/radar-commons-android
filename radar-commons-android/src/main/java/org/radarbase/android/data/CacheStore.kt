@@ -45,7 +45,7 @@ class CacheStore private constructor() {
     @Suppress("UNCHECKED_CAST")
     @Synchronized
     @Throws(IOException::class)
-    fun <K : ObservationKey, V : SpecificRecord> getOrCreateCaches(context: Context, topic: AvroTopic<K, V>, config: DataCache.CacheConfiguration): DataCacheGroup<K, V> {
+    fun <K: ObservationKey, V: SpecificRecord> getOrCreateCaches(context: Context, topic: AvroTopic<K, V>, config: DataCache.CacheConfiguration): DataCacheGroup<K, V> {
         val ref = tables[topic.name] as SynchronizedReference<DataCacheGroup<K, V>>?
                 ?: SynchronizedReference {
                     loadCache(context.cacheDir.absolutePath + "/" + topic.name, topic, config)
@@ -55,7 +55,7 @@ class CacheStore private constructor() {
     }
 
     @Throws(IOException::class)
-    private fun <K, V> loadCache(base: String, topic: AvroTopic<K, V>, config: DataCache.CacheConfiguration): DataCacheGroup<K, V> {
+    private fun <K: Any, V: Any> loadCache(base: String, topic: AvroTopic<K, V>, config: DataCache.CacheConfiguration): DataCacheGroup<K, V> {
         val fileBases = getFileBases(base)
         logger.debug("Files for topic {}: {}", topic.name, fileBases)
 

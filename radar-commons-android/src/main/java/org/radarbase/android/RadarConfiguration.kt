@@ -31,8 +31,8 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 import org.radarbase.android.auth.AppAuthState
+import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.portal.GetSubjectParser
-import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -444,6 +444,7 @@ class RadarConfiguration private constructor(context: Context,
         const val START_AT_BOOT = "start_at_boot"
         const val DEVICE_SERVICES_TO_CONNECT = "device_services_to_connect"
         const val KAFKA_UPLOAD_MINIMUM_BATTERY_LEVEL = "kafka_upload_minimum_battery_level"
+        const val KAFKA_UPLOAD_REDUCED_BATTERY_LEVEL = "kafka_upload_reduced_battery_level"
         const val MAX_CACHE_SIZE = "cache_max_size_bytes"
         const val SEND_ONLY_WITH_WIFI = "send_only_with_wifi"
         const val SEND_BINARY_CONTENT = "send_binary_content"

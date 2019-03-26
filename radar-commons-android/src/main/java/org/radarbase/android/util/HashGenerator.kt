@@ -19,14 +19,11 @@ package org.radarbase.android.util
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
-
 import org.radarbase.util.Serialization
-
 import java.nio.ByteBuffer
 import java.security.InvalidKeyException
 import java.security.NoSuchAlgorithmException
 import java.security.SecureRandom
-
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 

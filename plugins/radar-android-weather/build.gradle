@@ -1,0 +1,15 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+group = 'org.radarcns'
+description = 'Plugin for pRMT that queries Weather API'
+
+dependencies {
+    api project(':radar-commons-android')
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/bintray.gradle"

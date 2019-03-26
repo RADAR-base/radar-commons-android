@@ -3,18 +3,12 @@ package org.radarbase.android.device
 import com.crashlytics.android.Crashlytics
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarService
+import org.radarbase.android.util.ChangeApplier
 import org.slf4j.LoggerFactory
 import java.util.*
 
 class ProviderLoader {
-
-    private var previousDeviceServices: String? = null
-    private var previousProviders: List<DeviceServiceProvider<*>>? = null
-
-    init {
-        previousDeviceServices = null
-        previousProviders = null
-    }
+    private val deviceServiceCache = ChangeApplier(::loadProviders)
 
     /**
      * Loads the service providers specified in the
@@ -23,20 +17,12 @@ class ProviderLoader {
      * loaded service providers.
      */
     @Synchronized
-    fun loadProviders(context: RadarService,
+    fun loadProviders(radarService: RadarService,
                       config: RadarConfiguration): List<DeviceServiceProvider<*>> {
         val deviceServices = config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT)
-        if (previousDeviceServices == deviceServices) {
-            return previousProviders ?: listOf()
+        return deviceServiceCache.runIfChanged(deviceServices) { providers ->
+            providers.forEach { it.radarService = radarService }
         }
-        val providers = loadProviders(deviceServices)
-        for (provider in providers) {
-            provider.radarService = context
-        }
-        previousDeviceServices = deviceServices
-        previousProviders = providers
-
-        return providers
     }
 
     /**
@@ -51,9 +37,12 @@ class ProviderLoader {
                 }
                 .map { className ->
                     try {
-                        Class.forName(className)
+                        (Class.forName(className)
                                 .getConstructor()
-                                .newInstance() as DeviceServiceProvider<*>
+                                .newInstance() as DeviceServiceProvider<*>)
+                    } catch (ex: ClassNotFoundException) {
+                        logger.warn("Provider {} not found", className)
+                        null
                     } catch (ex: ReflectiveOperationException) {
                         logger.warn("Provider {} is not a legal DeviceServiceProvider: {}", className,
                                 ex.toString())
