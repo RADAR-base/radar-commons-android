@@ -49,10 +49,10 @@ before_script:
   - emulator -avd test -no-audio -no-window &
 
 script:
-  - ./gradlew assembleDebug lintDebug testDebug
+  - ./gradlew --daemon assembleDebug lintDebug testDebug
   - android-wait-for-emulator
   - adb shell input keyevent 82 &
-  - ./gradlew connectedCheck
+  - ./gradlew --daemon connectedCheck
 
 deploy:
   - provider: releases
