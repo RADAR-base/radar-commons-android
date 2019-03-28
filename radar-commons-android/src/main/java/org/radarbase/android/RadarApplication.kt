@@ -25,7 +25,7 @@ import android.os.Bundle
 import androidx.annotation.CallSuper
 import com.crashlytics.android.Crashlytics
 import io.fabric.sdk.android.Fabric
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.NotificationHandler
 import org.slf4j.impl.HandroidLoggerAdapter
 
@@ -50,8 +50,8 @@ abstract class RadarApplication : Application() {
         get() = RadarService::class.java
 
     open fun configureProvider(bundle: Bundle) {}
-    open fun onDeviceServiceInvocation(service: DeviceService<*>, bundle: Bundle, isNew: Boolean) {}
-    open fun onDeviceServiceDestroy(service: DeviceService<*>) {}
+    open fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean) {}
+    open fun onSourceServiceDestroy(service: SourceService<*>) {}
 
     @CallSuper
     override fun onCreate() {

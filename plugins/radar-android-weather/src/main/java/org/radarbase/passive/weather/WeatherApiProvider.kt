@@ -19,13 +19,20 @@ package org.radarbase.passive.weather
 import android.Manifest.permission.ACCESS_COARSE_LOCATION
 import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.content.pm.PackageManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceServiceProvider
+import org.radarbase.android.RadarService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceProvider
 import java.util.*
 
-open class WeatherApiProvider : DeviceServiceProvider<BaseDeviceState>() {
+open class WeatherApiProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val description: String?
         get() = radarService.getString(R.string.weather_api_description)
+
+    override val pluginNames = listOf(
+            "weather",
+            "weather_api",
+            "org.radarbase.passive.weather.WeatherApiProvider",
+            "org.radarcns.weather.WeatherApiProvider")
 
     override val serviceClass: Class<WeatherApiService> = WeatherApiService::class.java
 

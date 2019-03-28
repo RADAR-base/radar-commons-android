@@ -23,9 +23,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneBluetoothDevices
@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractDeviceManager<PhoneBluetoothService, BaseDeviceState>(service) {
+class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceManager<PhoneBluetoothService, BaseSourceState>(service) {
     private val processor: OfflineProcessor
     private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache("android_phone_bluetooth_devices", PhoneBluetoothDevices())
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
@@ -48,10 +48,10 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractDeviceMana
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
         register()
         processor.start()
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
     }
 
     private fun processBluetoothDevices() {

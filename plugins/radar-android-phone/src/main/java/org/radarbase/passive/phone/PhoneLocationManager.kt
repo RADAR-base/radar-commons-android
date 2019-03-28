@@ -25,9 +25,9 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.os.Process
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
@@ -43,7 +43,7 @@ import java.io.IOException
 import java.math.BigDecimal
 import java.util.concurrent.ThreadLocalRandom
 
-class PhoneLocationManager(context: PhoneLocationService) : AbstractDeviceManager<PhoneLocationService, BaseDeviceState>(context), LocationListener {
+class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManager<PhoneLocationService, BaseSourceState>(context), LocationListener {
     private val locationTopic: DataCache<ObservationKey, PhoneRelativeLocation> = createCache("android_phone_relative_location", PhoneRelativeLocation())
     private val locationManager = service.getSystemService(Context.LOCATION_SERVICE) as LocationManager?
     private val handler = SafeHandler("PhoneLocation", Process.THREAD_PRIORITY_BACKGROUND)
@@ -93,11 +93,11 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractDeviceManage
         register()
         handler.start()
 
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
 
         handler.execute {
             batteryLevelReceiver.register()
-            updateStatus(DeviceStatusListener.Status.CONNECTED)
+            updateStatus(SourceStatusListener.Status.CONNECTED)
             isStarted = true
         }
     }

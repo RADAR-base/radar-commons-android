@@ -4,7 +4,6 @@ apply from: "$rootDir/gradle/android.gradle"
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-group = 'org.radarcns'
 description = 'Plugin for pRMT that queries Weather API'
 
 dependencies {

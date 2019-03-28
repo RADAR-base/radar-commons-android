@@ -18,11 +18,19 @@ package org.radarbase.passive.phone.telephony
 
 import android.Manifest.permission.READ_CALL_LOG
 import android.Manifest.permission.READ_SMS
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceServiceProvider
+import org.radarbase.android.RadarService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceProvider
 
-open class PhoneLogProvider : DeviceServiceProvider<BaseDeviceState>() {
+open class PhoneLogProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val serviceClass: Class<PhoneLogService> = PhoneLogService::class.java
+
+    override val pluginNames = listOf(
+            "phone_telephony",
+            "telephony",
+            "phone_log",
+            "org.radarbase.passive.phone.telephony.PhoneLogProvider",
+            "org.radarcns.phone.PhoneLogProvider")
 
     override val description: String
         get() = radarService.getString(R.string.phone_log_description)

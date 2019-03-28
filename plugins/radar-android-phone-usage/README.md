@@ -10,13 +10,14 @@ To add the plugin code to your application, add the following snippet to your ap
 
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-phone-usage:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-phone-usage:$radarCommonsAndroidVersion"
 }
 ```
+Add `org.radarbase.passive.phone.usage.PhoneUsageProvider` to the `plugins` variable of the `RadarService` instance in your app.
 
 ## Configuration
 
-To enable this plugin, add the provider `.passive.phone.usage.PhoneUsageProvider` to `device_services_to_connect` property of the configuration.
+To enable this plugin, add the provider `phone_usage` to `plugins` property of the configuration.
 
 The following Firebase parameters are available:
 

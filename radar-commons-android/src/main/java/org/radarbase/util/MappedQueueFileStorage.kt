@@ -212,7 +212,7 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     }
 
     override fun toString(): String {
-        return javaClass.simpleName + "<" + fileName + ">[length=" + length + "]"
+        return "MappedQueueFileStorage<$fileName>[length=$length]"
     }
 
     private fun checkOffsetAndCount(bytes: ByteArray, offset: Int, count: Int) {

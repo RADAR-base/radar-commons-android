@@ -16,12 +16,12 @@
 
 package org.radarbase.passive.phone
 
-import org.radarbase.android.device.BaseDeviceState
+import org.radarbase.android.source.BaseSourceState
 
 /**
  * The status on a single point in time
  */
-class PhoneState : BaseDeviceState() {
+class PhoneState : BaseSourceState() {
     override val acceleration = floatArrayOf(Float.NaN, Float.NaN, Float.NaN)
     @set:Synchronized
     override var batteryLevel = Float.NaN

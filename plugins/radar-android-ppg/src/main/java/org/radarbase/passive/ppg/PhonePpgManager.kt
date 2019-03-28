@@ -25,9 +25,9 @@ import android.renderscript.Allocation
 import android.util.Size
 import android.view.Surface
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.DeviceStatusListener
-import org.radarbase.android.device.DeviceStatusListener.Status.*
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.source.SourceStatusListener.Status.*
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.ppg.RenderContext.Companion.RENDER_CONTEXT_RELEASER
 import org.radarcns.kafka.ObservationKey
@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit
  *
  * @param service service that the manager is started by
  */
-class PhonePpgManager(service: PhonePpgService) : AbstractDeviceManager<PhonePpgService, PhonePpgState>(service), PhonePpgState.OnActionListener {
+class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpgService, PhonePpgState>(service), PhonePpgState.OnActionListener {
     private val ppgTopic: DataCache<ObservationKey, PhoneCameraPpg> = createCache("android_phone_ppg", PhoneCameraPpg())
     private val cameraManager: CameraManager = service.getSystemService(Context.CAMERA_SERVICE) as CameraManager?
             ?: throw IllegalStateException("CameraManager not found")
@@ -61,7 +61,7 @@ class PhonePpgManager(service: PhonePpgService) : AbstractDeviceManager<PhonePpg
     private var measurementTime = 60_000L
 
     init {
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
 
         state.stateChangeListener = object : PhonePpgState.OnStateChangeListener {
             override fun release() {

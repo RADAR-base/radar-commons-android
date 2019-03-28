@@ -23,8 +23,8 @@ class ManagementPortalClientTest {
         val project = `object`.getJSONObject("project")
         val sources = `object`.getJSONArray("sources")
 
-        val deviceTypes = GetSubjectParser.parseSourceTypes(project)
-        val sourceList = GetSubjectParser.parseSources(deviceTypes, sources)
+        val sourceTypes = GetSubjectParser.parseSourceTypes(project)
+        val sourceList = GetSubjectParser.parseSources(sourceTypes, sources)
 
         val expected = SourceMetadata().apply {
             type = SourceType(0, "p", "m", "v", true)
@@ -43,10 +43,10 @@ class ManagementPortalClientTest {
         val `object` = JSONObject(EXAMPLE_REQUEST)
         val project = `object`.getJSONObject("project")
 
-        val deviceTypes = GetSubjectParser.parseSourceTypes(project)
+        val sourceTypes = GetSubjectParser.parseSourceTypes(project)
 
         val sources = JSONArray()
-        val sourceList = GetSubjectParser.parseSources(deviceTypes, sources)
+        val sourceList = GetSubjectParser.parseSources(sourceTypes, sources)
 
         assertEquals(emptyList<SourceMetadata>(), sourceList)
     }
@@ -55,10 +55,10 @@ class ManagementPortalClientTest {
     @Test
     @Throws(Exception::class)
     fun parseNonDynamicSources() {
-        val deviceTypes = listOf(SourceType(0, "p", "m", "v", false))
+        val sourceTypes = listOf(SourceType(0, "p", "m", "v", false))
 
         val sources = JSONArray()
-        val sourceList = GetSubjectParser.parseSources(deviceTypes, sources)
+        val sourceList = GetSubjectParser.parseSources(sourceTypes, sources)
 
         assertEquals(emptyList<Any>(), sourceList)
     }

@@ -18,20 +18,20 @@ package org.radarbase.passive.weather
 
 import okhttp3.OkHttpClient
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 import org.radarbase.config.ServerConfig
-import org.radarbase.producer.rest.RestClient
 import org.radarbase.passive.weather.WeatherApiManager.Companion.SOURCE_OPENWEATHERMAP
+import org.radarbase.producer.rest.RestClient
 import java.util.concurrent.TimeUnit
 
-class WeatherApiService : DeviceService<BaseDeviceState>() {
+class WeatherApiService : SourceService<BaseSourceState>() {
 
     private lateinit var client: OkHttpClient
 
-    override val defaultState: BaseDeviceState
-        get() = BaseDeviceState()
+    override val defaultState: BaseSourceState
+        get() = BaseSourceState()
 
     override fun onCreate() {
         super.onCreate()
@@ -41,11 +41,11 @@ class WeatherApiService : DeviceService<BaseDeviceState>() {
                 .httpClient
     }
 
-    override fun createDeviceManager(): WeatherApiManager {
+    override fun createSourceManager(): WeatherApiManager {
         return WeatherApiManager(this, client)
     }
 
-    override fun configureDeviceManager(manager: DeviceManager<BaseDeviceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
         val weatherManager = manager as WeatherApiManager
         weatherManager.setQueryInterval(configuration.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
         weatherManager.setSource(

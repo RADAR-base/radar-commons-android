@@ -21,9 +21,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.provider.ContactsContract
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneContactList
@@ -31,7 +31,7 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-class PhoneContactListManager(service: PhoneContactsListService) : AbstractDeviceManager<PhoneContactsListService, BaseDeviceState>(service) {
+class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourceManager<PhoneContactsListService, BaseSourceState>(service) {
     private val preferences: SharedPreferences = service.getSharedPreferences(PhoneContactListManager::class.java.name, Context.MODE_PRIVATE)
     private val contactsTopic: DataCache<ObservationKey, PhoneContactList> = createCache("android_phone_contacts", PhoneContactList())
     private val processor: OfflineProcessor
@@ -48,7 +48,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractDevic
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
         register()
 
         processor.start {
@@ -60,7 +60,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractDevic
             savedContactLookups = preferences.getStringSet(CONTACT_LOOKUPS, emptySet())!!
         }
 
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
     }
 
     private fun queryContacts(): Set<String>? {

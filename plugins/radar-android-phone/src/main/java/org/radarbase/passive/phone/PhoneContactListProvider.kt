@@ -17,16 +17,24 @@
 package org.radarbase.passive.phone
 
 import android.Manifest
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceServiceProvider
+import org.radarbase.android.RadarService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceProvider
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.MODEL
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.PRODUCER
 
-open class PhoneContactListProvider : DeviceServiceProvider<BaseDeviceState>() {
+open class PhoneContactListProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val description: String
         get() = radarService.getString(R.string.phone_contact_list_description)
 
     override val serviceClass: Class<PhoneContactsListService> = PhoneContactsListService::class.java
+
+    override val pluginNames = listOf(
+            "phone_contacts",
+            "contact_list",
+            "contacts",
+            "org.radarbase.passive.phone.PhoneContactListProvider",
+            "org.radarcns.phone.PhoneContactListProvider")
 
     override val displayName: String
         get() = radarService.getString(R.string.contact_list)

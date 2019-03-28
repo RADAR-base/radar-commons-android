@@ -19,9 +19,9 @@ package org.radarbase.android
 import android.os.IBinder
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.data.DataHandler
-import org.radarbase.android.device.DeviceServiceConnection
-import org.radarbase.android.device.DeviceServiceProvider
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.source.SourceServiceConnection
 import org.radarbase.data.TimedInt
 import org.radarcns.kafka.ObservationKey
 
@@ -30,11 +30,11 @@ interface IRadarBinder : IBinder {
 
     val latestNumberOfRecordsSent: TimedInt
 
-    val connections: List<DeviceServiceProvider<*>>
+    val connections: List<SourceProvider<*>>
 
     val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
 
-    fun setAllowedDeviceIds(connection: DeviceServiceConnection<*>, allowedIds: Collection<String>)
+    fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>)
 
     fun startScanning()
     fun stopScanning()

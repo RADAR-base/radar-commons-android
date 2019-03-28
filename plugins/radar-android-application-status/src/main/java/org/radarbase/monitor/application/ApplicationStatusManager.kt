@@ -23,14 +23,14 @@ import android.os.Build
 import android.os.SystemClock
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.DeviceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
-import org.radarbase.android.device.DeviceService.Companion.CACHE_TOPIC
-import org.radarbase.android.device.DeviceService.Companion.SERVER_RECORDS_SENT_NUMBER
-import org.radarbase.android.device.DeviceService.Companion.SERVER_RECORDS_SENT_TOPIC
-import org.radarbase.android.device.DeviceService.Companion.SERVER_STATUS_CHANGED
-import org.radarbase.android.device.DeviceStatusListener
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
+import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
+import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
+import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
+import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.*
 import org.radarbase.monitor.application.ApplicationStatusService.Companion.UPDATE_RATE_DEFAULT
 import org.radarcns.kafka.ObservationKey
@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.math.max
 
-class ApplicationStatusManager internal constructor(service: ApplicationStatusService) : AbstractDeviceManager<ApplicationStatusService, ApplicationState>(service) {
+class ApplicationStatusManager internal constructor(service: ApplicationStatusService) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
     private val serverTopic: DataCache<ObservationKey, ApplicationServerStatus> = createCache("application_server_status", ApplicationServerStatus())
     private val recordCountsTopic: DataCache<ObservationKey, ApplicationRecordCounts> = createCache("application_record_counts", ApplicationRecordCounts())
     private val uptimeTopic: DataCache<ObservationKey, ApplicationUptime> = createCache("application_uptime", ApplicationUptime())
@@ -95,7 +95,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
 
         processor.start {
             val osVersionCode: Int = this.prefs.getInt("operatingSystemVersionCode", -1)
@@ -140,7 +140,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
             }
         }
 
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
     }
 
     private val currentApplicationInfo: ApplicationInfo
@@ -292,7 +292,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
                     interval(tzUpdateRate, unit)
                     wake = false
                 }.also {
-                    if (this.state.status == DeviceStatusListener.Status.CONNECTED) {
+                    if (this.state.status == SourceStatusListener.Status.CONNECTED) {
                         it.start()
                     }
                 }

@@ -8,7 +8,7 @@ To add the library code to your app, add the following snippet to your app's `bu
 
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-login-qr:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-login-qr:$radarCommonsAndroidVersion"
 }
 ```
 

@@ -104,10 +104,7 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
     }
 
     override fun toString(): String {
-        return (javaClass.simpleName
-                + "[position=" + position
-                + ", length=" + length
-                + "]")
+        return "QueueFileElement[position=$position, length=$length]"
     }
 
     companion object {

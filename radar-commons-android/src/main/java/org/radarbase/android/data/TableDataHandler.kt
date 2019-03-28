@@ -21,8 +21,8 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificData
 import org.apache.avro.specific.SpecificRecord
-import org.radarbase.android.device.DeviceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
-import org.radarbase.android.device.DeviceService.Companion.CACHE_TOPIC
+import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
+import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.kafka.KafkaDataSubmitter
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.util.BatteryStageReceiver

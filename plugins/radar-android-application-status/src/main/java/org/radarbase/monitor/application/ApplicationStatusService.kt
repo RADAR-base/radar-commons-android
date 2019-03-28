@@ -17,21 +17,21 @@
 package org.radarbase.monitor.application
 
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 
 import java.util.concurrent.TimeUnit
 
-class ApplicationStatusService : DeviceService<ApplicationState>() {
+class ApplicationStatusService : SourceService<ApplicationState>() {
 
     override val defaultState: ApplicationState
         get() = ApplicationState()
 
-    override fun createDeviceManager(): ApplicationStatusManager {
+    override fun createSourceManager(): ApplicationStatusManager {
         return ApplicationStatusManager(this)
     }
 
-    override fun configureDeviceManager(manager: DeviceManager<ApplicationState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<ApplicationState>, configuration: RadarConfiguration) {
         (manager as ApplicationStatusManager).apply {
             setApplicationStatusUpdateRate(config.getLong(UPDATE_RATE, UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
             setTzUpdateRate(config.getLong(TZ_UPDATE_RATE, TZ_UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)

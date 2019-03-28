@@ -127,7 +127,7 @@ abstract class SplashActivity : AppCompatActivity() {
     }
 
     protected open fun startActivity(activity: Class<out Activity>) {
-        logger.debug("Scheduling start of activity {}", activity.simpleName)
+        logger.debug("Scheduling start of SplashActivity")
         handler.post {
             if (state == STATE_FINISHED) {
                 return@post
@@ -139,7 +139,7 @@ abstract class SplashActivity : AppCompatActivity() {
             Runnable {
                 updateState(STATE_FINISHED)
 
-                logger.info("Starting activity {}", activity.simpleName)
+                logger.info("Starting SplashActivity")
                 Intent(this@SplashActivity, activity).also {
                     it.flags = FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_TASK_ON_HOME or FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP
                     onWillStartActivity()

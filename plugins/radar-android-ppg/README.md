@@ -7,13 +7,14 @@ Plugin to measure PPG using the camera of a phone. This essentially takes previe
 Include this plugin in a RADAR app by adding the following configuration to `build.gradle`:
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-ppg:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-ppg:$radarCommonsAndroidVersion"
 }
 ```
+Add `org.radarbase.passive.ppg.PhonePpgProvider` to the `plugins` variable of the `RadarService` instance in your app.
 
 ## Configuration
 
-To enable this plugin, add the provider `.passive.ppg.PhonePpgProvider` to `device_services_to_connect` property of the configuration.
+To enable this plugin, add the provider `phone_ppg` to `plugins` property of the configuration.
 
 Other configuration properties are the following:
 

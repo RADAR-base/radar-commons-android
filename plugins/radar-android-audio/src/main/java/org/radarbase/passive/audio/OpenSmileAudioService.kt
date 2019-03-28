@@ -17,9 +17,9 @@
 package org.radarbase.passive.audio
 
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 
 import java.util.concurrent.TimeUnit
 
@@ -28,16 +28,16 @@ import java.util.concurrent.TimeUnit
  * the phone sensors and send it to a Kafka REST proxy.
  */
 
-class OpenSmileAudioService : DeviceService<BaseDeviceState>() {
-    override val defaultState: BaseDeviceState
-        get() = BaseDeviceState()
+class OpenSmileAudioService : SourceService<BaseSourceState>() {
+    override val defaultState: BaseSourceState
+        get() = BaseSourceState()
 
 
-    override fun createDeviceManager(): OpensmileAudioManager {
+    override fun createSourceManager(): OpensmileAudioManager {
         return OpensmileAudioManager(this)
     }
 
-    override fun configureDeviceManager(manager: DeviceManager<BaseDeviceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
         val audioManager = manager as OpensmileAudioManager
         audioManager.setRecordRate(configuration.getLong(AUDIO_RECORD_RATE_S, DEFAULT_RECORD_RATE))
         audioManager.config = OpensmileAudioManager.AudioConfiguration(

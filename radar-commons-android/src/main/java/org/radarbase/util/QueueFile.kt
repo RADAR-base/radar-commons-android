@@ -407,12 +407,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     }
 
     override fun toString(): String {
-        return (javaClass.simpleName
-                + "[storage=" + storage
-                + ", header=" + header
-                + ", first=" + first
-                + ", last=" + last
-                + "]")
+        return "QueueFile[storage=$storage, header=$header, first=$first, last=$last]"
     }
 
     private inner class QueueFileInputStream(element: QueueFileElement) : InputStream() {

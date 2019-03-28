@@ -25,9 +25,9 @@ import android.provider.BaseColumns._ID
 import android.provider.CallLog
 import android.provider.Telephony
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.HashGenerator
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
@@ -38,7 +38,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
-class PhoneLogManager(context: PhoneLogService) : AbstractDeviceManager<PhoneLogService, BaseDeviceState>(context) {
+class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLogService, BaseSourceState>(context) {
 
     private val callTopic: DataCache<ObservationKey, PhoneCall> = createCache("android_phone_call", PhoneCall())
     private val smsTopic: DataCache<ObservationKey, PhoneSms> = createCache("android_phone_sms", PhoneSms())
@@ -63,7 +63,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractDeviceManager<PhoneLog
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
         register()
         // Calls and sms, in and outgoing and number of unread sms
         logProcessor.start {
@@ -71,7 +71,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractDeviceManager<PhoneLog
             lastSmsTimestamp = preferences.getLong(LAST_SMS_KEY, System.currentTimeMillis())
         }
 
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
     }
 
     fun setCallAndSmsLogUpdateRate(period: Long, unit: TimeUnit) {

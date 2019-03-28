@@ -19,11 +19,18 @@ package org.radarbase.passive.audio
 import android.Manifest.permission.RECORD_AUDIO
 import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
 import android.content.pm.PackageManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceServiceProvider
+import org.radarbase.android.RadarService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceProvider
 
-open class OpenSmileAudioProvider : DeviceServiceProvider<BaseDeviceState>() {
+open class OpenSmileAudioProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val serviceClass: Class<OpenSmileAudioService> = OpenSmileAudioService::class.java
+
+    override val pluginNames = listOf(
+            "opensmile_audio",
+            "audio",
+            "org.radarbase.passive.audio.OpenSmileAudioProvider",
+            "org.radarcns.audio.AudioServiceProvider")
 
     override val displayName: String
         get() = radarService.getString(R.string.header_audio_status)

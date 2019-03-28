@@ -31,7 +31,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication
-import org.radarbase.android.device.DeviceStatusListener.Status.*
+import org.radarbase.android.source.SourceStatusListener.Status.*
 import org.radarbase.android.radarApp
 import org.radarbase.passive.ppg.PhonePpgService.Companion.PPG_MEASUREMENT_TIME_DEFAULT
 import org.radarbase.passive.ppg.PhonePpgService.Companion.PPG_MEASUREMENT_TIME_NAME
@@ -47,7 +47,7 @@ class PhonePpgActivity : AppCompatActivity(), Runnable {
     private val state: PhonePpgState?
         get() = if (ppgProvider == null || !ppgProvider!!.connection.hasService()) {
             null
-        } else ppgProvider!!.connection.deviceData
+        } else ppgProvider!!.connection.sourceState
 
     private val radarServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {

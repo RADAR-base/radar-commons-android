@@ -8,18 +8,20 @@ To add the plugin code to your app, add the following snippet to your app's `bui
 
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-phone:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-phone:$radarCommonsAndroidVersion"
 }
 ```
 
+Add `org.radarbase.passive.phone.PhoneBluetoothProvider`, `org.radarbase.passive.phone.PhoneContactListProvider`, `org.radarbase.passive.phone.PhoneLocationProvider`, `org.radarbase.passive.phone.PhoneSensorProvider` to the `plugins` variable of the `RadarService` instance in your app, depending on what plugins you want to be available at runtime. See the descriptions of the plugins below.
+
 ## Configuration
 
-This plugin contains four services, to enable them add their provider to the `device_services_to_connect` property of the configuration:
+This plugin contains four services, to enable them add their provider to the `plugins` property of the configuration:
 
-- `.passive.phone.PhoneSensorProvider` provides a service that monitors Android hardware sensors.
-- `.passive.phone.PhoneLocationProvider` provides a service that monitors current GPS and/or network location. Location data is gathered in a relative manner, adding a random reference offset to all locations. The reference offset is not transmitted. Because the GPS sensor is generally battery-heavy, there are separate parameters for location update frequency for low battery levels and higher battery levels.
-- `.passive.phone.PhoneBluetoothProvider` provides a service that monitors bluetooth usage.
-- `.passive.phone.PhoneContactListProvider` provides a service that monitors contact list size. Phone contacts themselves are not transmitted.
+- `phone_sensors` provides a service that monitors Android hardware sensors.
+- `phone_location` provides a service that monitors current GPS and/or network location. Location data is gathered in a relative manner, adding a random reference offset to all locations. The reference offset is not transmitted. Because the GPS sensor is generally battery-heavy, there are separate parameters for location update frequency for low battery levels and higher battery levels.
+- `phone_bluetooth` provides a service that monitors bluetooth usage.
+- `phone_contacts` provides a service that monitors contact list size. Phone contacts themselves are not transmitted.
 
 ### Sensors
 

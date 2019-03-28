@@ -17,9 +17,9 @@
 package org.radarbase.passive.ppg
 
 import android.os.SystemClock
-import org.radarbase.android.device.BaseDeviceState
+import org.radarbase.android.source.BaseSourceState
 
-class PhonePpgState : BaseDeviceState() {
+class PhonePpgState : BaseSourceState() {
     private var recordingStarted: Long = 0
     var actionListener: OnActionListener? = null
     var stateChangeListener: OnStateChangeListener? = null

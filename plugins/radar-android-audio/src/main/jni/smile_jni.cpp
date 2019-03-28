@@ -94,7 +94,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *pjvm, void *reserved) {
 }
 
 // Starts openSMILE through JNI.
-JNIEXPORT jstring JNICALL Java_org_radarcns_opensmile_SmileJNI_SMILExtractJNI( JNIEnv* env, jobject thiz, jstring cwd, jstring conf, jint updateProfile,jstring output){
+JNIEXPORT jstring JNICALL Java_org_radarbase_passive_audio_opensmile_SmileJNI_SMILExtractJNI( JNIEnv* env, jobject thiz, jstring cwd, jstring conf, jint updateProfile, jstring output){
     const char SMILExtract[] = "SMILExtract";
     const char * workingDirectory = env->GetStringUTFChars(cwd, NULL);
     chdir(workingDirectory);
@@ -118,7 +118,7 @@ JNIEXPORT jstring JNICALL Java_org_radarcns_opensmile_SmileJNI_SMILExtractJNI( J
 }
 
 // Terminates openSMILE upon external/user request.
-JNIEXPORT jstring JNICALL Java_org_radarcns_opensmile_SmileJNI_SMILEndJNI(JNIEnv* env, jobject thiz , jlong cmanglob){
+JNIEXPORT jstring JNICALL Java_org_radarbase_passive_audio_opensmile_SmileJNI_SMILEndJNI(JNIEnv* env, jobject thiz , jlong cmanglob){
     myCmanGlob = getComponentManager();
     if (myCmanGlob != NULL){
         myCmanGlob->requestAbort();

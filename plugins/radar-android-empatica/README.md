@@ -14,13 +14,14 @@ First, request an Empatica Connect developer account from [Empatica's Developer 
  }
  
  dependencies {
-     runtimeOnly "org.radarbase:radar-android-empatica:$radarCommonsAndroidVersion"
+     implementation "org.radarbase:radar-android-empatica:$radarCommonsAndroidVersion"
  }
  ```
+Add `org.radarbase.passive.empatica.E4Provider` to the `plugins` variable of the `RadarService` instance in your app.
 
 ### Configuration
 
-Add the provider `org.radarbase.passive.empatica.E4ServiceProvider` to the Firebase Remote Config `device_services_to_connect` variable.
+Add the provider `empatica_e4` to the Firebase Remote Config `plugins` variable.
 
 Request an Empatica API key for your Empatica Connect account. Set your Empatica API key in the `empatica_api_key` Firebase parameter. The plugin can now be used with devices linked to your account.
 

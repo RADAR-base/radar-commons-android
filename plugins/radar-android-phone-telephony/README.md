@@ -10,13 +10,14 @@ To add the plugin code to your app, add the following snippet to your app's `bui
 
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-phone-telephony:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-phone-telephony:$radarCommonsAndroidVersion"
 }
 ```
+Add `org.radarbase.passive.phone.telephony.PhoneLogProvider` to the `plugins` variable of the `RadarService` instance in your app.
 
 ## Configuration
 
-To enable this plugin, add the provider `.passive.phone.telephony.PhoneLogProvider` to `device_services_to_connect` property of the configuration.
+To enable this plugin, add the provider `phone_telephony` to `plugins` property of the configuration.
 
 The following Firebase parameters are available:
 

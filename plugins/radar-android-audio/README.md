@@ -9,13 +9,15 @@ To add the plugin code to your app, add the following snippet to your app's `bui
 
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-audio:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-audio:$radarCommonsAndroidVersion"
 }
 ```
 
+Add `org.radarbase.passive.audio.OpenSmileAudioProvider` to the `plugins` variable of the `RadarService` instance in your app.
+
 ## Configuration
 
-To enable this plugin, add the provider `.passive.audio.OpenSmileAudioProvider` to `device_services_to_connect` property of the configuration.
+To enable this plugin, add the provider `opensmile_audio` to `plugins` property of the configuration.
 
 | Parameter | Type | Default | Description |
 | --------- | ---- | ------- | ----------- |

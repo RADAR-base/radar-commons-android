@@ -22,9 +22,9 @@ import android.location.LocationManager
 import android.location.LocationManager.GPS_PROVIDER
 import android.location.LocationManager.NETWORK_PROVIDER
 import okhttp3.OkHttpClient
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.passive.weather.LocalWeather
@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class WeatherApiManager(service: WeatherApiService, private val client: OkHttpClient) : AbstractDeviceManager<WeatherApiService, BaseDeviceState>(service) {
+class WeatherApiManager(service: WeatherApiService, private val client: OkHttpClient) : AbstractSourceManager<WeatherApiService, BaseSourceState>(service) {
 
     private val processor: OfflineProcessor
     private val weatherTopic = createCache("android_local_weather", LocalWeather())
@@ -68,7 +68,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
 
         register(name = "OpenWeatherMap")
 
@@ -76,7 +76,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
         networkReceiver.register()
         processor.start()
 
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
     }
 
     private fun processWeather() {
@@ -135,7 +135,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
         get() {
             if (locationManager == null) {
                 logger.error("Cannot get location without a location manager.")
-                updateStatus(DeviceStatusListener.Status.DISCONNECTED)
+                updateStatus(SourceStatusListener.Status.DISCONNECTED)
                 return null
             }
             return try {

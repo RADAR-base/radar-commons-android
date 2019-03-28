@@ -8,7 +8,7 @@ To add the plugin code to your app, add the following snippet to your app's `bui
 
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-login-oauth2:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-login-oauth2:$radarCommonsAndroidVersion"
 }
 ```
 

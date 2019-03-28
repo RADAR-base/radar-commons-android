@@ -60,12 +60,12 @@ import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.TableDataHandler
-import org.radarbase.android.device.*
-import org.radarbase.android.device.DeviceService.Companion.DEVICE_CONNECT_FAILED
-import org.radarbase.android.device.DeviceService.Companion.SERVER_RECORDS_SENT_NUMBER
-import org.radarbase.android.device.DeviceService.Companion.SERVER_RECORDS_SENT_TOPIC
-import org.radarbase.android.device.DeviceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.source.*
+import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
+import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
+import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
+import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarbase.config.ServerConfig
@@ -77,7 +77,7 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.ArrayList
 
-open class RadarService : Service(), ServerStatusListener, LoginListener {
+abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     private var binder: IBinder? = null
 
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
@@ -87,8 +87,8 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     private var needsBluetooth: Boolean = false
     protected lateinit var configuration: RadarConfiguration
 
-    /** Filters to only listen to certain device IDs.  */
-    private val deviceFilters: MutableMap<DeviceServiceConnection<*>, Set<String>> = HashMap()
+    /** Filters to only listen to certain source IDs or source names.  */
+    private val sourceFilters: MutableMap<SourceServiceConnection<*>, Set<String>> = HashMap()
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private val bluetoothReceiver = object : BroadcastReceiver() {
@@ -114,20 +114,21 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             }
         }
     }
-    private lateinit var providerLoader: ProviderLoader
+    private lateinit var providerLoader: SourceProviderLoader
     private lateinit var configurationCache: ChangeRunner<Map<String, String>>
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
-    private lateinit var deviceFailedReceiver: BroadcastRegistration
+    private lateinit var sourceFailedReceiver: BroadcastRegistration
     private lateinit var serverStatusReceiver: BroadcastRegistration
-
 
     private val isMakingAuthRequest = AtomicBoolean(false)
 
     private lateinit var configChangedReceiver: BroadcastRegistration
 
+    abstract val plugins: List<SourceProvider<*>>
+
     /** Connections.  */
-    private var mConnections: List<DeviceServiceProvider<*>> = emptyList()
+    private var mConnections: List<SourceProvider<*>> = emptyList()
     private var isScanningEnabled = false
 
     /** An overview of how many records have been sent throughout the application.  */
@@ -156,7 +157,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         configurationCache = ChangeRunner()
         needsBluetooth = false
         configuration = radarConfig
-        providerLoader = ProviderLoader()
+        providerLoader = SourceProviderLoader(plugins)
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         broadcaster.run {
@@ -165,10 +166,10 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                         intent.getStringArrayExtra(EXTRA_PERMISSIONS),
                         intent.getIntArrayExtra(EXTRA_GRANT_RESULTS))
             }
-            deviceFailedReceiver = register(DEVICE_CONNECT_FAILED) { context, intent ->
+            sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
                         getString(R.string.cannot_connect_device,
-                                intent.getStringExtra(DeviceService.DEVICE_STATUS_NAME)),
+                                intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
                         Toast.LENGTH_SHORT).show()
             }
             serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
@@ -217,15 +218,15 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             unregisterReceiver(bluetoothReceiver)
         }
         permissionsBroadcastReceiver.unregister()
-        deviceFailedReceiver.unregister()
+        sourceFailedReceiver.unregister()
         serverStatusReceiver.unregister()
         configChangedReceiver.unregister()
 
         mHandler.stop { }
         authConnection.unbind()
 
-        mConnections.filter(DeviceServiceProvider<*>::isBound)
-                .forEach(DeviceServiceProvider<*>::unbind)
+        mConnections.filter(SourceProvider<*>::isBound)
+                .forEach(SourceProvider<*>::unbind)
 
         super.onDestroy()
     }
@@ -296,7 +297,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         mConnections.forEach { it.updateConfiguration() }
     }
 
-    private fun hasFeatures(provider: DeviceServiceProvider<*>, packageManager: PackageManager?): Boolean {
+    private fun hasFeatures(provider: SourceProvider<*>, packageManager: PackageManager?): Boolean {
         return packageManager?.let { manager ->
             provider.featuresNeeded.all { manager.hasSystemFeature(it) }
         } != false
@@ -329,7 +330,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    fun serviceConnected(connection: DeviceServiceConnection<*>) {
+    fun serviceConnected(connection: SourceServiceConnection<*>) {
         mHandler.execute {
             if (!isScanningEnabled) {
                 getConnectionProvider(connection)?.also { provider ->
@@ -354,7 +355,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    fun serviceDisconnected(connection: DeviceServiceConnection<*>) {
+    fun serviceDisconnected(connection: SourceServiceConnection<*>) {
         mHandler.execute {
             getConnectionProvider(connection)?.also { provider ->
                 bindServices(listOf(provider), true)
@@ -362,7 +363,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    private fun bindServices(providers: Collection<DeviceServiceProvider<*>>, unbindFirst: Boolean) {
+    private fun bindServices(providers: Collection<SourceProvider<*>>, unbindFirst: Boolean) {
         mHandler.executeReentrant {
             val authBinder = authConnection.binder
             if (authBinder == null) {
@@ -376,7 +377,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                             }
                 }
                 providers.filter { !it.isBound && (isScanningEnabled || it.mayBeConnectedInBackground) }
-                        .forEach(DeviceServiceProvider<*>::bind)
+                        .forEach(SourceProvider<*>::bind)
             }
         }
     }
@@ -402,16 +403,16 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    fun deviceStatusUpdated(connection: DeviceServiceConnection<*>, status: DeviceStatusListener.Status) {
+    fun sourceStatusUpdated(connection: SourceServiceConnection<*>, status: SourceStatusListener.Status) {
         Handler(mainLooper).post {
             val showRes = when (status) {
-                DeviceStatusListener.Status.READY -> R.string.device_ready
-                DeviceStatusListener.Status.CONNECTED -> R.string.device_connected
-                DeviceStatusListener.Status.CONNECTING -> {
-                    logger.info("Device name is {} while connecting.", connection.deviceName)
+                SourceStatusListener.Status.READY -> R.string.device_ready
+                SourceStatusListener.Status.CONNECTED -> R.string.device_connected
+                SourceStatusListener.Status.CONNECTING -> {
+                    logger.info("Device name is {} while connecting.", connection.sourceName)
                     R.string.device_connecting
                 }
-                DeviceStatusListener.Status.DISCONNECTED -> {
+                SourceStatusListener.Status.DISCONNECTED -> {
                     startScanning()
                     R.string.device_disconnected
                 }
@@ -420,7 +421,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    protected fun getConnectionProvider(connection: DeviceServiceConnection<*>): DeviceServiceProvider<*>? {
+    protected fun getConnectionProvider(connection: SourceServiceConnection<*>): SourceProvider<*>? {
         return mConnections.find { it.connection == connection }
     }
 
@@ -431,7 +432,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                     .forEach { provider ->
                         val connection = provider.connection
                         logger.info("Starting recording on connection {}", connection)
-                        connection.startRecording(deviceFilters[connection] ?: emptySet())
+                        connection.startRecording(sourceFilters[connection] ?: emptySet())
                     }
         }
     }
@@ -478,7 +479,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
 
-    protected open fun checkPermissions(provider: DeviceServiceProvider<*>): Boolean {
+    protected open fun checkPermissions(provider: SourceProvider<*>): Boolean {
         return provider.permissionsNeeded.none(needsPermissions::contains)
     }
 
@@ -486,7 +487,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
     protected open fun disconnect() = mConnections.forEach { disconnect(it.connection) }
 
     /** Disconnect from given service.  */
-    open fun disconnect(connection: DeviceServiceConnection<*>) {
+    open fun disconnect(connection: SourceServiceConnection<*>) {
         mHandler.executeReentrant {
             if (connection.isRecording) {
                 connection.stopRecording()
@@ -526,12 +527,12 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
                 }
             }
 
-            val connections = providerLoader.loadProviders(this, configuration)
+            val connections = providerLoader.loadProvidersFromNames(configuration)
 
             val oldConnections = ArrayList(mConnections)
             val providersToRemove = mConnections.filter { it !in connections }
             mConnections = mConnections.filterNot(providersToRemove::contains)
-            providersToRemove.forEach(DeviceServiceProvider<*>::unbind)
+            providersToRemove.forEach(SourceProvider<*>::unbind)
 
             val anyNeedsBluetooth = mConnections.any { it.isConnected && it.connection.needsBluetooth() }
             if (!anyNeedsBluetooth && needsBluetooth) {
@@ -554,7 +555,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             if (providersToAdd.isNotEmpty()) {
                 mConnections = mConnections + providersToAdd
 
-                deviceFilters += providersToAdd.map { Pair(it.connection, emptySet<String>()) }
+                sourceFilters += providersToAdd.map { Pair(it.connection, emptySet<String>()) }
 
                 checkPermissions()
                 bindServices(mConnections, false)
@@ -584,18 +585,18 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
         override val latestNumberOfRecordsSent: TimedInt
                 get() = this@RadarService.latestNumberOfRecordsSent
 
-        override val connections: List<DeviceServiceProvider<*>>
+        override val connections: List<SourceProvider<*>>
                 get() = mConnections
 
-        override fun setAllowedDeviceIds(connection: DeviceServiceConnection<*>, allowedIds: Collection<String>) {
-            deviceFilters[connection] = sanitizedIds(allowedIds)
+        override fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>) {
+            sourceFilters[connection] = sanitizedIds(allowedIds)
 
             mHandler.execute {
-                val status = connection.deviceStatus
+                val status = connection.sourceStatus
 
-                if (status == DeviceStatusListener.Status.READY
-                        || status == DeviceStatusListener.Status.CONNECTING
-                        || status == DeviceStatusListener.Status.CONNECTED && !connection.isAllowedDevice(allowedIds)) {
+                if (status == SourceStatusListener.Status.READY
+                        || status == SourceStatusListener.Status.CONNECTING
+                        || status == SourceStatusListener.Status.CONNECTED && !connection.isAllowedSource(allowedIds)) {
                     if (connection.isRecording) {
                         connection.stopRecording()
                         // will restart recording once the status is set to disconnected.
@@ -615,7 +616,7 @@ open class RadarService : Service(), ServerStatusListener, LoginListener {
             isScanningEnabled = false
             mConnections
                     .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
-                    .forEach(DeviceServiceProvider<*>::unbind)
+                    .forEach(SourceProvider<*>::unbind)
         }
     }
 

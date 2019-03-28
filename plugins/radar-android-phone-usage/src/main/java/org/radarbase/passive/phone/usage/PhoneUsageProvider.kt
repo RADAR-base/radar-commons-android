@@ -17,15 +17,22 @@
 package org.radarbase.passive.phone.usage
 
 import android.os.Build
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceServiceProvider
+import org.radarbase.android.RadarService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceProvider
 
-open class PhoneUsageProvider : DeviceServiceProvider<BaseDeviceState>() {
+class PhoneUsageProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
 
     override val description: String
         get() = radarService.getString(R.string.phone_usage_description)
 
     override val serviceClass: Class<PhoneUsageService> = PhoneUsageService::class.java
+
+    override val pluginNames = listOf(
+            "phone_usage",
+            "usage",
+            "org.radarbase.passive.phone.telephony.PhoneUsageProvider",
+            "org.radarcns.phone.PhoneUsageProvider")
 
     override val displayName: String
         get() = radarService.getString(R.string.phoneUsageServiceDisplayName)

@@ -23,9 +23,9 @@ import android.content.*
 import android.os.Build
 import android.util.SparseArray
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneInteractionState
@@ -37,7 +37,7 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-class PhoneUsageManager(context: PhoneUsageService) : AbstractDeviceManager<PhoneUsageService, BaseDeviceState>(context) {
+class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<PhoneUsageService, BaseSourceState>(context) {
 
     private val usageEventTopic: DataCache<ObservationKey, PhoneUsageEvent>?
     private val userInteractionTopic: DataCache<ObservationKey, PhoneUserInteraction> = createCache("android_phone_user_interaction", PhoneUserInteraction())
@@ -93,7 +93,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractDeviceManager<Phon
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
         // Start query of usage events
         phoneUsageProcessor.start()
         register()
@@ -105,7 +105,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractDeviceManager<Phon
             addAction(Intent.ACTION_SHUTDOWN) // shutdown
         })
 
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
     }
 
     private fun sendInteractionState(action: String) {

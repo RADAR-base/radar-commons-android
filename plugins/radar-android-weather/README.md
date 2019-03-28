@@ -22,9 +22,10 @@ dependencies {
     compile 'org.radarcns:radar-android-weatherapi:0.2.1'
 }
 ```
+Add `org.radarbase.passive.weather.WeatherApiManager` to the `plugins` variable of the `RadarService` instance in your app.
 
 ## Configuration
-To enable this plugin add `.weather.WeatherApiProvider` to the `device_services_to_connect` property of the configuration in Firebase or `remote_config_defaults.xml`)
+To enable this plugin add `weather_api` to the `plugins` property of the configuration in Firebase or `remote_config_defaults.xml`)
 
 The following parameters are available:
 

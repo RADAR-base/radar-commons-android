@@ -32,18 +32,18 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.util.SparseArray
 import android.util.SparseIntArray
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.passive.phone.PhoneSensorService.Companion.PHONE_SENSOR_INTERVAL_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.*
-import org.radarbase.passive.phone.PhoneSensorService.Companion.PHONE_SENSOR_INTERVAL_DEFAULT
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class PhoneSensorManager(context: PhoneSensorService) : AbstractDeviceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
+class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
 
     private val accelerationTopic: DataCache<ObservationKey, PhoneAcceleration> = createCache("android_phone_acceleration", PhoneAcceleration())
     private val lightTopic: DataCache<ObservationKey, PhoneLight> = createCache("android_phone_light", PhoneLight())
@@ -69,9 +69,9 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractDeviceManager<Ph
         }
 
         if (sensorManager == null) {
-            updateStatus(DeviceStatusListener.Status.DISCONNECTED)
+            updateStatus(SourceStatusListener.Status.DISCONNECTED)
         } else {
-            updateStatus(DeviceStatusListener.Status.READY)
+            updateStatus(SourceStatusListener.Status.READY)
         }
     }
 
@@ -85,7 +85,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractDeviceManager<Ph
                         .also { it.acquire() }
             }
             registerSensors()
-            updateStatus(DeviceStatusListener.Status.CONNECTED)
+            updateStatus(SourceStatusListener.Status.CONNECTED)
         }
 
         batteryProcessor.start {
@@ -103,7 +103,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractDeviceManager<Ph
             for (i in 0 until sensorDelays.size()) {
                 this.sensorDelays.put(sensorDelays.keyAt(i), sensorDelays.valueAt(i))
             }
-            if (state.status == DeviceStatusListener.Status.CONNECTED) {
+            if (state.status == SourceStatusListener.Status.CONNECTED) {
                 sensorManager!!.unregisterListener(this)
                 registerSensors()
             }

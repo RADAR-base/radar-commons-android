@@ -10,13 +10,15 @@ To add the plugin code to your app, add the following snippet to your app's `bui
 
 ```gradle
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-application-status:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-application-status:$radarCommonsAndroidVersion"
 }
 ```
 
+Add `org.radarbase.monitor.application.ApplicationStatusProvider` to the `plugins` variable of the `RadarService` instance in your app.
+
 ## Configuration
 
-To activate this plugin, add the provider `.monitor.application.ApplicationServiceProvider` to the Firebase Remote Config `device_services_to_connect` variable.
+To activate this plugin, add the provider `application_status` to the Firebase Remote Config `plugins` variable.
 
 This plugin takes the following Firebase configuration parameters:
 

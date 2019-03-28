@@ -19,8 +19,8 @@ package org.radarbase.passive.empatica
 import android.os.Process
 import com.empatica.empalink.EmpaDeviceManager
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.SafeHandler
 import org.slf4j.LoggerFactory
 
@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory
  * A service that manages a E4DeviceManager and a TableDataHandler to send store the data of an
  * Empatica E4 and send it to a Kafka REST proxy.
  */
-class E4Service : DeviceService<E4DeviceStatus>() {
+class E4Service : SourceService<E4State>() {
     private lateinit var mHandler: SafeHandler
     private lateinit var empaManager: EmpaDeviceManager
 
@@ -40,13 +40,13 @@ class E4Service : DeviceService<E4DeviceStatus>() {
         empaManager = EmpaDeviceManager(this, delegate, delegate, delegate)
     }
 
-    override fun createDeviceManager() = E4DeviceManager(this, empaManager, mHandler)
+    override fun createSourceManager() = E4Manager(this, empaManager, mHandler)
 
-    override fun configureDeviceManager(manager: DeviceManager<E4DeviceStatus>, configuration: RadarConfiguration) {
-        (manager as E4DeviceManager).apiKey = configuration.getString(EMPATICA_API_KEY)
+    override fun configureSourceManager(manager: SourceManager<E4State>, configuration: RadarConfiguration) {
+        (manager as E4Manager).apiKey = configuration.getString(EMPATICA_API_KEY)
     }
 
-    override val defaultState = E4DeviceStatus()
+    override val defaultState = E4State()
 
     override fun onDestroy() {
         super.onDestroy()

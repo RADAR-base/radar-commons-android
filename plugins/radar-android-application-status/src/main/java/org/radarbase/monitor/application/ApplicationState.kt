@@ -16,11 +16,11 @@
 
 package org.radarbase.monitor.application
 
-import org.radarbase.android.device.BaseDeviceState
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.source.BaseSourceState
 import java.util.concurrent.ConcurrentHashMap
 
-class ApplicationState : BaseDeviceState() {
+class ApplicationState : BaseSourceState() {
     @set:Synchronized
     var serverStatus: ServerStatusListener.Status? = null
         @Synchronized get() = field ?: ServerStatusListener.Status.DISCONNECTED

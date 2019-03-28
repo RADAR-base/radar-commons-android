@@ -18,17 +18,17 @@ package org.radarbase.passive.ppg
 
 import android.util.Size
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 
-class PhonePpgService : DeviceService<PhonePpgState>() {
+class PhonePpgService : SourceService<PhonePpgState>() {
 
     override val defaultState: PhonePpgState
         get() = PhonePpgState()
 
-    override fun createDeviceManager(): PhonePpgManager = PhonePpgManager(this)
+    override fun createSourceManager(): PhonePpgManager = PhonePpgManager(this)
 
-    override fun configureDeviceManager(manager: DeviceManager<PhonePpgState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<PhonePpgState>, configuration: RadarConfiguration) {
         (manager as PhonePpgManager).configure(
                 configuration.getLong(PPG_MEASUREMENT_TIME_NAME, PPG_MEASUREMENT_TIME_DEFAULT),
                 Size(configuration.getInt(PPG_MEASUREMENT_WIDTH_NAME, PPG_MEASUREMENT_WIDTH_DEFAULT),

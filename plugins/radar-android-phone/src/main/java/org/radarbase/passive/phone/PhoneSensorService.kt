@@ -19,8 +19,8 @@ package org.radarbase.passive.phone
 import android.hardware.Sensor
 import android.util.SparseIntArray
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
  * A service that manages the phone sensor manager and a TableDataHandler to send store the data of
  * the phone sensors and send it to a Kafka REST proxy.
  */
-class PhoneSensorService : DeviceService<PhoneState>() {
+class PhoneSensorService : SourceService<PhoneState>() {
 
     private lateinit var sensorDelays: SparseIntArray
 
@@ -40,12 +40,12 @@ class PhoneSensorService : DeviceService<PhoneState>() {
         sensorDelays = SparseIntArray(5)
     }
 
-    override fun createDeviceManager(): PhoneSensorManager {
+    override fun createSourceManager(): PhoneSensorManager {
         logger.info("Creating PhoneSensorManager")
         return PhoneSensorManager(this)
     }
 
-    override fun configureDeviceManager(manager: DeviceManager<PhoneState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<PhoneState>, configuration: RadarConfiguration) {
         val phoneManager = manager as PhoneSensorManager
 
         val defaultInterval = configuration.getInt(PHONE_SENSOR_INTERVAL, PHONE_SENSOR_INTERVAL_DEFAULT)

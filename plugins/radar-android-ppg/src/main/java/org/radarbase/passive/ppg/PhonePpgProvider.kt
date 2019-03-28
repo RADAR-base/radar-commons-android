@@ -21,13 +21,20 @@ import android.content.Intent
 import android.content.pm.PackageManager.FEATURE_CAMERA
 import android.content.pm.PackageManager.FEATURE_CAMERA_FLASH
 import org.radarbase.android.BuildConfig
-import org.radarbase.android.device.DeviceServiceProvider
+import org.radarbase.android.RadarService
+import org.radarbase.android.source.SourceProvider
 
-class PhonePpgProvider : DeviceServiceProvider<PhonePpgState>() {
+class PhonePpgProvider(radarService: RadarService) : SourceProvider<PhonePpgState>(radarService) {
     override val serviceClass: Class<PhonePpgService> = PhonePpgService::class.java
 
     override val displayName: String
         get() = radarService.getString(R.string.ppg_display_name)
+
+    override val pluginNames = listOf(
+            "phone_ppg",
+            "ppg",
+            "org.radarbase.passive.ppg.PhonePpgProvider",
+            "org.radarcns.passive.ppg.PhonePpgProvider")
 
     override val permissionsNeeded: List<String> = listOf(CAMERA)
 

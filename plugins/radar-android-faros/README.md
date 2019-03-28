@@ -13,11 +13,14 @@ repositories {
 }
 
 dependencies {
-    runtimeOnly "org.radarbase:radar-android-faros:$radarCommonsAndroidVersion"
+    implementation "org.radarbase:radar-android-faros:$radarCommonsAndroidVersion"
 }
 ```
+Add `org.radarbase.passive.bittium.FarosProvider` to the `plugins` variable of the `RadarService` instance in your app.
 
 ## Configuration
+
+To enable this plugin, add the provider `bittium_faros` to `plugins` property of the configuration.
 
 This plugin takes the following Firebase configuration parameters:
 

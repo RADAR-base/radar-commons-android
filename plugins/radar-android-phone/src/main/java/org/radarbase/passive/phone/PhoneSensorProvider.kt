@@ -16,10 +16,17 @@
 
 package org.radarbase.passive.phone
 
-import org.radarbase.android.device.DeviceServiceProvider
+import org.radarbase.android.RadarService
+import org.radarbase.android.source.SourceProvider
 
-open class PhoneSensorProvider : DeviceServiceProvider<PhoneState>() {
+open class PhoneSensorProvider(radarService: RadarService) : SourceProvider<PhoneState>(radarService) {
     override val serviceClass: Class<PhoneSensorService> = PhoneSensorService::class.java
+
+    override val pluginNames = listOf(
+            "phone_sensors",
+            "phone_sensor",
+            "org.radarbase.passive.phone.PhoneSensorProvider",
+            "org.radarcns.phone.PhoneSensorProvider")
 
     override val description: String
         get() = radarService.getString(R.string.phone_sensors_description)

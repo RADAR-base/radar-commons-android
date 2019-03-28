@@ -17,22 +17,22 @@
 package org.radarbase.passive.phone
 
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.BatteryStageReceiver
 
-class PhoneLocationService : DeviceService<BaseDeviceState>() {
-    override val defaultState: BaseDeviceState
-        get() = BaseDeviceState()
+class PhoneLocationService : SourceService<BaseSourceState>() {
+    override val defaultState: BaseSourceState
+        get() = BaseSourceState()
 
     override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createDeviceManager(): PhoneLocationManager {
+    override fun createSourceManager(): PhoneLocationManager {
         return PhoneLocationManager(this)
     }
 
-    override fun configureDeviceManager(manager: DeviceManager<BaseDeviceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
         val phoneManager = manager as PhoneLocationManager
         phoneManager.setBatteryLevels(BatteryStageReceiver.StageLevels(
                 minimum = configuration.getFloat(PHONE_LOCATION_BATTERY_LEVEL_MINIMUM, MINIMUM_BATTERY_LEVEL_DEFAULT),

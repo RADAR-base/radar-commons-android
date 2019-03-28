@@ -19,9 +19,9 @@ package org.radarbase.passive.audio
 import android.os.Process
 import android.util.Base64
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.device.AbstractDeviceManager
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceStatusListener
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.audio.OpenSmileAudioService.Companion.DEFAULT_RECORD_RATE
@@ -36,7 +36,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** Manages Phone sensors  */
-class OpensmileAudioManager constructor(service: OpenSmileAudioService) : AbstractDeviceManager<OpenSmileAudioService, BaseDeviceState>(service) {
+class OpensmileAudioManager constructor(service: OpenSmileAudioService) : AbstractSourceManager<OpenSmileAudioService, BaseSourceState>(service) {
     private val audioTopic: DataCache<ObservationKey, OpenSmile2PhoneAudio> = createCache("android_processed_audio", OpenSmile2PhoneAudio())
 
     @get:Synchronized
@@ -55,7 +55,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             handler(SafeHandler("RADARAudio", Process.THREAD_PRIORITY_BACKGROUND))
             wake = true
         }
-        updateStatus(DeviceStatusListener.Status.READY)
+        updateStatus(SourceStatusListener.Status.READY)
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -65,11 +65,11 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             register()
         }
         // Audio recording
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
     }
 
     private fun processAudio() {
-        updateStatus(DeviceStatusListener.Status.CONNECTED)
+        updateStatus(SourceStatusListener.Status.CONNECTED)
         logger.info("Setting up audio recording")
         val dataPath = File(service.getExternalFilesDir(""),"audio_" + System.currentTimeMillis() + ".bin")
         //openSMILE.clas.SMILExtractJNI(conf,1,dataPath);
@@ -93,7 +93,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
                         currentTime,
                         localConfig.configFile,
                         Base64.encodeToString(readAll(dataPath), Base64.DEFAULT)))
-                updateStatus(DeviceStatusListener.Status.READY)
+                updateStatus(SourceStatusListener.Status.READY)
             } else {
                 logger.warn("Failed to read audio file")
             }

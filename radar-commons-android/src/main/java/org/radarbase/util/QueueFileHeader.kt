@@ -178,12 +178,7 @@ constructor(
     }
 
     override fun toString(): String {
-        return (javaClass.simpleName
-                + "[length=" + length
-                + ", size=" + count
-                + ", first=" + firstPosition
-                + ", last=" + lastPosition
-                + "]")
+        return "QueueFileHeader[length=$length, size=$count, first=$firstPosition, last=$lastPosition]"
     }
 
     /** Clear the positions and count. This does not change the stored file length.  */

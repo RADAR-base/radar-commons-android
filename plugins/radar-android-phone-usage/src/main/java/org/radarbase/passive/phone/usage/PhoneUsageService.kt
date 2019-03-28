@@ -17,9 +17,9 @@
 package org.radarbase.passive.phone.usage
 
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.device.BaseDeviceState
-import org.radarbase.android.device.DeviceManager
-import org.radarbase.android.device.DeviceService
+import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceManager
+import org.radarbase.android.source.SourceService
 
 import java.util.concurrent.TimeUnit
 
@@ -27,19 +27,19 @@ import java.util.concurrent.TimeUnit
  * A service that manages the phone sensor manager and a TableDataHandler to send store the data of
  * the phone sensors and send it to a Kafka REST proxy.
  */
-class PhoneUsageService : DeviceService<BaseDeviceState>() {
+class PhoneUsageService : SourceService<BaseSourceState>() {
 
-    override val defaultState: BaseDeviceState
-        get() = BaseDeviceState()
+    override val defaultState: BaseSourceState
+        get() = BaseSourceState()
 
     override val isBluetoothConnectionRequired: Boolean
         get() = false
 
-    override fun createDeviceManager(): PhoneUsageManager {
+    override fun createSourceManager(): PhoneUsageManager {
         return PhoneUsageManager(this)
     }
 
-    override fun configureDeviceManager(manager: DeviceManager<BaseDeviceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
         val phoneManager = manager as PhoneUsageManager
         phoneManager.setUsageEventUpdateRate(
                 configuration.getLong(PHONE_USAGE_INTERVAL, USAGE_EVENT_PERIOD_DEFAULT),
