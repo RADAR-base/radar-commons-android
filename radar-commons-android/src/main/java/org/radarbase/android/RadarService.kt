@@ -22,8 +22,9 @@ import android.app.AppOpsManager.MODE_ALLOWED
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
-import android.bluetooth.BluetoothAdapter
-import android.content.*
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.location.LocationManager
@@ -90,30 +91,6 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     /** Filters to only listen to certain source IDs or source names.  */
     private val sourceFilters: MutableMap<SourceServiceConnection<*>, Set<String>> = HashMap()
 
-    /** Defines callbacks for service binding, passed to bindService()  */
-    private val bluetoothReceiver = object : BroadcastReceiver() {
-        private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
-
-        override fun onReceive(context: Context, intent: Intent) {
-            val action = intent.action
-
-            if (action == BluetoothAdapter.ACTION_STATE_CHANGED) {
-                val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                logger.info("Bluetooth state {}", state)
-                // Upon state change, restart ui handler and restart Scanning.
-                if (state == BluetoothAdapter.STATE_ON) {
-                    bluetoothNotification?.cancel()
-                    startScanning()
-                } else if (state == BluetoothAdapter.STATE_OFF) {
-                    bluetoothNotification = RadarApplication.getNotificationHandler(context)
-                            .notify(BLUETOOTH_NOTIFICATION, NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false) {
-                                setContentTitle(getString(R.string.notification_bluetooth_needed_title))
-                                setContentText(getString(R.string.notification_bluetooth_needed_text))
-                            }
-                }
-            }
-        }
-    }
     private lateinit var providerLoader: SourceProviderLoader
     private lateinit var configurationCache: ChangeRunner<Map<String, String>>
     private lateinit var authConnection: AuthServiceConnection
@@ -146,13 +123,37 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
     private lateinit var broadcaster: LocalBroadcastManager
 
+    private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
+
+    /** Defines callbacks for service binding, passed to bindService()  */
+    private lateinit var bluetoothReceiver: BluetoothStateReceiver
+
     override fun onCreate() {
         super.onCreate()
 
+        bluetoothReceiver = BluetoothStateReceiver(this) { enabled ->
+            // Upon state change, restart ui handler and restart Scanning.
+            if (enabled) {
+                bluetoothNotification?.cancel()
+                startScanning()
+            } else {
+                mConnections.map { it.connection }
+                        .filter { it.needsBluetooth() }
+                        .forEach { it.stopRecording() }
+
+                bluetoothNotification = RadarApplication.getNotificationHandler(this@RadarService)
+                        .notify(BLUETOOTH_NOTIFICATION, NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false) {
+                            setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                            setContentText(getString(R.string.notification_bluetooth_needed_text))
+                        }
+            }
+        }
+
         serverStatus = ServerStatusListener.Status.DISABLED
         binder = createBinder()
-        mHandler = SafeHandler("RadarService", THREAD_PRIORITY_BACKGROUND)
-        mHandler.start()
+        mHandler = SafeHandler("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
+            start()
+        }
 
         configurationCache = ChangeRunner()
         needsBluetooth = false
@@ -187,8 +188,9 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
             configChangedReceiver = register(RADAR_CONFIGURATION_CHANGED) { _, _ -> configure() }
         }
 
-        authConnection = AuthServiceConnection(this, this)
-        authConnection.bind()
+        authConnection = AuthServiceConnection(this, this).apply {
+            bind()
+        }
     }
 
     protected open fun createBinder(): IBinder {
@@ -215,7 +217,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
     override fun onDestroy() {
         if (needsBluetooth) {
-            unregisterReceiver(bluetoothReceiver)
+            bluetoothReceiver.unregister()
         }
         permissionsBroadcastReceiver.unregister()
         sourceFailedReceiver.unregister()
@@ -345,7 +347,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
             if (!needsBluetooth && connection.needsBluetooth()) {
                 needsBluetooth = true
-                registerReceiver(bluetoothReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
+                bluetoothReceiver.register()
 
                 broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
                     putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NEEDED)
@@ -536,7 +538,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
             val anyNeedsBluetooth = mConnections.any { it.isConnected && it.connection.needsBluetooth() }
             if (!anyNeedsBluetooth && needsBluetooth) {
-                unregisterReceiver(bluetoothReceiver)
+                bluetoothReceiver.unregister()
                 needsBluetooth = false
 
                 broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {

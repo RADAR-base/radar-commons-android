@@ -18,10 +18,7 @@ package org.radarbase.android.source
 
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.CallSuper
@@ -56,24 +53,6 @@ import kotlin.collections.HashMap
 abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListener, LoginListener {
     val key = ObservationKey()
 
-    /** Stops the source when bluetooth is disabled.  */
-    private val mBluetoothReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val action = intent.action
-
-            if (action == BluetoothAdapter.ACTION_STATE_CHANGED) {
-                val state = intent.getIntExtra(
-                        BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                when (state) {
-                    BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> {
-                        logger.warn("Bluetooth is off")
-                        handler.execute { stopSourceManager(unsetSourceManager()) }
-                    }
-                    else -> logger.debug("Bluetooth is in state {}", state)
-                }
-            }
-        }
-    }
     @get:Synchronized
     @set:Synchronized
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
@@ -115,7 +94,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
                 .filter { it != null })
 
     open val isBluetoothConnectionRequired: Boolean
-        get() = hasBluetoothPermission()
+        get() = hasBluetoothPermission
 
     @CallSuper
     override fun onCreate() {
@@ -126,11 +105,6 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         mBinder = createBinder()
-
-        if (isBluetoothConnectionRequired) {
-            val intentFilter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-            registerReceiver(mBluetoothReceiver, intentFilter)
-        }
 
         authConnection = AuthServiceConnection(this, this)
         authConnection.bind()
@@ -159,10 +133,6 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         radarConnection.unbind()
         authConnection.unbind()
 
-        if (isBluetoothConnectionRequired) {
-            // Unregister broadcast listeners
-            unregisterReceiver(mBluetoothReceiver)
-        }
         handler.stop { stopSourceManager(unsetSourceManager()) }
 
         radarApp.onSourceServiceDestroy(this)
@@ -251,9 +221,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
             throw IllegalStateException("Cannot start recording: user ID is not set.")
         }
 
-        if (!handler.isStarted) {
-            handler.start()
-        }
+        handler.takeUnless(SafeHandler::isStarted)?.start()
         handler.execute {
             doStart(acceptableIds)
         }
@@ -263,9 +231,9 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         val expectedNames = expectedSourceNames
         val actualIds = if (expectedNames.isEmpty()) acceptableIds else expectedNames
 
-        val localManager = sourceManager
-        if (localManager == null) {
-            if (isBluetoothConnectionRequired && BluetoothAdapter.getDefaultAdapter() != null && !BluetoothAdapter.getDefaultAdapter().isEnabled) {
+        if (sourceManager == null) {
+            if (isBluetoothConnectionRequired
+                    && BluetoothAdapter.getDefaultAdapter()?.isEnabled == true) {
                 logger.error("Cannot start recording without Bluetooth")
                 return
             }
@@ -318,7 +286,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
      */
     @CallSuper
     fun onInvocation(bundle: Bundle) {
-        setHasBluetoothPermission(bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false))
+        hasBluetoothPermission = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false)
         sourceProducer = bundle.getString(PRODUCER_KEY)
                 ?: throw IllegalArgumentException("Missing source producer")
         sourceModel = bundle.getString(MODEL_KEY)
@@ -327,27 +295,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     }
 
     /** Get the service local binder.  */
-    protected fun createBinder(): SourceServiceBinder<T> {
-        return SourceServiceBinder(this)
-    }
-
-    protected fun setHasBluetoothPermission(isRequired: Boolean) {
-        val oldBluetoothNeeded = isBluetoothConnectionRequired
-        hasBluetoothPermission = isRequired
-        val newBluetoothNeeded = isBluetoothConnectionRequired
-
-        if (oldBluetoothNeeded && !newBluetoothNeeded) {
-            unregisterReceiver(mBluetoothReceiver)
-        } else if (!oldBluetoothNeeded && newBluetoothNeeded) {
-            // Register for broadcasts on BluetoothAdapter state change
-            val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-            registerReceiver(mBluetoothReceiver, filter)
-        }
-    }
-
-    protected fun hasBluetoothPermission(): Boolean {
-        return hasBluetoothPermission
-    }
+    protected fun createBinder() = SourceServiceBinder(this)
 
     private fun registerSource(type: SourceType, name: String, attributes: Map<String, String>) {
         logger.info("Registering source {} with attributes {}", type, attributes)

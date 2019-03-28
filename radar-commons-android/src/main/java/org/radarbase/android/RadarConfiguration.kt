@@ -455,6 +455,7 @@ class RadarConfiguration private constructor(context: Context,
         const val OAUTH2_REDIRECT_URL = "oauth2_redirect_url"
         const val OAUTH2_CLIENT_ID = "oauth2_client_id"
         const val OAUTH2_CLIENT_SECRET = "oauth2_client_secret"
+        const val ENABLE_BLUETOOTH_REQUESTS = "enable_bluetooth_requests"
 
         const val SEND_ONLY_WITH_WIFI_DEFAULT = true
         const val SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true
