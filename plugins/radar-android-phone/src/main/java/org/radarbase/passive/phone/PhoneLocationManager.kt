@@ -55,7 +55,8 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private val intervals = ChangeRunner(LocationPollingIntervals())
     private var isStarted: Boolean = false
     private var referenceId: Int = 0
-    var isRelativeLocation: Boolean = true
+    @Volatile
+    var isAbsoluteLocation: Boolean = true
 
     private val preferences: SharedPreferences
         get() = service.getSharedPreferences(PhoneLocationService::class.java.name, Context.MODE_PRIVATE)
@@ -126,18 +127,20 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
             else -> LocationProvider.OTHER
         }
 
+        val isAbsolute = isAbsoluteLocation
+
         // Coordinates in degrees from the first coordinate registered
-        val latitude = getRelativeLatitude(location.latitude).normalize()
-        val longitude = getRelativeLongitude(location.longitude).normalize()
-        val altitude = if (location.hasAltitude()) getRelativeAltitude(location.altitude).normalize() else null
-        val accuracy = if (location.hasAccuracy()) location.accuracy.normalize() else null
-        val speed = if (location.hasSpeed()) location.speed.normalize() else null
-        val bearing = if (location.hasBearing()) location.bearing.normalize() else null
+        val latitude = offsetLatitude(location.latitude, isAbsolute)
+        val longitude = offsetLongitude(location.longitude, isAbsolute)
+        val altitude = if (location.hasAltitude()) offsetAltitude(location.altitude, isAbsolute) else null
+        val accuracy = if (location.hasAccuracy()) location.accuracy else null
+        val speed = if (location.hasSpeed()) location.speed else null
+        val bearing = if (location.hasBearing()) location.bearing else null
 
         val value = PhoneRelativeLocation(
                 eventTimestamp, timestamp, provider,
-                latitude, longitude,
-                altitude, accuracy, speed, bearing)
+                latitude.normalize(), longitude.normalize(),
+                altitude.normalize(), accuracy.normalize(), speed.normalize(), bearing.normalize())
         send(locationTopic, value)
 
         logger.info("Location: {} {} {} {} {} {} {} {} {}", provider, eventTimestamp, latitude,
@@ -183,10 +186,10 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         }
     }
 
-    private fun getRelativeLatitude(absoluteLatitude: Double): Double {
+    private fun offsetLatitude(absoluteLatitude: Double, isAbsolute: Boolean): Double {
         if (absoluteLatitude.isNaN()) {
             return Double.NaN
-        } else if (!isRelativeLocation) {
+        } else if (isAbsolute) {
             return absoluteLatitude
         }
 
@@ -206,10 +209,10 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         return latitude.subtract(latitudeReference).toDouble()
     }
 
-    private fun getRelativeLongitude(absoluteLongitude: Double): Double {
+    private fun offsetLongitude(absoluteLongitude: Double, isAbsolute: Boolean): Double {
         if (absoluteLongitude.isNaN()) {
             return Double.NaN
-        } else if (!isRelativeLocation) {
+        } else if (isAbsolute) {
             return absoluteLongitude
         }
 
@@ -235,10 +238,10 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         return relativeLongitude
     }
 
-    private fun getRelativeAltitude(absoluteAltitude: Double): Float {
+    private fun offsetAltitude(absoluteAltitude: Double, isAbsolute: Boolean): Float {
         if (absoluteAltitude.isNaN()) {
             return Float.NaN
-        } else if (!isRelativeLocation) {
+        } else if (isAbsolute) {
             return absoluteAltitude.toFloat()
         }
 
@@ -309,8 +312,9 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         private const val ALTITUDE_REFERENCE = "altitude.reference"
 
         /** Replace special float values with regular numbers.  */
-        private fun Double.normalize(): Double? {
+        private fun Double?.normalize(): Double? {
             return when {
+                this == null -> null
                 isNaN() -> null
                 isInfinite() && this < 0 -> -1e308
                 isInfinite() && this > 0 -> 1e308
@@ -319,8 +323,9 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         }
 
         /** Replace special float values with regular numbers.  */
-        private fun Float.normalize(): Float? {
+        private fun Float?.normalize(): Float? {
             return when {
+                this == null -> null
                 isNaN() -> null
                 isInfinite() && this < 0 -> -3e38f
                 isInfinite() && this > 0 -> 3e38f

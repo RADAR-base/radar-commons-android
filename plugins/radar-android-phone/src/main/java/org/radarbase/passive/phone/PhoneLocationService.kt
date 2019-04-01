@@ -42,7 +42,7 @@ class PhoneLocationService : SourceService<BaseSourceState>() {
                 gpsReduced = configuration.getLong(PHONE_LOCATION_GPS_INTERVAL_REDUCED, LOCATION_GPS_INTERVAL_REDUCED_DEFAULT),
                 network = configuration.getLong(PHONE_LOCATION_NETWORK_INTERVAL, LOCATION_NETWORK_INTERVAL_DEFAULT),
                 networkReduced = configuration.getLong(PHONE_LOCATION_NETWORK_INTERVAL_REDUCED, LOCATION_NETWORK_INTERVAL_REDUCED_DEFAULT)))
-        locationManager.isRelativeLocation = configuration.getBoolean(PHONE_LOCATION_RELATIVE, true)
+        locationManager.isAbsoluteLocation = !configuration.getBoolean(PHONE_LOCATION_RELATIVE, true)
 
     }
 
