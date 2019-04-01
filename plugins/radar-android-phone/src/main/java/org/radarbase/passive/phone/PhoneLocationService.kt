@@ -33,15 +33,17 @@ class PhoneLocationService : SourceService<BaseSourceState>() {
     }
 
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
-        val phoneManager = manager as PhoneLocationManager
-        phoneManager.setBatteryLevels(BatteryStageReceiver.StageLevels(
+        val locationManager = manager as PhoneLocationManager
+        locationManager.setBatteryLevels(BatteryStageReceiver.StageLevels(
                 minimum = configuration.getFloat(PHONE_LOCATION_BATTERY_LEVEL_MINIMUM, MINIMUM_BATTERY_LEVEL_DEFAULT),
                 reduced = configuration.getFloat(PHONE_LOCATION_BATTERY_LEVEL_REDUCED, REDUCED_BATTERY_LEVEL_DEFAULT)))
-        phoneManager.setIntervals(PhoneLocationManager.LocationPollingIntervals(
+        locationManager.setIntervals(PhoneLocationManager.LocationPollingIntervals(
                 gps = configuration.getLong(PHONE_LOCATION_GPS_INTERVAL, LOCATION_GPS_INTERVAL_DEFAULT),
                 gpsReduced = configuration.getLong(PHONE_LOCATION_GPS_INTERVAL_REDUCED, LOCATION_GPS_INTERVAL_REDUCED_DEFAULT),
                 network = configuration.getLong(PHONE_LOCATION_NETWORK_INTERVAL, LOCATION_NETWORK_INTERVAL_DEFAULT),
                 networkReduced = configuration.getLong(PHONE_LOCATION_NETWORK_INTERVAL_REDUCED, LOCATION_NETWORK_INTERVAL_REDUCED_DEFAULT)))
+        locationManager.isRelativeLocation = configuration.getBoolean(PHONE_LOCATION_RELATIVE, true)
+
     }
 
     companion object {
@@ -51,6 +53,7 @@ class PhoneLocationService : SourceService<BaseSourceState>() {
         private const val PHONE_LOCATION_NETWORK_INTERVAL_REDUCED = "phone_location_network_interval_reduced"
         private const val PHONE_LOCATION_BATTERY_LEVEL_REDUCED = "phone_location_battery_level_reduced"
         private const val PHONE_LOCATION_BATTERY_LEVEL_MINIMUM = "phone_location_battery_level_minimum"
+        private const val PHONE_LOCATION_RELATIVE = "phone_location_relative"
 
         internal const val LOCATION_GPS_INTERVAL_DEFAULT = 15 * 60L // seconds
         internal const val LOCATION_GPS_INTERVAL_REDUCED_DEFAULT = 4 * LOCATION_GPS_INTERVAL_DEFAULT // seconds

@@ -31,13 +31,13 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
-import org.radarcns.kafka.ObservationKey
-import org.radarcns.passive.phone.LocationProvider
-import org.radarcns.passive.phone.PhoneRelativeLocation
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_REDUCED_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_NETWORK_INTERVAL_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_NETWORK_INTERVAL_REDUCED_DEFAULT
+import org.radarcns.kafka.ObservationKey
+import org.radarcns.passive.phone.LocationProvider
+import org.radarcns.passive.phone.PhoneRelativeLocation
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.math.BigDecimal
@@ -54,9 +54,12 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private val frequency = ChangeRunner<BatteryStageReceiver.BatteryStage>()
     private val intervals = ChangeRunner(LocationPollingIntervals())
     private var isStarted: Boolean = false
+    private var referenceId: Int = 0
+    var isRelativeLocation: Boolean = true
 
     private val preferences: SharedPreferences
         get() = service.getSharedPreferences(PhoneLocationService::class.java.name, Context.MODE_PRIVATE)
+
 
     init {
         initializeReferences()
@@ -64,25 +67,32 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     }
 
     private fun initializeReferences() {
-        val preferences = preferences
-        latitudeReference = preferences.getString(LATITUDE_REFERENCE, null)
-                ?.let { BigDecimal(it) }
+        preferences.apply {
+            latitudeReference = getString(LATITUDE_REFERENCE, null)
+                    ?.let { BigDecimal(it) }
 
-        longitudeReference = preferences.getString(LONGITUDE_REFERENCE, null)
-                ?.let { BigDecimal(it) }
+            longitudeReference = getString(LONGITUDE_REFERENCE, null)
+                    ?.let { BigDecimal(it) }
 
-        if (preferences.contains(ALTITUDE_REFERENCE)) {
-            try {
-                altitudeReference = Double.fromBits(preferences.getLong(ALTITUDE_REFERENCE, 0))
-            } catch (ex: ClassCastException) {
-                // to fix bug where this was stored as String
-                altitudeReference = preferences.getString(ALTITUDE_REFERENCE, "0.0")!!.toDouble()
-                preferences.edit()
-                        .putLong(ALTITUDE_REFERENCE, altitudeReference.toRawBits())
-                        .apply()
+            if (contains(ALTITUDE_REFERENCE)) {
+                try {
+                    altitudeReference = Double.fromBits(getLong(ALTITUDE_REFERENCE, 0))
+                } catch (ex: ClassCastException) {
+                    // to fix bug where this was stored as String
+                    altitudeReference = getString(ALTITUDE_REFERENCE, "0.0")!!.toDouble()
+                    edit().putLong(ALTITUDE_REFERENCE, altitudeReference.toRawBits()).apply()
+                }
+            } else {
+                altitudeReference = Double.NaN
             }
-        } else {
-            altitudeReference = Double.NaN
+
+            if (contains(REFERENCE_ID)) {
+                referenceId = getInt(REFERENCE_ID, -1)
+                while (referenceId == -1 || referenceId == 0) {
+                    referenceId = ThreadLocalRandom.current().nextInt()
+                }
+                edit().putInt(REFERENCE_ID, referenceId).apply()
+            }
         }
     }
 
@@ -176,6 +186,8 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private fun getRelativeLatitude(absoluteLatitude: Double): Double {
         if (absoluteLatitude.isNaN()) {
             return Double.NaN
+        } else if (!isRelativeLocation) {
+            return absoluteLatitude
         }
 
         val latitude = BigDecimal.valueOf(absoluteLatitude)
@@ -197,7 +209,10 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private fun getRelativeLongitude(absoluteLongitude: Double): Double {
         if (absoluteLongitude.isNaN()) {
             return Double.NaN
+        } else if (!isRelativeLocation) {
+            return absoluteLongitude
         }
+
         val longitude = BigDecimal.valueOf(absoluteLongitude)
         if (longitudeReference == null) {
             longitudeReference = longitude
@@ -223,7 +238,10 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private fun getRelativeAltitude(absoluteAltitude: Double): Float {
         if (absoluteAltitude.isNaN()) {
             return Float.NaN
+        } else if (!isRelativeLocation) {
+            return absoluteAltitude.toFloat()
         }
+
         if (altitudeReference.isNaN()) {
             altitudeReference = absoluteAltitude
 
@@ -286,6 +304,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
 
         // storage with keys
         private const val LATITUDE_REFERENCE = "latitude.reference"
+        private const val REFERENCE_ID = "reference.id"
         private const val LONGITUDE_REFERENCE = "longitude.reference"
         private const val ALTITUDE_REFERENCE = "altitude.reference"
 
