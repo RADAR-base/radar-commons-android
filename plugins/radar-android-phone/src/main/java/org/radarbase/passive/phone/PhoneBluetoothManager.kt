@@ -60,48 +60,45 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
             logger.error("Bluetooth is not available.")
             return
         }
-        val wasEnabled = bluetoothAdapter.isEnabled
+        if (bluetoothAdapter.isEnabled) {
+            val filter = IntentFilter().apply {
+                addAction(BluetoothDevice.ACTION_FOUND)
+                addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            }
 
-        if (!wasEnabled) {
-            bluetoothAdapter.enable()
-        }
+            bluetoothBroadcastReceiver = object : BroadcastReceiver() {
+                private var numberOfDevices: Int = 0
 
-        val filter = IntentFilter()
-        filter.addAction(BluetoothDevice.ACTION_FOUND)
-        filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-
-        bluetoothBroadcastReceiver = object : BroadcastReceiver() {
-            private var numberOfDevices: Int = 0
-
-            override fun onReceive(context: Context, intent: Intent) {
-                val action = intent.action ?: return
-                when (action) {
-                    BluetoothDevice.ACTION_FOUND -> {
-                        numberOfDevices++
-                    }
-
-                    BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                        service.unregisterReceiver(this)
-                        bluetoothBroadcastReceiver = null
-
-                        val bondedDevices = bluetoothAdapter.bondedDevices.size
-
-                        if (!wasEnabled) {
-                            bluetoothAdapter.disable()
+                override fun onReceive(context: Context, intent: Intent) {
+                    val action = intent.action ?: return
+                    when (action) {
+                        BluetoothDevice.ACTION_FOUND -> {
+                            numberOfDevices++
                         }
 
-                        if (!isClosed) {
-                            val time = currentTime
-                            send(bluetoothDevicesTopic, PhoneBluetoothDevices(
-                                    time, time, bondedDevices, numberOfDevices, wasEnabled))
+                        BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                            service.unregisterReceiver(this)
+                            bluetoothBroadcastReceiver = null
+
+                            val bondedDevices = bluetoothAdapter.bondedDevices.size
+
+                            if (!isClosed) {
+                                val time = currentTime
+                                send(bluetoothDevicesTopic, PhoneBluetoothDevices(
+                                        time, time, bondedDevices, numberOfDevices, true))
+                            }
                         }
                     }
                 }
             }
-        }
 
-        service.registerReceiver(bluetoothBroadcastReceiver, filter)
-        bluetoothAdapter.startDiscovery()
+            service.registerReceiver(bluetoothBroadcastReceiver, filter)
+            bluetoothAdapter.startDiscovery()
+        } else {
+            val time = currentTime
+            send(bluetoothDevicesTopic, PhoneBluetoothDevices(
+                    time, time, null, null, false))
+        }
     }
 
     @Throws(IOException::class)
