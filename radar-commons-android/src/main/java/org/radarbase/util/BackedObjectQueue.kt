@@ -43,7 +43,7 @@ class BackedObjectQueue<S, T>(
 
     /** Number of elements in the queue.  */
     val size: Int
-        get() = queueFile.size()
+        get() = queueFile.size
 
     /**
      * Add a new element to the queue.
@@ -83,8 +83,9 @@ class BackedObjectQueue<S, T>(
      * @throws IllegalStateException if the element that was read was invalid.
      */
     @Throws(IOException::class)
-    fun peek(): T {
-        queueFile.peek()!!.use { `in` -> return deserializer.deserialize(`in`) }
+    fun peek(): T? {
+        return queueFile.peek()
+                ?.use { deserializer.deserialize(it) }
     }
 
     /**

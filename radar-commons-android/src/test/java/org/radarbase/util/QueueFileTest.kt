@@ -56,7 +56,7 @@ class QueueFileTest {
     @Throws(Exception::class)
     fun elementOutputStreamCircular() {
         val queue = createQueue()
-        assertEquals(0, queue.size())
+        assertEquals(0, queue.size)
         val buffer = ByteArray((MAX_SIZE / 4).toInt())
         queue.elementOutputStream().use { out ->
             out.write(buffer)
@@ -66,9 +66,9 @@ class QueueFileTest {
             out.write(buffer)
             out.next()
         }
-        assertEquals(3, queue.size())
+        assertEquals(3, queue.size)
         queue.remove(2)
-        assertEquals(1, queue.size())
+        assertEquals(1, queue.size)
         try {
             queue.elementOutputStream().use { out ->
                 out.write(buffer)
@@ -100,15 +100,15 @@ class QueueFileTest {
         val value = 1
         queueFile.elementOutputStream().use { out -> out.write(value) }
         assertFalse(queueFile.isEmpty)
-        assertEquals(1, queueFile.size())
+        assertEquals(1, queueFile.size)
         val `in` = queueFile.peek()
         assertNotNull(`in`)
         `in`!!.close()
         assertFalse(queueFile.isEmpty)
-        assertEquals(1, queueFile.size())
+        assertEquals(1, queueFile.size)
         queueFile.remove(1)
         assertTrue(queueFile.isEmpty)
-        assertEquals(0, queueFile.size())
+        assertEquals(0, queueFile.size)
     }
 
     @Test
@@ -130,7 +130,7 @@ class QueueFileTest {
             out.next()
             out.write(buffer)
         }
-        assertEquals(3, queueFile.size())
+        assertEquals(3, queueFile.size)
         queueFile.peek()!!.use { `in` ->
             assertNotNull(`in`)
             assertEquals(1, `in`.available())
@@ -191,7 +191,7 @@ class QueueFileTest {
             out.next()
             out.write(2)
         }
-        assertEquals(2, queue.size())
+        assertEquals(2, queue.size)
         queue.clear()
         assertTrue(queue.isEmpty)
     }
@@ -200,14 +200,14 @@ class QueueFileTest {
     private fun writeAssertFileSize(expectedSize: Long, expectedUsed: Long, buffer: ByteArray, queue: QueueFile) {
         queue.elementOutputStream().use { out -> out.write(buffer) }
         assertEquals(expectedUsed, queue.usedBytes)
-        assertEquals(expectedSize, queue.fileSize())
+        assertEquals(expectedSize, queue.fileSize)
     }
 
     @Test
     @Throws(Exception::class)
     fun fileSize() {
         val queue = createQueue()
-        assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH, queue.fileSize())
+        assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH, queue.fileSize)
         val bufSize = MAX_SIZE / 16 - QueueFileHeader.HEADER_LENGTH
         val buffer = ByteArray(bufSize.toInt())
         // write buffer, assert that the file size increases with the stored size
@@ -246,9 +246,9 @@ class QueueFileTest {
         queue.remove(1)
         writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 16 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
         queue.remove(14)
-        assertEquals(2, queue.size())
+        assertEquals(2, queue.size)
         assertEquals((bufSize + QueueFileElement.HEADER_LENGTH) * 2 + QueueFileHeader.HEADER_LENGTH, queue.usedBytes)
-        assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH * 2, queue.fileSize())
+        assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH * 2, queue.fileSize)
     }
 
     @Test(timeout = 10000L)
@@ -284,7 +284,7 @@ class QueueFileTest {
                     bytesUsed += write(list, queue, buffer, random, size)
                 }
                 assertEquals(bytesUsed, queue.usedBytes)
-                assertEquals(list.size, queue.size())
+                assertEquals(list.size, queue.size)
             }
         } catch (ex: Throwable) {
             logger.error("Current list: {} with used bytes {}; QueueFile {}", list, bytesUsed, queue)
@@ -299,7 +299,7 @@ class QueueFileTest {
      */
     @Throws(IOException::class)
     private fun remove(list: LinkedList<Element>, queue: QueueFile, random: Random): Long {
-        val numRemove = random.nextInt(queue.size()) + 1
+        val numRemove = random.nextInt(queue.size) + 1
         logger.info("Removing {} elements", numRemove)
         queue.remove(numRemove)
         var removedBytes = 0L
@@ -315,8 +315,8 @@ class QueueFileTest {
      */
     @Throws(Throwable::class)
     private fun read(list: LinkedList<Element>, queue: QueueFile, buffer: ByteArray, random: Random) {
-        val numRead = random.nextInt(queue.size()) + 1
-        assertTrue(queue.size() >= numRead)
+        val numRead = random.nextInt(queue.size) + 1
+        assertTrue(queue.size >= numRead)
         logger.info("Reading {} elements", numRead)
         val iterator = queue.iterator()
         for (j in 0 until numRead) {
@@ -355,23 +355,23 @@ class QueueFileTest {
                 val next = Element(0, numBytes)
                 if (list.isEmpty()) {
                     next.position = QueueFileHeader.HEADER_LENGTH.toLong()
-                } else if (out.usedSize + numBytes + QueueFileElement.HEADER_LENGTH > queue.fileSize()) {
+                } else if (out.usedSize + numBytes + QueueFileElement.HEADER_LENGTH > queue.fileSize) {
                     val firstPosition = list.first.position
                     for (el in list) {
                         if (el.position < firstPosition) {
-                            el.position += (queue.fileSize() - QueueFileHeader.HEADER_LENGTH).toInt()
+                            el.position += (queue.fileSize - QueueFileHeader.HEADER_LENGTH).toInt()
                         }
                     }
                     val last = list.last
                     next.position = last.position + last.length + QueueFileElement.HEADER_LENGTH
-                    if (next.position >= queue.fileSize() * 2) {
-                        next.position += (QueueFileHeader.HEADER_LENGTH - queue.fileSize() * 2).toInt()
+                    if (next.position >= queue.fileSize * 2) {
+                        next.position += (QueueFileHeader.HEADER_LENGTH - queue.fileSize * 2).toInt()
                     }
                 } else {
                     val last = list.last
                     next.position = last.position + last.length + QueueFileElement.HEADER_LENGTH
-                    if (next.position >= queue.fileSize()) {
-                        next.position += (QueueFileHeader.HEADER_LENGTH - queue.fileSize()).toInt()
+                    if (next.position >= queue.fileSize) {
+                        next.position += (QueueFileHeader.HEADER_LENGTH - queue.fileSize).toInt()
                     }
                 }
                 bytesUsed += next.length + QueueFileElement.HEADER_LENGTH

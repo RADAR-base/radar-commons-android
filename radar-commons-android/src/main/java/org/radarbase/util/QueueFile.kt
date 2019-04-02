@@ -79,7 +79,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     private val header: QueueFileHeader = QueueFileHeader(storage)
 
     /** Pointer to first (or eldest) element.  */
-    private val first: ArrayDeque<QueueFileElement>
+    private val first = ArrayDeque<QueueFileElement>()
 
     /** Pointer to last (or newest) element.  */
     private val last: QueueFileElement
@@ -95,7 +95,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
 
     /** Returns true if this queue contains no entries.  */
     val isEmpty: Boolean
-        get() = size() == 0
+        get() = size == 0
 
     var maximumFileSize: Long
         get() = storage.maximumLength
@@ -108,11 +108,9 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             this.storage.resize(header.length)
         }
 
-        first = ArrayDeque()
-        val newFirst = readElement(header.firstPosition)
-        if (!newFirst.isEmpty) {
-            first.add(newFirst)
-        }
+        readElement(header.firstPosition).takeUnless { it.isEmpty }
+                ?.let { first.add(it) }
+
         last = readElement(header.lastPosition)
     }
 
@@ -174,12 +172,11 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             }
 
             val firstPosition = first.first.position
-            return if (last.position >= firstPosition) {
-                // Contiguous queue.
-                last.nextPosition - firstPosition + QueueFileHeader.HEADER_LENGTH
+            return last.nextPosition - firstPosition + if (last.position >= firstPosition) {
+                QueueFileHeader.HEADER_LENGTH.toLong()
             } else {
                 // tail < head. The queue wraps.
-                last.nextPosition - firstPosition + header.length
+                header.length
             }
         }
 
@@ -187,9 +184,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     @Throws(IOException::class)
     fun peek(): InputStream? {
         requireNotClosed()
-        return if (isEmpty) {
-            null
-        } else QueueFileInputStream(first.first)
+        return if (!isEmpty) QueueFileInputStream(first.first) else null
     }
 
     /**
@@ -198,53 +193,40 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
      *
      * The iterator disallows modifications to be made to the QueueFile during iteration.
      */
-    override fun iterator(): Iterator<InputStream> {
-        return ElementIterator()
-    }
+    override fun iterator(): Iterator<InputStream> = ElementIterator()
 
     internal inner class ElementIterator : Iterator<InputStream> {
         /** Index of element to be returned by subsequent call to next.  */
         private var nextElementIndex: Int = 0
 
         /** Position of element to be returned by subsequent call to next.  */
-        private var nextElementPosition: Long = 0
+        private var nextElementPosition: Long = if (first.isEmpty()) 0 else first.first.position
 
         /**
          * The [.modCount] value that the iterator believes that the backing QueueFile should
          * have. If this expectation is violated, the iterator has detected concurrent modification.
          */
-        private val expectedModCount: Int
+        private val expectedModCount = modCount.get()
 
-        private var cacheIterator: Iterator<QueueFileElement>? = null
-        private var previousCached: QueueFileElement? = null
+        private var cacheIterator: Iterator<QueueFileElement>? = first.iterator()
+        private var previousCached: QueueFileElement? = QueueFileElement()
 
-        init {
-            nextElementIndex = 0
-            expectedModCount = modCount.get()
-            previousCached = QueueFileElement()
-            cacheIterator = first.iterator()
-            nextElementPosition = if (first.isEmpty()) 0 else first.first.position
-        }
-
-        private fun checkForComodification() {
+        private fun checkConditions() {
+            if (storage.isClosed) {
+                throw IllegalStateException("closed")
+            }
             if (modCount.get() != expectedModCount) {
                 throw ConcurrentModificationException()
             }
         }
 
         override fun hasNext(): Boolean {
-            if (storage.isClosed) {
-                throw IllegalStateException("closed")
-            }
-            checkForComodification()
+            checkConditions()
             return nextElementIndex != header.count
         }
 
         override fun next(): InputStream {
-            if (storage.isClosed) {
-                throw IllegalStateException("closed")
-            }
-            checkForComodification()
+            checkConditions()
             if (nextElementIndex >= header.count) {
                 throw NoSuchElementException()
             }
@@ -283,14 +265,12 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     }
 
     /** Returns the number of elements in this queue.  */
-    fun size(): Int {
-        return header.count
-    }
+    val size: Int
+        get() = header.count
 
     /** File size in bytes  */
-    fun fileSize(): Long {
-        return header.length
-    }
+    val fileSize: Long
+        get() = header.length
 
     /**
      * Removes the eldest `n` elements.

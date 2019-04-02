@@ -19,6 +19,7 @@ package org.radarbase.android.data
 import com.crashlytics.android.Crashlytics
 import org.apache.avro.generic.GenericData
 import org.radarbase.android.kafka.KafkaDataSubmitter.Companion.SIZE_LIMIT_DEFAULT
+import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.data.AvroRecordData
 import org.radarbase.data.Record
@@ -56,44 +57,40 @@ constructor(override val file: File,
             outputFormat: GenericData,
             config: DataCache.CacheConfiguration) : DataCache<K, V> {
 
-    private val measurementsToAdd: MutableList<Record<K, V>>
-    private val serializer: BackedObjectQueue.Serializer<Record<K, V>>
-    private val deserializer: BackedObjectQueue.Deserializer<Record<Any, Any>>
-    private var queueFile: QueueFile
+    private val measurementsToAdd = mutableListOf<Record<K, V>>()
+    private val serializer = TapeAvroSerializer(topic, inputFormat)
+    private val deserializer = TapeAvroDeserializer<Any, Any>(readTopic, outputFormat)
 
+    private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
+
     private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
 
-    override var config = config
-        get() = executor.compute { field }
+    private val configCache = ChangeRunner(config)
+
+    override var config
+        get() = executor.compute { configCache.value }
         set(value) = executor.execute {
-            if (value != field) {
-                if (value.maximumSize != field.maximumSize) {
-                    queueFile.maximumFileSize = value.maximumSize
-                }
-                field = value.copy()
+            configCache.applyIfChanged(value.copy()) {
+                queueFile.maximumFileSize = it.maximumSize
             }
         }
 
     private val maximumSize: Long
-        get() = config.maximumSize.let { if (it > Int.MAX_VALUE) Int.MAX_VALUE.toLong() else it }
+        get() = config.maximumSize.takeIf { it <= Int.MAX_VALUE } ?: Int.MAX_VALUE.toLong()
 
     init {
         queueFile = try {
             QueueFile.newMapped(Objects.requireNonNull(file), maximumSize)
         } catch (ex: IOException) {
-            logger.error("TapeCache $file was corrupted. Removing old cache.")
+            logger.error("TapeCache {} was corrupted. Removing old cache.", file)
+            Crashlytics.logException(ex)
             if (file.delete()) {
                 QueueFile.newMapped(file, maximumSize)
             } else {
                 throw ex
             }
         }
-
-        this.measurementsToAdd = mutableListOf()
-
-        this.serializer = TapeAvroSerializer(topic, inputFormat)
-        this.deserializer = TapeAvroDeserializer(readTopic, outputFormat)
         this.queue = BackedObjectQueue(queueFile, serializer, deserializer)
     }
 
@@ -108,10 +105,10 @@ constructor(override val file: File,
 
                     return@compute AvroRecordData<Any, Any>(readTopic, currentKey, values)
                 } catch (ex: IOException) {
-                    fixCorruptQueue()
+                    fixCorruptQueue(ex)
                     return@compute null
                 } catch (ex: IllegalStateException) {
-                    fixCorruptQueue()
+                    fixCorruptQueue(ex)
                     return@compute null
                 }
             }
@@ -130,31 +127,29 @@ constructor(override val file: File,
         }
     }
 
-    private fun getValidUnsentRecords(limit: Int, sizeLimit: Long): Pair<Any, List<Any?>>? {
+    private fun getValidUnsentRecords(limit: Int, sizeLimit: Long): Pair<Any, List<Any>>? {
         var currentKey: Any? = null
         lateinit var records: List<Record<Any, Any>?>
 
         while (currentKey == null) {
-            records = queue.peek(limit, sizeLimit)
-            if (records.isEmpty()) {
-                return null
+            records = queue.peek(limit, sizeLimit).takeUnless { it.isEmpty() }
+                    ?: return null
+
+            val nullSize = records.indexOfFirst { it != null }
+                    .takeIf { it != -1 }
+                    ?: records.size
+
+            if (nullSize > 0) {
+                queue.remove(nullSize)
+                records = records.subList(nullSize, records.size)
             }
-            var firstNonNull = records.indexOfFirst { it != null }
-            if (firstNonNull == -1) firstNonNull = records.size
-            if (firstNonNull > 0) {
-                queue.remove(firstNonNull)
-                if (firstNonNull < records.size) {
-                    records = records.subList(firstNonNull, records.size)
-                } else {
-                    continue
-                }
-            }
-            currentKey = records[0]!!.key
+            currentKey = records.firstOrNull()?.key
         }
 
         return Pair(currentKey, records.asSequence()
                 .takeWhile { it?.key == currentKey }
-                .map { it?.value }
+                .filterNotNull()
+                .map(Record<Any, Any>::value)
                 .toList())
     }
 
@@ -262,15 +257,15 @@ constructor(override val file: File,
                 logger.error("Failed to add record", ex)
                 throw RuntimeException(ex)
             }
-
         } finally {
             measurementsToAdd.clear()
         }
     }
 
     @Throws(IOException::class)
-    private fun fixCorruptQueue() {
-        logger.error("Queue {} was corrupted. Removing cache.", topic.name)
+    private fun fixCorruptQueue(ex: Exception) {
+        logger.error("Queue {} was corrupted. Removing cache.", topic.name, ex)
+        Crashlytics.logException(ex)
         try {
             queue.close()
         } catch (ioex: IOException) {
