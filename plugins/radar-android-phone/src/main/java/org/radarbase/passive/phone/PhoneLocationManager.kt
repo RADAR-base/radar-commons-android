@@ -56,18 +56,12 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private var isStarted: Boolean = false
     private var referenceId: Int = 0
     @Volatile
-    var isAbsoluteLocation: Boolean = true
+    var isAbsoluteLocation: Boolean = false
 
     private val preferences: SharedPreferences
         get() = service.getSharedPreferences(PhoneLocationService::class.java.name, Context.MODE_PRIVATE)
 
-
     init {
-        initializeReferences()
-        isStarted = false
-    }
-
-    private fun initializeReferences() {
         preferences.apply {
             latitudeReference = getString(LATITUDE_REFERENCE, null)
                     ?.let { BigDecimal(it) }
@@ -89,12 +83,15 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
 
             if (contains(REFERENCE_ID)) {
                 referenceId = getInt(REFERENCE_ID, -1)
-                while (referenceId == -1 || referenceId == 0) {
-                    referenceId = ThreadLocalRandom.current().nextInt()
+            } else {
+                val random = ThreadLocalRandom.current()
+                while (referenceId == 0) {
+                    referenceId = random.nextInt()
                 }
                 edit().putInt(REFERENCE_ID, referenceId).apply()
             }
         }
+        isStarted = false
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -136,9 +133,10 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         val accuracy = if (location.hasAccuracy()) location.accuracy else null
         val speed = if (location.hasSpeed()) location.speed else null
         val bearing = if (location.hasBearing()) location.bearing else null
+        val reference = if (isAbsolute) 0 else referenceId
 
         val value = PhoneRelativeLocation(
-                eventTimestamp, timestamp, provider,
+                eventTimestamp, timestamp, reference, provider,
                 latitude.normalize(), longitude.normalize(),
                 altitude.normalize(), accuracy.normalize(), speed.normalize(), bearing.normalize())
         send(locationTopic, value)

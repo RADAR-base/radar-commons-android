@@ -31,7 +31,7 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
     override val serverStatus: ServerStatusListener.Status
         get() = sourceService.dataHandler?.status ?: ServerStatusListener.Status.DISCONNECTED
 
-    override val serverRecordsSent: Map<String, Int>
+    override val serverRecordsSent: Map<String, Long>
         get() = sourceService.dataHandler?.recordsSent ?: mapOf()
 
     override fun updateConfiguration(bundle: Bundle) {

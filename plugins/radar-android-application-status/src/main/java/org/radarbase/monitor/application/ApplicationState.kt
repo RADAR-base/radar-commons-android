@@ -32,7 +32,7 @@ class ApplicationState : BaseSourceState() {
     val cachedRecords: MutableMap<String, Long> = ConcurrentHashMap()
 
     @Synchronized
-    fun addRecordsSent(nRecords: Int) {
-        recordsSent += nRecords.toLong()
+    fun addRecordsSent(nRecords: Long) {
+        recordsSent += nRecords
     }
 }

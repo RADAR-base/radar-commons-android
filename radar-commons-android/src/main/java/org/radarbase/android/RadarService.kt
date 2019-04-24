@@ -109,7 +109,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     private var isScanningEnabled = false
 
     /** An overview of how many records have been sent throughout the application.  */
-    private val latestNumberOfRecordsSent = TimedInt()
+    private val latestNumberOfRecordsSent = TimedLong(0)
 
     /** Current server status.  */
     private lateinit var serverStatus: ServerStatusListener.Status
@@ -395,8 +395,8 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         }
     }
 
-    override fun updateRecordsSent(topicName: String, numberOfRecords: Int) {
-        this.latestNumberOfRecordsSent.set(numberOfRecords)
+    override fun updateRecordsSent(topicName: String, numberOfRecords: Long) {
+        this.latestNumberOfRecordsSent.value = numberOfRecords
 
         broadcaster.send(SERVER_RECORDS_SENT_TOPIC) {
             // Signal that a certain topic changed, the key of the map retrieved by getRecordsSent().
@@ -584,7 +584,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         override val serverStatus: ServerStatusListener.Status
                 get() = this@RadarService.serverStatus
 
-        override val latestNumberOfRecordsSent: TimedInt
+        override val latestNumberOfRecordsSent: TimedLong
                 get() = this@RadarService.latestNumberOfRecordsSent
 
         override val connections: List<SourceProvider<*>>

@@ -261,7 +261,7 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
                 throw e
             }
 
-            dataHandler.updateRecordsSent(topic.name, size)
+            dataHandler.updateRecordsSent(topic.name, size.toLong())
 
             logger.debug("uploaded {} {} records", size, topic.name)
         }

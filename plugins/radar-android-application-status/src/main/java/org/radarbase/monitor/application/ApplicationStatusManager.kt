@@ -57,7 +57,6 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
     private val creationTimeStamp: Long = SystemClock.elapsedRealtime()
     private val sntpClient: SntpClient = SntpClient()
     private val prefs: SharedPreferences = service.getSharedPreferences(ApplicationStatusManager::class.java.name, Context.MODE_PRIVATE)
-    private lateinit var storedDeviceInfo: ApplicationDeviceInfo
     private var tzProcessor: OfflineProcessor? = null
 
     @get:Synchronized
@@ -130,7 +129,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
                 state.serverStatus = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
             }
             serverRecordsReceiver = register(SERVER_RECORDS_SENT_TOPIC) { _, intent ->
-                val numberOfRecordsSent = intent.getIntExtra(SERVER_RECORDS_SENT_NUMBER, 0)
+                val numberOfRecordsSent = intent.getLongExtra(SERVER_RECORDS_SENT_NUMBER, 0)
                 state.addRecordsSent(max(numberOfRecordsSent, 0))
             }
             cacheReceiver = register(CACHE_TOPIC) { _, intent ->
@@ -239,7 +238,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
         val time = currentTime
 
         var recordsCachedUnsent = state.cachedRecords.values.sum().toIntCapped()
-        val recordsCachedSent = 0
+        val recordsCachedSent = 0L
 
         for (records in state.cachedRecords.values) {
             if (records != NUMBER_UNKNOWN) {
@@ -247,7 +246,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
             }
         }
         val recordsCached = recordsCachedUnsent + recordsCachedSent
-        val recordsSent = state.recordsSent.toIntCapped()
+        val recordsSent = state.recordsSent
 
         logger.info("Number of records: {sent: {}, unsent: {}, cached: {}}",
                 recordsSent, recordsCachedUnsent, recordsCached)

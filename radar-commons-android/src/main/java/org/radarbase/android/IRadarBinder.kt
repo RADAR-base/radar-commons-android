@@ -22,13 +22,13 @@ import org.radarbase.android.data.DataHandler
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.SourceProvider
 import org.radarbase.android.source.SourceServiceConnection
-import org.radarbase.data.TimedInt
+import org.radarbase.android.util.TimedLong
 import org.radarcns.kafka.ObservationKey
 
 interface IRadarBinder : IBinder {
     val serverStatus: ServerStatusListener.Status
 
-    val latestNumberOfRecordsSent: TimedInt
+    val latestNumberOfRecordsSent: TimedLong
 
     val connections: List<SourceProvider<*>>
 

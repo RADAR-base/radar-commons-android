@@ -45,7 +45,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
     val serverStatus: ServerStatusListener.Status?
         get() = serviceBinder?.serverStatus
 
-    val serverSent: Map<String, Int>?
+    val serverSent: Map<String, Long>?
         get() = serviceBinder?.serverRecordsSent
 
     val sourceState: S?

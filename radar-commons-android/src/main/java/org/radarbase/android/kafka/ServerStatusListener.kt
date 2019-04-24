@@ -23,5 +23,5 @@ interface ServerStatusListener {
 
     fun updateServerStatus(status: Status)
 
-    fun updateRecordsSent(topicName: String, numberOfRecords: Int)
+    fun updateRecordsSent(topicName: String, numberOfRecords: Long)
 }

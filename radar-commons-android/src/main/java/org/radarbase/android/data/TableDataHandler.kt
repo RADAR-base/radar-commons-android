@@ -61,14 +61,14 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
         get() = synchronized(statusSync) { field }
         set(value) = synchronized(statusSync) { field = value }
 
-    private val lastNumberOfRecordsSent = TreeMap<String, Int>()
+    private val lastNumberOfRecordsSent = TreeMap<String, Long>()
     private var submitter: KafkaDataSubmitter? = null
     private var sender: RestSender? = null
 
     private val isStarted: Boolean
         @Synchronized get() = submitter != null
 
-    override val recordsSent: Map<String, Int>
+    override val recordsSent: Map<String, Long>
         get() = synchronized(statusSync) {
             HashMap(lastNumberOfRecordsSent)
         }
@@ -297,7 +297,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
         }
     }
 
-    override fun updateRecordsSent(topicName: String, numberOfRecords: Int) {
+    override fun updateRecordsSent(topicName: String, numberOfRecords: Long) {
         synchronized(statusSync) {
             statusListener?.updateRecordsSent(topicName, numberOfRecords)
 

@@ -29,7 +29,7 @@ interface SourceBinder<T : BaseSourceState> {
     /** Get the current server status  */
     val serverStatus: ServerStatusListener.Status
     /** Get the last number of records sent  */
-    val serverRecordsSent: Map<String, Int>
+    val serverRecordsSent: Map<String, Long>
 
     /** Start scanning and recording from a compatible source.
      * @param acceptableIds a set of source IDs that may be connected to.

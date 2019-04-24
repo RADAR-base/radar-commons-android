@@ -31,7 +31,7 @@ interface DataHandler<K, V> : ServerStatusListener {
     /** Get caches currently active for sending.  */
     val activeCaches: List<DataCacheGroup<*, *>>
 
-    val recordsSent: Map<String, Int>
+    val recordsSent: Map<String, Long>
     val status: ServerStatusListener.Status
 
     fun <W: V> registerCache(topic: AvroTopic<K, W>): DataCache<K, W>
