@@ -36,6 +36,8 @@ import org.slf4j.impl.HandroidLoggerAdapter
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.ThreadLocalRandom
+import com.crashlytics.android.Crashlytics
+import io.fabric.sdk.android.Fabric
 
 @RunWith(AndroidJUnit4::class)
 class TapeCacheTest {
@@ -67,6 +69,7 @@ class TapeCacheTest {
     @Before
     @Throws(IOException::class)
     fun setUp() {
+        Fabric.with(this, Crashlytics())
         HandroidLoggerAdapter.APP_NAME = "Test"
         val topic = AvroTopic("test",
                 ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
