@@ -1,0 +1,21 @@
+<resources>
+    <plurals name="ppgMainDescription">
+        <item quantity="one">Press START, then put this phone
+        in your right hand and your left
+        index finger on the camera as shown
+        below. The measurement will
+        take about one second.
+        </item>
+        <item quantity="other">
+        Press START, then put this phone
+        in your right hand and your left
+        index finger on the camera as shown
+        below. The measurement will
+        take about %1$d seconds.
+        </item>
+    </plurals>
+    <plurals name="ppg_recording_seconds">
+        <item quantity="one">Recording one second…</item>
+        <item quantity="other">Recording %1$d seconds…</item>
+    </plurals>
+</resources>

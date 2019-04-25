@@ -1,0 +1,22 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = 'Plugin for RADAR passive remote monitoring app for measuring PPG using a phone camera'
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+dependencies {
+    api project(':radar-commons-android')
+    implementation 'androidx.appcompat:appcompat:1.0.2'
+    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    implementation 'com.google.android.material:material:1.0.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/bintray.gradle"

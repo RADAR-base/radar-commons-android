@@ -1,0 +1,27 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = 'Empatica E4 plugin for RADAR passive remote monitoring app'
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+repositories {
+    flatDir { dirs 'libs' }
+}
+
+dependencies {
+    api project(':radar-commons-android')
+
+    implementation 'com.empatica:empalink:2.2@aar'
+    //specified by empalink binary
+    //noinspection GradleDependency
+    runtimeOnly 'com.squareup.okhttp:okhttp:2.5.0'
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/bintray.gradle"

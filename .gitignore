@@ -97,3 +97,5 @@ fabric.properties
 
 ## Pebble 2
 .lock*
+.skip
+gradle.skip
