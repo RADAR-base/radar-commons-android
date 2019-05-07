@@ -29,7 +29,6 @@ import com.google.android.gms.tasks.OnFailureListener
 import com.google.android.gms.tasks.Task
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.portal.GetSubjectParser
@@ -53,8 +52,7 @@ class RadarConfiguration private constructor(context: Context,
     private val onFetchCompleteHandler: OnCompleteListener<Void>
     private val localConfiguration: MutableMap<String, String> = ConcurrentHashMap()
     private val persistChanges: Runnable
-    private val isInDevelopmentMode: Boolean
-        get() = firebase.info.configSettings.isDeveloperModeEnabled
+    private var isInDevelopmentMode: Boolean = false
     private var firebaseKeys: Set<String> = HashSet(firebase.getKeysByPrefix(""))
     private val broadcaster = LocalBroadcastManager.getInstance(context)
 
@@ -68,14 +66,14 @@ class RadarConfiguration private constructor(context: Context,
                 status = FirebaseStatus.FETCHED
                 // Once the config is successfully fetched it must be
                 // activated before newly fetched values are returned.
-                activateFetched()
-
-                // Set global properties.
-                logger.info("RADAR configuration changed: {}", this@RadarConfiguration)
-                broadcaster.send(RADAR_CONFIGURATION_CHANGED)
+                activateFetched().addOnCompleteListener {
+                    // Set global properties.
+                    logger.info("RADAR configuration changed: {}", this@RadarConfiguration)
+                    broadcaster.send(RADAR_CONFIGURATION_CHANGED)
+                }
             } else {
                 status = FirebaseStatus.ERROR
-                logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.getException())
+                logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.exception)
             }
         }
 
@@ -205,8 +203,8 @@ class RadarConfiguration private constructor(context: Context,
 
     fun forceFetch(): Task<Void>? = fetch(0L)
 
-    fun activateFetched(): Boolean {
-        val result = firebase.activateFetched()
+    fun activateFetched(): Task<Boolean> {
+        val result = firebase.activate()
         firebaseKeys = HashSet(firebase.getKeysByPrefix(""))
         return result
     }
@@ -481,13 +479,13 @@ class RadarConfiguration private constructor(context: Context,
             return instance ?:
                 RadarConfiguration(context,
                         FirebaseRemoteConfig.getInstance().apply {
-                            setDefaults(defaultSettings)
-                            setConfigSettings(FirebaseRemoteConfigSettings.Builder()
-                                    .setDeveloperModeEnabled(inDevelopmentMode)
-                                    .build())
+                            setDefaultsAsync(defaultSettings)
                         })
                         .also { instance = it }
-                        .also { it.fetch() }
+                        .apply {
+                            isInDevelopmentMode = inDevelopmentMode
+                            fetch()
+                        }
         }
 
         fun hasExtra(bundle: Bundle, key: String): Boolean {
