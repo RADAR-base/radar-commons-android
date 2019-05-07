@@ -38,6 +38,8 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
     manifest.from sharedManifest
 }
 
+ext.nexusRepoBase = 'https://repo.thehyve.nl/content/repositories'
+
 publishing {
     publications {
         mavenAar(MavenPublication) {
@@ -74,6 +76,17 @@ publishing {
                     connection = 'scm:git:' + githubUrl
                     url = githubUrl
                 }
+            }
+        }
+    }
+    repositories {
+        maven {
+            def releasesRepoUrl = "$nexusRepoBase/releases"
+            def snapshotsRepoUrl = "$nexusRepoBase/snapshots"
+            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+            credentials {
+                username = project.hasProperty('nexusUser') ? project.property('nexusUser') : System.getenv('NEXUS_USER')
+                password = project.hasProperty('nexusPassword') ? project.property('nexusPassword') : System.getenv('NEXUS_PASSWORD')
             }
         }
     }

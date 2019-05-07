@@ -65,7 +65,7 @@ deploy:
     on:
       tags: true
   - provider: script
-    script: ./gradlew artifactoryPublish
+    script: ./gradlew publish
     skip_cleanup: true
     on:
       branch: dev
