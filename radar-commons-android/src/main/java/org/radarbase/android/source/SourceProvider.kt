@@ -221,8 +221,8 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      */
     fun isAuthorizedFor(state: AppAuthState, checkVersion: Boolean): Boolean {
         return !state.needsRegisteredSources
-                || (state.sourceMetadata.any { matches(it.type, checkVersion) }
-                && state.sourceTypes.any { it.hasDynamicRegistration && matches(it, checkVersion) })
+                || state.sourceMetadata.any { matches(it.type, checkVersion) }
+                || state.sourceTypes.any { it.hasDynamicRegistration && matches(it, checkVersion) }
     }
 
     override fun hashCode(): Int {
@@ -235,7 +235,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
 
     open val actions: List<Action> = emptyList()
 
-    data class Action(val name: String, val activate: (MainActivity) -> Unit)
+    data class Action(val name: String, val activate: MainActivity.() -> Unit)
 
     companion object {
         const val NEEDS_BLUETOOTH_KEY = "org.radarbase.android.source.SourceProvider.needsBluetooth"

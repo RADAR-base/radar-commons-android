@@ -31,6 +31,7 @@ class PhoneUsageProvider(radarService: RadarService) : SourceProvider<BaseSource
     override val pluginNames = listOf(
             "phone_usage",
             "usage",
+            ".phone.PhoneUsageProvider",
             "org.radarbase.passive.phone.telephony.PhoneUsageProvider",
             "org.radarcns.phone.PhoneUsageProvider")
 

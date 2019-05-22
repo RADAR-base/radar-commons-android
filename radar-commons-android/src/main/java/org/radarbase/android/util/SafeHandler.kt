@@ -4,12 +4,14 @@ import android.os.Handler
 import android.os.HandlerThread
 import androidx.annotation.Keep
 import org.slf4j.LoggerFactory
+import java.lang.ref.WeakReference
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.SynchronousQueue
 
 class SafeHandler(val name: String, private val priority: Int) {
     private var handlerThread: HandlerThread? = null
 
+    @get:Synchronized
     val isStarted: Boolean
         get() = handler != null
 
@@ -19,7 +21,7 @@ class SafeHandler(val name: String, private val priority: Int) {
 
     @Synchronized
     fun start() {
-        if (handler != null) {
+        if (isStarted) {
             logger.warn("Tried to start SafeHandler multiple times.")
             return
         }
@@ -63,7 +65,7 @@ class SafeHandler(val name: String, private val priority: Int) {
         }
     }
 
-    private fun <T> doRun(callable: () -> T): T? {
+    private fun <T> tryRunOrNull(callable: () -> T): T? {
         return try {
             callable()
         } catch (ex: Exception) {
@@ -78,7 +80,7 @@ class SafeHandler(val name: String, private val priority: Int) {
 
     fun executeReentrant(runnable: () -> Unit) {
         if (Thread.currentThread() == handlerThread) {
-            runnable()
+            tryRunOrNull(runnable)
         } else {
             execute(runnable)
         }
@@ -90,11 +92,11 @@ class SafeHandler(val name: String, private val priority: Int) {
 
     fun execute(defaultToCurrentThread: Boolean, runnable: () -> Unit) {
         val didRun = synchronized(this) {
-            handler?.post { doRun(runnable) }
+            handler?.post { tryRunOrNull(runnable) }
         } ?: false
 
         if (!didRun && defaultToCurrentThread) {
-            doRun(runnable)
+            tryRunOrNull(runnable)
         }
     }
 
@@ -104,7 +106,7 @@ class SafeHandler(val name: String, private val priority: Int) {
     fun delay(delay: Long, runnable: () -> Unit): HandlerFuture? {
         return handler?.let {
             val r = Runnable {
-                doRun(runnable)
+                tryRunOrNull(runnable)
             }
             it.postDelayed(r, delay)
             HandlerFutureRef(r)
@@ -114,14 +116,14 @@ class SafeHandler(val name: String, private val priority: Int) {
     fun repeatWhile(delay: Long, runnable: RepeatableRunnable): HandlerFuture? = repeatWhile(delay, runnable::runAndRepeat)
 
     fun repeatWhile(delay: Long, runnable: () -> Boolean): HandlerFuture? {
-        return delay(delay) {
-            if (runnable()) repeatWhile(delay, runnable)
+        return this.delay(delay) {
+            if (tryRunOrNull(runnable) == true) repeatWhile(delay, runnable)
         }
     }
 
     fun repeat(delay: Long, runnable: () -> Unit): HandlerFuture? {
-        return delay(delay) {
-            runnable()
+        return this.delay(delay) {
+            tryRunOrNull(runnable)
             repeat(delay, runnable)
         }
     }
@@ -134,7 +136,7 @@ class SafeHandler(val name: String, private val priority: Int) {
             val oldHandler = handler
             handler = null
             finalization?.let {
-                oldHandler?.post { doRun(it) } ?: doRun(it)
+                oldHandler?.post { tryRunOrNull(it) } ?: tryRunOrNull(it)
             }
             thread.quitSafely()
             handlerThread = null
@@ -180,5 +182,18 @@ class SafeHandler(val name: String, private val priority: Int) {
     companion object {
         private val logger = LoggerFactory.getLogger(SafeHandler::class.java)
         private val nullMarker = object : Any() {}
+        private val map: MutableMap<String, WeakReference<SafeHandler>> = HashMap()
+
+        @Synchronized
+        fun getInstance(name: String, priority: Int): SafeHandler {
+            val handlerRef = map[name]?.get()
+            return if (handlerRef != null) {
+                handlerRef
+            } else {
+                val handler = SafeHandler(name, priority)
+                map[name] = WeakReference(handler)
+                handler
+            }
+        }
     }
 }

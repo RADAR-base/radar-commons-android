@@ -36,7 +36,6 @@ import org.radarbase.monitor.application.ApplicationStatusService.Companion.UPDA
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.monitor.application.*
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.SocketException
@@ -94,7 +93,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
 
         processor.start {
             val osVersionCode: Int = this.prefs.getInt("operatingSystemVersionCode", -1)
@@ -139,7 +138,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
             }
         }
 
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        status = SourceStatusListener.Status.CONNECTED
     }
 
     private val currentApplicationInfo: ApplicationInfo
@@ -163,7 +162,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
 
     // using versionCode
     private fun processDeviceInfo() {
-        deviceInfoCache.runIfChanged(currentApplicationInfo) { deviceInfo ->
+        deviceInfoCache.applyIfChanged(currentApplicationInfo) { deviceInfo ->
             send(deviceInfoTopic, ApplicationDeviceInfo(
                     currentTime,
                     deviceInfo.manufacturer,
@@ -254,14 +253,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
                 recordsCached, recordsSent, recordsCachedUnsent))
     }
 
-    @Throws(IOException::class)
-    override fun close() {
-        if (isClosed) {
-            return
-        }
-        super.close()
-
-        logger.info("Closing ApplicationStatusManager")
+    override fun onClose() {
         this.processor.close()
         cacheReceiver.unregister()
         serverRecordsReceiver.unregister()
@@ -271,7 +263,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
     private fun processTimeZone() {
         val tz = TimeZone.getDefault()
         val now = System.currentTimeMillis()
-        tzOffsetCache.runIfChanged(tz.getOffset(now) / 1000) { offset ->
+        tzOffsetCache.applyIfChanged(tz.getOffset(now) / 1000) { offset ->
             send(timeZoneTopic, ApplicationTimeZone(now / 1000.0, offset))
             prefs.edit()
                     .putInt("timeZoneOffset", offset)

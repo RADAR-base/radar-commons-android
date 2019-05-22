@@ -33,6 +33,7 @@ open class PhoneBluetoothProvider(radarService: RadarService) : SourceProvider<B
     override val pluginNames = listOf(
             "phone_bluetooth",
             "bluetooth",
+            ".phone.PhoneBluetoothProvider",
             "org.radarbase.passive.phone.PhoneBluetoothProvider",
             "org.radarcns.phone.PhoneBluetoothProvider")
 

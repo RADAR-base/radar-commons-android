@@ -35,7 +35,7 @@ class SourceProviderLoader(private var plugins: List<SourceProvider<*>>) {
                 config.getString(RadarConfiguration.PLUGINS, ""))
                 .joinToString(separator = " ")
 
-        return pluginCache.runIfChanged(pluginString) { providers ->
+        return pluginCache.applyIfChanged(pluginString) { providers ->
             logger.info("Loading plugins {}", providers.map { it.pluginNames.firstOrNull() ?: it })
         }
     }

@@ -21,10 +21,10 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificData
 import org.apache.avro.specific.SpecificRecord
-import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
-import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.kafka.KafkaDataSubmitter
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
+import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
@@ -52,7 +52,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     private val batteryLevelReceiver: BatteryStageReceiver
     private val networkConnectedReceiver: NetworkConnectedReceiver
     private val specificData: SpecificData
-    private val handler: SafeHandler = SafeHandler("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
+    private val dataHandler: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
     private val broadcaster = LocalBroadcastManager.getInstance(context)
 
     private var config = DataHandler.DataHandlerConfiguration()
@@ -74,8 +74,8 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
         }
 
     init {
-        this.handler.start()
-        this.handler.repeat(10_000L, ::broadcastNumberOfRecords)
+        this.dataHandler.start()
+        this.dataHandler.repeat(10_000L, ::broadcastNumberOfRecords)
 
         this.batteryLevelReceiver = BatteryStageReceiver(context, config.batteryStageLevels) { stage ->
             when (stage) {
@@ -225,7 +225,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
     @Synchronized
     @Throws(IOException::class)
     fun close() {
-        handler.stop { }
+        dataHandler.stop { }
 
         if (status !== ServerStatusListener.Status.DISABLED) {
             networkConnectedReceiver.unregister()
@@ -314,7 +314,7 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
 
     @Throws(IOException::class)
     override fun <V: SpecificRecord> registerCache(topic: AvroTopic<ObservationKey, V>): DataCache<ObservationKey, V> {
-        return CacheStore.get()
+        return CacheStore
                 .getOrCreateCaches(context.applicationContext, topic, config.cacheConfig)
                 .also { tables[topic.name] = it }
                 .let { it.activeDataCache }

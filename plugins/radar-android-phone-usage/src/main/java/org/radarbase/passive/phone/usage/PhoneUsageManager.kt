@@ -33,7 +33,6 @@ import org.radarcns.passive.phone.PhoneUsageEvent
 import org.radarcns.passive.phone.PhoneUserInteraction
 import org.radarcns.passive.phone.UsageEventType
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -93,9 +92,8 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
         // Start query of usage events
-        phoneUsageProcessor.start()
         register()
 
         // Activity to perform when alarm is triggered
@@ -105,7 +103,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
             addAction(Intent.ACTION_SHUTDOWN) // shutdown
         })
 
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        phoneUsageProcessor.start()
+
+        status = SourceStatusListener.Status.CONNECTED
     }
 
     private fun sendInteractionState(action: String) {
@@ -149,7 +149,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         val event = UsageEvents.Event()
         while (usageEvents.getNextEvent(event) && !phoneUsageProcessor.isDone) {
             // Ignore config changes, old events, and events from the same activity
-            if (event.eventType == UsageEvents.Event.CONFIGURATION_CHANGE || event.timeStamp < lastTimestamp) {
+            if (event.eventType == CONFIGURATION_CHANGE || event.timeStamp < lastTimestamp) {
                 continue
             }
 
@@ -219,12 +219,11 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
-        phoneUsageProcessor.close()
-        val context = service
-        context.unregisterReceiver(phoneStateReceiver)
-        super.close()
+    override fun onClose() {
+        if (phoneUsageProcessor.isStarted) {
+            phoneUsageProcessor.close()
+            service.unregisterReceiver(phoneStateReceiver)
+        }
     }
 
     companion object {
@@ -233,19 +232,19 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         private val EVENT_TYPES = SparseArray<UsageEventType>(6)
 
         init {
-            EVENT_TYPES.append(UsageEvents.Event.MOVE_TO_FOREGROUND, UsageEventType.FOREGROUND)
-            EVENT_TYPES.append(UsageEvents.Event.MOVE_TO_BACKGROUND, UsageEventType.BACKGROUND)
-            EVENT_TYPES.append(UsageEvents.Event.CONFIGURATION_CHANGE, UsageEventType.CONFIG)
-            if (android.os.Build.VERSION.SDK_INT >= 25) {
-                EVENT_TYPES.append(UsageEvents.Event.SHORTCUT_INVOCATION, UsageEventType.SHORTCUT)
+            EVENT_TYPES.append(MOVE_TO_FOREGROUND, UsageEventType.FOREGROUND)
+            EVENT_TYPES.append(MOVE_TO_BACKGROUND, UsageEventType.BACKGROUND)
+            EVENT_TYPES.append(CONFIGURATION_CHANGE, UsageEventType.CONFIG)
+            if (Build.VERSION.SDK_INT >= 25) {
+                EVENT_TYPES.append(SHORTCUT_INVOCATION, UsageEventType.SHORTCUT)
             }
-            if (android.os.Build.VERSION.SDK_INT >= 23) {
-                EVENT_TYPES.append(UsageEvents.Event.USER_INTERACTION, UsageEventType.INTERACTION)
+            if (Build.VERSION.SDK_INT >= 23) {
+                EVENT_TYPES.append(USER_INTERACTION, UsageEventType.INTERACTION)
             }
         }
 
-        private val SHORTCUT_INVOCATION_COMPAT = if (android.os.Build.VERSION.SDK_INT >= 25) SHORTCUT_INVOCATION else 8
-        private val USER_INTERACTION_COMPAT = if (android.os.Build.VERSION.SDK_INT >= 23) USER_INTERACTION else 7
+        private val SHORTCUT_INVOCATION_COMPAT = if (Build.VERSION.SDK_INT >= 25) SHORTCUT_INVOCATION else 8
+        private val USER_INTERACTION_COMPAT = if (Build.VERSION.SDK_INT >= 23) USER_INTERACTION else 7
 
         private const val LAST_PACKAGE_NAME = "org.radarcns.phone.packageName"
         private const val LAST_EVENT_TIMESTAMP = "org.radarcns.phone.timestamp"

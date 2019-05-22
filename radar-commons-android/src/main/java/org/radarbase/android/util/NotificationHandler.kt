@@ -14,23 +14,33 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import org.radarbase.android.R
 import org.radarbase.android.RadarApplication
+import org.slf4j.LoggerFactory
 
 /**
  * Handle notifications and notification channels.
  */
 class NotificationHandler(private val context: Context) {
+    private var isCreated: Boolean = false
 
-    init {
+    val manager : NotificationManager?
+        get() = context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager?
+
+    fun onCreate() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             createNotificationChannels()
         }
     }
 
-    val manager = context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager?
-
     @RequiresApi(api = Build.VERSION_CODES.O)
     private fun createNotificationChannels() {
         manager?.run {
+            synchronized(this) {
+                if (isCreated) {
+                    return
+                }
+                isCreated = true
+            }
+            logger.debug("Creating notification channels")
             createNotificationChannel(NOTIFICATION_CHANNEL_INFO,
                     NotificationManager.IMPORTANCE_LOW,
                     R.string.channel_info_name, R.string.channel_info_description)
@@ -129,23 +139,25 @@ class NotificationHandler(private val context: Context) {
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(NotificationHandler::class.java)
+
         /** Notification channel ID for informational messages. No user response required.  */
-        const val NOTIFICATION_CHANNEL_INFO = "NotificationHandler.INFO"
+        const val NOTIFICATION_CHANNEL_INFO = "org.radarbase.android.NotificationHandler.INFO"
         /**
          * Notification channel ID for tasks and active notification messages.
          * User response is requested.
          */
-        const val NOTIFICATION_CHANNEL_NOTIFY = "NotificationHandler.NOTIFY"
+        const val NOTIFICATION_CHANNEL_NOTIFY = "org.radarbase.android.NotificationHandler.NOTIFY"
         /**
          * Notification channel ID for missed tasks and app failure notification messages.
          * User response is strongly requested.
          */
-        const val NOTIFICATION_CHANNEL_ALERT = "NotificationHandler.ALERT"
+        const val NOTIFICATION_CHANNEL_ALERT = "org.radarbase.android.NotificationHandler.ALERT"
         /**
          * Notification channel ID for missed tasks and app failure notification messages.
          * User response is required.
          */
-        const val NOTIFICATION_CHANNEL_FINAL_ALERT = "NotificationHandler.FINAL_ALERT"
+        const val NOTIFICATION_CHANNEL_FINAL_ALERT = "org.radarbase.android.NotificationHandler.FINAL_ALERT"
     }
 
     data class NotificationRegistration(private val manager: NotificationManager?, private val id: Int) {

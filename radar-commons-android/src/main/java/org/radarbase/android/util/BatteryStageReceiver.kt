@@ -2,7 +2,7 @@ package org.radarbase.android.util
 
 import android.content.Context
 
-class BatteryStageReceiver(context: Context, stageLevels: StageLevels?,
+class BatteryStageReceiver(context: Context, stageLevels: StageLevels = StageLevels(0.1f, 0.3f),
                            private val listener: (BatteryStage) -> Unit): SpecificReceiver {
     var stage: BatteryStage = BatteryStage.FULL
         private set
@@ -17,16 +17,16 @@ class BatteryStageReceiver(context: Context, stageLevels: StageLevels?,
         listener(stage)
     }
 
-    private val _stageLevels = ChangeRunner<StageLevels>()
+    private val _stageLevels = ChangeRunner(stageLevels)
 
-    var stageLevels
+    var stageLevels: StageLevels
         get() = _stageLevels.value.copy()
         set(value) {
             _stageLevels.applyIfChanged(value.copy()) { notifyListener() }
         }
 
     init {
-        stageLevels?.let { this.stageLevels = stageLevels }
+        notifyListener()
     }
 
     enum class BatteryStage {

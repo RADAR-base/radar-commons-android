@@ -34,8 +34,6 @@ class BatteryLevelReceiver(
     var isPlugged: Boolean = true
         private set
 
-    constructor(context: Context, listener: BatteryLevelListener) : this(context, listener::onBatteryLevelChanged)
-
     private var receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
             if (intent?.action == ACTION_BATTERY_CHANGED) {
@@ -50,10 +48,6 @@ class BatteryLevelReceiver(
         }
     }
 
-    /** Returns true if the current battery level is at least the given level, or that the device is
-     * currently plugged in. Returns false otherwise.  */
-    fun hasMinimumLevel(minLevel: Float): Boolean = level >= minLevel || isPlugged
-
     override fun register() {
         val init = context.registerReceiver(receiver, IntentFilter(ACTION_BATTERY_CHANGED))
         receiver.onReceive(context, init)
@@ -65,14 +59,5 @@ class BatteryLevelReceiver(
 
     override fun unregister() {
         context.unregisterReceiver(receiver)
-    }
-
-    interface BatteryLevelListener {
-        /**
-         * Latest battery level reported by the system.
-         * @param level battery level in range [0, 1]
-         * @param isPlugged whether the device is plugged into a charger
-         */
-        fun onBatteryLevelChanged(level: Float, isPlugged: Boolean)
     }
 }

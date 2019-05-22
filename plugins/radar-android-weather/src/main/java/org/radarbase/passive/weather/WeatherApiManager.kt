@@ -27,9 +27,9 @@ import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.OfflineProcessor
+import org.radarbase.passive.weather.WeatherApiService.Companion.WEATHER_QUERY_INTERVAL_DEFAULT
 import org.radarcns.passive.weather.LocalWeather
 import org.radarcns.passive.weather.LocationType
-import org.radarbase.passive.weather.WeatherApiService.Companion.WEATHER_QUERY_INTERVAL_DEFAULT
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -68,7 +68,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
 
         register(name = "OpenWeatherMap")
 
@@ -76,7 +76,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
         networkReceiver.register()
         processor.start()
 
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        status = SourceStatusListener.Status.CONNECTED
     }
 
     private fun processWeather() {
@@ -135,12 +135,12 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
         get() {
             if (locationManager == null) {
                 logger.error("Cannot get location without a location manager.")
-                updateStatus(SourceStatusListener.Status.DISCONNECTED)
+                disconnect()
                 return null
             }
             return try {
                 locationManager.getLastKnownLocation(GPS_PROVIDER)
-                        ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                        ?: locationManager.getLastKnownLocation(NETWORK_PROVIDER)
             } catch (ex: SecurityException) {
                 logger.error("Failed to get location", ex)
                 null
@@ -151,11 +151,9 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
         processor.interval(queryInterval, unit)
     }
 
-    @Throws(IOException::class)
-    override fun close() {
+    override fun onClose() {
         networkReceiver.unregister()
         processor.close()
-        super.close()
     }
 
     companion object {

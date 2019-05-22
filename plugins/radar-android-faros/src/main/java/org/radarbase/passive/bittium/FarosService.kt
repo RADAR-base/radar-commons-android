@@ -36,7 +36,7 @@ class FarosService : SourceService<FarosState>() {
 
     override fun onCreate() {
         super.onCreate()
-        handler = SafeHandler("Faros", THREAD_PRIORITY_FOREGROUND)
+        handler = SafeHandler.getInstance("Faros", THREAD_PRIORITY_FOREGROUND)
         farosFactory = FarosSdkFactory()
     }
 

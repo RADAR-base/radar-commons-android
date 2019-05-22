@@ -31,6 +31,7 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
     override val pluginNames = listOf(
             "bittium_faros",
             "faros",
+            ".passive.bittium.FarosProvider",
             "org.radarbase.passive.bittium.FarosProvider",
             "org.radarcns.passive.bittium.FarosProvider")
 

@@ -90,7 +90,7 @@ abstract class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
         enableBluetoothRequests = ChangeRunner(configuration.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true))
-        mHandler = SafeHandler("Service connection", Process.THREAD_PRIORITY_BACKGROUND)
+        mHandler = SafeHandler.getInstance("Main background handler", Process.THREAD_PRIORITY_BACKGROUND)
         bluetoothReceiver = BluetoothStateReceiver(this) { enabled ->
             if (!enabled) {
                 requestEnableBt()
@@ -100,14 +100,14 @@ abstract class MainActivity : AppCompatActivity() {
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
-        radarConnection = ManagedServiceConnection<IRadarBinder>(this@MainActivity, RadarService::class.java).apply {
+        radarConnection = ManagedServiceConnection<IRadarBinder>(this@MainActivity, radarApp.radarService).apply {
             bindFlags = Context.BIND_ABOVE_CLIENT or Context.BIND_AUTO_CREATE
             onBoundListeners += IRadarBinder::startScanning
             onBoundListeners += { binder -> view?.onRadarServiceBound(binder) }
             onUnboundListeners += IRadarBinder::stopScanning
         }
 
-        authConnection = ManagedServiceConnection(this, AuthService::class.java)
+        authConnection = ManagedServiceConnection(this, radarApp.authService)
         create()
     }
 
@@ -170,7 +170,7 @@ abstract class MainActivity : AppCompatActivity() {
         mHandler.start()
         authConnection.bind()
 
-        val radarServiceCls = (application as RadarApplication).radarService
+        val radarServiceCls = radarApp.radarService
         try {
             val intent = Intent(this, radarServiceCls)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -197,6 +197,9 @@ abstract class MainActivity : AppCompatActivity() {
                     view = createView()
                 }
             }
+        }
+        synchronized(this@MainActivity) {
+            view = createView()
         }
     }
 

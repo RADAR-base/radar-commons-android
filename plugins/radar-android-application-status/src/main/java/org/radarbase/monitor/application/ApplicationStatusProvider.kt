@@ -29,6 +29,7 @@ open class ApplicationStatusProvider(radarService: RadarService) : SourceProvide
             "application_status",
             "application",
             "application_monitor",
+            ".application.ApplicationServiceProvider",
             "org.radarbase.monitor.application.ApplicationStatusProvider",
             "org.radarcns.application.ApplicationStatusProvider")
 

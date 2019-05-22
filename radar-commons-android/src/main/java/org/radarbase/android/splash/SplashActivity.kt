@@ -54,7 +54,7 @@ abstract class SplashActivity : AppCompatActivity() {
         authConnection = AuthServiceConnection(this@SplashActivity, loginListener)
         config = radarConfig
         configReceiver = false
-        handler = Handler(mainLooper)
+        handler = Handler()
         startedAt = SystemClock.elapsedRealtime()
 
         createView()
@@ -69,11 +69,11 @@ abstract class SplashActivity : AppCompatActivity() {
         networkReceiver.register()
 
         when (config.status) {
-            RadarConfiguration.FirebaseStatus.UNAVAILABLE -> {
+            RadarConfiguration.RemoteConfigStatus.UNAVAILABLE -> {
                 logger.info("Firebase unavailable")
                 updateState(STATE_FIREBASE_UNAVAILABLE)
             }
-            RadarConfiguration.FirebaseStatus.FETCHED -> {
+            RadarConfiguration.RemoteConfigStatus.FETCHED -> {
                 logger.info("Firebase fetched, starting AuthService")
                 startAuthConnection()
             }
@@ -134,7 +134,7 @@ abstract class SplashActivity : AppCompatActivity() {
             }
             updateState(STATE_STARTING)
             startActivityFuture?.also {
-                handler.removeCallbacks(startActivityFuture)
+                handler.removeCallbacks(it)
             }
             Runnable {
                 updateState(STATE_FINISHED)
@@ -165,7 +165,7 @@ abstract class SplashActivity : AppCompatActivity() {
                 .register(RadarConfiguration.RADAR_CONFIGURATION_CHANGED) { _, _ ->
                     if ((lifecycle.currentState == Lifecycle.State.RESUMED
                                     || lifecycle.currentState == Lifecycle.State.STARTED)
-                            && config.status == RadarConfiguration.FirebaseStatus.FETCHED
+                            && config.status == RadarConfiguration.RemoteConfigStatus.FETCHED
                             && state != STATE_AUTHORIZING) {
                         logger.info("Config has been fetched, checking authentication")
                         stopConfigListener()

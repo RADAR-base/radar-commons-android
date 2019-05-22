@@ -117,7 +117,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
             }
         }
         radarConnection.bind()
-        handler = SafeHandler("SourceService", THREAD_PRIORITY_BACKGROUND)
+        handler = SafeHandler.getInstance("SourceService-$javaClass", THREAD_PRIORITY_BACKGROUND)
 
         config = radarConfig
 
@@ -170,7 +170,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
 
     override fun sourceFailedToConnect(name: String) {
         broadcaster.send(SOURCE_CONNECT_FAILED) {
-            putExtra(SOURCE_SERVICE_CLASS, javaClass.name)
+            putExtra(SOURCE_SERVICE_CLASS, this@SourceService.javaClass.name)
             putExtra(SOURCE_STATUS_NAME, name)
         }
     }
@@ -178,13 +178,13 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     private fun broadcastSourceStatus(name: String?, status: SourceStatusListener.Status) {
         broadcaster.send(SOURCE_STATUS_CHANGED) {
             putExtra(SOURCE_STATUS_CHANGED, status.ordinal)
-            putExtra(SOURCE_SERVICE_CLASS, javaClass.name)
+            putExtra(SOURCE_SERVICE_CLASS, this@SourceService.javaClass.name)
             name?.let { putExtra(SOURCE_STATUS_NAME, it) }
         }
     }
 
     override fun sourceStatusUpdated(manager: SourceManager<*>, status: SourceStatusListener.Status) {
-        if (status == SourceStatusListener.Status.DISCONNECTED) {
+        if (status == SourceStatusListener.Status.DISCONNECTING) {
             handler.execute(true) {
                 if (this.sourceManager === manager) {
                     this.sourceManager = null
@@ -197,10 +197,10 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
 
     @Synchronized
     private fun unsetSourceManager(): SourceManager<*>? {
-        val tmpManager = sourceManager
-        sourceManager = null
-        handler.stop { }
-        return tmpManager
+        return sourceManager.also {
+            sourceManager = null
+            handler.stop { }
+        }
     }
 
     private fun stopSourceManager(manager: SourceManager<*>?) {
@@ -238,20 +238,34 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
                 return
             }
             if (dataHandler != null) {
-                logger.info("Starting recording")
+                logger.info("Starting recording now for {}", javaClass.simpleName)
                 if (sourceManager == null) {
                     createSourceManager().also { manager ->
                         sourceManager = manager
                         configureSourceManager(manager, config)
                         manager.start(actualIds)
                     }
+                } else {
+                    logger.warn("A SourceManager is already registered in the mean time for {}", javaClass.simpleName)
                 }
-            } else if (startFuture == null) {
-                startFuture = handler.delay(100) {
-                    startFuture?.let {
-                        startFuture = null
-                        doStart(acceptableIds)
-                    }
+            } else {
+                startAfterDelay(acceptableIds)
+            }
+        } else if (sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED) {
+            logger.warn("A disconnected SourceManager is still registered for {}", javaClass.simpleName)
+            startAfterDelay(acceptableIds)
+        } else {
+            logger.warn("A SourceManager is already registered for {}", javaClass.simpleName)
+        }
+    }
+
+    private fun startAfterDelay(acceptableIds: Set<String>) {
+        if (startFuture == null) {
+            logger.warn("Starting recording soon for {}", javaClass.simpleName)
+            startFuture = handler.delay(100) {
+                startFuture?.let {
+                    startFuture = null
+                    doStart(acceptableIds)
                 }
             }
         }

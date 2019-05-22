@@ -34,9 +34,9 @@ import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
 import java.util.*
 
-class CacheStore private constructor() {
+object CacheStore {
     private val tables: MutableMap<String, SynchronizedReference<DataCacheGroup<*, *>>> = HashMap()
-    private val handler: SafeHandler = SafeHandler("DataCache", THREAD_PRIORITY_BACKGROUND)
+    private val handler = SafeHandler.getInstance("DataCache", THREAD_PRIORITY_BACKGROUND)
 
     init {
         handler.start()
@@ -144,83 +144,76 @@ class CacheStore private constructor() {
     private fun getFileBases(base: String): List<String> {
         val files = ArrayList<String>(2)
         if (File(base + TAPE_EXTENSION).isFile) {
-            files.add(base)
+            files += base
         }
         val baseDir = File(base)
         if (baseDir.isDirectory) {
-            baseDir.listFiles { _, name -> name.endsWith(TAPE_EXTENSION, ignoreCase = true) }
-                    .forEach {
+            files += baseDir.listFiles { _, name -> name.endsWith(TAPE_EXTENSION, ignoreCase = true) }
+                    .map {
                         val name = it.name
-                        files.add(base + "/" + name.substring(0, name.length - TAPE_EXTENSION.length))
+                        base + "/" + name.substring(0, name.length - TAPE_EXTENSION.length)
                     }
         }
         return files
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(CacheStore::class.java)
+    private val logger = LoggerFactory.getLogger(CacheStore::class.java)
 
-        internal const val TAPE_EXTENSION = ".tape"
-        internal const val KEY_SCHEMA_EXTENSION = ".key.avsc"
-        internal const val VALUE_SCHEMA_EXTENSION = ".value.avsc"
-        private val INSTANCE = CacheStore()
+    internal const val TAPE_EXTENSION = ".tape"
+    internal const val KEY_SCHEMA_EXTENSION = ".key.avsc"
+    internal const val VALUE_SCHEMA_EXTENSION = ".value.avsc"
 
-        val genericData: GenericData = object : GenericData(CacheStore::class.java.classLoader) {
-            override fun isFloat(`object`: Any?): Boolean {
-                return (`object` is Float
-                        && !`object`.isNaN()
-                        && !`object`.isInfinite())
-            }
-
-            override fun isDouble(`object`: Any?): Boolean {
-                return (`object` is Double
-                        && !`object`.isNaN()
-                        && !`object`.isInfinite())
-            }
+    val genericData: GenericData = object : GenericData(CacheStore::class.java.classLoader) {
+        override fun isFloat(`object`: Any?): Boolean {
+            return (`object` is Float
+                    && !`object`.isNaN()
+                    && !`object`.isInfinite())
         }
 
-        val specificData: SpecificData = object : SpecificData(CacheStore::class.java.classLoader) {
-            override fun isFloat(`object`: Any?): Boolean {
-                return (`object` is Float
-                        && !`object`.isNaN()
-                        && !`object`.isInfinite())
-            }
+        override fun isDouble(`object`: Any?): Boolean {
+            return (`object` is Double
+                    && !`object`.isNaN()
+                    && !`object`.isInfinite())
+        }
+    }
 
-            override fun isDouble(`object`: Any?): Boolean {
-                return (`object` is Double
-                        && !`object`.isNaN()
-                        && !`object`.isInfinite())
-            }
+    val specificData: SpecificData = object : SpecificData(CacheStore::class.java.classLoader) {
+        override fun isFloat(`object`: Any?): Boolean {
+            return (`object` is Float
+                    && !`object`.isNaN()
+                    && !`object`.isInfinite())
         }
 
-        fun get(): CacheStore {
-            return INSTANCE
+        override fun isDouble(`object`: Any?): Boolean {
+            return (`object` is Double
+                    && !`object`.isNaN()
+                    && !`object`.isInfinite())
+        }
+    }
+
+    private fun loadSchema(parser: Schema.Parser, file: File): Schema? {
+        return try {
+            if (file.isFile) parser.parse(file) else null
+        } catch (ex: RuntimeException) {
+            logger.error("Failed to load schema", ex)
+            null
+        } catch (ex: IOException) {
+            logger.error("Failed to load schema", ex)
+            null
         }
 
-        private fun loadSchema(parser: Schema.Parser, file: File): Schema? {
-            return try {
-                if (file.isFile) parser.parse(file) else null
-            } catch (ex: RuntimeException) {
-                logger.error("Failed to load schema", ex)
-                null
-            } catch (ex: IOException) {
-                logger.error("Failed to load schema", ex)
-                null
-            }
+    }
 
-        }
-
-        private fun storeSchema(schema: Schema, file: File) {
-            try {
-                FileOutputStream(file).use { out ->
-                    OutputStreamWriter(out, StandardCharsets.UTF_8).use {
-                        it.write(schema.toString(false))
-                    }
+    private fun storeSchema(schema: Schema, file: File) {
+        try {
+            FileOutputStream(file).use { out ->
+                OutputStreamWriter(out, StandardCharsets.UTF_8).use {
+                    it.write(schema.toString(false))
                 }
-            } catch (ex: IOException) {
-                logger.error("Cannot write schema", ex)
             }
-
+        } catch (ex: IOException) {
+            logger.error("Cannot write schema", ex)
         }
+
     }
 }

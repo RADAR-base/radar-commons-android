@@ -26,7 +26,7 @@ abstract class AuthService : Service(), LoginListener {
     lateinit var loginManagers: List<LoginManager>
     private val listeners: MutableList<LoginListenerRegistration> = mutableListOf()
     lateinit var config: RadarConfiguration
-    val handler = SafeHandler("AuthService", THREAD_PRIORITY_BACKGROUND)
+    val handler = SafeHandler.getInstance("AuthService", THREAD_PRIORITY_BACKGROUND)
     var loginListenerId: Long = 0
     private lateinit var networkConnectedListener: NetworkConnectedReceiver
     private var configRegistration: LoginListenerRegistration? = null

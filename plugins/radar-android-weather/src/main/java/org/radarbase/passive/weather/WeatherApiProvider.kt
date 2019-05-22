@@ -31,6 +31,7 @@ open class WeatherApiProvider(radarService: RadarService) : SourceProvider<BaseS
     override val pluginNames = listOf(
             "weather",
             "weather_api",
+            ".weather.WeatherApiProvider",
             "org.radarbase.passive.weather.WeatherApiProvider",
             "org.radarcns.weather.WeatherApiProvider")
 

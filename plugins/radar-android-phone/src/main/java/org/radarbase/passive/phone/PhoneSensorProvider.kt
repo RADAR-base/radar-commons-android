@@ -25,6 +25,7 @@ open class PhoneSensorProvider(radarService: RadarService) : SourceProvider<Phon
     override val pluginNames = listOf(
             "phone_sensors",
             "phone_sensor",
+            ".phone.PhoneSensorProvider",
             "org.radarbase.passive.phone.PhoneSensorProvider",
             "org.radarcns.phone.PhoneSensorProvider")
 

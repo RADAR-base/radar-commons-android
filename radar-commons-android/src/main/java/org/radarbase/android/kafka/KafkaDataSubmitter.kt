@@ -16,10 +16,11 @@
 
 package org.radarbase.android.kafka
 
-import android.os.Process.THREAD_PRIORITY_BACKGROUND
+import android.os.Process
 import org.apache.avro.Schema
 import org.apache.avro.SchemaValidationException
 import org.apache.avro.generic.IndexedRecord
+import org.radarbase.android.data.DataCacheGroup
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.ReadableDataCache
 import org.radarbase.android.util.SafeHandler
@@ -40,14 +41,18 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * It uses a set of timers to addMeasurement data and clean the databases.
  */
-class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val sender: KafkaSender, config: SubmitterConfiguration) : Closeable {
+class KafkaDataSubmitter(
+        private val dataHandler: DataHandler<*, *>,
+        private val sender: KafkaSender,
+        config: SubmitterConfiguration) : Closeable {
+
+    private val submitHandler = SafeHandler.getInstance("KafkaDataSubmitter", Process.THREAD_PRIORITY_BACKGROUND)
     private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>>
     private val connection: KafkaConnectionChecker
-    private val mHandler: SafeHandler
 
     var config: SubmitterConfiguration = config
         set(newValue) {
-            mHandler.execute {
+            this.submitHandler.execute {
                 if (newValue != field) {
                     validate(newValue)
                     field = newValue.copy()
@@ -63,14 +68,13 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
     init {
         topicSenders = HashMap()
 
-        mHandler = SafeHandler("data-submitter", THREAD_PRIORITY_BACKGROUND)
-        mHandler.start()
+        this.submitHandler.start()
 
         logger.debug("Started data submission executor")
 
-        connection = KafkaConnectionChecker(sender, mHandler, dataHandler, config.uploadRate * 5)
+        connection = KafkaConnectionChecker(sender, this.submitHandler, dataHandler, config.uploadRate * 5)
 
-        mHandler.execute {
+        this.submitHandler.execute {
             try {
                 if (this@KafkaDataSubmitter.sender.isConnected) {
                     this@KafkaDataSubmitter.dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
@@ -84,7 +88,7 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
             }
         }
 
-        mHandler.execute {
+        this.submitHandler.execute {
             uploadFuture = null
             uploadIfNeededFuture = null
             validate(config)
@@ -104,19 +108,19 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
         uploadIfNeededFuture?.cancel()
 
         // Get upload frequency from system property
-        uploadFuture = mHandler.repeat(uploadRate) {
+        uploadFuture = this.submitHandler.repeat(uploadRate) {
             val topicsToSend = HashSet<String>(dataHandler.activeCaches.map { it.topicName })
-            while (connection.isConnected && !topicSenders.isEmpty()) {
+            while (connection.isConnected && topicsToSend.isNotEmpty()) {
+                logger.debug("Uploading topics {}", topicsToSend)
                 uploadCaches(topicsToSend)
             }
         }
 
-        uploadIfNeededFuture = mHandler.repeat(uploadRate / 5) {
-            while (connection.isConnected) {
-                val sendAgain = uploadCachesIfNeeded()
-                if (!sendAgain) {
-                    break
-                }
+        uploadIfNeededFuture = this.submitHandler.repeat(uploadRate / 5) {
+            var sendAgain = true
+            while (connection.isConnected && sendAgain) {
+                logger.debug("Uploading full topics")
+                sendAgain = uploadCachesIfNeeded()
             }
         }
     }
@@ -126,12 +130,12 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
      */
     @Synchronized
     override fun close() {
-        mHandler.stop {
-            for ((key, value) in topicSenders) {
+        this.submitHandler.stop {
+            for ((topic, sender) in topicSenders) {
                 try {
-                    value.close()
+                    sender.close()
                 } catch (e: IOException) {
-                    logger.warn("failed to stop topicSender for topic {}", key, e)
+                    logger.warn("failed to stop topicSender for topic {}", topic, e)
                 }
 
             }
@@ -198,20 +202,20 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
     private fun uploadCaches(toSend: MutableSet<String>) {
         try {
             val uploadingNotified = AtomicBoolean(false)
-            dataHandler.activeCaches
-                    .filter { it.topicName !in toSend }
-                    .forEach { group ->
-                        val sentActive = uploadCache(group.activeDataCache, uploadingNotified)
-                        val sentDeprecated = group.deprecatedCaches.map { uploadCache(it, uploadingNotified) }
+            toSend -= dataHandler.activeCaches
+                    .filter { group ->
+                        if (group.topicName in toSend) {
+                            val sentActive = uploadCache(group.activeDataCache, uploadingNotified)
+                            val sentDeprecated = group.deprecatedCaches.map { uploadCache(it, uploadingNotified) }
 
-                        if (sentDeprecated.any { it == 0 }) {
-                            group.deleteEmptyCaches()
-                        }
-                        if (sentActive < config.amountLimit
-                                && sentDeprecated.all { it < config.amountLimit }) {
-                            toSend.remove(group.topicName)
-                        }
+                            if (sentDeprecated.any { it == 0 }) {
+                                group.deleteEmptyCaches()
+                            }
+                            sentActive < config.amountLimit
+                                    && sentDeprecated.all { it < config.amountLimit }
+                        } else false
                     }
+                    .map(DataCacheGroup<*,*>::topicName)
 
             if (uploadingNotified.get()) {
                 dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
@@ -234,36 +238,44 @@ class KafkaDataSubmitter(private val dataHandler: DataHandler<*, *>, private val
                 ?: return 0
 
         val size = data.size()
-        val topic = cache.readTopic
+        if (size == 0) {
+            return 0
+        }
 
-        val keyUserId = if (topic.keySchema.type == Schema.Type.RECORD) {
-            topic.keySchema.getField("userId")?.let { userIdField ->
-                (data.key as IndexedRecord).get(userIdField.pos()).toString()
-            }
-        } else null
+        val dataNonNull = data.filterNotNull()
 
-        if (keyUserId == null || keyUserId == config.userId!!) {
-            if (uploadingNotified.compareAndSet(false, true)) {
-                dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING)
-            }
+        if (dataNonNull.isNotEmpty()) {
+            val topic = cache.readTopic
 
-            try {
-                sender(topic).run {
-                    send(AvroRecordData<Any, Any>(data.topic, data.key, data.filterNotNull()))
-                    flush()
+            val keyUserId = if (topic.keySchema.type == Schema.Type.RECORD) {
+                topic.keySchema.getField("userId")?.let { userIdField ->
+                    (data.key as IndexedRecord).get(userIdField.pos()).toString()
                 }
-            } catch (ex: AuthenticationException) {
-                dataHandler.updateRecordsSent(topic.name, -1)
-                throw ex
-            } catch (e: Exception) {
-                dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING_FAILED)
-                dataHandler.updateRecordsSent(topic.name, -1)
-                throw e
+            } else null
+
+            if (keyUserId == null || keyUserId == config.userId!!) {
+                if (uploadingNotified.compareAndSet(false, true)) {
+                    dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING)
+                }
+
+                try {
+                    sender(topic).run {
+                        send(AvroRecordData<Any, Any>(data.topic, data.key, dataNonNull))
+                        flush()
+                    }
+                } catch (ex: AuthenticationException) {
+                    dataHandler.updateRecordsSent(topic.name, -1)
+                    throw ex
+                } catch (e: Exception) {
+                    dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING_FAILED)
+                    dataHandler.updateRecordsSent(topic.name, -1)
+                    throw e
+                }
+
+                dataHandler.updateRecordsSent(topic.name, size.toLong())
+
+                logger.debug("uploaded {} {} records", size, topic.name)
             }
-
-            dataHandler.updateRecordsSent(topic.name, size.toLong())
-
-            logger.debug("uploaded {} {} records", size, topic.name)
         }
 
         cache.remove(size)

@@ -27,7 +27,6 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneContactList
-import java.io.IOException
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -48,7 +47,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
         register()
 
         processor.start {
@@ -60,7 +59,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
             savedContactLookups = preferences.getStringSet(CONTACT_LOOKUPS, emptySet())!!
         }
 
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        status = SourceStatusListener.Status.CONNECTED
     }
 
     private fun queryContacts(): Set<String>? {
@@ -96,10 +95,8 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
         return contactIds
     }
 
-    @Throws(IOException::class)
-    override fun close() {
+    override fun onClose() {
         processor.close()
-        super.close()
     }
 
     private fun processContacts() {

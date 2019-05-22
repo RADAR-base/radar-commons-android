@@ -39,15 +39,14 @@ import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.LocationProvider
 import org.radarcns.passive.phone.PhoneRelativeLocation
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.math.BigDecimal
 import java.util.concurrent.ThreadLocalRandom
 
 class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManager<PhoneLocationService, BaseSourceState>(context), LocationListener {
     private val locationTopic: DataCache<ObservationKey, PhoneRelativeLocation> = createCache("android_phone_relative_location", PhoneRelativeLocation())
     private val locationManager = service.getSystemService(Context.LOCATION_SERVICE) as LocationManager?
-    private val handler = SafeHandler("PhoneLocation", Process.THREAD_PRIORITY_BACKGROUND)
-    private val batteryLevelReceiver = BatteryStageReceiver(context, null, ::onBatteryLevelChanged)
+    private val handler = SafeHandler.getInstance("PhoneLocation", Process.THREAD_PRIORITY_BACKGROUND)
+    private val batteryLevelReceiver = BatteryStageReceiver(context, BatteryStageReceiver.StageLevels(0.1f, 0.3f), ::onBatteryLevelChanged)
     private var latitudeReference: BigDecimal? = null
     private var longitudeReference: BigDecimal? = null
     private var altitudeReference: Double = 0.toDouble()
@@ -101,11 +100,11 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         register()
         handler.start()
 
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
 
         handler.execute {
             batteryLevelReceiver.register()
-            updateStatus(SourceStatusListener.Status.CONNECTED)
+            status = SourceStatusListener.Status.CONNECTED
             isStarted = true
         }
     }
@@ -255,7 +254,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
 
     private fun onBatteryLevelChanged(stage: BatteryStageReceiver.BatteryStage) {
         handler.executeReentrant {
-            frequency.runIfChanged(stage) { resetPollingIntervals() }
+            frequency.applyIfChanged(stage) { resetPollingIntervals() }
         }
     }
 
@@ -270,16 +269,13 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
+    override fun onClose() {
         locationManager?.let { manager ->
             handler.stop {
                 batteryLevelReceiver.unregister()
                 manager.removeUpdates(this@PhoneLocationManager)
             }
         }
-
-        super.close()
     }
 
     fun setBatteryLevels(stageLevels: BatteryStageReceiver.StageLevels) {
@@ -290,7 +286,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
 
     fun setIntervals(value: LocationPollingIntervals) {
         handler.execute {
-            intervals.runIfChanged(value) { resetPollingIntervals() }
+            intervals.applyIfChanged(value) { resetPollingIntervals() }
         }
     }
 

@@ -30,7 +30,6 @@ import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneBluetoothDevices
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceManager<PhoneBluetoothService, BaseSourceState>(service) {
@@ -48,10 +47,10 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
         register()
         processor.start()
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        status = SourceStatusListener.Status.CONNECTED
     }
 
     private fun processBluetoothDevices() {
@@ -101,8 +100,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
+    override fun onClose() {
         processor.close()
         bluetoothBroadcastReceiver?.let {
             try {
@@ -110,9 +108,8 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
             } catch (ex: IllegalStateException) {
                 logger.warn("Bluetooth receiver already unregistered in broadcast")
             }
+            bluetoothBroadcastReceiver = null
         }
-        bluetoothBroadcastReceiver = null
-        super.close()
     }
 
     internal fun setCheckInterval(checkInterval: Long, intervalUnit: TimeUnit) {

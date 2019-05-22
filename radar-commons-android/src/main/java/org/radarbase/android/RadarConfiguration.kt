@@ -18,108 +18,27 @@ package org.radarbase.android
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Bundle
-import android.os.Handler
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.crashlytics.android.Crashlytics
-import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailability
-import com.google.android.gms.tasks.OnCompleteListener
-import com.google.android.gms.tasks.OnFailureListener
 import com.google.android.gms.tasks.Task
 import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.portal.GetSubjectParser
-import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 import java.util.*
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Pattern
 import java.util.regex.Pattern.CASE_INSENSITIVE
-import kotlin.collections.HashSet
 
-class RadarConfiguration private constructor(context: Context,
-                                             private val firebase: FirebaseRemoteConfig) {
-    private val onFailureListener: OnFailureListener
-    private val hasChange: AtomicBoolean = AtomicBoolean(false)
-    var status: FirebaseStatus?
-        private set
+interface RadarConfiguration {
+    val status: RemoteConfigStatus
 
-    private val handler: Handler = Handler()
-    private val onFetchCompleteHandler: OnCompleteListener<Void>
-    private val localConfiguration: MutableMap<String, String> = ConcurrentHashMap()
-    private val persistChanges: Runnable
-    private var isInDevelopmentMode: Boolean = false
-    private var firebaseKeys: Set<String> = HashSet(firebase.getKeysByPrefix(""))
-    private val broadcaster = LocalBroadcastManager.getInstance(context)
-
-    enum class FirebaseStatus {
-        UNAVAILABLE, ERROR, READY, FETCHING, FETCHED
-    }
-
-    init {
-        this.onFetchCompleteHandler = OnCompleteListener {  task ->
-            if (task.isSuccessful) {
-                status = FirebaseStatus.FETCHED
-                // Once the config is successfully fetched it must be
-                // activated before newly fetched values are returned.
-                activateFetched().addOnCompleteListener {
-                    // Set global properties.
-                    logger.info("RADAR configuration changed: {}", this@RadarConfiguration)
-                    broadcaster.send(RADAR_CONFIGURATION_CHANGED)
-                }
-            } else {
-                status = FirebaseStatus.ERROR
-                logger.warn("Remote Config: Fetch failed. Stacktrace: {}", task.exception)
-            }
-        }
-
-        this.onFailureListener = OnFailureListener {
-            logger.info("Failed to fetch Firebase config")
-            status = FirebaseStatus.ERROR
-            broadcaster.send(RADAR_CONFIGURATION_CHANGED)
-        }
-
-        val prefs = context.applicationContext.getSharedPreferences(javaClass.name, Context.MODE_PRIVATE)
-        for ((key, value) in prefs.all) {
-            if (value == null || value is String) {
-                this.localConfiguration[key] = (value as String?)!!
-            }
-        }
-
-        persistChanges = Runnable {
-            val editor = prefs.edit()
-            for ((key, value) in localConfiguration) {
-                editor.putString(key, value)
-            }
-            editor.apply()
-
-            if (hasChange.compareAndSet(true, false)) {
-                logger.info("RADAR configuration changed: {}", this@RadarConfiguration)
-                broadcaster.send(RADAR_CONFIGURATION_CHANGED)            }
-        }
-
-        val googleApi = GoogleApiAvailability.getInstance()
-        if (googleApi.isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS) {
-            status = FirebaseStatus.READY
-            this.handler.postDelayed(object : Runnable {
-                override fun run() {
-                    fetch()
-                    val delay = getLong(FIREBASE_FETCH_TIMEOUT_MS_KEY, FIREBASE_FETCH_TIMEOUT_MS_DEFAULT)
-                    handler.postDelayed(this, delay)
-                }
-            }, getLong(FIREBASE_FETCH_TIMEOUT_MS_KEY, FIREBASE_FETCH_TIMEOUT_MS_DEFAULT))
-        } else {
-            status = FirebaseStatus.UNAVAILABLE
-        }
+    enum class RemoteConfigStatus {
+        UNAVAILABLE, INITIAL, ERROR, READY, FETCHING, FETCHED
     }
 
     /**
      * Adds a new or updated setting to the local configuration. This will be persisted to
-     * SharedPreferences. Using this will override Firebase settings. Setting it to `null`
+     * SharedPreferences. Using this will override remote settings. Setting it to `null`
      * means that the default value in code will be used, not the Firebase setting. Use
      * [.reset] to completely unset any local configuration.
      *
@@ -127,93 +46,38 @@ class RadarConfiguration private constructor(context: Context,
      * @param value configuration value
      * @return previous local value for given name, if any
      */
-    fun put(key: String, value: Any): String? {
-        Objects.requireNonNull(value)
-        if (!(value is String
-                        || value is Long
-                        || value is Int
-                        || value is Float
-                        || value is Boolean)) {
-            throw IllegalArgumentException("Cannot put value of type " + value.javaClass
-                    + " into RadarConfiguration")
-        }
-        val config = value as? String ?: value.toString()
-        val oldValue = getRawString(key)
-        if (oldValue != config) {
-            hasChange.set(true)
-        }
-        localConfiguration[key] = config
-        return oldValue
-    }
+    fun put(key: String, value: Any): String?
 
-    fun persistChanges() = persistChanges.run()
+    fun persistChanges()
 
     /**
-     * Reset configuration to Firebase Remote Config values. If no keys are given, all local
+     * Reset configuration to remote config values. If no keys are given, all local
      * settings are reset, otherwise only the given keys are reset.
      * @param keys configuration names
      */
-    fun reset(vararg keys: String) {
-        if (keys.isEmpty()) {
-            localConfiguration.clear()
-            hasChange.set(true)
-        } else {
-            for (key in keys) {
-                val oldValue = getRawString(key)
-                localConfiguration.remove(key)
-                val newValue = getRawString(key)
-                if (oldValue != newValue) {
-                    hasChange.set(true)
-                }
-            }
-        }
-        persistChanges()
-    }
+    fun reset(vararg keys: String)
 
     /**
-     * Fetch the configuration from the firebase server.
-     * @return fetch task or null status is [FirebaseStatus.UNAVAILABLE].
+     * Fetch the remote configuration from server if it is outdated.
+     * @return fetch task or null status is [RemoteConfigStatus.UNAVAILABLE].
      */
-    fun fetch(): Task<Void>? {
-        val delay = if (isInDevelopmentMode) {
-            0L
-        } else {
-            getLong(FIREBASE_FETCH_TIMEOUT_MS_KEY, FIREBASE_FETCH_TIMEOUT_MS_DEFAULT)
-        }
-        return fetch(delay)
-    }
+    fun fetch(): Task<Void>?
 
     /**
-     * Fetch the configuration from the firebase server.
-     * @param delay seconds
-     * @return fetch task or null status is [FirebaseStatus.UNAVAILABLE].
+     * Force fetching the remote configuration from server, even if it is not outdated.
+     * @return fetch task or null status is [RemoteConfigStatus.UNAVAILABLE].
      */
-    private fun fetch(delay: Long): Task<Void>? {
-        if (status == FirebaseStatus.UNAVAILABLE) {
-            return null
-        }
-        val task = firebase.fetch(delay)
-        synchronized(this) {
-            status = FirebaseStatus.FETCHING
-            task.addOnCompleteListener(onFetchCompleteHandler)
-            task.addOnFailureListener(onFailureListener)
-        }
-        return task
-    }
+    fun forceFetch(): Task<Void>?
 
-    fun forceFetch(): Task<Void>? = fetch(0L)
+    /**
+     * Activate the fetched configuration.
+     */
+    fun activateFetched(): Task<Boolean>
 
-    fun activateFetched(): Task<Boolean> {
-        val result = firebase.activate()
-        firebaseKeys = HashSet(firebase.getKeysByPrefix(""))
-        return result
-    }
-
-    private fun getRawString(key: String): String? {
-        return localConfiguration[key]
-                ?: if (key in firebaseKeys) firebase.getValue(key).asString() else null
-    }
-
+    /**
+     * Get a string indexed by key.
+     * @throws IllegalArgumentException if the key does not have a value
+     */
     fun getString(key: String): String {
         return optString(key)
                 ?: throw IllegalArgumentException("Key does not have a value")
@@ -246,12 +110,17 @@ class RadarConfiguration private constructor(context: Context,
      */
     fun getFloat(key: String): Float = java.lang.Float.parseFloat(getString(key))
 
+    /**
+     * Get a string indexed by key, or a default value if it does not exist.
+     * @throws IllegalArgumentException if the key does not have a value
+     */
     fun getString(key: String, defaultValue: String): String = optString(key) ?: defaultValue
 
-    fun optString(key: String): String? {
-        val result = getRawString(key)
-        return if (result?.isEmpty() == false) result else null
-    }
+    /**
+     * Get a string indexed by key, or null if it does not exist.
+     * @throws IllegalArgumentException if the key does not have a value
+     */
+    fun optString(key: String): String?
 
     /**
      * Get a configured long value. If the configured value is not present or not a valid long,
@@ -290,7 +159,10 @@ class RadarConfiguration private constructor(context: Context,
                 ?: defaultValue
     }
 
-    fun containsKey(key: String) = key in firebase.getKeysByPrefix(key)
+    /**
+     * Configuration has a value for given key.
+     */
+    fun containsKey(key: String): Boolean
 
     fun getBoolean(key: String): Boolean {
         val str = getString(key)
@@ -312,46 +184,9 @@ class RadarConfiguration private constructor(context: Context,
     }
 
     val keys: Set<String>
-        get() {
-            val baseKeys = HashSet(firebaseKeys + localConfiguration.keys)
-            val iter = baseKeys.iterator()
-            while (iter.hasNext()) {
-                if (optString(iter.next()) == null) {
-                    iter.remove()
-                }
-            }
-            return baseKeys
-        }
 
-    override fun equals(other: Any?): Boolean {
-        return (other != null
-                && other.javaClass != javaClass
-                && firebase == (other as RadarConfiguration).firebase)
-    }
-
-    override fun hashCode(): Int {
-        return firebase.hashCode()
-    }
-
-    fun putExtras(bundle: Bundle, vararg extras: String) {
-        for (extra in extras) {
-            val key = RADAR_PREFIX + extra
-
-            if (localConfiguration.containsKey(extra)) {
-                bundle.putString(key, localConfiguration[extra])
-            } else {
-                try {
-                    bundle.putString(key, getString(extra))
-                } catch (ex: IllegalArgumentException) {
-                    // do nothing
-                }
-
-            }
-        }
-    }
-
-    fun has(key: String) = key in localConfiguration
-            || (key in firebaseKeys && !firebase.getValue(key).asString().isEmpty())
+    /** There is a non-empty configuration for given key. */
+    fun has(key: String): Boolean
 
     /**
      * Adds base URL from auth state to configuration.
@@ -361,7 +196,7 @@ class RadarConfiguration private constructor(context: Context,
         if (appAuthState == null) {
             return false
         }
-        val baseUrl = stripEndSlashes(appAuthState.getAttribute(BASE_URL_PROPERTY))
+        val baseUrl = appAuthState.getAttribute(BASE_URL_PROPERTY).stripEndSlashes()
         val projectId = appAuthState.projectId
         val userId = appAuthState.userId
 
@@ -388,9 +223,9 @@ class RadarConfiguration private constructor(context: Context,
 
         FirebaseAnalytics.getInstance(context).apply {
             setUserId(userId)
-            setUserProperty(USER_ID_KEY, maxCharacters(userId, 36))
-            setUserProperty(PROJECT_ID_KEY, maxCharacters(projectId, 36))
-            setUserProperty(BASE_URL_KEY, maxCharacters(baseUrl, 36))
+            setUserProperty(USER_ID_KEY, userId.limit(36))
+            setUserProperty(PROJECT_ID_KEY, projectId.limit(36))
+            setUserProperty(BASE_URL_KEY, baseUrl.limit(36))
         }
         Crashlytics.setUserIdentifier(userId)
 
@@ -399,23 +234,8 @@ class RadarConfiguration private constructor(context: Context,
 
     fun toMap(): Map<String, String> = keys.map { Pair(it, getString(it)) }.toMap()
 
-    override fun toString(): String {
-        val keys = keys
-        val builder = StringBuilder(keys.size * 40 + 20)
-        builder.append("RadarConfiguration:\n")
-        for (key in keys) {
-            builder.append("  ")
-                    .append(key)
-                    .append(": ")
-                    .append(getString(key))
-                    .append('\n')
-        }
-        return builder.toString()
-    }
-
     companion object {
         private val logger = LoggerFactory.getLogger(RadarConfiguration::class.java)
-        private const val FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12 * 60 * 60 * 1000L
 
         const val RADAR_PREFIX = "org.radarcns.android."
 
@@ -464,81 +284,6 @@ class RadarConfiguration private constructor(context: Context,
         private val IS_FALSE = Pattern.compile(
                 "^(0|false|f|no|n|off|)$", CASE_INSENSITIVE)
 
-        private var instance: RadarConfiguration? = null
-
-        @Deprecated("")
-        @Synchronized
-        fun getInstance(): RadarConfiguration {
-            return instance
-                    ?: throw IllegalStateException(
-                            "RadarConfiguration instance is not yet initialized")
-        }
-
-        @Synchronized
-        fun configure(context: Context, inDevelopmentMode: Boolean, defaultSettings: Int): RadarConfiguration {
-            return instance ?:
-                RadarConfiguration(context,
-                        FirebaseRemoteConfig.getInstance().apply {
-                            setDefaultsAsync(defaultSettings)
-                        })
-                        .also { instance = it }
-                        .apply {
-                            isInDevelopmentMode = inDevelopmentMode
-                            fetch()
-                        }
-        }
-
-        fun hasExtra(bundle: Bundle, key: String): Boolean {
-            return bundle.containsKey(RADAR_PREFIX + key)
-        }
-
-        fun getIntExtra(bundle: Bundle, key: String, defaultValue: Int): Int {
-            val value = bundle.getString(RADAR_PREFIX + key)
-            return if (value == null) {
-                defaultValue
-            } else {
-                Integer.parseInt(value)
-            }
-        }
-
-        fun getBooleanExtra(bundle: Bundle, key: String, defaultValue: Boolean): Boolean {
-            val value = bundle.getString(RADAR_PREFIX + key)
-            return if (value == null) {
-                defaultValue
-            } else {
-                IS_TRUE.matcher(value).find() || !IS_FALSE.matcher(value).find() && defaultValue
-            }
-        }
-
-        fun getIntExtra(bundle: Bundle, key: String): Int {
-            return Integer.parseInt(bundle.getString(RADAR_PREFIX + key)!!)
-        }
-
-        fun getLongExtra(bundle: Bundle, key: String, defaultValue: Long): Long {
-            val value = bundle.getString(RADAR_PREFIX + key)
-            return if (value == null) {
-                defaultValue
-            } else {
-                java.lang.Long.parseLong(value)
-            }
-        }
-
-        fun getLongExtra(bundle: Bundle, key: String): Long {
-            return java.lang.Long.parseLong(bundle.getString(RADAR_PREFIX + key)!!)
-        }
-
-        fun getStringExtra(bundle: Bundle, key: String, defaultValue: String): String {
-            return bundle.getString(RADAR_PREFIX + key, defaultValue)
-        }
-
-        fun getStringExtra(bundle: Bundle, key: String): String? {
-            return bundle.getString(RADAR_PREFIX + key)
-        }
-
-        fun getFloatExtra(bundle: Bundle, key: String): Float {
-            return java.lang.Float.parseFloat(bundle.getString(RADAR_PREFIX + key)!!)
-        }
-
         @SuppressLint("ApplySharedPref")
         fun getOrSetUUID(context: Context, key: String): String {
             val prefs = context.getSharedPreferences("global", Context.MODE_PRIVATE)
@@ -552,11 +297,11 @@ class RadarConfiguration private constructor(context: Context,
             }
         }
 
-        private fun maxCharacters(value: String?, numChars: Int): String? {
-            return if (value != null && value.length > numChars) {
-                value.substring(0, numChars)
+        private fun String?.limit(numChars: Int): String? {
+            return if (this != null && length > numChars) {
+                substring(0, numChars)
             } else {
-                value
+                this
             }
         }
 
@@ -565,19 +310,19 @@ class RadarConfiguration private constructor(context: Context,
          * @param url string to strip
          * @return stripped URL or null if that would result in an empty or null string.
          */
-        private fun stripEndSlashes(url: String?): String? {
-            if (url == null) {
+        private fun String?.stripEndSlashes(): String? {
+            if (this == null) {
                 return null
             }
-            var lastIndex = url.length - 1
-            while (lastIndex >= 0 && url[lastIndex] == '/') {
+            var lastIndex = length - 1
+            while (lastIndex >= 0 && this[lastIndex] == '/') {
                 lastIndex--
             }
             if (lastIndex == -1) {
-                logger.warn("Base URL '{}' should be a valid URL.", url)
+                logger.warn("Base URL '{}' should be a valid URL.", this)
                 return null
             }
-            return url.substring(0, lastIndex + 1)
+            return substring(0, lastIndex + 1)
         }
     }
 }

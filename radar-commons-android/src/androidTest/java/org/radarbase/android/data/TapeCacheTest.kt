@@ -121,7 +121,7 @@ class TapeCacheTest {
         val actualValue = unsent.iterator().next() as GenericRecord
         assertEquals(key.getSourceId(), (unsent.key as GenericRecord).get("sourceId"))
         assertEquals(value.getUptime(), actualValue.get("uptime"))
-        assertEquals(1, tapeCache.remove(1))
+        tapeCache.remove(1)
         assertEquals(0L, tapeCache.numberOfRecords)
         val emptyRecords = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)
         if (emptyRecords != null) {

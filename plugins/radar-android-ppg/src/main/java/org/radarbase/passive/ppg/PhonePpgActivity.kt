@@ -26,16 +26,14 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
-import androidx.appcompat.app.ActionBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication
-import org.radarbase.android.source.SourceStatusListener.Status.*
 import org.radarbase.android.radarApp
+import org.radarbase.android.source.SourceStatusListener.Status.*
 import org.radarbase.passive.ppg.PhonePpgService.Companion.PPG_MEASUREMENT_TIME_DEFAULT
 import org.radarbase.passive.ppg.PhonePpgService.Companion.PPG_MEASUREMENT_TIME_NAME
-import java.util.*
 
 class PhonePpgActivity : AppCompatActivity(), Runnable {
     private lateinit var mTextField: TextView
@@ -45,9 +43,7 @@ class PhonePpgActivity : AppCompatActivity(), Runnable {
     private lateinit var startButton: Button
 
     private val state: PhonePpgState?
-        get() = if (ppgProvider == null || !ppgProvider!!.connection.hasService()) {
-            null
-        } else ppgProvider!!.connection.sourceState
+        get() = ppgProvider?.connection?.sourceState
 
     private val radarServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
@@ -86,27 +82,29 @@ class PhonePpgActivity : AppCompatActivity(), Runnable {
         ml.bringToFront()
 
         val config = (application as RadarApplication).configuration
+        val totalTime = config.getInt(PPG_MEASUREMENT_TIME_NAME, PPG_MEASUREMENT_TIME_DEFAULT.toInt())
         this.findViewById<TextView>(R.id.ppgMainDescription).text = resources.getQuantityString(
-                R.plurals.ppgMainDescription,
-                config.getInt(PPG_MEASUREMENT_TIME_NAME, PPG_MEASUREMENT_TIME_DEFAULT.toInt()))
+                R.plurals.ppgMainDescription, totalTime, totalTime)
         mTextField = findViewById(R.id.ppgMeasurementStatus)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val toolbar = findViewById<Toolbar>(R.id.toolbar)
-        toolbar.setTitle(R.string.ppg_app)
-        setSupportActionBar(toolbar)
-        val actionBar = Objects.requireNonNull<ActionBar>(supportActionBar)
-        actionBar.setDisplayShowHomeEnabled(true)
-        actionBar.setDisplayHomeAsUpEnabled(true)
+        setSupportActionBar(findViewById<Toolbar>(R.id.toolbar).apply {
+            setTitle(R.string.ppg_app)
+        })
+
+        supportActionBar?.apply {
+            setDisplayShowHomeEnabled(true)
+            setDisplayHomeAsUpEnabled(true)
+        }
         wasConnected = false
 
-        handler = Handler(mainLooper)
+        handler = Handler()
     }
 
     override fun onStart() {
         super.onStart()
-        bindService(Intent(this, (application as RadarApplication).radarService), radarServiceConnection, 0)
+        bindService(Intent(this, radarApp.radarService), radarServiceConnection, 0)
     }
 
     override fun onResume() {
@@ -123,25 +121,22 @@ class PhonePpgActivity : AppCompatActivity(), Runnable {
         super.onStop()
         unbindService(radarServiceConnection)
     }
-
-    override fun onNavigateUp(): Boolean {
+    override fun onSupportNavigateUp(): Boolean {
         onBackPressed()
         return true
     }
 
     override fun onBackPressed() {
-        startActivity(Intent(this, radarApp.mainActivity).apply {
-            flags += Intent.FLAG_ACTIVITY_NO_ANIMATION
-        })
-        overridePendingTransition(0, 0)
-        finish()
+        state?.actionListener?.stopCamera()
+        super.onBackPressed()
     }
 
     override fun run() {
         val state = state
         if (state != null && state.status == CONNECTED) {
+            val recordingTime = (state.recordingTime / 1000L).toInt()
             mTextField.text = resources.getQuantityString(
-                    R.plurals.ppg_recording_seconds, (state.recordingTime / 1000L).toInt())
+                    R.plurals.ppg_recording_seconds, recordingTime, recordingTime)
             startButton.setText(R.string.ppg_stop)
             wasConnected = true
         } else if (wasConnected) {

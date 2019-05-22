@@ -58,7 +58,10 @@ class OfflineProcessor(private val context: Context,
     var isDone: Boolean = false
         private set
 
-    private var isStarted: Boolean = false
+    private var didStart: Boolean = false
+
+    val isStarted: Boolean
+        get() = handler.compute { didStart }
 
     private val isRunning: Semaphore
 
@@ -77,7 +80,7 @@ class OfflineProcessor(private val context: Context,
                 trigger()
             }
         }
-        isStarted = false
+        didStart = false
         isRunning = Semaphore(1)
     }
 
@@ -87,11 +90,11 @@ class OfflineProcessor(private val context: Context,
             if (config.intervalMillis <= 0) {
                 throw IllegalStateException("Cannot start processing without an interval")
             }
+            didStart = true
         }
-        context.registerReceiver(this.receiver, IntentFilter(config.requestName))
         handler.execute {
+            context.registerReceiver(this.receiver, IntentFilter(config.requestName))
             schedule()
-            isStarted = true
             initializer?.let { it() }
         }
     }
@@ -141,7 +144,7 @@ class OfflineProcessor(private val context: Context,
             throw IllegalArgumentException("Duration must be positive")
         }
         handler.execute(true) {
-            if (config.interval(duration, timeUnit) && isStarted) {
+            if (config.interval(duration, timeUnit) && didStart) {
                 schedule()
             }
         }

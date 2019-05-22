@@ -27,6 +27,7 @@ open class E4Provider(radarService: RadarService) : SourceProvider<E4State>(rada
     override val pluginNames = listOf(
             "empatica_e4",
             "e4",
+            ".empatica.E4ServiceProvider",
             "org.radarbase.passive.empatica.E4Provider",
             "org.radarcns.empatica.E4ServiceProvider")
 

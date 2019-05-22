@@ -17,7 +17,6 @@
 package org.radarbase.android.source
 
 import org.radarbase.android.auth.SourceMetadata
-
 import java.io.Closeable
 import java.io.IOException
 
@@ -27,7 +26,6 @@ import java.io.IOException
  * stop data location.
  */
 interface SourceManager<T> : Closeable {
-
     /** Whether the source manager was already closed.  */
     val isClosed: Boolean
 

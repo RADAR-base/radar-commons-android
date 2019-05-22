@@ -24,6 +24,7 @@ import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.SOURCE_ID_KEY
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.data.DataCache
+import org.radarbase.android.util.ChangeRunner
 import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
@@ -38,11 +39,10 @@ import java.io.IOException
 @Keep
 abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(val service: S)
         : SourceManager<T> {
-
     /** Get the current source state.  */
     override val state: T = service.state
 
-    protected val dataHandler = service.dataHandler ?: throw IllegalStateException(
+    private val dataHandler = service.dataHandler ?: throw IllegalStateException(
             "Cannot start source manager without data handler")
 
     /** Get the name of the source.  */
@@ -58,26 +58,41 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
 
     @get:Synchronized
     @set:Synchronized
-    private var hasClosed: Boolean = false
+    protected var hasClosed: Boolean = false
     private var didWarn: Boolean = false
 
+    private val statusChanges = ChangeRunner(service.state.status)
+
     /**
-     * Update the source status. The source status should be updated with the following meanings:
+     * Source status. The source status should be updated with the following meanings:
      *
      *  * DISABLED if the manager will not be able to record any data.
      *  * READY if the manager is searching for a source to connect with.
      *  * CONNECTING if the manager has found a source to connect with.
      *  * CONNECTED if the manager is connected to a source.
+     *  * DISCONNECTING if the source is disconnecting.
      *  * DISCONNECTED if the source has disconnected OR the manager is closed.
      *
      * If DISABLED is set, no other status may be set.  Once DISCONNECTED has been set, no other
      * status may be set, and the manager will be closed by the service if not already closed.
-     *
-     * @param status status to set
      */
-    protected open fun updateStatus(status: SourceStatusListener.Status) {
-        this.state.status = status
-        this.service.sourceStatusUpdated(this, status)
+    protected open var status: SourceStatusListener.Status
+        get() = statusChanges.value
+        set(value) {
+            statusChanges.applyIfChanged(value) { status ->
+                synchronized(this) {
+                    state.status = status
+                    service.sourceStatusUpdated(this, status)
+                    onStatusUpdated(status)
+                }
+            }
+        }
+
+    protected fun disconnect() {
+        status = SourceStatusListener.Status.DISCONNECTING
+    }
+
+    protected open fun onStatusUpdated(status: SourceStatusListener.Status) {
     }
 
     protected fun register(
@@ -146,9 +161,19 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
      * DISCONNECTED.
      */
     @Throws(IOException::class)
-    override fun close() {
-        hasClosed = true
-        updateStatus(SourceStatusListener.Status.DISCONNECTED)
+    final override fun close() {
+        synchronized(this) {
+            if (hasClosed) {
+                return
+            }
+            hasClosed = true
+        }
+        status = SourceStatusListener.Status.DISCONNECTING
+        onClose()
+        status = SourceStatusListener.Status.DISCONNECTED
+    }
+
+    protected open fun onClose() {
     }
 
     override fun toString() = "SourceManager{name='$name', status=$state}"

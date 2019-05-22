@@ -164,30 +164,14 @@ constructor(override val file: File,
         get() = executor.compute { queue.size.toLong() }
 
     @Throws(IOException::class)
-    override fun remove(number: Int): Int {
-        try {
-            return executor.compute {
-                val actualNumber = Math.min(number, queue.size)
-                if (actualNumber > 0) {
-                    logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
-                    queue.remove(actualNumber)
-                }
-                actualNumber
-            }
-        } catch (ex: InterruptedException) {
-            Thread.currentThread().interrupt()
-            logger.warn("Failed to mark record as sent. May resend those at a later time.", ex)
-            return 0
-        } catch (ex: ExecutionException) {
-            logger.warn("Failed to mark sent records for topic {}", topic, ex)
-            val cause = ex.cause
-            when (cause) {
-                is RuntimeException -> return 0
-                is IOException -> throw cause
-                else -> throw IOException("Unknown error occurred", ex)
+    override fun remove(number: Int) {
+        return executor.execute {
+            val actualNumber = Math.min(number, queue.size)
+            if (actualNumber > 0) {
+                logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
+                queue.remove(actualNumber)
             }
         }
-
     }
 
     override fun addMeasurement(key: K?, value: V?) {

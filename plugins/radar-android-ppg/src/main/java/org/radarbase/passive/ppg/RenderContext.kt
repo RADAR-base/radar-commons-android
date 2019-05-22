@@ -126,11 +126,13 @@ internal class RenderContext(context: Context, dimensions: Size) : Closeable {
     companion object {
         private val logger = LoggerFactory.getLogger(RenderContext::class.java)
 
-        val RENDER_CONTEXT_RELEASER = CountedReference({}, {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                logger.info("Releasing RenderScript context")
-                RenderScript.releaseAllContexts()
-            }
-        })
+        val RENDER_CONTEXT_RELEASER: CountedReference<Unit> = CountedReference(
+                creator = {},
+                destroyer = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        logger.info("Releasing RenderScript context")
+                        RenderScript.releaseAllContexts()
+                    }
+                })
     }
 }

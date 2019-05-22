@@ -31,7 +31,11 @@ import org.slf4j.impl.HandroidLoggerAdapter
 
 /** Provides the name and some metadata of the main activity  */
 abstract class RadarApplication : Application() {
-    private lateinit var notificationHandler: NotificationHandler
+    private lateinit var innerNotificationHandler: NotificationHandler
+
+    val notificationHandler: NotificationHandler
+        get() = innerNotificationHandler.apply { onCreate() }
+
     lateinit var configuration: RadarConfiguration
         private set
 
@@ -58,7 +62,7 @@ abstract class RadarApplication : Application() {
         super.onCreate()
         setupLogging()
         configuration = createConfiguration()
-        notificationHandler = NotificationHandler(this)
+        innerNotificationHandler = NotificationHandler(this)
     }
 
     protected open fun setupLogging() {
@@ -76,18 +80,6 @@ abstract class RadarApplication : Application() {
      * @return configured RadarConfiguration
      */
     protected abstract fun createConfiguration(): RadarConfiguration
-
-    companion object {
-        /** Get a notification handler.  */
-        fun getNotificationHandler(context: Context): NotificationHandler {
-            val applicationContext = context.applicationContext
-            return if (applicationContext is RadarApplication) {
-                applicationContext.notificationHandler
-            } else {
-                NotificationHandler(applicationContext)
-            }
-        }
-    }
 }
 
 val Context.radarApp: RadarApplication

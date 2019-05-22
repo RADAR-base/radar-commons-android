@@ -33,7 +33,6 @@ import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.*
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
@@ -63,7 +62,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     }
 
     override fun start(acceptableIds: Set<String>) {
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
         register()
         // Calls and sms, in and outgoing and number of unread sms
         logProcessor.start {
@@ -71,7 +70,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
             lastSmsTimestamp = preferences.getLong(LAST_SMS_KEY, System.currentTimeMillis())
         }
 
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        status = SourceStatusListener.Status.CONNECTED
     }
 
     fun setCallAndSmsLogUpdateRate(period: Long, unit: TimeUnit) {
@@ -259,10 +258,8 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
+    override fun onClose() {
         logProcessor.close()
-        super.close()
     }
 
     companion object {

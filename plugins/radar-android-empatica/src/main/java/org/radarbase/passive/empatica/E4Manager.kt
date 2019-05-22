@@ -32,7 +32,6 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.passive.empatica.*
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Manages scanning for an Empatica E4 wearable and connecting to it  */
@@ -88,19 +87,19 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
                         empaManager.startScanning()
                         logger.info("Started scanning")
                     }
-                    updateStatus(SourceStatusListener.Status.READY)
+                    status = SourceStatusListener.Status.READY
                 } catch (ex: RuntimeException) {
                     logger.error("Empatica internally did not initialize")
-                    updateStatus(SourceStatusListener.Status.DISCONNECTED)
+                    disconnect()
                 }
             }
             EmpaStatus.CONNECTING -> hasBeenConnecting = true
-            EmpaStatus.CONNECTED -> updateStatus(SourceStatusListener.Status.CONNECTED)
+            EmpaStatus.CONNECTED -> status = SourceStatusListener.Status.CONNECTED
             EmpaStatus.DISCONNECTED ->
                 // The device manager disconnected from a device. Before it ever makes a connection,
                 // it also calls this, so check if we have a connected device first.
                 if (hasBeenConnecting) {
-                    updateStatus(SourceStatusListener.Status.DISCONNECTED)
+                    disconnect()
                 }
             else -> {
                 // not handling all cases
@@ -131,7 +130,7 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
                     logger.info("Will connect device {}", deviceName)
                     try {
                         // Connect to the device
-                        updateStatus(SourceStatusListener.Status.CONNECTING)
+                        status = SourceStatusListener.Status.CONNECTING
                         empaManager.connectDevice(empaDevice)
                     } catch (e: ConnectionNotAllowedException) {
                         // This should happen only if you try to connect when allowed == false.
@@ -158,13 +157,7 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
-        logger.info("Closing device {}", name)
-        if (isClosed) {
-            return
-        }
-        super.close()
+    override fun onClose() {
         handler.execute(true) {
             stopScanning()
             logger.info("Initiated device {} stop-sequence", name)
@@ -183,7 +176,7 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
     override fun didRequestEnableBluetooth() {
         if (!BluetoothAdapter.getDefaultAdapter().isEnabled) {
             logger.warn("Bluetooth is not enabled.")
-            updateStatus(SourceStatusListener.Status.DISCONNECTED)
+            disconnect()
         }
     }
 
@@ -250,7 +243,7 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
     override fun didUpdateSessionStatus(event: EmpaSessionEvent?, progress: Float) {
         logger.info("Empatica session event {} with progress {}", event, progress)
         if (event == EmpaSessionEvent.UNAUTHORIZED_USER_ERROR) {
-            updateStatus(SourceStatusListener.Status.DISCONNECTED)
+            disconnect()
         }
     }
 

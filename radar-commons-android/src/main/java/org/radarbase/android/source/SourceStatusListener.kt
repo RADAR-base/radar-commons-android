@@ -21,6 +21,8 @@ interface SourceStatusListener {
     enum class Status {
         /** A source is found and the source manager is trying to connect to it. No data is yet received.  */
         CONNECTING,
+        /** A source is currently disconnecting. It may still stream data. */
+        DISCONNECTING,
         /** A source was disconnected and will no longer stream data. If this status is passed without an argument, the source manager is no longer active.  */
         DISCONNECTED,
         /** A compatible source was found and connected to. Data can now stream in.  */

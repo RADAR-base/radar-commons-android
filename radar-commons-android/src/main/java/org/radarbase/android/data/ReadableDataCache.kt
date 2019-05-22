@@ -46,15 +46,14 @@ interface ReadableDataCache : Closeable {
     fun getRecords(limit: Int): RecordData<Any, Any>?
 
     /**
-     * Get a pair with the number of unsent records
+     * Number of unsent records in cache.
      */
     val numberOfRecords: Long
 
     /**
      * Remove oldest records.
      * @param number number of records (inclusive) to remove.
-     * @return number of rows removed
      */
     @Throws(IOException::class)
-    fun remove(number: Int): Int
+    fun remove(number: Int)
 }

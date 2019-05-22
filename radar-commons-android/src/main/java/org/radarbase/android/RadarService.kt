@@ -70,7 +70,6 @@ import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILE
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarbase.config.ServerConfig
-import org.radarbase.data.TimedInt
 import org.radarbase.producer.rest.SchemaRetriever
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
@@ -79,6 +78,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.ArrayList
 
 abstract class RadarService : Service(), ServerStatusListener, LoginListener {
+    private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
 
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
@@ -109,7 +109,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     private var isScanningEnabled = false
 
     /** An overview of how many records have been sent throughout the application.  */
-    private val latestNumberOfRecordsSent = TimedLong(0)
+    private var latestNumberOfRecordsSent = TimedLong(0)
 
     /** Current server status.  */
     private lateinit var serverStatus: ServerStatusListener.Status
@@ -130,30 +130,12 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
     override fun onCreate() {
         super.onCreate()
-
-        bluetoothReceiver = BluetoothStateReceiver(this) { enabled ->
-            // Upon state change, restart ui handler and restart Scanning.
-            if (enabled) {
-                bluetoothNotification?.cancel()
-                startScanning()
-            } else {
-                mConnections.map { it.connection }
-                        .filter { it.needsBluetooth() }
-                        .forEach { it.stopRecording() }
-
-                bluetoothNotification = RadarApplication.getNotificationHandler(this@RadarService)
-                        .notify(BLUETOOTH_NOTIFICATION, NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false) {
-                            setContentTitle(getString(R.string.notification_bluetooth_needed_title))
-                            setContentText(getString(R.string.notification_bluetooth_needed_text))
-                        }
-            }
-        }
-
         serverStatus = ServerStatusListener.Status.DISABLED
         binder = createBinder()
-        mHandler = SafeHandler("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
+        mHandler = SafeHandler.getInstance("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
             start()
         }
+        mainHandler = Handler()
 
         configurationCache = ChangeRunner()
         needsBluetooth = false
@@ -191,6 +173,24 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         authConnection = AuthServiceConnection(this, this).apply {
             bind()
         }
+
+        bluetoothReceiver = BluetoothStateReceiver(this) { enabled ->
+            // Upon state change, restart ui handler and restart Scanning.
+            if (enabled) {
+                bluetoothNotification?.cancel()
+                startScanning()
+            } else {
+                mConnections.map { it.connection }
+                        .filter { it.needsBluetooth() }
+                        .forEach { it.stopRecording() }
+
+                bluetoothNotification = radarApp.notificationHandler
+                        .notify(BLUETOOTH_NOTIFICATION, NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false) {
+                            setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                            setContentText(getString(R.string.notification_bluetooth_needed_text))
+                        }
+            }
+        }
     }
 
     protected open fun createBinder(): IBinder {
@@ -202,12 +202,12 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         checkPermissions()
         startForeground(1, createForegroundNotification())
 
-        return Service.START_STICKY
+        return START_STICKY
     }
 
     protected open fun createForegroundNotification(): Notification {
         val mainIntent = Intent(this, radarApp.mainActivity)
-        return RadarApplication.getNotificationHandler(this)
+        return radarApp.notificationHandler
                 .create(NOTIFICATION_CHANNEL_INFO, true) {
                     setContentText(getText(R.string.service_notification_text))
                     setContentTitle(getText(R.string.service_notification_title))
@@ -236,7 +236,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     @CallSuper
     protected open fun configure() {
        mHandler.executeReentrant {
-            configurationCache.runIfChanged(configuration.toMap()) { doConfigure() }
+            configurationCache.applyIfChanged(configuration.toMap()) { doConfigure() }
        }
     }
 
@@ -317,7 +317,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     protected fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
         val grantedPermissions = permissions.indices
                 .filter {
-                    if (grantResults[it] == PackageManager.PERMISSION_GRANTED) {
+                    if (grantResults[it] == PERMISSION_GRANTED) {
                         true
                     } else {
                         logger.info("Denied permission {}", it)
@@ -396,7 +396,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     override fun updateRecordsSent(topicName: String, numberOfRecords: Long) {
-        this.latestNumberOfRecordsSent.value = numberOfRecords
+        this.latestNumberOfRecordsSent = TimedLong(numberOfRecords)
 
         broadcaster.send(SERVER_RECORDS_SENT_TOPIC) {
             // Signal that a certain topic changed, the key of the map retrieved by getRecordsSent().
@@ -406,7 +406,8 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     fun sourceStatusUpdated(connection: SourceServiceConnection<*>, status: SourceStatusListener.Status) {
-        Handler(mainLooper).post {
+        logger.info("Source of {} was updated to {}", connection, status)
+        mainHandler.post {
             val showRes = when (status) {
                 SourceStatusListener.Status.READY -> R.string.device_ready
                 SourceStatusListener.Status.CONNECTED -> R.string.device_connected
@@ -414,6 +415,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
                     logger.info("Device name is {} while connecting.", connection.sourceName)
                     R.string.device_connecting
                 }
+                SourceStatusListener.Status.DISCONNECTING -> return@post  // do not show toast
                 SourceStatusListener.Status.DISCONNECTED -> {
                     startScanning()
                     R.string.device_disconnected
@@ -647,8 +649,8 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
-        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
-        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) android.Manifest.permission.PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
+        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
         private val providerSeparator = ",".toRegex()
 
         fun sanitizedIds(ids: Collection<String>): Set<String> = HashSet(ids

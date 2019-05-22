@@ -21,19 +21,17 @@ import android.hardware.camera2.*
 import android.hardware.camera2.CameraCharacteristics.LENS_FACING
 import android.hardware.camera2.CameraDevice.TEMPLATE_PREVIEW
 import android.hardware.camera2.CameraMetadata.LENS_FACING_BACK
+import android.os.Process.THREAD_PRIORITY_FOREGROUND
 import android.renderscript.Allocation
 import android.util.Size
-import android.view.Surface
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
-import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.source.SourceStatusListener.Status.*
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.ppg.RenderContext.Companion.RENDER_CONTEXT_RELEASER
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.ppg.PhoneCameraPpg
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
@@ -61,7 +59,7 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
     private var measurementTime = 60_000L
 
     init {
-        updateStatus(SourceStatusListener.Status.READY)
+        status = READY
 
         state.stateChangeListener = object : PhonePpgState.OnStateChangeListener {
             override fun release() {
@@ -73,11 +71,12 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
             }
         }
 
-        mHandler = SafeHandler("PPG", android.os.Process.THREAD_PRIORITY_FOREGROUND)
-        mProcessor = SafeHandler("PPG processing", android.os.Process.THREAD_PRIORITY_FOREGROUND)
+        mHandler = SafeHandler.getInstance("PPG", THREAD_PRIORITY_FOREGROUND)
+        mProcessor = SafeHandler.getInstance("PPG processing", THREAD_PRIORITY_FOREGROUND)
     }
 
     override fun start(acceptableIds: Set<String>) {
+        logger.debug("Starting PPG manager")
         register()
         state.actionListener = this
         mHandler.start()
@@ -96,14 +95,14 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
 
             if (cameraId == null) {
                 logger.error("Cannot get back-facing camera.")
-                updateStatus(DISCONNECTED)
+                disconnect()
                 return false
             }
 
             val videoSize = getImageSize(cameraId)
             if (videoSize == null) {
                 logger.error("Cannot determine PPG image size.")
-                updateStatus(DISCONNECTED)
+                disconnect()
                 return false
             }
 
@@ -111,7 +110,7 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
                 setImageHandler(mProcessor, this@PhonePpgManager::updatePreview)
             }
 
-            updateStatus(CONNECTING)
+            status = CONNECTING
 
             logger.debug("Opening camera")
             cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
@@ -123,13 +122,13 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
 
                 override fun onDisconnected(camera: CameraDevice) {
                     mCameraDevice = null
-                    updateStatus(DISCONNECTED)
+                    disconnect()
                 }
 
                 override fun onError(camera: CameraDevice, error: Int) {
                     cameraOpenCloseLock.release()
                     mCameraDevice = null
-                    updateStatus(DISCONNECTED)
+                    disconnect()
                 }
             }, mHandler.handler)
 
@@ -156,12 +155,12 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
 
         try {
             logger.debug("Starting capture session")
-            camera.createCaptureSession(listOf<Surface>(context.surface),
+            camera.createCaptureSession(listOf(context.surface),
                     object : CameraCaptureSession.StateCallback() {
                         override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
                             mPreviewSession = cameraCaptureSession
                             state.recordingStartedNow()
-                            updateStatus(CONNECTED)
+                            status = CONNECTED
                             logger.info("Started PPG capture session")
 
                             try {
@@ -183,21 +182,21 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
                                 }, mHandler.handler)
                             } catch (e: IllegalStateException) {
                                 logger.error("Failed to create capture request", e)
-                                updateStatus(DISCONNECTED)
+                                disconnect()
                             } catch (e: CameraAccessException) {
                                 logger.error("Failed to access camera for requesting preview", e)
-                                updateStatus(DISCONNECTED)
+                                disconnect()
                             }
                         }
 
                         override fun onConfigureFailed(cameraCaptureSession: CameraCaptureSession) {
                             logger.error("Create capture session failed")
-                            updateStatus(DISCONNECTED)
+                            disconnect()
                         }
                     }, mHandler.handler)
         } catch (e: CameraAccessException) {
             logger.error("Failed to access camera to make a preview request", e)
-            updateStatus(DISCONNECTED)
+            disconnect()
         }
 
     }
@@ -205,7 +204,7 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
     // Poll whether the preview session should stop
     private fun pollDisconnect() {
         if (state.recordingTime > measurementTime || doStop) {
-            updateStatus(DISCONNECTED)
+            disconnect()
         }
     }
 
@@ -236,8 +235,6 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
         val g = (totalG / range).toFloat()
         val b = (totalB / range).toFloat()
 
-        logger.debug("Got RGB {} {} {}", r, g, b)
-
         send(ppgTopic, PhoneCameraPpg(time / 1000.0, currentTime, sampleSize, r, g, b))
     }
 
@@ -267,7 +264,7 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
         return if (sizes.isNotEmpty()) {
             chooseOptimalSize(sizes)
         } else {
-            updateStatus(DISCONNECTED)
+            disconnect()
             null
         }
     }
@@ -291,32 +288,36 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
         return minSize
     }
 
-    @Throws(IOException::class)
-    override fun close() {
-        super.close()
-
-        state.actionListener = null
-
-        mHandler.execute {
+    override fun onClose() {
+        logger.debug("Closing PPG manager")
+        mHandler.stop {
             doStop = true
-            mPreviewSession = null
-            mCameraDevice?.close()
-
-            mHandler.stop {
-                mProcessor.stop {
-                    mRenderContext?.close()
-                    mRenderContext = null
+            mPreviewSession?.let {
+                try {
+                    it.stopRepeating()
+                    it.close()
+                } catch (ex: java.lang.IllegalStateException) {
+                    logger.info("Failed to stop preview session: {}", ex.toString())
+                } catch (ex: CameraAccessException) {
+                    logger.info("Failed to access camera to stop preview session: {}", ex.toString())
+                } finally {
+                    mPreviewSession = null
                 }
             }
-        }
+            mCameraDevice?.close()
 
+            mProcessor.stop {
+                mRenderContext?.close()
+                mRenderContext = null
+            }
+        }
     }
 
     override fun startCamera() {
         mHandler.execute {
             doStop = false
             if (!openCamera()) {
-                updateStatus(DISCONNECTED)
+                disconnect()
             }
         }
     }

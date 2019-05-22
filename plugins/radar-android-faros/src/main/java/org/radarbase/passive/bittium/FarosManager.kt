@@ -52,7 +52,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
             apiManager = farosFactory.createSdkManager(service)
             try {
                 apiManager.startScanning(this, handler.handler)
-                updateStatus(SourceStatusListener.Status.READY)
+                status = SourceStatusListener.Status.READY
             } catch (ex: IllegalStateException) {
                 logger.error("Failed to start scanning", ex)
                 close()
@@ -74,7 +74,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
                 SourceStatusListener.Status.CONNECTING
             }
             FarosDeviceListener.CONNECTING -> SourceStatusListener.Status.CONNECTING
-            FarosDeviceListener.DISCONNECTED, FarosDeviceListener.DISCONNECTING -> SourceStatusListener.Status.DISCONNECTED
+            FarosDeviceListener.DISCONNECTED, FarosDeviceListener.DISCONNECTING -> SourceStatusListener.Status.DISCONNECTING
             FarosDeviceListener.MEASURING -> SourceStatusListener.Status.CONNECTED
             else -> {
                 logger.warn("Faros status {} is unknown", status)
@@ -83,7 +83,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
         }
         logger.debug("Faros status {} and radarStatus {}", status, radarStatus)
 
-        updateStatus(radarStatus)
+        this.status = radarStatus
     }
 
     override fun onDeviceScanned(device: FarosDevice) {
@@ -110,7 +110,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
                 logger.info("Connecting to device {}", device.name)
                 device.connect(this, handler.handler)
                 this.faros = device
-                updateStatus(SourceStatusListener.Status.CONNECTING)
+                status = SourceStatusListener.Status.CONNECTING
             }
         }
     }
@@ -175,12 +175,8 @@ class FarosManager internal constructor(service: FarosService, private val faros
         }
     }
 
-    override fun close() {
-        if (isClosed) {
-            return
-        }
+    override fun onClose() {
         logger.info("Faros BT Closing device {}", this)
-        super.close()
 
         handler.stop {
             try {

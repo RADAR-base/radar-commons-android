@@ -29,6 +29,7 @@ open class PhoneLogProvider(radarService: RadarService) : SourceProvider<BaseSou
             "phone_telephony",
             "telephony",
             "phone_log",
+            ".phone.PhoneLogProvider",
             "org.radarbase.passive.phone.telephony.PhoneLogProvider",
             "org.radarcns.phone.PhoneLogProvider")
 

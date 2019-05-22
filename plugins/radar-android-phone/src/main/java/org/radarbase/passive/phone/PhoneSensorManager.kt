@@ -25,7 +25,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.BatteryManager
 import android.os.BatteryManager.*
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
@@ -40,7 +39,6 @@ import org.radarbase.passive.phone.PhoneSensorService.Companion.PHONE_SENSOR_INT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.*
 import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
@@ -53,7 +51,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     private val batteryTopic: DataCache<ObservationKey, PhoneBatteryLevel> = createCache("android_phone_battery_level", PhoneBatteryLevel())
     private val sensorDelays: SparseIntArray = SparseIntArray()
 
-    private val mHandler: SafeHandler = SafeHandler("Phone sensors", THREAD_PRIORITY_BACKGROUND)
+    private val mHandler = SafeHandler.getInstance("Phone sensors", THREAD_PRIORITY_BACKGROUND)
 
     private val sensorManager: SensorManager? = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager?
     private val batteryProcessor: OfflineProcessor
@@ -68,10 +66,10 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             wake = true
         }
 
-        if (sensorManager == null) {
-            updateStatus(SourceStatusListener.Status.DISCONNECTED)
+        status = if (sensorManager == null) {
+            SourceStatusListener.Status.DISCONNECTED
         } else {
-            updateStatus(SourceStatusListener.Status.READY)
+            SourceStatusListener.Status.READY
         }
     }
 
@@ -85,7 +83,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
                         .also { it.acquire() }
             }
             registerSensors()
-            updateStatus(SourceStatusListener.Status.CONNECTED)
+            status = SourceStatusListener.Status.CONNECTED
         }
 
         batteryProcessor.start {
@@ -219,13 +217,13 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         val intent = service.registerReceiver(null,
                 IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
 
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val level = intent.getIntExtra(EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(EXTRA_SCALE, -1)
 
         val batteryPct = level / scale.toFloat()
 
-        val isPlugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) > 0
-        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BATTERY_STATUS_UNKNOWN)
+        val isPlugged = intent.getIntExtra(EXTRA_PLUGGED, 0) > 0
+        val status = intent.getIntExtra(EXTRA_STATUS, BATTERY_STATUS_UNKNOWN)
         val batteryStatus = BATTERY_TYPES.get(status, BatteryStatus.UNKNOWN)
 
         state.batteryLevel = batteryPct
@@ -234,15 +232,13 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         send(batteryTopic, PhoneBatteryLevel(time, time, batteryPct, isPlugged, batteryStatus))
     }
 
-    @Throws(IOException::class)
-    override fun close() {
+    override fun onClose() {
         batteryProcessor.close()
 
         mHandler.stop {
             sensorManager?.unregisterListener(this)
             wakeLock?.release()
         }
-        super.close()
     }
 
     companion object {
@@ -272,7 +268,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             BATTERY_TYPES.append(BATTERY_STATUS_FULL, BatteryStatus.FULL)
         }
 
-        private val ACTIVITY_LAUNCH_WAKE = "org.radarbase.passive.phone.PhoneSensorManager.ACTIVITY_LAUNCH_WAKE"
-        private val REQUEST_CODE_PENDING_INTENT = 482480668
+        private const val ACTIVITY_LAUNCH_WAKE = "org.radarbase.passive.phone.PhoneSensorManager.ACTIVITY_LAUNCH_WAKE"
+        private const val REQUEST_CODE_PENDING_INTENT = 482480668
     }
 }

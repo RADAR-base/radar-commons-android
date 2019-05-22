@@ -1,15 +1,18 @@
 package org.radarbase.android.util
 
-class TimedLong(value: Long) {
-    @get:Synchronized
-    var time = System.currentTimeMillis()
-        private set
+import java.util.Objects.hash
 
-    @get:Synchronized
-    @set:Synchronized
-    var value: Long = value
-        set(value) {
-            field = value
-            time = System.currentTimeMillis()
-        }
+class TimedLong(val value: Long) {
+    val time = System.currentTimeMillis()
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as TimedLong
+        return time == other.time && value == other.value
+    }
+
+    override fun hashCode(): Int {
+        return hash(time, value)
+    }
 }

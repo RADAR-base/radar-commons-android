@@ -52,10 +52,10 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             requestCode = AUDIO_REQUEST_CODE
             requestName = AUDIO_REQUEST_NAME
             interval(DEFAULT_RECORD_RATE, TimeUnit.SECONDS)
-            handler(SafeHandler("RADARAudio", Process.THREAD_PRIORITY_BACKGROUND))
+            handler(SafeHandler.getInstance("RADARAudio", Process.THREAD_PRIORITY_BACKGROUND))
             wake = true
         }
-        updateStatus(SourceStatusListener.Status.READY)
+        status = SourceStatusListener.Status.READY
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -65,11 +65,11 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             register()
         }
         // Audio recording
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        status = SourceStatusListener.Status.CONNECTED
     }
 
     private fun processAudio() {
-        updateStatus(SourceStatusListener.Status.CONNECTED)
+        status = SourceStatusListener.Status.CONNECTED
         logger.info("Setting up audio recording")
         val dataPath = File(service.getExternalFilesDir(""),"audio_" + System.currentTimeMillis() + ".bin")
         //openSMILE.clas.SMILExtractJNI(conf,1,dataPath);
@@ -93,7 +93,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
                         currentTime,
                         localConfig.configFile,
                         Base64.encodeToString(readAll(dataPath), Base64.DEFAULT)))
-                updateStatus(SourceStatusListener.Status.READY)
+                status = SourceStatusListener.Status.READY
             } else {
                 logger.warn("Failed to read audio file")
             }
@@ -102,15 +102,10 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
-        if (isClosed) {
-            return
-        }
+    override fun onClose() {
         if (isRunning) {
             processor.close()
         }
-        super.close()
     }
 
     fun setRecordRate(audioRecordRateMs: Long) {

@@ -29,6 +29,7 @@ open class OpenSmileAudioProvider(radarService: RadarService) : SourceProvider<B
     override val pluginNames = listOf(
             "opensmile_audio",
             "audio",
+            ".audio.AudioServiceProvider",
             "org.radarbase.passive.audio.OpenSmileAudioProvider",
             "org.radarcns.audio.AudioServiceProvider")
 

@@ -34,6 +34,7 @@ open class PhoneLocationProvider(radarService: RadarService) : SourceProvider<Ba
     override val pluginNames = listOf(
             "phone_location",
             "location",
+            ".phone.PhoneLocationProvider",
             "org.radarbase.passive.phone.PhoneLocationProvider",
             "org.radarcns.phone.PhoneLocationProvider")
 

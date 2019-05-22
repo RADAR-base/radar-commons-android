@@ -39,8 +39,6 @@ open class ChangeApplier<T: Any, V: Any>(initialValue: T?, private val applier: 
         }
     }
 
-    fun runIfChanged(value: T, block: (V) -> Unit): V = applyIfChanged(value, block)
-
     @Synchronized
     fun isSame(value: T): Boolean {
         return value.comparator(_value)

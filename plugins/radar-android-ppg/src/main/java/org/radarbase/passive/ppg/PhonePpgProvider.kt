@@ -33,6 +33,7 @@ class PhonePpgProvider(radarService: RadarService) : SourceProvider<PhonePpgStat
     override val pluginNames = listOf(
             "phone_ppg",
             "ppg",
+            ".passive.ppg.PhonePpgProvider",
             "org.radarbase.passive.ppg.PhonePpgProvider",
             "org.radarcns.passive.ppg.PhonePpgProvider")
 
@@ -49,13 +50,7 @@ class PhonePpgProvider(radarService: RadarService) : SourceProvider<PhonePpgStat
     override val isDisplayable: Boolean = false
 
     override val actions: List<Action>
-        get() = listOf(Action(radarService.getString(R.string.startPpgMeasurement)) { activity ->
-            activity.apply {
-                activity.startActivity(Intent(this, PhonePpgActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                })
-                activity.overridePendingTransition(0, 0)
-                activity.finish()
-            }
+        get() = listOf(Action(radarService.getString(R.string.startPpgMeasurement)) {
+            startActivity(Intent(this, PhonePpgActivity::class.java))
         })
 }

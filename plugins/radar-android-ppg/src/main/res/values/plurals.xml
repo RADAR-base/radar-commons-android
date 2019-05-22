@@ -11,11 +11,12 @@
         in your right hand and your left
         index finger on the camera as shown
         below. The measurement will
-        take about %1$d seconds.
+        take about %d seconds.
         </item>
     </plurals>
     <plurals name="ppg_recording_seconds">
-        <item quantity="one">Recording one second…</item>
-        <item quantity="other">Recording %1$d seconds…</item>
+        <item quantity="zero">Recording…</item>
+        <item quantity="one">Recording 1 second…</item>
+        <item quantity="other">Recording %d seconds…</item>
     </plurals>
 </resources>

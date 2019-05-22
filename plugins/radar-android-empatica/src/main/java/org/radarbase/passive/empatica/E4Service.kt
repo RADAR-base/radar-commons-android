@@ -34,7 +34,7 @@ class E4Service : SourceService<E4State>() {
 
     override fun onCreate() {
         super.onCreate()
-        mHandler = SafeHandler("E4-device-handler", Process.THREAD_PRIORITY_MORE_FAVORABLE)
+        mHandler = SafeHandler.getInstance("E4-device-handler", Process.THREAD_PRIORITY_MORE_FAVORABLE)
 
         val delegate = E4Delegate(this)
         empaManager = EmpaDeviceManager(this, delegate, delegate, delegate)

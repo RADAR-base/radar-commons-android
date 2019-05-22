@@ -33,6 +33,7 @@ open class PhoneContactListProvider(radarService: RadarService) : SourceProvider
             "phone_contacts",
             "contact_list",
             "contacts",
+            ".phone.PhoneContactListProvider",
             "org.radarbase.passive.phone.PhoneContactListProvider",
             "org.radarcns.phone.PhoneContactListProvider")
 
