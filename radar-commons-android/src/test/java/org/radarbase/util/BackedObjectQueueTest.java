@@ -38,6 +38,7 @@ import java.util.Random;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -51,8 +52,8 @@ public class BackedObjectQueueTest {
     @Rule
     public ExpectedException exception = ExpectedException.none();
 
-    private static final SpecificData specificData = CacheStore.Companion.getSpecificData();
-    private static final GenericData genericData = CacheStore.Companion.getGenericData();
+    private static final SpecificData specificData = CacheStore.INSTANCE.getSpecificData();
+    private static final GenericData genericData = CacheStore.INSTANCE.getGenericData();
 
     @Test
     public void testBinaryObject() throws IOException {
@@ -85,7 +86,7 @@ public class BackedObjectQueueTest {
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
                 QueueFile.Companion.newMapped(file, 450000000), new TapeAvroSerializer<>(topic, specificData), new TapeAvroDeserializer<>(outputTopic, genericData))) {
             Record<GenericRecord, GenericRecord> result = queue.peek();
-
+            assertNotNull(result);
             assertArrayEquals(data, ((ByteBuffer) result.value.get("data")).array());
         }
     }

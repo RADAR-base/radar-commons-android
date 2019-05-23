@@ -193,7 +193,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
                 logger.info("Add {} as sourceName", sourceName)
             }
             val sourceAttributes = source.attributes
-            if (!sourceAttributes.isEmpty()) {
+            if (sourceAttributes.isNotEmpty()) {
                 val attrs = JSONObject()
                 for ((key, value) in sourceAttributes) {
                     attrs.put(key, value)
