@@ -35,6 +35,8 @@ import androidx.annotation.CallSuper
 import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.RadarApplication.Companion.radarApp
+import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.DATABASE_COMMIT_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.KAFKA_RECORDS_SEND_LIMIT_KEY
 import org.radarbase.android.RadarConfiguration.Companion.KAFKA_RECORDS_SIZE_LIMIT_KEY

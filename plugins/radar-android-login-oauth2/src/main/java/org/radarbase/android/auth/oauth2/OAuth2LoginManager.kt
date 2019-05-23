@@ -18,8 +18,8 @@ package org.radarbase.android.auth.oauth2
 
 import android.app.Activity
 import org.json.JSONException
+import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.auth.*
-import org.radarbase.android.radarApp
 import org.radarbase.producer.AuthenticationException
 
 /**

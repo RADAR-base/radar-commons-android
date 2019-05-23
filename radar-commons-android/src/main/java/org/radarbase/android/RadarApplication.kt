@@ -80,10 +80,12 @@ abstract class RadarApplication : Application() {
      * @return configured RadarConfiguration
      */
     protected abstract fun createConfiguration(): RadarConfiguration
+
+    companion object {
+        val Context.radarApp: RadarApplication
+            get() = applicationContext as RadarApplication
+
+        val Context.radarConfig: RadarConfiguration
+            get() = radarApp.configuration
+    }
 }
-
-val Context.radarApp: RadarApplication
-    get() = applicationContext as RadarApplication
-
-val Context.radarConfig: RadarConfiguration
-    get() = radarApp.configuration

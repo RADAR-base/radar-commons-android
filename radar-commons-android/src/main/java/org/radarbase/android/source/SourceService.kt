@@ -25,11 +25,11 @@ import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.RadarApplication.Companion.radarApp
+import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.*
 import org.radarbase.android.data.DataHandler
-import org.radarbase.android.radarApp
-import org.radarbase.android.radarConfig
 import org.radarbase.android.source.SourceProvider.Companion.MODEL_KEY
 import org.radarbase.android.source.SourceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY

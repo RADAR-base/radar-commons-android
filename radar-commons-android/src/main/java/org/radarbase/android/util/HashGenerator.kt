@@ -16,7 +16,6 @@
 
 package org.radarbase.android.util
 
-import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
 import org.radarbase.util.Serialization
@@ -52,13 +51,6 @@ class HashGenerator(private val preferences: SharedPreferences) {
         }
 
     }
-
-    /**
-     * Create a hash generator. This persists the hash in the SharedPreferences with the class name
-     * of the passed context, in the hash.key property.
-     * @param context service that the hash is needed for.
-     */
-    constructor(context: Context) : this(context.getSharedPreferences(context.javaClass.name, Context.MODE_PRIVATE))
 
     private fun loadHashKey(): ByteArray {
         var b64Salt = preferences.getString(HASH_KEY, null)

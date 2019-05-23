@@ -9,9 +9,9 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.Keep
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarApplication
+import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.LoginActivity.Companion.ACTION_LOGIN_SUCCESS
-import org.radarbase.android.radarConfig
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.send

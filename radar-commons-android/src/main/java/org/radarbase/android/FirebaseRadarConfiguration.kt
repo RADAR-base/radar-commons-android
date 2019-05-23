@@ -34,7 +34,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.HashSet
 
-class FirebaseRadarConfiguration constructor(context: Context, inDevelopmentMode: Boolean, defaultSettings: Int) : RadarConfiguration {
+@Suppress("unused")
+class FirebaseRadarConfiguration(context: Context, inDevelopmentMode: Boolean, defaultSettings: Int) : RadarConfiguration {
     private val firebase = FirebaseRemoteConfig.getInstance().apply {
         setDefaultsAsync(defaultSettings)
         isInDevelopmentMode = inDevelopmentMode
@@ -166,7 +167,7 @@ class FirebaseRadarConfiguration constructor(context: Context, inDevelopmentMode
 
     /**
      * Fetch the configuration from the firebase server.
-     * @return fetch task or null status is [FirebaseStatus.UNAVAILABLE].
+     * @return fetch task or null status is [RadarConfiguration.RemoteConfigStatus.UNAVAILABLE].
      */
     override fun fetch(): Task<Void>? {
         val delay = if (isInDevelopmentMode) {
@@ -180,7 +181,7 @@ class FirebaseRadarConfiguration constructor(context: Context, inDevelopmentMode
     /**
      * Fetch the configuration from the firebase server.
      * @param delay seconds
-     * @return fetch task or null status is [FirebaseStatus.UNAVAILABLE].
+     * @return fetch task or null status is [RadarConfiguration.RemoteConfigStatus.UNAVAILABLE].
      */
     private fun fetch(delay: Long): Task<Void>? {
         if (status == RadarConfiguration.RemoteConfigStatus.UNAVAILABLE) {

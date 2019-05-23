@@ -23,7 +23,7 @@ import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
-import org.radarbase.android.radarApp
+import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.util.Boast
 import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory

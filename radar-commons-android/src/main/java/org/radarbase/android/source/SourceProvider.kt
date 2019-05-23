@@ -23,7 +23,11 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
-import org.radarbase.android.*
+import org.radarbase.android.MainActivity
+import org.radarbase.android.RadarApplication.Companion.radarApp
+import org.radarbase.android.RadarApplication.Companion.radarConfig
+import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.RadarService
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceType
 import org.slf4j.LoggerFactory

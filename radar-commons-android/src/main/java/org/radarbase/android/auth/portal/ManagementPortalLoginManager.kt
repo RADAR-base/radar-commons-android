@@ -3,6 +3,7 @@ package org.radarbase.android.auth.portal
 import android.app.Activity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.json.JSONException
+import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
@@ -13,7 +14,6 @@ import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.radarConfig
 import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.register
 import org.radarbase.config.ServerConfig

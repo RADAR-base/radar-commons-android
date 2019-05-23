@@ -30,7 +30,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication
-import org.radarbase.android.radarApp
+import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.source.SourceStatusListener.Status.*
 import org.radarbase.passive.ppg.PhonePpgService.Companion.PPG_MEASUREMENT_TIME_DEFAULT
 import org.radarbase.passive.ppg.PhonePpgService.Companion.PPG_MEASUREMENT_TIME_NAME
