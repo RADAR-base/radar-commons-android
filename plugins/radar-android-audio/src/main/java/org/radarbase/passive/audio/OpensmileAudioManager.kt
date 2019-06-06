@@ -29,9 +29,7 @@ import org.radarbase.passive.audio.opensmile.SmileJNI
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.opensmile.OpenSmile2PhoneAudio
 import org.slf4j.LoggerFactory
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -45,6 +43,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
 
     private val processor: OfflineProcessor
     private var isRunning: Boolean = false
+    private val dataDirectory: File?
 
     init {
         processor = OfflineProcessor(service) {
@@ -55,10 +54,21 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             handler(SafeHandler.getInstance("RADARAudio", Process.THREAD_PRIORITY_BACKGROUND))
             wake = true
         }
-        status = SourceStatusListener.Status.READY
+        val externalDirectory = service.getExternalFilesDir("")
+        if (externalDirectory != null) {
+            dataDirectory = File(externalDirectory, "org.radarbase.passive.audio")
+            status = SourceStatusListener.Status.READY
+            clearDataDirectory()
+        } else {
+            dataDirectory = null
+            status = SourceStatusListener.Status.DISCONNECTED
+        }
     }
 
     override fun start(acceptableIds: Set<String>) {
+        if (status == SourceStatusListener.Status.DISCONNECTED) {
+            return
+        }
         isRunning = true
         processor.start {
             SmileJNI.init(service)
@@ -71,7 +81,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
     private fun processAudio() {
         status = SourceStatusListener.Status.CONNECTED
         logger.info("Setting up audio recording")
-        val dataPath = File(service.getExternalFilesDir(""),"audio_" + System.currentTimeMillis() + ".bin")
+        val dataPath = File(dataDirectory, "audio_" + System.currentTimeMillis() + ".bin")
         //openSMILE.clas.SMILExtractJNI(conf,1,dataPath);
         val localConfig = config
         val smileJNI = SmileJNI(localConfig.configFile, dataPath.absolutePath, localConfig.recordDurationMillis)
@@ -92,7 +102,8 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
                         startTime,
                         currentTime,
                         localConfig.configFile,
-                        Base64.encodeToString(readAll(dataPath), Base64.DEFAULT)))
+                        Base64.encodeToString(dataPath.readBytes(), Base64.DEFAULT)))
+                dataPath.delete()
                 status = SourceStatusListener.Status.READY
             } else {
                 logger.warn("Failed to read audio file")
@@ -106,6 +117,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
         if (isRunning) {
             processor.close()
         }
+        clearDataDirectory()
     }
 
     fun setRecordRate(audioRecordRateMs: Long) {
@@ -117,24 +129,19 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             get() = unit.toMillis(recordDuration)
     }
 
+    private fun clearDataDirectory() {
+        dataDirectory?.let { audioDir ->
+            audioDir.parentFile.list { _, name -> name.startsWith("audio_") && name.endsWith(".bin") }
+                    .forEach { File(audioDir.parentFile, it).delete() }
+
+            audioDir.walk().filter { it.startsWith("audio_") && it.endsWith(".bin") }
+                    .forEach { it.delete() }
+        }
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(OpensmileAudioManager::class.java)
         private const val AUDIO_REQUEST_CODE = 130102
         private const val AUDIO_REQUEST_NAME = "org.radarcns.audio.AudioDeviceManager"
-
-        @Throws(IOException::class)
-        fun readAll(file: File): ByteArray {
-            return ByteArrayOutputStream().use { output ->
-                FileInputStream(file).use { input ->
-                    val buffer = ByteArray(4096)
-                    var numRead = input.read(buffer)
-                    while (numRead != -1) {
-                        output.write(buffer, 0, numRead)
-                        numRead = input.read(buffer)
-                    }
-                }
-                output.toByteArray()
-            }
-        }
     }
 }
