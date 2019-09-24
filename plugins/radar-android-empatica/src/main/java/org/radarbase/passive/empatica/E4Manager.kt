@@ -27,8 +27,10 @@ import com.empatica.empalink.config.EmpaStatus
 import com.empatica.empalink.delegate.EmpaDataDelegate
 import com.empatica.empalink.delegate.EmpaSessionManagerDelegate
 import com.empatica.empalink.delegate.EmpaStatusDelegate
+import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.passive.empatica.*
 import org.slf4j.LoggerFactory
@@ -94,7 +96,10 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
                 }
             }
             EmpaStatus.CONNECTING -> hasBeenConnecting = true
-            EmpaStatus.CONNECTED -> status = SourceStatusListener.Status.CONNECTED
+            EmpaStatus.CONNECTED -> {
+                status = SourceStatusListener.Status.CONNECTED
+                service.radarApp.notificationHandler.manager?.cancel(EMPATICA_DISCONNECTED_NOTIFICATION_ID)
+            }
             EmpaStatus.DISCONNECTED ->
                 // The device manager disconnected from a device. Before it ever makes a connection,
                 // it also calls this, so check if we have a connected device first.
@@ -180,6 +185,20 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
         }
     }
 
+    override fun disconnect() {
+        if (isClosed) return
+
+        service.radarApp.notificationHandler.notify(
+                id = EMPATICA_DISCONNECTED_NOTIFICATION_ID,
+                channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                includeStartIntent = true) {
+            setContentTitle(service.getString(R.string.notification_empatica_disconnected_title))
+            setContentText(service.getString(R.string.notification_empatica_disconnected_text))
+        }
+
+        super.disconnect()
+    }
+
     override fun didUpdateOnWristStatus(status: Int) {
         val now = currentTime
         send(sensorStatusTopic, EmpaticaE4SensorStatus(
@@ -262,5 +281,7 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
         // BLE scan timeout
         private const val ANDROID_N_MAX_SCAN_DURATION_MS = 30 * 60 * 1000L // 30 minutes
         private const val SCAN_TIMEOUT = ANDROID_N_MAX_SCAN_DURATION_MS / 2
+
+        private const val EMPATICA_DISCONNECTED_NOTIFICATION_ID = 27286
     }
 }

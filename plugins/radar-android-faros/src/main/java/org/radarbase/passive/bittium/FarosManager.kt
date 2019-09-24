@@ -16,9 +16,11 @@
 
 package org.radarbase.passive.bittium
 
+import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.util.Strings
 import org.radarcns.bittium.faros.*
@@ -71,10 +73,14 @@ class FarosManager internal constructor(service: FarosService, private val faros
                         startMeasurements()
                     }
                 }
-                SourceStatusListener.Status.CONNECTING
+                service.radarApp.notificationHandler.manager?.cancel(FAROS_DISCONNECTED_NOTIFICATION_ID)
+                SourceStatusListener.Status.CONNECTED
             }
             FarosDeviceListener.CONNECTING -> SourceStatusListener.Status.CONNECTING
-            FarosDeviceListener.DISCONNECTED, FarosDeviceListener.DISCONNECTING -> SourceStatusListener.Status.DISCONNECTING
+            FarosDeviceListener.DISCONNECTED, FarosDeviceListener.DISCONNECTING -> {
+                disconnect()
+                SourceStatusListener.Status.DISCONNECTING
+            }
             FarosDeviceListener.MEASURING -> SourceStatusListener.Status.CONNECTED
             else -> {
                 logger.warn("Faros status {} is unknown", status)
@@ -175,6 +181,20 @@ class FarosManager internal constructor(service: FarosService, private val faros
         }
     }
 
+    override fun disconnect() {
+        if (isClosed) return
+
+        service.radarApp.notificationHandler.notify(
+                id = FAROS_DISCONNECTED_NOTIFICATION_ID,
+                channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                includeStartIntent = true) {
+            setContentTitle(service.getString(R.string.notification_faros_disconnected_title))
+            setContentText(service.getString(R.string.notification_faros_disconnected_text))
+        }
+
+        super.disconnect()
+    }
+
     override fun onClose() {
         logger.info("Faros BT Closing device {}", this)
 
@@ -193,5 +213,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
 
     companion object {
         private val logger = LoggerFactory.getLogger(FarosManager::class.java)
+
+        private const val FAROS_DISCONNECTED_NOTIFICATION_ID = 27287
     }
 }
