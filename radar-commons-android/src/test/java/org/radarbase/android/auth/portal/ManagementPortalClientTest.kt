@@ -91,7 +91,7 @@ class ManagementPortalClientTest {
             // Start the server.
             server.start()
 
-            val serverConfig = ServerConfig(server.url("/").url())
+            val serverConfig = ServerConfig(server.url("/").toUrl())
 
             val client = ManagementPortalClient(serverConfig, "pRMT", "")
             val authState = AppAuthState {
