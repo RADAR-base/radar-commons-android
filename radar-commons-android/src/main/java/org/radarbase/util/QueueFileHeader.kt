@@ -171,9 +171,8 @@ constructor(
     /** Wraps the position if it exceeds the end of the file.  */
     fun wrapPosition(position: Long): Long {
         val newPosition = if (position < length) position else HEADER_LENGTH + position - length
-        if (newPosition >= length || newPosition < 0) {
-            throw IllegalArgumentException("Position $position invalid outside of storage length $length")
-        }
+        @Suppress("ConvertTwoComparisonsToRangeCheck")
+        require(newPosition < length && newPosition >= 0) { "Position $position invalid outside of storage length $length" }
         return newPosition
     }
 

@@ -24,7 +24,7 @@ open class ManagedServiceConnection<T: IBinder>(val context: Context, private va
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             service?.let { b ->
                 @Suppress("UNCHECKED_CAST")
-                (b as? T ?: throw java.lang.IllegalStateException("Cannot cast binder to type T"))
+                (requireNotNull(b as? T) { "Cannot cast binder to type T" })
                         .also { binder = it }
                         .also { bound -> onBoundListeners.forEach { it(bound) } }
             }

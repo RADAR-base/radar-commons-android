@@ -67,10 +67,9 @@ class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val specificDat
             throw IOException("Failed to deserialize object", ex)
         }
 
-        if (!specificData.validate(keySchema, key)
-                || !specificData.validate(valueSchema, value)) {
-            throw IllegalArgumentException("Failed to validate given record in topic "
-                    + topicName + "\n\tkey: " + key + "\n\tvalue: " + value)
+        require(specificData.validate(keySchema, key)
+                && specificData.validate(valueSchema, value)) {
+            "Failed to validate given record in topic $topicName\n\tkey: $key\n\tvalue: $value"
         }
         return Record(key, value)
     }

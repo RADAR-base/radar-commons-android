@@ -39,9 +39,7 @@ class CountedReference<T>(private val creator: () -> T, private val destroyer: T
 
     @Synchronized
     fun release() {
-        if (count <= 0) {
-            throw IllegalStateException("Cannot release object that was not acquired")
-        }
+        check(count > 0) { "Cannot release object that was not acquired" }
         count--
         if (count == 0) {
             value?.let {

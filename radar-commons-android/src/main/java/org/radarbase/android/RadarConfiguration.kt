@@ -79,8 +79,7 @@ interface RadarConfiguration {
      * @throws IllegalArgumentException if the key does not have a value
      */
     fun getString(key: String): String {
-        return optString(key)
-                ?: throw IllegalArgumentException("Key does not have a value")
+        return requireNotNull(optString(key)) { "Key does not have a value" }
     }
 
     /**

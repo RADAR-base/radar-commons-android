@@ -60,7 +60,7 @@ internal class RenderContext(context: Context, dimensions: Size) : Closeable {
      */
     private val rgb: ByteArray
         get() {
-            val bytes = buffer ?: throw IllegalStateException("RenderContext already closed")
+            val bytes = checkNotNull(buffer) { "RenderContext already closed" }
             input.ioReceive()
             yuvToRgbIntrinsic._gCurrentFrame = input
             yuvToRgbIntrinsic.forEach_yuv2rgb(output)

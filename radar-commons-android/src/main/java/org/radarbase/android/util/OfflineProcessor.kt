@@ -87,9 +87,7 @@ class OfflineProcessor(private val context: Context,
     /** Start processing.  */
     fun start(initializer: (() -> Unit)? = null) {
         handler.compute {
-            if (config.intervalMillis <= 0) {
-                throw IllegalStateException("Cannot start processing without an interval")
-            }
+            check(config.intervalMillis > 0) { "Cannot start processing without an interval" }
             didStart = true
         }
         handler.execute {
@@ -140,9 +138,7 @@ class OfflineProcessor(private val context: Context,
      * @param timeUnit time unit to that duration is given with
      */
     fun interval(duration: Long, timeUnit: TimeUnit) {
-        if (duration <= 0L) {
-            throw IllegalArgumentException("Duration must be positive")
-        }
+        require(duration > 0L) { "Duration must be positive" }
         handler.execute(true) {
             if (config.interval(duration, timeUnit) && didStart) {
                 schedule()
@@ -201,19 +197,13 @@ class OfflineProcessor(private val context: Context,
             var handlerReference: CountedReference<SafeHandler> = DEFAULT_HANDLER_THREAD) {
 
         fun validate() {
-            if (requestCode == null || requestName == null) {
-                throw IllegalArgumentException("Cannot start processor without request code or name")
-            }
-            if (process.isEmpty()) {
-                throw IllegalArgumentException("Cannot run without a process")
-            }
+            require(requestCode != null && requestName != null) { "Cannot start processor without request code or name" }
+            require(process.isNotEmpty()) { "Cannot run without a process" }
         }
 
         @Synchronized
         fun interval(duration: Long, unit: TimeUnit): Boolean {
-            if (duration <= 0L) {
-                throw IllegalArgumentException("Duration must be positive")
-            }
+            require(duration > 0L) { "Duration must be positive" }
             val oldInterval = intervalMillis
             intervalMillis = unit.toMillis(duration)
             return oldInterval != intervalMillis

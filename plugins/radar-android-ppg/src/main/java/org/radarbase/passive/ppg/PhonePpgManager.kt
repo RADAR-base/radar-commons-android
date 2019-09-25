@@ -43,8 +43,7 @@ import java.util.concurrent.TimeUnit
  */
 class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpgService, PhonePpgState>(service), PhonePpgState.OnActionListener {
     private val ppgTopic: DataCache<ObservationKey, PhoneCameraPpg> = createCache("android_phone_ppg", PhoneCameraPpg())
-    private val cameraManager: CameraManager = service.getSystemService(Context.CAMERA_SERVICE) as CameraManager?
-            ?: throw IllegalStateException("CameraManager not found")
+    private val cameraManager: CameraManager = checkNotNull(service.getSystemService(Context.CAMERA_SERVICE) as CameraManager?)
 
     @get:Synchronized
     private lateinit var preferredDimensions: Size

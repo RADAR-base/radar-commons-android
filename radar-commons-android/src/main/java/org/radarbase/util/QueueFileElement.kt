@@ -26,9 +26,7 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
     /** Start position.  */
     var position: Long = position
         set(value) {
-            if (value < 0) {
-                throw IllegalArgumentException("position < 0")
-            }
+            require(value >= 0) { "position < 0" }
             field = value
         }
 
@@ -38,9 +36,7 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
      */
     var length: Int = length
         set(value) {
-            if (value < 0) {
-                throw IllegalArgumentException("length < 0")
-            }
+            require(value >= 0) { "length < 0" }
             field = value
         }
 
@@ -55,18 +51,16 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
     /** Position that the data begins.  */
     val dataPosition: Long
         get() {
-            if (length == 0) {
-                throw IllegalStateException("Cannot get data position of empty element")
-            }
-            return position + QueueFileElement.HEADER_LENGTH
+            check(!isEmpty) { "Cannot get data position of empty element" }
+            return position + HEADER_LENGTH
         }
 
     /** Position of the next element.  */
     val nextPosition: Long
         get() = if (isEmpty) {
-            QueueFileHeader.HEADER_LENGTH.toLong()
+            HEADER_LENGTH.toLong()
         } else {
-            position + QueueFileElement.HEADER_LENGTH + length
+            position + HEADER_LENGTH + length
         }
 
     /** Update element values to the given element.  */

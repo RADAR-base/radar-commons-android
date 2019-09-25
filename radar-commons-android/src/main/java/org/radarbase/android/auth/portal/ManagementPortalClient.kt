@@ -139,8 +139,9 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
     @Throws(IOException::class)
     fun refreshToken(authState: AppAuthState, parser: AuthStringParser): AppAuthState {
         try {
-            val refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY)
-                    ?: throw IllegalArgumentException("No refresh token found")
+            val refreshToken = requireNotNull(authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY)) {
+                "No refresh token found"
+            }
 
             val body = FormBody.Builder()
                     .add("grant_type", "refresh_token")
@@ -187,8 +188,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
         internal fun sourceRegistrationBody(source: SourceMetadata): JSONObject {
             val requestBody = JSONObject()
 
-            val typeId =  source.type?.id ?: throw java.lang.IllegalArgumentException(
-                    "Cannot register source without a type")
+            val typeId = requireNotNull(source.type?.id) { "Cannot register source without a type" }
             requestBody.put("sourceTypeId", typeId)
 
             source.sourceName?.let {

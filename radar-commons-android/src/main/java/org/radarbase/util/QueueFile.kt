@@ -212,9 +212,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         private var previousCached: QueueFileElement? = QueueFileElement()
 
         private fun checkConditions() {
-            if (storage.isClosed) {
-                throw IllegalStateException("closed")
-            }
+            check(!storage.isClosed) { "storage is closed" }
             if (modCount.get() != expectedModCount) {
                 throw ConcurrentModificationException()
             }
@@ -280,9 +278,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     @Throws(IOException::class)
     fun remove(n: Int) {
         requireNotClosed()
-        if (n < 0) {
-            throw IllegalArgumentException("Cannot remove negative ($n) number of elements.")
-        }
+        require(n >= 0) { "Cannot remove negative ($n) number of elements." }
         if (n == 0) {
             return
         }
@@ -471,21 +467,14 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         modCount.incrementAndGet()
     }
 
+    @Suppress("ConvertTwoComparisonsToRangeCheck")
     @Throws(IOException::class)
     fun setFileLength(size: Long, position: Long, beginningOfFirstElement: Long) {
-        if (size > maximumFileSize) {
-            throw IllegalArgumentException("File length may not exceed maximum file length")
-        }
+        require(size <= maximumFileSize) { "File length may not exceed maximum file length" }
         val oldLength = header.length
-        if (size < oldLength) {
-            throw IllegalArgumentException("File length may not be decreased")
-        }
-        if (beginningOfFirstElement >= oldLength || beginningOfFirstElement < 0) {
-            throw IllegalArgumentException("First element may not exceed file size")
-        }
-        if (position > oldLength || position < 0) {
-            throw IllegalArgumentException("Position may not exceed file size")
-        }
+        require(size >= oldLength) { "File length may not be decreased" }
+        require(beginningOfFirstElement < oldLength && beginningOfFirstElement >= 0) { "First element may not exceed file size" }
+        require(position <= oldLength && position >= 0) { "Position may not exceed file size" }
 
         storage.resize(size)
         header.length = size
