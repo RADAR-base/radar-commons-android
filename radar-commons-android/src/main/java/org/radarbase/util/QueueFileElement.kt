@@ -52,15 +52,15 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
     val dataPosition: Long
         get() {
             check(!isEmpty) { "Cannot get data position of empty element" }
-            return position + HEADER_LENGTH
+            return position + ELEMENT_HEADER_LENGTH
         }
 
     /** Position of the next element.  */
     val nextPosition: Long
         get() = if (isEmpty) {
-            HEADER_LENGTH.toLong()
+            QueueFileHeader.QUEUE_HEADER_LENGTH.toLong()
         } else {
-            position + HEADER_LENGTH + length
+            position + ELEMENT_HEADER_LENGTH + length
         }
 
     /** Update element values to the given element.  */
@@ -103,7 +103,7 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
 
     companion object {
         /** Length of element header in bytes.  */
-        const val HEADER_LENGTH = 5
+        const val ELEMENT_HEADER_LENGTH = 5
 
         /** Single byte checksum of given value.  */
         fun crc(value: Int): Byte {

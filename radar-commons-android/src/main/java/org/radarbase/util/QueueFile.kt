@@ -91,7 +91,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
      */
     private val modCount = AtomicInteger(0)
 
-    private val elementHeaderBuffer = ByteArray(QueueFileElement.HEADER_LENGTH)
+    private val elementHeaderBuffer = ByteArray(QueueFileElement.ELEMENT_HEADER_LENGTH)
 
     /** Returns true if this queue contains no entries.  */
     val isEmpty: Boolean
@@ -128,7 +128,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             return
         }
 
-        storage.read(position, elementHeaderBuffer, 0, QueueFileElement.HEADER_LENGTH)
+        storage.read(position, elementHeaderBuffer, 0, QueueFileElement.ELEMENT_HEADER_LENGTH)
         val length = bytesToInt(elementHeaderBuffer, 0)
 
         if (elementHeaderBuffer[4] != QueueFileElement.crc(length)) {
@@ -168,12 +168,12 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     val usedBytes: Long
         get() {
             if (isEmpty) {
-                return QueueFileHeader.HEADER_LENGTH.toLong()
+                return QueueFileHeader.QUEUE_HEADER_LENGTH.toLong()
             }
 
             val firstPosition = first.first.position
             return last.nextPosition - firstPosition + if (last.position >= firstPosition) {
-                QueueFileHeader.HEADER_LENGTH.toLong()
+                QueueFileHeader.QUEUE_HEADER_LENGTH.toLong()
             } else {
                 // tail < head. The queue wraps.
                 header.length
@@ -482,14 +482,14 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         // Calculate the position of the tail end of the data in the ring buffer
         // If the buffer is split, we need to make it contiguous
         if (position <= beginningOfFirstElement) {
-            if (position > QueueFileHeader.HEADER_LENGTH) {
-                val count = position - QueueFileHeader.HEADER_LENGTH
-                storage.move(QueueFileHeader.HEADER_LENGTH.toLong(), oldLength, count)
+            if (position > QueueFileHeader.QUEUE_HEADER_LENGTH) {
+                val count = position - QueueFileHeader.QUEUE_HEADER_LENGTH
+                storage.move(QueueFileHeader.QUEUE_HEADER_LENGTH.toLong(), oldLength, count)
             }
             modCount.incrementAndGet()
 
             // Last position was moved forward in the copy
-            val positionUpdate = oldLength - QueueFileHeader.HEADER_LENGTH
+            val positionUpdate = oldLength - QueueFileHeader.QUEUE_HEADER_LENGTH
             if (header.lastPosition < beginningOfFirstElement) {
                 header.lastPosition = header.lastPosition + positionUpdate
                 last.position = header.lastPosition

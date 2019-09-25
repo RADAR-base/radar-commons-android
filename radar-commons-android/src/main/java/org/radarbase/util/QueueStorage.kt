@@ -49,7 +49,7 @@ interface QueueStorage : Closeable, Flushable {
      * @throws IndexOutOfBoundsException if `position < 0`,
      * `offset < 0`, `count < 0`,
      * `offset + count > buffer.length`, or
-     * `count > file size - QueueFileHeader.HEADER_LENGTH`
+     * `count > file size - QueueFileHeader.ELEMENT_HEADER_LENGTH`
      * @throws IOException if the storage is full or cannot be written to
      * @return wrapped position after the write)
      */
@@ -62,7 +62,7 @@ interface QueueStorage : Closeable, Flushable {
      * @param buffer buffer to read data into
      * @param offset offset in buffer read data to
      * @param count number of bytes to read
-     * @throws IndexOutOfBoundsException if `position < QueueFileHeader.HEADER_LENGTH`,
+     * @throws IndexOutOfBoundsException if `position < QueueFileHeader.ELEMENT_HEADER_LENGTH`,
      * `offset < 0`, `count < 0`, or
      * `offset + count > buffer.length`
      * @throws IOException if the storage cannot be read.
@@ -74,8 +74,8 @@ interface QueueStorage : Closeable, Flushable {
     /**
      * Move part of the storage to another location, overwriting any data on the previous location.
      *
-     * @throws IllegalArgumentException if `srcPosition < QueueFileHeader.HEADER_LENGTH`,
-     * `dstPosition < QueueFileHeader.HEADER_LENGTH`,
+     * @throws IllegalArgumentException if `srcPosition < QueueFileHeader.ELEMENT_HEADER_LENGTH`,
+     * `dstPosition < QueueFileHeader.ELEMENT_HEADER_LENGTH`,
      * `count <= 0`, `srcPosition + count > size`
      * or `dstPosition + count > size`
      */
@@ -88,7 +88,7 @@ interface QueueStorage : Closeable, Flushable {
      * it contiguously from previously written data.
      *
      * @param size new size in bytes.
-     * @throws IllegalArgumentException if `size < QueueFileHeader.HEADER_LENGTH` or
+     * @throws IllegalArgumentException if `size < QueueFileHeader.ELEMENT_HEADER_LENGTH` or
      * if the size is increased and `size > #getMaximumSize()`.
      * @throws IOException if the storage could not be resized
      */

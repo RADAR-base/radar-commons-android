@@ -42,7 +42,7 @@ class QueueFileOutputStream internal constructor(
     private val newFirst: QueueFileElement
     private var elementsWritten: Int = 0
     private var streamBytesUsed: Long = 0
-    private val elementHeaderBuffer = ByteArray(QueueFileElement.HEADER_LENGTH)
+    private val elementHeaderBuffer = ByteArray(QueueFileElement.ELEMENT_HEADER_LENGTH)
     private val singleByteBuffer = ByteArray(1)
     private var storagePosition: Long = 0
 
@@ -71,9 +71,9 @@ class QueueFileOutputStream internal constructor(
         checkConditions()
 
         if (current.isEmpty) {
-            expandAndUpdate(QueueFileElement.HEADER_LENGTH + count.toLong())
+            expandAndUpdate(QueueFileElement.ELEMENT_HEADER_LENGTH + count.toLong())
             Arrays.fill(elementHeaderBuffer, 0.toByte())
-            storagePosition = storage.write(storagePosition, elementHeaderBuffer, 0, QueueFileElement.HEADER_LENGTH)
+            storagePosition = storage.write(storagePosition, elementHeaderBuffer, 0, QueueFileElement.ELEMENT_HEADER_LENGTH)
         } else {
             expandAndUpdate(count.toLong())
         }
@@ -110,7 +110,7 @@ class QueueFileOutputStream internal constructor(
 
         intToBytes(newLast.length, elementHeaderBuffer, 0)
         elementHeaderBuffer[4] = newLast.crc
-        storage.write(newLast.position, elementHeaderBuffer, 0, QueueFileElement.HEADER_LENGTH)
+        storage.write(newLast.position, elementHeaderBuffer, 0, QueueFileElement.ELEMENT_HEADER_LENGTH)
 
         elementsWritten++
     }
@@ -160,7 +160,7 @@ class QueueFileOutputStream internal constructor(
         queue.setFileLength(Math.min(queue.maximumFileSize, newLength), storagePosition, beginningOfFirstElement)
 
         if (storagePosition <= beginningOfFirstElement) {
-            val positionUpdate = oldLength - QueueFileHeader.HEADER_LENGTH
+            val positionUpdate = oldLength - QueueFileHeader.QUEUE_HEADER_LENGTH
 
             if (current.position <= beginningOfFirstElement) {
                 current.position = current.position + positionUpdate

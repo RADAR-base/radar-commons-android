@@ -39,7 +39,7 @@ constructor(
         private val storage: QueueStorage) {
 
     /** Buffer to read and store the header with.  */
-    private val headerBuffer = ByteArray(HEADER_LENGTH)
+    private val headerBuffer = ByteArray(QUEUE_HEADER_LENGTH)
 
     /** Cached file length. Always a power of 2.  */
     /** Get the stored length of the QueueStorage in bytes.  */
@@ -73,7 +73,7 @@ constructor(
             read()
         } else {
             length = this.storage.length
-            if (length < HEADER_LENGTH) {
+            if (length < QUEUE_HEADER_LENGTH) {
                 throw IOException("Storage does not contain header.")
             }
             count = 0
@@ -86,7 +86,7 @@ constructor(
     /** To initialize the header, read it from file.  */
     @Throws(IOException::class)
     private fun read() {
-        storage.read(0L, headerBuffer, 0, HEADER_LENGTH)
+        storage.read(0L, headerBuffer, 0, QUEUE_HEADER_LENGTH)
 
         val version = bytesToInt(headerBuffer, 0)
         if (version != VERSIONED_HEADER) {
@@ -101,7 +101,7 @@ constructor(
         firstPosition = bytesToLong(headerBuffer, 16)
         lastPosition = bytesToLong(headerBuffer, 24)
 
-        if (length < HEADER_LENGTH) {
+        if (length < QUEUE_HEADER_LENGTH) {
             throw IOException("File length in $storage header too small")
         }
         if (firstPosition < 0 || firstPosition > length
@@ -132,7 +132,7 @@ constructor(
         intToBytes(hashCode(), headerBuffer, 32)
 
         // then write the byte buffer out in one go
-        storage.write(0L, headerBuffer, 0, HEADER_LENGTH)
+        storage.write(0L, headerBuffer, 0, QUEUE_HEADER_LENGTH)
         storage.flush()
     }
 
@@ -170,7 +170,7 @@ constructor(
 
     /** Wraps the position if it exceeds the end of the file.  */
     fun wrapPosition(position: Long): Long {
-        val newPosition = if (position < length) position else HEADER_LENGTH + position - length
+        val newPosition = if (position < length) position else QUEUE_HEADER_LENGTH + position - length
         @Suppress("ConvertTwoComparisonsToRangeCheck")
         require(newPosition < length && newPosition >= 0) { "Position $position invalid outside of storage length $length" }
         return newPosition
@@ -189,7 +189,7 @@ constructor(
 
     companion object {
         /** The header length in bytes.  */
-        const val HEADER_LENGTH = 36
+        const val QUEUE_HEADER_LENGTH = 36
 
         /** Leading bit set to 1 indicating a versioned header and the version of 1.  */
         private const val VERSIONED_HEADER = 0x00000001

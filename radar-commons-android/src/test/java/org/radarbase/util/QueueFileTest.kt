@@ -208,30 +208,30 @@ class QueueFileTest {
     fun fileSize() {
         val queue = createQueue()
         assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH, queue.fileSize)
-        val bufSize = MAX_SIZE / 16 - QueueFileHeader.HEADER_LENGTH
+        val bufSize = MAX_SIZE / 16 - QueueFileHeader.QUEUE_HEADER_LENGTH
         val buffer = ByteArray(bufSize.toInt())
         // write buffer, assert that the file size increases with the stored size
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH, bufSize + QueueFileElement.HEADER_LENGTH + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH, (bufSize + QueueFileElement.HEADER_LENGTH) * 2 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 2, (bufSize + QueueFileElement.HEADER_LENGTH) * 3 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 2, (bufSize + QueueFileElement.HEADER_LENGTH) * 4 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.HEADER_LENGTH) * 5 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.HEADER_LENGTH) * 6 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.HEADER_LENGTH) * 7 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.HEADER_LENGTH) * 8 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 9 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 10 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 11 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 12 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 13 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 14 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 15 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 16 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH, bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 2 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 2, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 3 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 2, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 4 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 5 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 6 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 7 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 8 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 9 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 10 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 11 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 12 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 13 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 14 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 15 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 16 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
 
         // queue is full now
         var actualException: Exception? = null
         try {
-            writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 17 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
+            writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 17 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
         } catch (ex: IllegalStateException) {
             actualException = ex
         }
@@ -240,14 +240,14 @@ class QueueFileTest {
         // queue is full, remove elements to add new ones
         queue.remove(1)
         // this buffer is written in a circular way
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 16 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 16 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
         queue.remove(1)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 16 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 16 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
         queue.remove(1)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.HEADER_LENGTH) * 16 + QueueFileHeader.HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 16 + QueueFileHeader.QUEUE_HEADER_LENGTH, buffer, queue)
         queue.remove(14)
         assertEquals(2, queue.size)
-        assertEquals((bufSize + QueueFileElement.HEADER_LENGTH) * 2 + QueueFileHeader.HEADER_LENGTH, queue.usedBytes)
+        assertEquals((bufSize + QueueFileElement.ELEMENT_HEADER_LENGTH) * 2 + QueueFileHeader.QUEUE_HEADER_LENGTH, queue.usedBytes)
         assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH * 2, queue.fileSize)
     }
 
@@ -304,7 +304,7 @@ class QueueFileTest {
         queue.remove(numRemove)
         var removedBytes = 0L
         for (j in 0 until numRemove) {
-            removedBytes += list.removeFirst().length + QueueFileElement.HEADER_LENGTH
+            removedBytes += list.removeFirst().length + QueueFileElement.ELEMENT_HEADER_LENGTH
         }
         return removedBytes
     }
@@ -348,33 +348,33 @@ class QueueFileTest {
         queue.elementOutputStream().use { out ->
             for (j in 0 until numAdd) {
                 val numBytes = (random.nextInt(buffer.size) + 1).toLong()
-                if (numBytes + out.usedSize + QueueFileElement.HEADER_LENGTH > size) {
+                if (numBytes + out.usedSize + QueueFileElement.ELEMENT_HEADER_LENGTH > size) {
                     logger.info("Not adding to full queue")
                     break
                 }
                 val next = Element(0, numBytes)
                 if (list.isEmpty()) {
-                    next.position = QueueFileHeader.HEADER_LENGTH.toLong()
-                } else if (out.usedSize + numBytes + QueueFileElement.HEADER_LENGTH > queue.fileSize) {
+                    next.position = QueueFileHeader.QUEUE_HEADER_LENGTH.toLong()
+                } else if (out.usedSize + numBytes + QueueFileElement.ELEMENT_HEADER_LENGTH > queue.fileSize) {
                     val firstPosition = list.first.position
                     for (el in list) {
                         if (el.position < firstPosition) {
-                            el.position += (queue.fileSize - QueueFileHeader.HEADER_LENGTH).toInt()
+                            el.position += (queue.fileSize - QueueFileHeader.QUEUE_HEADER_LENGTH).toInt()
                         }
                     }
                     val last = list.last
-                    next.position = last.position + last.length + QueueFileElement.HEADER_LENGTH
+                    next.position = last.position + last.length + QueueFileElement.ELEMENT_HEADER_LENGTH
                     if (next.position >= queue.fileSize * 2) {
-                        next.position += (QueueFileHeader.HEADER_LENGTH - queue.fileSize * 2).toInt()
+                        next.position += (QueueFileHeader.QUEUE_HEADER_LENGTH - queue.fileSize * 2).toInt()
                     }
                 } else {
                     val last = list.last
-                    next.position = last.position + last.length + QueueFileElement.HEADER_LENGTH
+                    next.position = last.position + last.length + QueueFileElement.ELEMENT_HEADER_LENGTH
                     if (next.position >= queue.fileSize) {
-                        next.position += (QueueFileHeader.HEADER_LENGTH - queue.fileSize).toInt()
+                        next.position += (QueueFileHeader.QUEUE_HEADER_LENGTH - queue.fileSize).toInt()
                     }
                 }
-                bytesUsed += next.length + QueueFileElement.HEADER_LENGTH
+                bytesUsed += next.length + QueueFileElement.ELEMENT_HEADER_LENGTH
                 list.add(next)
                 out.write(buffer, 0, numBytes.toInt())
                 out.next()
