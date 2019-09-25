@@ -17,6 +17,7 @@
 package org.radarbase.android.data
 
 import okhttp3.Headers
+import okhttp3.Headers.Companion.headersOf
 import org.radarbase.android.kafka.KafkaDataSubmitter
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.util.BatteryStageReceiver
@@ -41,7 +42,7 @@ interface DataHandler<K, V> : ServerStatusListener {
 
     data class RestConfiguration(
             /** Request headers. */
-            var headers: Headers = Headers.of(),
+            var headers: Headers = headersOf(),
             /** Kafka server configuration. If null, no rest sender will be configured. */
             var kafkaConfig: ServerConfig? = null,
             /** Schema registry retriever. */

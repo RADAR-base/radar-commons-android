@@ -31,16 +31,16 @@ import java.nio.channels.FileChannel
  * @param maximumLength maximum length that the file may have.
  * @throws NullPointerException if file is null
  * @throws IllegalArgumentException if the initialLength or maximumLength is smaller than
- *                                  `QueueFileHeader.HEADER_LENGTH`.
+ *                                  `QueueFileHeader.ELEMENT_HEADER_LENGTH`.
  * @throws IOException if the file could not be accessed or was smaller than
- *                     `QueueFileHeader.HEADER_LENGTH`
+ *                     `QueueFileHeader.ELEMENT_HEADER_LENGTH`
  */
 class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Long) : QueueStorage {
     /**
      * The underlying file. Uses a ring buffer to store entries.
      * <pre>
      * Format:
-     * QueueFileHeader.HEADER_LENGTH bytes    Header
+     * QueueFileHeader.ELEMENT_HEADER_LENGTH bytes    Header
      * length bytes                           Data
     </pre> *
      */
@@ -64,33 +64,23 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
 
     override var maximumLength: Long = maximumLength
         set(value) {
-            if (value > Int.MAX_VALUE) {
-                throw IllegalArgumentException("Maximum cache size out of range "
-                        + value + " <= " + Int.MAX_VALUE)
+            require(value <= Int.MAX_VALUE) {
+                "Maximum cache size out of range $value <= ${Int.MAX_VALUE}"
             }
-            field = Math.max(MINIMUM_LENGTH, value)
+            field = value.coerceAtLeast(MINIMUM_LENGTH)
         }
 
     init {
-        if (initialLength < minimumLength) {
-            throw IllegalArgumentException(
-                    "Initial length $initialLength is smaller than minimum length $minimumLength")
-        }
-        if (maximumLength > Int.MAX_VALUE) {
-            throw IllegalArgumentException(
-                    "Maximum cache size out of range $maximumLength <= ${Int.MAX_VALUE}")
-        }
-        if (initialLength > maximumLength) {
-            throw IllegalArgumentException(
-                    "Initial length $initialLength exceeds maximum length $maximumLength")
-        }
+        require(initialLength >= minimumLength) { "Initial length $initialLength is smaller than minimum length $minimumLength" }
+        require(maximumLength <= Int.MAX_VALUE) { "Maximum cache size out of range $maximumLength <= ${Int.MAX_VALUE}" }
+        require(initialLength <= maximumLength) { "Initial length $initialLength exceeds maximum length $maximumLength" }
 
         randomAccessFile = RandomAccessFile(file, "rw")
         length = if (isPreExisting) {
             // Read header from file
             val currentLength = randomAccessFile.length()
-            if (currentLength < QueueFileHeader.HEADER_LENGTH) {
-                throw IOException("File length " + length + " is smaller than queue header length " + QueueFileHeader.HEADER_LENGTH)
+            if (currentLength < QueueFileHeader.QUEUE_HEADER_LENGTH) {
+                throw IOException("File length " + length + " is smaller than queue header length " + QueueFileHeader.QUEUE_HEADER_LENGTH)
             }
             currentLength
         } else {
@@ -116,18 +106,16 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
             // # of bytes to read before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
             val firstPart = (length - wrappedPosition).toInt()
             byteBuffer.get(buffer, offset, firstPart)
-            byteBuffer.position(QueueFileHeader.HEADER_LENGTH)
+            byteBuffer.position(QueueFileHeader.QUEUE_HEADER_LENGTH)
             byteBuffer.get(buffer, offset + firstPart, count - firstPart)
-            (QueueFileHeader.HEADER_LENGTH + count - firstPart).toLong()
+            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - firstPart).toLong()
         }
     }
 
     /** Wraps the position if it exceeds the end of the file.  */
     private fun wrapPosition(position: Long): Int {
-        val newPosition = if (position < length) position else QueueFileHeader.HEADER_LENGTH + position - length
-        if (newPosition >= length || position < 0) {
-            throw IllegalArgumentException("Position $position invalid outside of storage length $length")
-        }
+        val newPosition = if (position < length) position else QueueFileHeader.QUEUE_HEADER_LENGTH + position - length
+        require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
         return newPosition.toInt()
     }
 
@@ -138,13 +126,11 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         if (size == length) {
             return
         }
-        if (size > length && size > maximumLength) {
-            throw IllegalArgumentException("New length " + size
-                    + " exceeds maximum length " + maximumLength)
+        require(!(size > length && size > maximumLength)) {
+            "New length $size exceeds maximum length $maximumLength"
         }
-        if (size < MINIMUM_LENGTH) {
-            throw IllegalArgumentException("New length " + size
-                    + " is less than minimum length " + QueueFileHeader.HEADER_LENGTH)
+        require(size >= MINIMUM_LENGTH) {
+            "New length $size is less than minimum length ${QueueFileHeader.QUEUE_HEADER_LENGTH}"
         }
         flush()
         randomAccessFile.setLength(size)
@@ -174,20 +160,21 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
             if (linearPart > 0) {
                 byteBuffer.put(buffer, offset, linearPart)
             }
-            byteBuffer.position(QueueFileHeader.HEADER_LENGTH)
+            byteBuffer.position(QueueFileHeader.QUEUE_HEADER_LENGTH)
             byteBuffer.put(buffer, offset + linearPart, count - linearPart)
-            (QueueFileHeader.HEADER_LENGTH + count - linearPart).toLong()
+            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - linearPart).toLong()
         }
     }
 
     @Throws(IOException::class)
     override fun move(srcPosition: Long, dstPosition: Long, count: Long) {
         requireNotClosed()
-        if (srcPosition < 0 || dstPosition < 0 || count <= 0
-                || srcPosition + count > length || dstPosition + count > length) {
-            throw IllegalArgumentException("Movement specification src=" + srcPosition
-                    + ", count=" + count + ", dst=" + dstPosition
-                    + " is invalid for storage of length " + length)
+        require(srcPosition >= 0
+                && dstPosition >= 0
+                && count > 0
+                && srcPosition + count <= length
+                && dstPosition + count <= length) {
+            "Movement specification src=$srcPosition, count=$count, dst=$dstPosition is invalid for storage of length $length"
         }
         flush()
         channel.position(dstPosition)
@@ -222,9 +209,8 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         if (count < 0) {
             throw IndexOutOfBoundsException("count < 0")
         }
-        if (count + QueueFileHeader.HEADER_LENGTH > length) {
-            throw IllegalArgumentException("buffer count " + count
-                    + " exceeds storage length " + length)
+        require(count + QueueFileHeader.QUEUE_HEADER_LENGTH <= length) {
+            "buffer count $count exceeds storage length $length"
         }
         if (offset + count > bytes.size) {
             throw IndexOutOfBoundsException(

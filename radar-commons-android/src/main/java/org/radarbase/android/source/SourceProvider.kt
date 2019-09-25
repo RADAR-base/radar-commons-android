@@ -115,9 +115,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      * if the service is already bound.
      */
     fun bind() {
-        if (isBound) {
-            throw IllegalStateException("Service is already bound")
-        }
+        check(!isBound) { "Service is already bound" }
         try {
             logger.debug("Binding {}", this)
             val extras = Bundle()
@@ -142,9 +140,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      * called.
      */
     fun unbind() {
-        if (!isBound) {
-            throw IllegalStateException("Service is not bound")
-        }
+        check(isBound) { "Service is not bound" }
         logger.debug("Unbinding {}", this)
         isBound = false
         radarService.unbindService(connection)

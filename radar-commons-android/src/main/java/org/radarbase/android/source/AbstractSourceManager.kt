@@ -53,6 +53,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
         protected set
 
     /** Whether this source manager has been closed.  */
+    @get:Synchronized
     override val isClosed: Boolean
         get() = hasClosed
 
@@ -88,7 +89,8 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             }
         }
 
-    protected fun disconnect() {
+    @CallSuper
+    protected open fun disconnect() {
         status = SourceStatusListener.Status.DISCONNECTING
     }
 

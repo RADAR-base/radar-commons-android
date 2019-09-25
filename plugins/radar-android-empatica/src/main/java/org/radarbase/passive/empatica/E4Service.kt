@@ -43,7 +43,9 @@ class E4Service : SourceService<E4State>() {
     override fun createSourceManager() = E4Manager(this, empaManager, mHandler)
 
     override fun configureSourceManager(manager: SourceManager<E4State>, configuration: RadarConfiguration) {
-        (manager as E4Manager).apiKey = configuration.getString(EMPATICA_API_KEY)
+        if (manager !is E4Manager) return
+        manager.apiKey = configuration.getString(EMPATICA_API_KEY)
+        manager.notifyDisconnect(configuration.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
     }
 
     override val defaultState = E4State()
@@ -63,5 +65,8 @@ class E4Service : SourceService<E4State>() {
         private val logger = LoggerFactory.getLogger(E4Service::class.java)
 
         private const val EMPATICA_API_KEY = "empatica_api_key"
+
+        private const val NOTIFY_DISCONNECT = "empatica_notify_disconnect"
+        private const val NOTIFY_DISCONNECT_DEFAULT = false
     }
 }

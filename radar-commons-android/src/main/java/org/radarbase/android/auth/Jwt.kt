@@ -13,10 +13,7 @@ class Jwt(val originalString: String, val header: JSONObject, val body: JSONObje
         @Throws(JSONException::class)
         fun parse(token: String): Jwt {
             val parts = token.split(jwtSeparatorCharacter)
-            if (parts.size != 3) {
-                throw IllegalArgumentException(
-                        "Argument is not a valid JSON web token. Need 3 parts but got " + parts.size)
-            }
+            require(parts.size == 3) { "Argument is not a valid JSON web token. Need 3 parts but got " + parts.size }
             val header = String(Base64.decode(parts[0], NO_PADDING or NO_WRAP))
                     .let(::JSONObject)
 

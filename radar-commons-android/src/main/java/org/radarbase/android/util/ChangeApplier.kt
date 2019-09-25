@@ -5,7 +5,7 @@ open class ChangeApplier<T: Any, V: Any>(initialValue: T?, private val applier: 
 
     @get:Synchronized
     val value: T
-        get() = _value ?: throw IllegalStateException("Value is not initialized yet")
+        get() = checkNotNull(_value) { "Value is not initialized yet" }
 
     @get:Synchronized
     lateinit var lastResult: V

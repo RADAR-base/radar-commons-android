@@ -97,9 +97,7 @@ class KafkaDataSubmitter(
     }
 
     private fun validate(config: SubmitterConfiguration) {
-        if (config.userId == null) {
-            throw IllegalArgumentException("User ID is mandatory to start KafkaDataSubmitter")
-        }
+        requireNotNull(config.userId) { "User ID is mandatory to start KafkaDataSubmitter" }
     }
 
     private fun schedule() {

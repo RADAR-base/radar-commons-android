@@ -41,6 +41,7 @@ android:
 before_install:
   - yes | sdkmanager "platforms;android-28"
   - yes | sdkmanager "ndk-bundle"
+  - android-update-sdk --components=sys-img-armeabi-v7a-android-$ANDROID_MINIMUM_API_LEVEL --accept-licenses='android-sdk-license-[0-9a-f]{8}'
 
 # Emulator Management: Create, Start and Wait
 before_script:

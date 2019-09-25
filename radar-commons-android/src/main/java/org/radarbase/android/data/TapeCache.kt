@@ -175,10 +175,9 @@ constructor(override val file: File,
     }
 
     override fun addMeasurement(key: K?, value: V?) {
-        if (!inputFormat.validate(topic.keySchema, key)
-                || !inputFormat.validate(topic.valueSchema, value)) {
-            throw IllegalArgumentException("Cannot send invalid record to topic " + topic
-                    + " with {key: " + key + ", value: " + value + "}")
+        require(inputFormat.validate(topic.keySchema, key)
+                && inputFormat.validate(topic.valueSchema, value)) {
+            "Cannot send invalid record to topic $topic with {key: $key, value: $value}"
         }
 
         executor.execute {

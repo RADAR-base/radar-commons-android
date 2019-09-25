@@ -1,6 +1,10 @@
 package org.radarbase.android.auth.portal
 
-import okhttp3.*
+import okhttp3.Credentials
+import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
@@ -66,7 +70,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
     @Throws(IOException::class, JSONException::class)
     fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
         val bodyString = sourceRegistrationBody(source).toString()
-        val body = RequestBody.create(APPLICATION_JSON_TYPE, bodyString)
+        val body = bodyString.toRequestBody(APPLICATION_JSON_TYPE)
 
         val request = client.requestBuilder("api/subjects/${auth.userId}/sources")
                 .post(body)
@@ -76,7 +80,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
                 .build()
 
         client.request(request).use { response ->
-            when (response.code()) {
+            when (response.code) {
                 401 -> throw AuthenticationException("Authentication failure with the ManagementPortal.")
                 403 -> throw UnsupportedOperationException("Not allowed to update source data.")
                 404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal.")
@@ -102,7 +106,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
     @Throws(IOException::class, JSONException::class)
     fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
         val bodyString = sourceUpdateBody(source).toString()
-        val body = RequestBody.create(APPLICATION_JSON_TYPE, bodyString)
+        val body = bodyString.toRequestBody(APPLICATION_JSON_TYPE)
 
         val request = client.requestBuilder("api/subjects/${auth.userId}/sources/${source.sourceName}")
                 .post(body)
@@ -112,7 +116,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
                 .build()
 
         client.request(request).use { response ->
-            when (response.code()) {
+            when (response.code) {
                 401 -> throw AuthenticationException("Authentication failure with the ManagementPortal.")
                 403 -> throw UnsupportedOperationException("Not allowed to update source data.")
                 404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal or the source no longer exists.")
@@ -135,8 +139,9 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
     @Throws(IOException::class)
     fun refreshToken(authState: AppAuthState, parser: AuthStringParser): AppAuthState {
         try {
-            val refreshToken = authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY)
-                    ?: throw IllegalArgumentException("No refresh token found")
+            val refreshToken = requireNotNull(authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY)) {
+                "No refresh token found"
+            }
 
             val body = FormBody.Builder()
                     .add("grant_type", "refresh_token")
@@ -161,7 +166,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
             val body = RestClient.responseBody(response) ?: ""
 
             when {
-                response.code() == 401 -> throw AuthenticationException("QR code is invalid: $body")
+                response.code == 401 -> throw AuthenticationException("QR code is invalid: $body")
                 !response.isSuccessful -> throw IOException("Failed to make request; response $body")
                 body.isEmpty() -> throw IOException("Response body expected but not found")
                 else -> parser.parse(body)
@@ -176,15 +181,14 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
         const val MP_REFRESH_TOKEN_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.refreshToken"
         private const val APPLICATION_JSON = "application/json"
         private const val APPLICATION_JSON_UTF8 = "$APPLICATION_JSON; charset=utf-8"
-        private val APPLICATION_JSON_TYPE = MediaType.parse(APPLICATION_JSON_UTF8)
+        private val APPLICATION_JSON_TYPE = APPLICATION_JSON_UTF8.toMediaType()
         private val illegalSourceCharacters = "[^_'.@A-Za-z0-9- ]+".toRegex()
 
         @Throws(JSONException::class)
         internal fun sourceRegistrationBody(source: SourceMetadata): JSONObject {
             val requestBody = JSONObject()
 
-            val typeId =  source.type?.id ?: throw java.lang.IllegalArgumentException(
-                    "Cannot register source without a type")
+            val typeId = requireNotNull(source.type?.id) { "Cannot register source without a type" }
             requestBody.put("sourceTypeId", typeId)
 
             source.sourceName?.let {

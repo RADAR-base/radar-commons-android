@@ -40,7 +40,7 @@ import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.HashSet
+import java.util.*
 import kotlin.collections.HashMap
 
 /**
@@ -217,9 +217,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     protected abstract fun createSourceManager(): SourceManager<T>
 
     fun startRecording(acceptableIds: Set<String>) {
-        if (key.getUserId() == null) {
-            throw IllegalStateException("Cannot start recording: user ID is not set.")
-        }
+        checkNotNull(key.getUserId()) { "Cannot start recording: user ID is not set." }
 
         handler.takeUnless(SafeHandler::isStarted)?.start()
         handler.execute {
@@ -301,15 +299,13 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     @CallSuper
     fun onInvocation(bundle: Bundle) {
         hasBluetoothPermission = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false)
-        sourceProducer = bundle.getString(PRODUCER_KEY)
-                ?: throw IllegalArgumentException("Missing source producer")
-        sourceModel = bundle.getString(MODEL_KEY)
-                ?: throw IllegalArgumentException("Missing source model")
+        sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
+        sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
         configure(config)
     }
 
     /** Get the service local binder.  */
-    protected fun createBinder() = SourceServiceBinder(this)
+    private fun createBinder() = SourceServiceBinder(this)
 
     private fun registerSource(type: SourceType, name: String, attributes: Map<String, String>) {
         logger.info("Registering source {} with attributes {}", type, attributes)

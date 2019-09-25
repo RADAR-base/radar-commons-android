@@ -43,7 +43,8 @@ class FarosService : SourceService<FarosState>() {
     override fun createSourceManager() = FarosManager(this, farosFactory, handler)
 
     override fun configureSourceManager(manager: SourceManager<FarosState>, configuration: RadarConfiguration) {
-        (manager as FarosManager).applySettings(farosFactory.defaultSettingsBuilder()
+        if (manager !is FarosManager) return
+        manager.applySettings(farosFactory.defaultSettingsBuilder()
                 .accelerometerRate(configuration.getInt(ACC_RATE, ACC_RATE_DEFAULT))
                 .accelerometerResolution(configuration.getFloat(ACC_RESOLUTION, ACC_RESOLUTION_DEFAULT))
                 .ecgRate(configuration.getInt(ECG_RATE, ECG_RATE_DEFAULT))
@@ -53,6 +54,7 @@ class FarosService : SourceService<FarosState>() {
                 .interBeatIntervalEnable(configuration.getBoolean(IBI_ENABLE, IBI_ENABLE_DEFAULT))
                 .temperatureEnable(configuration.getBoolean(TEMP_ENABLE, TEMP_ENABLE_DEFAULT))
                 .build())
+        manager.notifyDisconnect(configuration.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
     }
 
     companion object {
@@ -79,5 +81,8 @@ class FarosService : SourceService<FarosState>() {
 
         private const val IBI_ENABLE = "bittium_faros_inter_beat_interval_enable"
         private const val IBI_ENABLE_DEFAULT = true
+
+        private const val NOTIFY_DISCONNECT = "bittium_faros_notify_disconnect"
+        private const val NOTIFY_DISCONNECT_DEFAULT = false
     }
 }

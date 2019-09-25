@@ -29,10 +29,8 @@ import org.radarbase.android.RadarConfiguration.Companion.FIREBASE_FETCH_TIMEOUT
 import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
 import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.HashSet
 
 @Suppress("unused")
 class FirebaseRadarConfiguration(context: Context, inDevelopmentMode: Boolean, defaultSettings: Int) : RadarConfiguration {
@@ -123,15 +121,13 @@ class FirebaseRadarConfiguration(context: Context, inDevelopmentMode: Boolean, d
      * @return previous local value for given name, if any
      */
     override fun put(key: String, value: Any): String? {
-        Objects.requireNonNull(value)
-        if (!(value is String
-                        || value is Long
-                        || value is Int
-                        || value is Float
-                        || value is Boolean)) {
-            throw IllegalArgumentException("Cannot put value of type " + value.javaClass
-                    + " into RadarConfiguration")
-        }
+        requireNotNull(value)
+        require((value is String
+                || value is Long
+                || value is Int
+                || value is Float
+                || value is Boolean)) { ("Cannot put value of type " + value.javaClass
+                + " into RadarConfiguration") }
         val config = value as? String ?: value.toString()
         val oldValue = getRawString(key)
         if (oldValue != config) {

@@ -25,6 +25,8 @@ Add the provider `empatica_e4` to the Firebase Remote Config `plugins` variable.
 
 Request an Empatica API key for your Empatica Connect account. Set your Empatica API key in the `empatica_api_key` Firebase parameter. The plugin can now be used with devices linked to your account.
 
+To enable notifications when an Empatica device is disconnected, set `empatica_notify_disconnect` to `true`.
+
 ## Contributing
 
 To build this repository, download the Empatica Android SDK from the [Empatica Developer Area][1]. Copy the `empalink-2.2.aar` from the Empatica Android SDK package to the `libs` directory. Remove the `gradle.skip` file in the project directory to enable building it.

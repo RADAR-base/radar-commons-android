@@ -21,16 +21,17 @@ apply from: "$rootDir/gradle/android.gradle"
 description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarbase:radar-commons:0.12.1') {
+    api ('org.radarbase:radar-commons:0.12.2') {
         exclude group: 'org.json', module: 'json'
     }
-    api 'org.radarcns:radar-schemas-commons:0.5.0'
-    api "androidx.appcompat:appcompat:1.0.2"
+    api 'org.radarcns:radar-schemas-commons:0.5.2'
+    api "androidx.appcompat:appcompat:1.1.0"
 
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
-    implementation 'com.google.firebase:firebase-config:17.0.0'
-    implementation 'com.google.firebase:firebase-core:16.0.9'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
+    implementation 'com.google.firebase:firebase-config:19.0.2'
+    implementation 'com.google.firebase:firebase-core:17.2.0'
+     implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.27'
 }
 
