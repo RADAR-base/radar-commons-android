@@ -8,4 +8,6 @@
     <string name="empatica_failed">Empatica E4 failed. Please enable internet and bluetooth and restart the
         Empatica plugin or this app.
     </string>
+    <string name="notification_empatica_disconnected_text">Empatica has been disconnected. Please reconnect it.</string>
+    <string name="notification_empatica_disconnected_title">Empatica disconnected</string>
 </resources>
