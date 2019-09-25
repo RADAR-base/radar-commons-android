@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Manages scanning for an Empatica E4 wearable and connecting to it  */
 class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager, private val handler: SafeHandler) : AbstractSourceManager<E4Service, E4State>(e4Service), EmpaDataDelegate, EmpaStatusDelegate, EmpaSessionManagerDelegate {
+    private var doNotify: Boolean = false
     private val accelerationTopic = createCache("android_empatica_e4_acceleration", EmpaticaE4Acceleration())
     private val batteryLevelTopic = createCache("android_empatica_e4_battery_level", EmpaticaE4BatteryLevel())
     private val bloodVolumePulseTopic = createCache("android_empatica_e4_blood_volume_pulse", EmpaticaE4BloodVolumePulse())
@@ -188,12 +189,14 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
     override fun disconnect() {
         if (isClosed) return
 
-        service.radarApp.notificationHandler.notify(
-                id = EMPATICA_DISCONNECTED_NOTIFICATION_ID,
-                channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
-                includeStartIntent = true) {
-            setContentTitle(service.getString(R.string.notification_empatica_disconnected_title))
-            setContentText(service.getString(R.string.notification_empatica_disconnected_text))
+        if (doNotify) {
+            service.radarApp.notificationHandler.notify(
+                    id = EMPATICA_DISCONNECTED_NOTIFICATION_ID,
+                    channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                    includeStartIntent = true) {
+                setContentTitle(service.getString(R.string.notification_empatica_disconnected_title))
+                setContentText(service.getString(R.string.notification_empatica_disconnected_text))
+            }
         }
 
         super.disconnect()
@@ -264,6 +267,10 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
         if (event == EmpaSessionEvent.UNAUTHORIZED_USER_ERROR) {
             disconnect()
         }
+    }
+
+    fun notifyDisconnect(doNotify: Boolean) {
+        this.doNotify = doNotify
     }
 
     companion object {

@@ -35,6 +35,7 @@ This plugin takes the following Firebase configuration parameters:
 | `bittium_faros_temperature_enable` | boolean | `true` | Whether to send temperature readings. Only the Faros 360 supports temperature readings. |
 | `bittium_faros_inter_beat_interval_enable` | boolean | `true` | Whether to send inter-beat-interval readings. |
 | `bittium_faros_battery_interval` | int (s) | `60` = 1 minute | How often to send the battery level. Use `0` to disable precise battery level collection and opt for approximate battery level instead. |
+| `bittium_faros_notify_disconnect` | boolean | `false` | Set to `true` to send a notification whenever the Faros device is disconnected. |
 
 This plugin produces data for several Kafka topics. All value types are prefixed with the `org.radarcns.passive.bittium` namespace.
 

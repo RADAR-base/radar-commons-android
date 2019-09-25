@@ -31,7 +31,7 @@ import java.io.IOException
 import java.util.regex.Pattern
 
 class FarosManager internal constructor(service: FarosService, private val farosFactory: FarosSdkFactory, private val handler: SafeHandler) : AbstractSourceManager<FarosService, FarosState>(service), FarosDeviceListener, FarosSdkListener {
-
+    private var doNotify: Boolean = false
     private val accelerationTopic: DataCache<ObservationKey, BittiumFarosAcceleration> = createCache("android_bittium_faros_acceleration", BittiumFarosAcceleration())
     private val ecgTopic: DataCache<ObservationKey, BittiumFarosEcg> = createCache("android_bittium_faros_ecg", BittiumFarosEcg())
     private val ibiTopic: DataCache<ObservationKey, BittiumFarosInterBeatInterval> = createCache("android_bittium_faros_inter_beat_interval", BittiumFarosInterBeatInterval())
@@ -184,12 +184,14 @@ class FarosManager internal constructor(service: FarosService, private val faros
     override fun disconnect() {
         if (isClosed) return
 
-        service.radarApp.notificationHandler.notify(
-                id = FAROS_DISCONNECTED_NOTIFICATION_ID,
-                channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
-                includeStartIntent = true) {
-            setContentTitle(service.getString(R.string.notification_faros_disconnected_title))
-            setContentText(service.getString(R.string.notification_faros_disconnected_text))
+        if (doNotify) {
+            service.radarApp.notificationHandler.notify(
+                    id = FAROS_DISCONNECTED_NOTIFICATION_ID,
+                    channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                    includeStartIntent = true) {
+                setContentTitle(service.getString(R.string.notification_faros_disconnected_title))
+                setContentText(service.getString(R.string.notification_faros_disconnected_text))
+            }
         }
 
         super.disconnect()
@@ -209,6 +211,10 @@ class FarosManager internal constructor(service: FarosService, private val faros
 
             apiManager.close()
         }
+    }
+
+    fun notifyDisconnect(doNotify: Boolean) {
+        this.doNotify = doNotify
     }
 
     companion object {
