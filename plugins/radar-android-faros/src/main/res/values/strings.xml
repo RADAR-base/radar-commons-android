@@ -1,0 +1,8 @@
+<resources>
+    <string name="farosLabel">Faros</string>
+    <string name="farosDescription">Collects data from Faros 90/180/360. The connection is made over Bluetooth using the location permission. Location
+        information is not stored.
+    </string>
+    <string name="notification_faros_disconnected_title">Faros disconnected</string>
+    <string name="notification_faros_disconnected_text">Faros device disconnected. Please ensure it gets reconnected</string>
+</resources>

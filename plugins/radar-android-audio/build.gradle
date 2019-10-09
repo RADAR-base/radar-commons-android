@@ -1,0 +1,41 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    defaultConfig {
+        ndk {
+            moduleName rootProject.name
+        }
+    }
+
+    // Encapsulates your external native build configurations.
+    externalNativeBuild {
+        ndkBuild {
+            path 'src/main/jni/Android.mk'
+        }
+    }
+
+    buildTypes {
+        debug {
+            ndk {
+                abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+            }
+        }
+    }
+}
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = 'Audio phone sensor plugin for RADAR passive remote monitoring app'
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+dependencies {
+    api project(':radar-commons-android')
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/bintray.gradle"

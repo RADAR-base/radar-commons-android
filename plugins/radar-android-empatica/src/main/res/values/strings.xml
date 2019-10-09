@@ -1,0 +1,13 @@
+<resources>
+    <string name="empaticaE4DisplayName">E4</string>
+    <string name="empatica_e4_explanation">Empatica E4 collects heart rate, blood volume pulse and
+        acceleration, and electrodermal activity. Connect an Empatica E4 by pressing the
+        power-button. It needs Bluetooth and location permissions to communicate efficiently. The
+        location permission is not used to find your location.
+    </string>
+    <string name="empatica_failed">Empatica E4 failed. Please enable internet and bluetooth and restart the
+        Empatica plugin or this app.
+    </string>
+    <string name="notification_empatica_disconnected_text">Empatica has been disconnected. Please reconnect it.</string>
+    <string name="notification_empatica_disconnected_title">Empatica disconnected</string>
+</resources>

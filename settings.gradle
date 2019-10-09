@@ -1,3 +1,8 @@
 include ':radar-commons-android'
-include ':radar-android-login-oauth2'
-include ':radar-android-login-qr'
+
+file("${rootDir}/plugins").listFiles().each { pluginDir ->
+    if (!file("$pluginDir/gradle.skip").exists()) {
+        include pluginDir.name
+        project(":${pluginDir.name}").projectDir = pluginDir
+    }
+}

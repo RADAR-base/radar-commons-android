@@ -14,62 +14,27 @@
  * limitations under the License.
  */
 
-android {
-    compileSdkVersion 28
-    buildToolsVersion '28.0.3'
+apply plugin: 'kotlin-android-extensions'
 
-    defaultConfig {
-        minSdkVersion 21
-        targetSdkVersion 28
-        versionCode versionCode
-        versionName version
-    }
-    lintOptions {
-        abortOnError false
-    }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    libraryVariants.all { variant ->
-        variant.outputs.all {
-            if (variant.name == 'release') {
-                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}.aar"
-            } else {
-                outputFileName = "${archivesBaseName}-${android.defaultConfig.versionName}-${variant.name}.aar"
-            }
-        }
-    }
-    packagingOptions {
-        exclude 'META-INF/ASL2.0'
-        exclude 'META-INF/LICENSE'
-    }
-    compileOptions {
-        targetCompatibility 1.8
-        sourceCompatibility 1.8
-    }
-}
+apply from: "$rootDir/gradle/android.gradle"
 
-ext.moduleName = 'radar-commons-android'
-ext.description = 'Kafka backend for processing device data.'
+description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarcns:radar-commons:0.11.3') {
+    api ('org.radarbase:radar-commons:0.12.2') {
         exclude group: 'org.json', module: 'json'
     }
-    api 'org.radarcns:radar-schemas-commons:0.4.2'
+    api 'org.radarcns:radar-schemas-commons:0.5.2'
+    api "androidx.appcompat:appcompat:1.1.0"
 
-    implementation 'com.android.support:support-v4:28.0.0'
-
-    implementation 'com.google.firebase:firebase-config:16.1.2'
-    implementation 'com.google.firebase:firebase-core:16.0.6'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.7'
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
+    implementation "androidx.legacy:legacy-support-v4:1.0.0"
+    implementation 'com.google.firebase:firebase-config:19.0.2'
+    implementation 'com.google.firebase:firebase-core:17.2.0'
+    implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.27'
-
-    implementation 'android.arch.lifecycle:extensions:1.1.1'
 }
 
-apply from: '../gradle/test.gradle'
-apply from: '../gradle/publishing.gradle'
+apply from: "$rootDir/gradle/test.gradle"
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/bintray.gradle"

@@ -1,0 +1,4 @@
+<resources>
+    <string name="header_audio_status">Audio</string>
+    <string name="audio_description">Audio recordings using the device\'s microphone.</string>
+</resources>
