@@ -42,8 +42,9 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
     /** Get the current source state.  */
     override val state: T = service.state
 
-    private val dataHandler = service.dataHandler ?: throw IllegalStateException(
-            "Cannot start source manager without data handler")
+    private val dataHandler = checkNotNull(service.dataHandler) {
+        "Cannot start source manager without data handler"
+    }
 
     /** Get the name of the source.  */
     /** Set the source name. Be sure to do this as soon as possible.  */

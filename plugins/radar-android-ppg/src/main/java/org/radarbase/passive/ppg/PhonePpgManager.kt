@@ -275,13 +275,13 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
     private fun chooseOptimalSize(sizes: Array<Size>): Size {
         val prefSize = preferredDimensions
 
-        val minSize = sizes.asSequence().minBy {
+        val minSize = checkNotNull(sizes.asSequence().minBy {
             logger.debug("Available preview size {}x{}", it.width, it.height)
             val wDiff = (it.width - prefSize.width).toLong()
             val hDiff = (it.height - prefSize.height).toLong()
 
             wDiff * wDiff + hDiff * hDiff
-        } ?: throw IllegalStateException("Optimal image size cannot be determined.")
+        }) { "Optimal image size cannot be determined." }
 
         logger.debug("Chosen preview size {}x{}", minSize.width, minSize.height)
         return minSize
