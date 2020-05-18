@@ -137,7 +137,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         val value = PhoneRelativeLocation(
                 eventTimestamp, timestamp, reference, provider,
                 latitude.normalize(), longitude.normalize(),
-                altitude.normalize(), accuracy.normalize(), speed.normalize(), bearing.normalize())
+                altitude?.normalize(), accuracy?.normalize(), speed?.normalize(), bearing?.normalize())
         send(locationTopic, value)
 
         logger.info("Location: {} {} {} {} {} {} {} {} {}", provider, eventTimestamp, latitude,
@@ -193,7 +193,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         val latitude = BigDecimal.valueOf(absoluteLatitude)
         if (latitudeReference == null) {
             // Create reference within 8 degrees of actual latitude
-            // corresponds mildly with the UTM zones used to make flat coordinates estimations.
+            // corresponds loosely to the UTM zones used to make flat coordinates estimations.
             val reference = ThreadLocalRandom.current().nextDouble(-4.0, 4.0) // interval [-4,4)
             latitudeReference = BigDecimal.valueOf(reference)
                     .also {
@@ -306,23 +306,25 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         private const val ALTITUDE_REFERENCE = "altitude.reference"
 
         /** Replace special float values with regular numbers.  */
-        private fun Double?.normalize(): Double? {
-            return when {
-                this == null -> null
-                isNaN() -> null
-                isInfinite() && this < 0 -> -1e308
-                isInfinite() && this > 0 -> 1e308
+        private fun Double.normalize(): Double? {
+            if (isNaN()) {
+                return null
+            }
+            return when(this) {
+                Double.Companion.NEGATIVE_INFINITY -> -1e308
+                Double.Companion.POSITIVE_INFINITY -> 1e308
                 else -> this
             }
         }
 
         /** Replace special float values with regular numbers.  */
-        private fun Float?.normalize(): Float? {
-            return when {
-                this == null -> null
-                isNaN() -> null
-                isInfinite() && this < 0 -> -3e38f
-                isInfinite() && this > 0 -> 3e38f
+        private fun Float.normalize(): Float? {
+            if (isNaN()) {
+                return null
+            }
+            return when(this) {
+                Float.Companion.NEGATIVE_INFINITY -> -3e38f
+                Float.Companion.POSITIVE_INFINITY -> 3e38f
                 else -> this
             }
         }
