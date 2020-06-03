@@ -19,6 +19,7 @@ buildscript {
         google()
         jcenter()
         mavenCentral()
+        mavenLocal()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.5.0'
@@ -26,7 +27,7 @@ buildscript {
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.4'
         classpath 'de.mobilej.unmock:UnMockPlugin:0.7.3'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.1'
-        classpath 'digital.wup:android-maven-publish:3.6.2'
+        classpath 'digital.wup:android-maven-publish:3.6.3'
         classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.18"
         classpath 'org.owasp:dependency-check-gradle:5.2.2'
     }
@@ -58,8 +59,9 @@ subprojects {
     repositories {
         google()
         jcenter()
-        mavenCentral()
+        mavenLocal()
     }
+
 
     dependencies {
         api "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"

@@ -1,4 +1,4 @@
-package org.radarbase.passive.garmin
+package org.radarbase.garmin
 
 import org.radarbase.android.source.BaseSourceState
 
