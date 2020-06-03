@@ -24,7 +24,7 @@ dependencies {
     api ('org.radarbase:radar-commons:0.12.2') {
         exclude group: 'org.json', module: 'json'
     }
-    api 'org.radarcns:radar-schemas-commons:0.5.7'
+    api 'org.radarcns:radar-schemas-commons:0.5.9'
     api "androidx.appcompat:appcompat:1.1.0"
 
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
