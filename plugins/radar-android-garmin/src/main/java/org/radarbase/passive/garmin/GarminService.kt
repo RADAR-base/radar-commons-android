@@ -1,14 +1,7 @@
-package org.radarbase.garmin
-
-import org.radarbase.android.source.BaseSourceState
-import org.radarbase.android.source.SourceManager
+package org.radarbase.passive.garmin
 import org.radarbase.android.source.SourceService
 
 class GarminService : SourceService<GarminState>() {
-    override val defaultState: GarminState
-        get() = TODO("Not yet implemented")
-
-    override fun createSourceManager(): SourceManager<GarminState> {
-        TODO("Not yet implemented")
-    }
+    override val defaultState: GarminState = GarminState()
+    override fun createSourceManager() = GarminManager(this)
 }

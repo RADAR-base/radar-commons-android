@@ -1,11 +1,9 @@
-package org.radarbase.garmin
+package org.radarbase.passive.garmin
 
 import android.Manifest
 import android.content.pm.PackageManager
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
-import org.radarbase.android.source.SourceService
-import org.radarbase.passive.garmin.R
 
 class GarminProvider(radarService: RadarService) : SourceProvider<GarminState>(radarService) {
     override val permissionsNeeded = listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN)
@@ -18,9 +16,9 @@ class GarminProvider(radarService: RadarService) : SourceProvider<GarminState>(r
     override val serviceClass: Class<GarminService> = GarminService::class.java
     override val sourceProducer: String = "Garmin"
 
-    override val sourceModel: String = "fenix 6"
+    override val sourceModel: String = "Generic"
 
-    override val version: String = org.radarbase.android.BuildConfig.VERSION_NAME
+    override val version = "1.0.0"
 
     override val displayName: String
         get() = radarService.getString(R.string.garminlabel)

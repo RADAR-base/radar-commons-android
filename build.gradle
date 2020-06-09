@@ -19,7 +19,6 @@ buildscript {
         google()
         jcenter()
         mavenCentral()
-        mavenLocal()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.5.0'
