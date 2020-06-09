@@ -30,6 +30,6 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:alpha=".1"
-        app:srcCompat="@mipmap/ic_launcher" />
+        />
 
 </FrameLayout>

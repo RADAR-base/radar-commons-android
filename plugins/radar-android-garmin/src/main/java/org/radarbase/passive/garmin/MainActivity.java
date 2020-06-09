@@ -9,24 +9,24 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Toast;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
-
+import com.garmin.device.realtime.RealTimeDataType;
+import com.garmin.device.realtime.RealTimeResult;
+import com.garmin.device.realtime.listeners.RealTimeDataListener;
 import com.garmin.health.Device;
 import com.garmin.health.DeviceManager;
 import com.garmin.health.DevicePairedStateListener;
 import com.garmin.health.GarminHealthInitializationException;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
-
-import org.radarbase.passive.garmin.ui.HealthSDKManager;
+import java.util.EnumSet;
+import java.util.concurrent.Executors;
 import org.radarbase.passive.garmin.devices.PairedDevicesDialogFragment;
 import org.radarbase.passive.garmin.ui.BaseGarminHealthActivity;
-
-import java.util.concurrent.Executors;
+import org.radarbase.passive.garmin.ui.HealthSDKManager;
 
 
 /**
@@ -190,7 +190,9 @@ public class MainActivity extends BaseGarminHealthActivity
         transaction.replace(R.id.main_root, pairedDevicesDialogFragment, pairedDevicesDialogFragment.getTag()).commit();
     }
 
-    public static class SetupListener implements DevicePairedStateListener
+
+
+    public static class SetupListener implements DevicePairedStateListener, RealTimeDataListener
     {
         private final Context mAppContext;
 
@@ -206,9 +208,25 @@ public class MainActivity extends BaseGarminHealthActivity
         }
 
         @Override
-        public void onDevicePaired(@NonNull Device device) {}
+        public void onDevicePaired(@NonNull Device device) {
+            DeviceManager.getDeviceManager().enableRealTimeData(device.address(), EnumSet.allOf(
+                RealTimeDataType.class));
+            DeviceManager.getDeviceManager().addRealTimeDataListener(this, EnumSet.allOf(RealTimeDataType.class));
+
+        }
 
         @Override
         public void onDeviceUnpaired(@NonNull String macAddress) {}
+
+        @Override
+        public void onServiceDisconnected() {
+
+        }
+
+        @Override
+        public void onDataUpdate(@NonNull String s, @NonNull RealTimeDataType realTimeDataType,
+            @NonNull RealTimeResult realTimeResult) {
+            Toast.makeText(mAppContext,"Success",Toast.LENGTH_SHORT).show();
+        }
     }
 }

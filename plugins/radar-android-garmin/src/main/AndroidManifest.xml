@@ -8,21 +8,6 @@ xmlns:android="http://schemas.android.com/apk/res/android">
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
-<!-- (OPTIONAL) PERMISSIONS THAT ENABLE GENERAL SMART NOTIFICATIONS -->
-
-<uses-permission android:name="android.permission.WAKE_LOCK"/>
-<uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-<uses-permission android:name="android.permission.READ_CONTACTS"/>
-
-<!-- Permission needed for Android Oreo call handling -->
-<uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
-
-<!-- Permission needed to reject incoming phone calls -->
-<uses-permission android:name="android.permission.CALL_PHONE"/>
-
-<!-- Media Control Permission for Advanced Music Controls -->
-<uses-permission android:name="android.Manifest.permission.MEDIA_CONTENT_CONTROL"/>
-
 <!-- Foreground Permission required for newer Android SDKs -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 
@@ -36,19 +21,9 @@ xmlns:android="http://schemas.android.com/apk/res/android">
     android:protectionLevel="normal" />
 
 <application
-    android:allowBackup="false"
-    android:icon="@drawable/health_logo"
-    android:label="@string/app_name_sample"
-    android:roundIcon="@drawable/health_logo"
     android:supportsRtl="true"
     android:theme="@style/AppTheme" tools:ignore="GoogleAppIndexingWarning">
-    <activity android:name=".MainActivity">
-        <intent-filter>
-            <action android:name="android.intent.action.MAIN" />
-
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent-filter>
-    </activity>
+    <activity android:name=".MainActivity"/>
     <activity android:name=".ui.DataDisplayActivity"/>
 
     <meta-data
@@ -63,20 +38,19 @@ xmlns:android="http://schemas.android.com/apk/res/android">
     <meta-data
         android:name="com.garmin.health.notification_channel_description"
         android:value="Channel for notification related to the Garmin Health SDK on Behalf of Partner Applications"/>
+
     <meta-data
         android:name="com.garmin.health.foreground_notification_title"
         android:value="Garmin Health Service"/>
-    <meta-data
-        android:name="com.garmin.health.foreground_notification_icon"
-        android:resource="@drawable/health_logo"/>
 
     <service android:name="com.garmin.health.GarminHealthService"
         android:enabled="true"
         android:process=":ghProcess"
         tools:replace="android:enabled,android:process"/>
+
     <service android:name="com.garmin.android.gncs.GNCSListenerService"
         android:process=":ghProcess"
         tools:replace="android:process"/>
+    <service android:name=".GarminService"/>
 </application>
-
 </manifest>
