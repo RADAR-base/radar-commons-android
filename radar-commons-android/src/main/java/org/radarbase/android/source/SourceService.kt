@@ -231,7 +231,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
 
         if (sourceManager == null) {
             if (isBluetoothConnectionRequired
-                    && BluetoothAdapter.getDefaultAdapter()?.isEnabled == true) {
+                    && BluetoothAdapter.getDefaultAdapter()?.isEnabled == false) {
                 logger.error("Cannot start recording without Bluetooth")
                 return
             }
