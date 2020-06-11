@@ -33,10 +33,8 @@ import org.radarbase.android.data.DataHandler
 import org.radarbase.android.source.SourceProvider.Companion.MODEL_KEY
 import org.radarbase.android.source.SourceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
-import org.radarbase.android.util.BundleSerialization
-import org.radarbase.android.util.ManagedServiceConnection
-import org.radarbase.android.util.SafeHandler
-import org.radarbase.android.util.send
+import org.radarbase.android.util.*
+import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -89,9 +87,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     protected abstract val defaultState: T
 
     private val expectedSourceNames: Set<String>
-        get() = HashSet<String>(sources
-                .map { it.expectedSourceName }
-                .filter { it != null })
+        get() = HashSet(sources.mapNotNull { it.expectedSourceName })
 
     open val isBluetoothConnectionRequired: Boolean
         get() = hasBluetoothPermission
@@ -231,7 +227,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
 
         if (sourceManager == null) {
             if (isBluetoothConnectionRequired
-                    && BluetoothAdapter.getDefaultAdapter()?.isEnabled == true) {
+                    && !bluetoothIsEnabled) {
                 logger.error("Cannot start recording without Bluetooth")
                 return
             }

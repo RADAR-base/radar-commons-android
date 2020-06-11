@@ -38,6 +38,7 @@ import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.util.*
+import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
 import org.slf4j.LoggerFactory
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
@@ -235,7 +236,7 @@ abstract class MainActivity : AppCompatActivity() {
      */
     protected fun requestEnableBt() {
         if (enableBluetoothRequests.value
-                && BluetoothAdapter.getDefaultAdapter()?.isEnabled == false) {
+                && !bluetoothIsEnabled) {
             startActivityForResult(Intent().apply {
                 action = BluetoothAdapter.ACTION_REQUEST_ENABLE
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

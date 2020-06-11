@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
 import org.slf4j.LoggerFactory
 
 class BluetoothStateReceiver(
@@ -31,7 +32,7 @@ class BluetoothStateReceiver(
     }
 
     init {
-        stateCache.applyIfChanged(BluetoothAdapter.getDefaultAdapter()?.isEnabled == true) {
+        stateCache.applyIfChanged(bluetoothIsEnabled) {
             notifyListener()
         }
     }
