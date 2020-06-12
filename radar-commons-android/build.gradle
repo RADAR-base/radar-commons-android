@@ -21,7 +21,7 @@ apply from: "$rootDir/gradle/android.gradle"
 description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarbase:radar-commons:0.12.2') {
+    api ('org.radarbase:radar-commons:0.12.3') {
         exclude group: 'org.json', module: 'json'
     }
     api 'org.radarcns:radar-schemas-commons:0.5.9'
