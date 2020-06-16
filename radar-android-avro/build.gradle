@@ -1,0 +1,96 @@
+plugins {
+    id 'com.github.johnrengelman.shadow' version '6.0.0'
+    id 'java'
+    id 'maven-publish'
+}
+
+repositories {
+    jcenter()
+}
+
+dependencies {
+    implementation(group: 'org.apache.avro', name: 'avro', version: '1.9.2') {
+        exclude group: 'org.apache.commons'
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'org.slf4j'
+    }
+    shadow "com.fasterxml.jackson.core:jackson-databind:2.11.0"
+    shadow "org.slf4j:slf4j-api:1.7.30"
+}
+
+shadowJar {
+    exclude '**/org/apache/avro/reflect/Reflect*.class'
+    exclude '**/org/apache/avro/reflect/Field*.class'
+    exclude '**/org/apache/avro/reflect/Avro*.class'
+    exclude '**/org/apache/avro/reflect/*Encoding.class'
+    exclude '**/org/apache/avro/reflect/*able.class*'
+    exclude '**/org/apache/avro/reflect/Union.class'
+    exclude '**/org/apache/avro/reflect/ArrayAccessor.class'
+    archiveClassifier.set(null)
+    conventionMapping.with {
+        map('classifier') {
+            null
+        }
+    }
+}
+
+jar {
+    enabled = false
+}
+
+ext.sharedManifest = manifest {
+    attributes("Implementation-Title": name,
+            "Implementation-Version": version)
+}
+
+ext.nexusRepoBase = 'https://repo.thehyve.nl/content/repositories'
+
+publishing {
+    publications {
+        mavenAar(MavenPublication) { publication ->
+            project.shadow.component(publication)
+
+            pom {
+                description = project.description
+                licenses {
+                    license {
+                        name = 'The Apache Software License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'blootsvoets'
+                        name = 'Joris Borgdorff'
+                        email = 'joris@thehyve.nl'
+                        organization = 'The Hyve'
+                    }
+                }
+                issueManagement {
+                    system = 'GitHub'
+                    url = githubUrl + '/issues'
+                }
+                organization {
+                    name = 'RADAR-base'
+                    url = website
+                }
+                scm {
+                    connection = 'scm:git:' + githubUrl
+                    url = githubUrl
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            def releasesRepoUrl = "$nexusRepoBase/releases"
+            def snapshotsRepoUrl = "$nexusRepoBase/snapshots"
+            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+            credentials {
+                username = project.hasProperty('nexusUser') ? project.property('nexusUser') : System.getenv('NEXUS_USER')
+                password = project.hasProperty('nexusPassword') ? project.property('nexusPassword') : System.getenv('NEXUS_PASSWORD')
+            }
+        }
+    }
+}

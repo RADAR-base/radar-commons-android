@@ -23,9 +23,13 @@ description = 'Kafka backend for processing device data.'
 dependencies {
     api ('org.radarbase:radar-commons:0.12.3') {
         exclude group: 'org.json', module: 'json'
+        exclude group: 'org.apache.avro', module: 'avro'
     }
-    api 'org.radarcns:radar-schemas-commons:0.5.10'
+    api ('org.radarcns:radar-schemas-commons:0.5.10') {
+        exclude group: 'org.apache.avro', module: 'avro'
+    }
     api "androidx.appcompat:appcompat:1.1.0"
+    api project(path: ":radar-android-avro", configuration: "shadow")
 
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"

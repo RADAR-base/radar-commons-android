@@ -32,7 +32,21 @@ buildscript {
     }
 }
 
+allprojects {
+    ext.githubRepoName = 'RADAR-base/radar-commons-android'
+
+    ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
+    ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
+    ext.website = 'http://radar-base.org'
+
+    version = '1.0.0-alpha2'
+    group = 'org.radarbase'
+}
+
 subprojects {
+    if (it.name == 'radar-android-avro') {
+        return
+    }
     apply plugin: 'com.android.library'
     apply plugin: 'kotlin-android'
     apply plugin: 'idea'
@@ -41,15 +55,7 @@ subprojects {
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
-
-    version = '1.0.0-alpha2'
     ext.versionCode = 31
-    group = 'org.radarbase'
-    ext.githubRepoName = 'RADAR-base/radar-commons-android'
-
-    ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
-    ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
-    ext.website = 'http://radar-base.org'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
