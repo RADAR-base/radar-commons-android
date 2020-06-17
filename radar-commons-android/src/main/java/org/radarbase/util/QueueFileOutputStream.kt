@@ -131,10 +131,10 @@ class QueueFileOutputStream internal constructor(
         val newStreamBytesUsed = streamBytesUsed + length
         val bytesNeeded = queue.usedBytes + newStreamBytesUsed
 
-        if (bytesNeeded > queue.maximumFileSize) {
+        check(bytesNeeded <= queue.maximumFileSize) {
             // reset current element
             current.length = 0
-            throw IllegalStateException("Data does not fit in queue")
+            "Data does not fit in queue"
         }
 
         streamBytesUsed = newStreamBytesUsed

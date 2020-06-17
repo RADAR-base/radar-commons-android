@@ -30,6 +30,7 @@ import com.empatica.empalink.delegate.EmpaStatusDelegate
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
 import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.passive.empatica.*
@@ -180,7 +181,7 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
     }
 
     override fun didRequestEnableBluetooth() {
-        if (!BluetoothAdapter.getDefaultAdapter().isEnabled) {
+        if (!bluetoothIsEnabled) {
             logger.warn("Bluetooth is not enabled.")
             disconnect()
         }

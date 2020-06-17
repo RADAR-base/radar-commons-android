@@ -100,7 +100,11 @@ class NotificationHandler(private val context: Context) {
 
     fun notify(id: Int, channel: String, includeStartIntent: Boolean,
                buildNotification: Notification.Builder.() -> Unit): NotificationRegistration {
-        manager?.notify(id, create(channel, includeStartIntent, buildNotification))
+        try {
+            manager?.notify(id, create(channel, includeStartIntent, buildNotification))
+        } catch (ex: Exception) {
+            logger.error("Failed to show notification {}", id, ex)
+        }
         return NotificationRegistration(manager, id)
     }
 
@@ -162,7 +166,11 @@ class NotificationHandler(private val context: Context) {
 
     data class NotificationRegistration(private val manager: NotificationManager?, private val id: Int) {
         fun cancel() {
-            manager?.cancel(id)
+            try {
+                manager?.cancel(id)
+            } catch (ex: Exception) {
+                logger.error("Failed to cancel notification {}", id, ex)
+            }
         }
     }
 }
