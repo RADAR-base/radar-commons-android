@@ -307,6 +307,7 @@
   <string name="respiration_logging_dataset">RESPIRATION</string>
   <string name="respiration_logging_description">Respiration</string>
     <string name="garminlabel">Garmin</string>
+  <string name="pair">Pair Garmin</string>
 
     <string-array name="unit_measures">
     <item>Imperial</item>
