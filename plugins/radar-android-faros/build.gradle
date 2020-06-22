@@ -18,6 +18,8 @@ repositories {
 dependencies {
     api project(':radar-commons-android')
     implementation 'org.radarcns:radar-faros-sdk:0.1.0'
+    implementation files('libs/radar-schemas-common.jar')
+
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"

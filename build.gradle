@@ -58,8 +58,9 @@ subprojects {
     repositories {
         google()
         jcenter()
-        mavenCentral()
+        mavenLocal()
     }
+
 
     dependencies {
         api "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
