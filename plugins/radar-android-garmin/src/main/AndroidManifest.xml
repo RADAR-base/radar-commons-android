@@ -19,8 +19,9 @@
       android:protectionLevel="normal" />
 
     <application>
-        <activity android:name=".ui.MainActivity" />
-        <activity android:name=".ui.DataDisplayActivity" />
+        <!--Uncomment after integrating the UI from Garmin CSDK folder-->
+<!--        <activity android:name=".ui.MainActivity" />-->
+<!--        <activity android:name=".ui.DataDisplayActivity" />-->
         <meta-data
           android:name="com.garmin.android.gncs.permission"
           android:value="${applicationId}.permission.RECEIVE_BROADCASTS" />

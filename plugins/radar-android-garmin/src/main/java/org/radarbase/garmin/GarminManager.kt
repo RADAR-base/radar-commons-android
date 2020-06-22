@@ -9,7 +9,6 @@ import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.garmin.interfaces.OnHealthDataReceieved
-import org.radarbase.garmin.ui.realtime.RealTimeDataHandler
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.garmin.*
 import android.app.Activity;
@@ -36,7 +35,7 @@ class GarminManager internal constructor(service: GarminService,private val hand
         Log.w(TAG, "In Start")
         handler.start()
         handler.execute {
-            RealTimeDataHandler.getInstance().registerListenerForHealthData(this)
+          //  RealTimeDataHandler.getInstance().registerListenerForHealthData(this)
             status = SourceStatusListener.Status.READY
         }
 
@@ -45,7 +44,7 @@ class GarminManager internal constructor(service: GarminService,private val hand
 
     override fun intensityMinutesReceived(intensityMinutesResult: RealTimeIntensityMinutes?) {
         Log.i(TAG, intensityMinutesResult.toString())
-        send(intensityTopic, GarminGenericIntensity(System.currentTimeMillis().toDouble(),intensityMinutesResult?.lastUpdated?.toDouble(),intensityMinutesResult?.totalDailyMinutes,
+        send(intensityTopic, GarminGenericIntensity(System.currentTimeMillis().toDouble(),intensityMinutesResult?.lastUpdated?.toDouble()?.div(1000),intensityMinutesResult?.totalDailyMinutes,
         intensityMinutesResult?.dailyModerateMinutes,intensityMinutesResult?.dailyVigorousMinutes,intensityMinutesResult?.totalWeeklyMinutes,intensityMinutesResult?.weeklyGoal))
     }
 
@@ -63,16 +62,16 @@ class GarminManager internal constructor(service: GarminService,private val hand
             ConnectionState.DISCONNECTED -> state = State.DISCONNECTED
             else -> state = State.UNKNOWN
         }
-        send(deviceInfoTopic, GarminGenericDeviceInfo(System.currentTimeMillis().toDouble(),System.currentTimeMillis().toDouble(),state,device?.model().toString(),device?.firmwareVersion(),device?.friendlyName()))
+        send(deviceInfoTopic, GarminGenericDeviceInfo(System.currentTimeMillis().toDouble(),System.currentTimeMillis().toDouble().div(1000),state,device?.model().toString(),device?.firmwareVersion(),device?.friendlyName()))
 
     }
 
     override fun calorieRecieved(caloriesResult: RealTimeCalories?) {
-        send(caloriesTopic,GarminGenericCalories(System.currentTimeMillis().toDouble(),caloriesResult?.lastUpdated?.toDouble(),caloriesResult?.currentActiveCalories,caloriesResult?.currentTotalCalories))
+        send(caloriesTopic,GarminGenericCalories(System.currentTimeMillis().toDouble(),caloriesResult?.lastUpdated?.toDouble()?.div(1000),caloriesResult?.currentActiveCalories,caloriesResult?.currentTotalCalories))
     }
 
     override fun spo2Received(spo2Result: RealTimeSpo2?) {
-        send(spo2Topic,GarminGenericSpo2(System.currentTimeMillis().toDouble(),spo2Result?.readingTimestamp?.toDouble(),spo2Result?.spo2Reading))
+        send(spo2Topic,GarminGenericSpo2(System.currentTimeMillis().toDouble(),spo2Result?.readingTimestamp?.toDouble()?.div(1000),spo2Result?.spo2Reading))
     }
 
     override fun ascentDataReceived(ascentResult: RealTimeAscent?) {
@@ -89,7 +88,7 @@ class GarminManager internal constructor(service: GarminService,private val hand
 
     override fun accelerometerReceived(accelerometerResult: RealTimeAccelerometer?) {
         send(accelerometerTopic, GarminGenericAccelerometer(System.currentTimeMillis().toDouble(),
-                accelerometerResult?.accelerometerSamples?.get(0)?.millisecondTimestamp?.toDouble(),
+                accelerometerResult?.accelerometerSamples?.get(0)?.millisecondTimestamp?.toDouble()?.div(1000),
                 accelerometerResult?.accelerometerSamples?.get(0)?.x?.toFloat(),
                 accelerometerResult?.accelerometerSamples?.get(0)?.y?.toFloat(),
                 accelerometerResult?.accelerometerSamples?.get(0)?.z?.toFloat(),
@@ -100,14 +99,14 @@ class GarminManager internal constructor(service: GarminService,private val hand
 
     override fun heartRateVariabilityReceived(heartRateVariabilityResult: RealTimeHeartRateVariability?) {
         send(heartRateVariabilityTopic, GarminGenericHeartRateVariability(System.currentTimeMillis().toDouble(),
-                heartRateVariabilityResult?.lastUpdated?.toDouble(),
+                heartRateVariabilityResult?.lastUpdated?.toDouble()?.div(1000),
                 heartRateVariabilityResult?.heartRateVariability))
     }
 
     override fun respirationReceived(respirationResult: RealTimeRespiration?) {
         Log.i(TAG, respirationResult.toString())
         send(respirationTopic, GarminGenericRespiration(System.currentTimeMillis().toDouble(),
-                respirationResult?.lastUpdated?.toDouble(),
+                respirationResult?.lastUpdated?.toDouble()?.div(1000),
                 respirationResult?.respirationRate
                 ))
     }
@@ -122,7 +121,7 @@ class GarminManager internal constructor(service: GarminService,private val hand
             else -> source = Source.HR_STRAP
         }
         send(heartRateTopic, GarminGenericHeartRate(System.currentTimeMillis().toDouble(),
-                heartRateResult?.lastUpdated?.toDouble(),
+                heartRateResult?.lastUpdated?.toDouble()?.div(1000),
                 heartRateResult?.currentHeartRate,
                 heartRateResult?.currentRestingHeartRate,
                 heartRateResult?.dailyHighHeartRate,
@@ -132,11 +131,11 @@ class GarminManager internal constructor(service: GarminService,private val hand
 
     override fun stressReceived(stressResult: RealTimeStress?) {
         send(stressTopic, GarminGenericStress(System.currentTimeMillis().toDouble(),
-                stressResult?.lastUpdated?.toDouble(),stressResult?.stressScore))
+                stressResult?.lastUpdated?.toDouble()?.div(1000),stressResult?.stressScore))
     }
 
     override fun stepsReceived(steps: RealTimeSteps?) {
-        send(stepsTopic,GarminGenericSteps(System.currentTimeMillis().toDouble(),steps?.lastUpdated?.toDouble(),
+        send(stepsTopic,GarminGenericSteps(System.currentTimeMillis().toDouble(),steps?.lastUpdated?.toDouble()?.div(1000),
                 steps?.currentStepCount,steps?.currentStepGoal))
     }
 

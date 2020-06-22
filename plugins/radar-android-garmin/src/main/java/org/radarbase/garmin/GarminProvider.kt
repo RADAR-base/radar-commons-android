@@ -4,7 +4,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
-import org.radarbase.garmin.ui.MainActivity
 
 
 class GarminProvider(radarService: RadarService) : SourceProvider<GarminState>(radarService) {
@@ -25,8 +24,8 @@ class GarminProvider(radarService: RadarService) : SourceProvider<GarminState>(r
     override val displayName: String
         get() = radarService.getString(R.string.garminlabel)
 
-    override val actions: List<Action>
-        get() = listOf(Action(radarService.getString(R.string.pair)) {
-            startActivity(Intent(this, MainActivity::class.java))
-        })
+//    override val actions: List<Action>
+//        get() = listOf(Action(radarService.getString(R.string.pair)) {
+//            startActivity(Intent(this, MainActivity::class.java))
+//        })
 }
