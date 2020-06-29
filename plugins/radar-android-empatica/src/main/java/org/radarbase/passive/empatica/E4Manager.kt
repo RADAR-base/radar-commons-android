@@ -54,7 +54,6 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
 
     override fun start(acceptableIds: Set<String>) {
         logger.info("Starting scanning")
-        handler.start()
         handler.execute {
             // Create a new EmpaDeviceManager. E4DeviceManager is both its data and status delegate.
             // Initialize the Device Manager using your API key. You need to have Internet access at this point.
