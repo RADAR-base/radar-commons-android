@@ -44,5 +44,5 @@ open class E4Provider(radarService: RadarService) : SourceProvider<E4State>(rada
 
     override val sourceProducer = "Empatica"
     override val sourceModel = "E4"
-    override val version = BuildConfig.VERSION_NAME
+    override val version = "1.1.0"
 }
