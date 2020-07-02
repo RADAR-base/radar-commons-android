@@ -17,6 +17,7 @@
 package org.radarbase.util;
 
 import org.apache.avro.generic.GenericRecord;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -45,6 +46,13 @@ public class BackedObjectQueueTest {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
+    TapeAvroSerializationFactory serialization;
+
+    @Before
+    public void setUp() {
+        serialization = new TapeAvroSerializationFactory();
+    }
+
     @Test
     public void testBinaryObject() throws IOException {
         File file = folder.newFile();
@@ -61,12 +69,10 @@ public class BackedObjectQueueTest {
                 ObservationKey.getClassSchema(), ActiveAudioRecording.getClassSchema(),
                 GenericRecord.class, GenericRecord.class);
 
-        TapeAvroSerializationFactory serializerFactory = new TapeAvroSerializationFactory();
-
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
                 QueueFile.Companion.newMapped(file, 450000000),
-                serializerFactory.createSerializer(topic),
-                serializerFactory.createDeserializer(outputTopic))) {
+                serialization.createSerializer(topic),
+                serialization.createDeserializer(outputTopic))) {
 
             ByteBuffer buffer = ByteBuffer.wrap(data);
             Record<ObservationKey, ActiveAudioRecording> record = new Record<>(
@@ -77,8 +83,8 @@ public class BackedObjectQueueTest {
         }
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
                 QueueFile.Companion.newMapped(file, 450000000),
-                serializerFactory.createSerializer(topic),
-                serializerFactory.createDeserializer(outputTopic))) {
+                serialization.createSerializer(topic),
+                serialization.createDeserializer(outputTopic))) {
             Record<GenericRecord, GenericRecord> result = queue.peek();
             assertNotNull(result);
             assertArrayEquals(data, ((ByteBuffer) result.value.get("data")).array());
@@ -96,13 +102,11 @@ public class BackedObjectQueueTest {
                 ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
                 GenericRecord.class, GenericRecord.class);
 
-        TapeAvroSerializationFactory serializerFactory = new TapeAvroSerializationFactory();
-
         BackedObjectQueue<Record<ObservationKey, ObservationKey>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
                 QueueFile.Companion.newMapped(file, 10000),
-                serializerFactory.createSerializer(topic),
-                serializerFactory.createDeserializer(outputTopic));
+                serialization.createSerializer(topic),
+                serialization.createDeserializer(outputTopic));
 
         Record<ObservationKey, ObservationKey> record = new Record<>(
                 new ObservationKey("test", "a", "b"),
@@ -126,13 +130,11 @@ public class BackedObjectQueueTest {
                 GenericRecord.class, GenericRecord.class);
 
 
-        TapeAvroSerializationFactory serializerFactory = new TapeAvroSerializationFactory();
-
         BackedObjectQueue<Record<ObservationKey, PhoneLight>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
                 QueueFile.Companion.newMapped(file, 10000),
-                serializerFactory.createSerializer(topic),
-                serializerFactory.createDeserializer(outputTopic));
+                serialization.createSerializer(topic),
+                serialization.createDeserializer(outputTopic));
 
         double now = System.currentTimeMillis() / 1000d;
         Record<ObservationKey, PhoneLight> record = new Record<>(

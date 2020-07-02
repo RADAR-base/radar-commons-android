@@ -19,7 +19,6 @@ package org.radarbase.android.util;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,6 +28,12 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
 /**
  * Test that all hashes are unique for different values and the same for the same values.
@@ -60,11 +65,11 @@ public class HashGeneratorTest {
             byte[] b1 = hasher1.createHash(v);
             byte[] b2 = hasher1a.createHash(v);
             byte[] b3 = hasher2.createHash(v);
-            Assert.assertNotNull(b1);
-            Assert.assertArrayEquals(b2, b1);
-            Assert.assertFalse(Arrays.equals(b3, b1));
+            assertNotNull(b1);
+            assertArrayEquals(b2, b1);
+            assertFalse(Arrays.equals(b3, b1));
             if (i > 0 && previousV != v) {
-                Assert.assertFalse(Arrays.equals(previousB, b1));
+                assertFalse(Arrays.equals(previousB, b1));
             }
             previousV = v;
             previousB = b1;
@@ -80,10 +85,10 @@ public class HashGeneratorTest {
             byte[] b1 = hasher1.createHash(v);
             byte[] b2 = hasher1a.createHash(v);
             byte[] b3 = hasher2.createHash(v);
-            Assert.assertArrayEquals(b2, b1);
-            Assert.assertFalse(Arrays.equals(b3, b1));
+            assertArrayEquals(b2, b1);
+            assertFalse(Arrays.equals(b3, b1));
             if (i > 0 && !v.equals(previousV)) {
-                Assert.assertFalse(Arrays.equals(previousB, b1));
+                assertFalse(Arrays.equals(previousB, b1));
             }
             previousV = v;
             previousB = b1;
@@ -101,10 +106,10 @@ public class HashGeneratorTest {
             ByteBuffer b1 = hasher1.createHashByteBuffer(v);
             ByteBuffer b2 = hasher1a.createHashByteBuffer(v);
             ByteBuffer b3 = hasher2.createHashByteBuffer(v);
-            Assert.assertEquals(b2, b1);
-            Assert.assertNotEquals(b3, b1);
+            assertEquals(b2, b1);
+            assertNotEquals(b3, b1);
             if (i > 0 && v != previousV) {
-                Assert.assertNotEquals(previousB, b1);
+                assertNotEquals(previousB, b1);
             }
             previousV = v;
             previousB = b1;
@@ -120,10 +125,10 @@ public class HashGeneratorTest {
             ByteBuffer b1 = hasher1.createHashByteBuffer(v);
             ByteBuffer b2 = hasher1a.createHashByteBuffer(v);
             ByteBuffer b3 = hasher2.createHashByteBuffer(v);
-            Assert.assertEquals(b2, b1);
-            Assert.assertNotEquals(b3, b1);
+            assertEquals(b2, b1);
+            assertNotEquals(b3, b1);
             if (i > 0 && !v.equals(previousV)) {
-                Assert.assertNotEquals(previousB, b1);
+                assertNotEquals(previousB, b1);
             }
             previousV = v;
             previousB = b1;

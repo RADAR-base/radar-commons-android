@@ -3,8 +3,7 @@ package org.radarbase.android.auth
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.junit.Assert
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,14 +50,14 @@ class SharedPreferencesAuthSerializerTest {
     }
 
     private fun testProperties(state: AppAuthState, refreshToken: String = "efgh") {
-        Assert.assertEquals("abcd", state.token)
-        Assert.assertEquals(refreshToken, state.getAttribute(ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY))
-        Assert.assertEquals("p", state.projectId)
-        Assert.assertEquals("u", state.userId)
-        Assert.assertTrue(state.isValidFor(9, TimeUnit.SECONDS))
-        Assert.assertFalse(state.isValidFor(11, TimeUnit.SECONDS))
-        Assert.assertEquals(LoginManager.AUTH_TYPE_BEARER.toLong(), state.tokenType.toLong())
-        Assert.assertEquals("Bearer abcd", state.headers[0].value)
-        Assert.assertEquals(sources, state.sourceMetadata)
+        assertEquals("abcd", state.token)
+        assertEquals(refreshToken, state.getAttribute(ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY))
+        assertEquals("p", state.projectId)
+        assertEquals("u", state.userId)
+        assertTrue(state.isValidFor(9, TimeUnit.SECONDS))
+        assertFalse(state.isValidFor(11, TimeUnit.SECONDS))
+        assertEquals(LoginManager.AUTH_TYPE_BEARER.toLong(), state.tokenType.toLong())
+        assertEquals("Bearer abcd", state.headers[0].value)
+        assertEquals(sources, state.sourceMetadata)
     }
 }
