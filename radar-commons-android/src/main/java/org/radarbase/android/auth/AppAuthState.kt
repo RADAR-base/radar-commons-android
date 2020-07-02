@@ -213,10 +213,40 @@ class AppAuthState private constructor(builder: Builder) {
                 ", \nexpiration=" + expiration +
                 ", \nlastUpdate=" + lastUpdate +
                 ", \nattributes=" + attributes +
+                ", \nsourceTypes=" + sourceTypes +
                 ", \nsourceMetadata=" + sourceMetadata +
                 ", \nparseHeaders=" + headers +
                 ", \nisPrivacyPolicyAccepted=" + isPrivacyPolicyAccepted +
                 "\n")
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as AppAuthState
+
+        if (projectId != other.projectId) return false
+        if (userId != other.userId) return false
+        if (token != other.token) return false
+        if (tokenType != other.tokenType) return false
+        if (authenticationSource != other.authenticationSource) return false
+        if (needsRegisteredSources != other.needsRegisteredSources) return false
+        if (expiration != other.expiration) return false
+        if (attributes != other.attributes) return false
+        if (headers != other.headers) return false
+        if (sourceMetadata != other.sourceMetadata) return false
+        if (sourceTypes != other.sourceTypes) return false
+        if (isPrivacyPolicyAccepted != other.isPrivacyPolicyAccepted) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = projectId?.hashCode() ?: 0
+        result = 31 * result + (userId?.hashCode() ?: 0)
+        result = 31 * result + (token?.hashCode() ?: 0)
+        return result
     }
 
     companion object {
