@@ -11,7 +11,7 @@ import org.radarbase.android.auth.portal.ManagementPortalClient
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
-class SharedPreferencesAuthSerializerTest {
+class SharedPreferencesAuthSerializationTest {
     private lateinit var state: AppAuthState
     private lateinit var sources: List<SourceMetadata>
 
@@ -40,7 +40,7 @@ class SharedPreferencesAuthSerializerTest {
     @Test
     fun addToPreferences() {
         val readState = ApplicationProvider.getApplicationContext<Context>().let { context ->
-            val authSerializer = SharedPreferencesAuthSerializer(context)
+            val authSerializer = SharedPreferencesAuthSerialization(context)
             authSerializer.store(state)
             authSerializer.load()
         }

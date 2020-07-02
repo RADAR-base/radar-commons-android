@@ -33,8 +33,8 @@ abstract class AuthService : Service(), LoginListener {
     private var currentDelay: Long? = null
     private var isConnected: Boolean = false
 
-    open val authSerializers: List<AuthSerializer> by lazy {
-        listOf(SharedPreferencesAuthSerializer(this))
+    open val authSerializations: List<AuthSerialization> by lazy {
+        listOf(SharedPreferencesAuthSerialization(this))
     }
 
     @Volatile
@@ -43,13 +43,13 @@ abstract class AuthService : Service(), LoginListener {
     private lateinit var broadcaster: LocalBroadcastManager
 
     private fun loadAuthState(): AppAuthState {
-        authSerializers.forEachIndexed { i, serializer ->
+        authSerializations.forEachIndexed { i, serializer ->
             val auth = serializer.load()
             if (auth != null) {
                 // ensure auth is stored in the primary serialization method
-                if (i > 0) authSerializers.first().store(auth)
+                if (i > 0) authSerializations.first().store(auth)
                 // remove auth from all other serialization methods
-                authSerializers.drop(1).forEach { it.remove() }
+                authSerializations.drop(1).forEach { it.remove() }
                 return auth
             }
         }
@@ -85,7 +85,7 @@ abstract class AuthService : Service(), LoginListener {
                 currentDelay = null
                 config.updateWithAuthState(this@AuthService, appAuth)
                 config.persistChanges()
-                authSerializers.first().store(appAuth)
+                authSerializations.first().store(appAuth)
             }
         })
     }
@@ -211,7 +211,7 @@ abstract class AuthService : Service(), LoginListener {
         configRegistration?.let { removeLoginListener(it) }
         handler.stop {
             loginManagers.forEach { it.onDestroy() }
-            authSerializers.first().store(appAuth)
+            authSerializations.first().store(appAuth)
         }
     }
 
@@ -266,7 +266,7 @@ abstract class AuthService : Service(), LoginListener {
                     manager.invalidate(appAuth, disableRefresh)
                             ?.also { appAuth = it } != null
                 }) {
-                    authSerializers.first().store(appAuth)
+                    authSerializations.first().store(appAuth)
                     startLogin()
                 }
             }

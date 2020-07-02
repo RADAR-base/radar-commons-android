@@ -1,7 +1,7 @@
 package org.radarbase.android.auth
 
 /** Manages persistence of the AppAuthState. */
-interface AuthSerializer {
+interface AuthSerialization {
     /**
      * Load the state from this serialization.
      * @return state if it was stored, null otherwise.

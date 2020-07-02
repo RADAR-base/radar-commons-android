@@ -12,7 +12,7 @@ import java.io.Serializable
 import java.util.ArrayList
 import java.util.HashSet
 
-class SharedPreferencesAuthSerializer(context: Context): AuthSerializer {
+class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
     private val prefs = context.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE)
 
     override fun load(): AppAuthState? {
@@ -131,7 +131,7 @@ class SharedPreferencesAuthSerializer(context: Context): AuthSerializer {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(SharedPreferencesAuthSerializer::class.java)
+        private val logger = LoggerFactory.getLogger(SharedPreferencesAuthSerialization::class.java)
 
         private const val LOGIN_PROJECT_ID = "org.radarcns.android.auth.AppAuthState.projectId"
         private const val LOGIN_USER_ID = "org.radarcns.android.auth.AppAuthState.userId"
