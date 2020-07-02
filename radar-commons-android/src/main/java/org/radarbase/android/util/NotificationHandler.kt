@@ -85,6 +85,20 @@ class NotificationHandler(private val context: Context) {
         createNotificationChannel(channel)
     }
 
+    /**
+     * Creates a notification. Example usage:
+     * ```
+     * notificationHandler.create(NOTIFICATION_CHANNEL_INFO, true) {
+     *     setContentText(getString(R.string.my_text))
+     *     setContentTitle(getString(R.string.myTitle))
+     * }
+     * ```
+     * @param channel channel name to send notification to
+     * @param includeStartIntent whether to include an intent to start the current app when the
+     *                           notification is clicked.
+     * @param buildNotification notification builder function, where notification properties can be
+     *                          set.
+     */
     fun create(channel: String, includeStartIntent: Boolean,
                buildNotification: Notification.Builder.() -> Unit): Notification {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -98,6 +112,24 @@ class NotificationHandler(private val context: Context) {
         }.build()
     }
 
+    /**
+     * Shows a to the user notification. Example usage:
+     * ```
+     * notificationHandler.notify(MY_UNIQUE_ID, NOTIFICATION_CHANNEL_INFO, true) {
+     *     setContentText(getString(R.string.my_text))
+     *     setContentTitle(getString(R.string.myTitle))
+     * }
+     * ```
+     * @param id a number, unique within the app for this notification. If a notification with a
+     *           duplicate ID is used, the current notification with that ID may be removed.
+     * @param channel channel name to send notification to
+     * @param includeStartIntent whether to include an intent to start the current app when the
+     *                           notification is clicked.
+     * @param buildNotification notification builder function, where notification properties can be
+     *                          set.
+     * @return a registration of the notification, which can be used to cancel the notification
+     *         at a later time.
+     */
     fun notify(id: Int, channel: String, includeStartIntent: Boolean,
                buildNotification: Notification.Builder.() -> Unit): NotificationRegistration {
         try {
@@ -164,7 +196,11 @@ class NotificationHandler(private val context: Context) {
         const val NOTIFICATION_CHANNEL_FINAL_ALERT = "org.radarbase.android.NotificationHandler.FINAL_ALERT"
     }
 
-    data class NotificationRegistration(private val manager: NotificationManager?, private val id: Int) {
+    data class NotificationRegistration(
+            private val manager: NotificationManager?,
+            private val id: Int
+    ) {
+        /** Cancels the notification, if possible. */
         fun cancel() {
             try {
                 manager?.cancel(id)

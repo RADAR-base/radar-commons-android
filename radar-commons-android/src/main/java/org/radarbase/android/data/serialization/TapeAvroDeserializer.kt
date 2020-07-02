@@ -51,10 +51,7 @@ class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val avroData: G
     @Throws(IOException::class)
     override fun deserialize(input: InputStream): Record<K, V> {
         // for backwards compatibility
-        var numRead = 0L
-        do {
-            numRead += input.skip(8L - numRead).toInt()
-        } while (numRead < 8L)
+        input.skipFully(8L)
 
         decoder = decoderFactory.binaryDecoder(input, decoder)
 
@@ -72,5 +69,14 @@ class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val avroData: G
             "Failed to validate given record in topic $topicName\n\tkey: $key\n\tvalue: $value"
         }
         return Record(key, value)
+    }
+
+    companion object {
+        fun InputStream.skipFully(n: Long) {
+            var numRead = 0L
+            do {
+                numRead += skip(n - numRead)
+            } while (numRead < n)
+        }
     }
 }

@@ -49,19 +49,24 @@ class TapeAvroSerializer<K: Any, V: Any>(
         // for backwards compatibility
         output.write(EMPTY_HEADER, 0, 8)
         output.write(cachedKey.applyIfChanged(value.key))
-        encoder = encoderFactory.binaryEncoder(output, encoder).also {
-            valueWriter.write(value.value, it)
-            it.flush()
-        }
+        valueWriter.writeBinary(value.value, output)
     }
 
     private fun serializeKey(key: K): ByteArray {
-        val keyOut = ByteArrayOutputStream()
-        encoder = encoderFactory.binaryEncoder(keyOut, encoder).also {
-            keyWriter.write(key, it)
-            it.flush()
+        return ByteArrayOutputStream().use { buffer ->
+            keyWriter.writeBinary(key, buffer)
+            buffer.toByteArray()
         }
-        return keyOut.toByteArray()
+    }
+
+    /** Write value to outputstream using a binary encoder. */
+    private fun <T> DatumWriter<T>.writeBinary(value: T, output: OutputStream) {
+        encoderFactory.binaryEncoder(output, encoder)
+                .also { encoder = it }
+                .run {
+                    write(value, this)
+                    flush()
+                }
     }
 
     companion object {
