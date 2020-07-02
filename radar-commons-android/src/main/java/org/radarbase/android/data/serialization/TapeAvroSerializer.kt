@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.android.data
+package org.radarbase.android.data.serialization
 
 import org.apache.avro.generic.GenericData
 import org.apache.avro.io.BinaryEncoder
@@ -31,12 +31,16 @@ import java.io.OutputStream
 /**
  * Converts records from an AvroTopic for Tape
  */
-class TapeAvroSerializer<K: Any, V: Any>(topic: AvroTopic<K, V>, specificData: GenericData) : BackedObjectQueue.Serializer<Record<K, V>> {
+class TapeAvroSerializer<K: Any, V: Any>(
+        private val topic: AvroTopic<K, V>,
+        private val avroData: GenericData
+) : BackedObjectQueue.Serializer<Record<K, V>> {
+
     private val encoderFactory: EncoderFactory = EncoderFactory.get()
     @Suppress("UNCHECKED_CAST")
-    private val keyWriter: DatumWriter<K> = specificData.createDatumWriter(topic.keySchema) as DatumWriter<K>
+    private val keyWriter: DatumWriter<K> = avroData.createDatumWriter(topic.keySchema) as DatumWriter<K>
     @Suppress("UNCHECKED_CAST")
-    private val valueWriter: DatumWriter<V> = specificData.createDatumWriter(topic.valueSchema) as DatumWriter<V>
+    private val valueWriter: DatumWriter<V> = avroData.createDatumWriter(topic.valueSchema) as DatumWriter<V>
     private var encoder: BinaryEncoder? = null
     private val cachedKey = ChangeApplier(::serializeKey)
 
@@ -63,4 +67,9 @@ class TapeAvroSerializer<K: Any, V: Any>(topic: AvroTopic<K, V>, specificData: G
     companion object {
         private val EMPTY_HEADER = byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0)
     }
+
+    override fun canSerialize(
+            value: Record<K, V>
+    ) = avroData.validate(topic.keySchema, value.key)
+                && avroData.validate(topic.valueSchema, value.value)
 }

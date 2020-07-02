@@ -15,7 +15,7 @@
  */
 
 
-package org.radarbase.android.data
+package org.radarbase.android.data.serialization
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
@@ -32,7 +32,7 @@ import java.io.InputStream
 /**
  * Converts records from an AvroTopic for Tape
  */
-class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val specificData: GenericData) : BackedObjectQueue.Deserializer<Record<K, V>> {
+class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val avroData: GenericData) : BackedObjectQueue.Deserializer<Record<K, V>> {
     private val decoderFactory: DecoderFactory = DecoderFactory.get()
     private val keyReader: DatumReader<K>
     private val valueReader: DatumReader<V>
@@ -43,9 +43,9 @@ class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val specificDat
 
     init {
         @Suppress("UNCHECKED_CAST")
-        keyReader = specificData.createDatumReader(keySchema) as DatumReader<K>
+        keyReader = avroData.createDatumReader(keySchema) as DatumReader<K>
         @Suppress("UNCHECKED_CAST")
-        valueReader = specificData.createDatumReader(valueSchema) as DatumReader<V>
+        valueReader = avroData.createDatumReader(valueSchema) as DatumReader<V>
     }
 
     @Throws(IOException::class)
@@ -67,8 +67,8 @@ class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val specificDat
             throw IOException("Failed to deserialize object", ex)
         }
 
-        require(specificData.validate(keySchema, key)
-                && specificData.validate(valueSchema, value)) {
+        require(avroData.validate(keySchema, key)
+                && avroData.validate(valueSchema, value)) {
             "Failed to validate given record in topic $topicName\n\tkey: $key\n\tvalue: $value"
         }
         return Record(key, value)

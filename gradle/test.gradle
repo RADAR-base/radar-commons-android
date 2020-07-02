@@ -16,8 +16,8 @@ ext {
 }
 
 dependencies {
-    testImplementation 'junit:junit:4.12'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.0.1'
+    testImplementation 'junit:junit:4.13'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.7.2'
 
     // Core library
     androidTestImplementation "androidx.test:core:$androidXCoreVersion"
@@ -50,6 +50,20 @@ dependencies {
     unmock 'org.robolectric:android-all:5.0.2_r3-robolectric-r0'
 }
 
+android.testOptions.unitTests.all {
+    // Configure whether failing tests should fail the build
+    ignoreFailures false
+
+    testLogging {
+        exceptionFormat "full"
+        showCauses true
+        showExceptions true
+        showStackTraces true
+        showStandardStreams true
+        events = ["passed", "skipped", "failed", "standardOut", "standardError"]
+    }
+}
+
 unMock {
     keep "android.widget.BaseAdapter"
     keep "android.widget.ArrayAdapter"
@@ -61,6 +75,7 @@ unMock {
     keepStartingWith "android.text.TextUtils"
     keepStartingWith "android.util."
     keepStartingWith "android.text."
+    keepStartingWith "android.security.keystore."
     keep "android.app.Application"
     keep "android.content.Context"
     keep "android.app.ContextImpl"

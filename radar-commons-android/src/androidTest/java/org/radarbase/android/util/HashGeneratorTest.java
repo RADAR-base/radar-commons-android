@@ -1,4 +1,4 @@
-package org.radarbase.android.util;/*
+/*
  * Copyright 2017 The Hyve
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,10 +14,13 @@ package org.radarbase.android.util;/*
  * limitations under the License.
  */
 
-import android.content.Context;
-import android.content.SharedPreferences;
+package org.radarbase.android.util;
+
+import androidx.test.core.app.ApplicationProvider;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -25,9 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.UUID;
-
-import androidx.test.core.app.ApplicationProvider;
-import androidx.test.ext.junit.runners.AndroidJUnit4;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Test that all hashes are unique for different values and the same for the same values.
@@ -35,15 +36,21 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
  */
 @RunWith(AndroidJUnit4.class)
 public class HashGeneratorTest {
+    private HashGenerator hasher1;
+    private HashGenerator hasher1a;
+    private HashGenerator hasher2;
 
-    private SharedPreferences getPrefs(String name) {
-        return ApplicationProvider.getApplicationContext().getSharedPreferences(name, Context.MODE_PRIVATE);
+    @Before
+    public void setUp() {
+        int v1 = ThreadLocalRandom.current().nextInt();
+        int v2 = ThreadLocalRandom.current().nextInt();
+        hasher1 = new HashGenerator(ApplicationProvider.getApplicationContext(), "createHash1" + v1);
+        hasher1a = new HashGenerator(ApplicationProvider.getApplicationContext(), "createHash1" + v1);
+        hasher2 = new HashGenerator(ApplicationProvider.getApplicationContext(), "createHash2" + v2);
     }
 
     @Test
     public void createHash() {
-        HashGenerator hasher1 = new HashGenerator(getPrefs("createHash1"));
-        HashGenerator hasher2 = new HashGenerator(getPrefs("createHash2"));
         Random random = new Random();
 
         byte[] previousB = null;
@@ -51,10 +58,10 @@ public class HashGeneratorTest {
         for (int i = 0; i < 10; i++) {
             int v = random.nextInt();
             byte[] b1 = hasher1.createHash(v);
-            byte[] b2 = hasher1.createHash(v);
+            byte[] b2 = hasher1a.createHash(v);
             byte[] b3 = hasher2.createHash(v);
             Assert.assertNotNull(b1);
-            Assert.assertTrue(Arrays.equals(b2, b1));
+            Assert.assertArrayEquals(b2, b1);
             Assert.assertFalse(Arrays.equals(b3, b1));
             if (i > 0 && previousV != v) {
                 Assert.assertFalse(Arrays.equals(previousB, b1));
@@ -66,17 +73,14 @@ public class HashGeneratorTest {
 
     @Test
     public void createHash1() {
-        HashGenerator hasher1 = new HashGenerator(getPrefs("createHashString1"));
-        HashGenerator hasher2 = new HashGenerator(getPrefs("createHashString2"));
-
         byte[] previousB = null;
         String previousV = null;
         for (int i = 0; i < 10; i++) {
             String v = UUID.randomUUID().toString();
             byte[] b1 = hasher1.createHash(v);
-            byte[] b2 = hasher1.createHash(v);
+            byte[] b2 = hasher1a.createHash(v);
             byte[] b3 = hasher2.createHash(v);
-            Assert.assertTrue(Arrays.equals(b2, b1));
+            Assert.assertArrayEquals(b2, b1);
             Assert.assertFalse(Arrays.equals(b3, b1));
             if (i > 0 && !v.equals(previousV)) {
                 Assert.assertFalse(Arrays.equals(previousB, b1));
@@ -88,8 +92,6 @@ public class HashGeneratorTest {
 
     @Test
     public void createHashByteBuffer() {
-        HashGenerator hasher1 = new HashGenerator(getPrefs("createHashByteBuffer1"));
-        HashGenerator hasher2 = new HashGenerator(getPrefs("createHashByteBuffer2"));
         Random random = new Random();
 
         ByteBuffer previousB = null;
@@ -97,7 +99,7 @@ public class HashGeneratorTest {
         for (int i = 0; i < 10; i++) {
             int v = random.nextInt();
             ByteBuffer b1 = hasher1.createHashByteBuffer(v);
-            ByteBuffer b2 = hasher1.createHashByteBuffer(v);
+            ByteBuffer b2 = hasher1a.createHashByteBuffer(v);
             ByteBuffer b3 = hasher2.createHashByteBuffer(v);
             Assert.assertEquals(b2, b1);
             Assert.assertNotEquals(b3, b1);
@@ -111,15 +113,12 @@ public class HashGeneratorTest {
 
     @Test
     public void createHashByteBuffer1() {
-        HashGenerator hasher1 = new HashGenerator(getPrefs("createHashByteBufferString1"));
-        HashGenerator hasher2 = new HashGenerator(getPrefs("createHashByteBufferString2"));
-
         ByteBuffer previousB = null;
         String previousV = null;
         for (int i = 0; i < 10; i++) {
             String v = UUID.randomUUID().toString();
             ByteBuffer b1 = hasher1.createHashByteBuffer(v);
-            ByteBuffer b2 = hasher1.createHashByteBuffer(v);
+            ByteBuffer b2 = hasher1a.createHashByteBuffer(v);
             ByteBuffer b3 = hasher2.createHashByteBuffer(v);
             Assert.assertEquals(b2, b1);
             Assert.assertNotEquals(b3, b1);

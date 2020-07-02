@@ -7,7 +7,8 @@ import java.io.IOException
 
 class DataCacheGroup<K, V>(
         val activeDataCache: DataCache<K, V>,
-        val deprecatedCaches: MutableList<ReadableDataCache>) : Closeable {
+        val deprecatedCaches: MutableList<ReadableDataCache>
+) : Closeable {
 
     val topicName: String = activeDataCache.topic.name
 
@@ -26,7 +27,7 @@ class DataCacheGroup<K, V>(
                 logger.warn("Cannot remove old DataCache file " + tapeFile + " for topic " + storedCache.readTopic.name)
             }
             val name = tapeFile.absolutePath
-            val base = name.substring(0, name.length - CacheStore.TAPE_EXTENSION.length)
+            val base = name.substring(0, name.length - storedCache.serialization.fileExtension.length)
             val keySchemaFile = File(base + CacheStore.KEY_SCHEMA_EXTENSION)
             if (!keySchemaFile.delete()) {
                 logger.warn("Cannot remove old key schema file " + keySchemaFile + " for topic " + storedCache.readTopic.name)

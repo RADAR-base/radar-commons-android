@@ -32,15 +32,34 @@ abstract class AuthService : Service(), LoginListener {
     private var configRegistration: LoginListenerRegistration? = null
     private var currentDelay: Long? = null
     private var isConnected: Boolean = false
+
+    open val authSerializers: List<AuthSerializer> by lazy {
+        listOf(SharedPreferencesAuthSerializer(this))
+    }
+
     @Volatile
     private var isInLoginActivity: Boolean = false
 
     private lateinit var broadcaster: LocalBroadcastManager
 
+    private fun loadAuthState(): AppAuthState {
+        authSerializers.forEachIndexed { i, serializer ->
+            val auth = serializer.load()
+            if (auth != null) {
+                // ensure auth is stored in the primary serialization method
+                if (i > 0) authSerializers.first().store(auth)
+                // remove auth from all other serialization methods
+                authSerializers.drop(1).forEach { it.remove() }
+                return auth
+            }
+        }
+        return AppAuthState()
+    }
+
     override fun onCreate() {
         super.onCreate()
         broadcaster = LocalBroadcastManager.getInstance(this)
-        appAuth = AppAuthState.from(this)
+        appAuth = loadAuthState()
         config = radarConfig
         config.updateWithAuthState(this, appAuth)
         handler.start()
@@ -66,7 +85,7 @@ abstract class AuthService : Service(), LoginListener {
                 currentDelay = null
                 config.updateWithAuthState(this@AuthService, appAuth)
                 config.persistChanges()
-                appAuth.addToPreferences(this@AuthService)
+                authSerializers.first().store(appAuth)
             }
         })
     }
@@ -141,7 +160,7 @@ abstract class AuthService : Service(), LoginListener {
             if (ex is ConnectException) {
                 isConnected = false
 
-                val actualDelay = Math.min(2 * (currentDelay ?: RETRY_MIN_DELAY), RETRY_MAX_DELAY)
+                val actualDelay = (2 * (currentDelay ?: RETRY_MIN_DELAY)).coerceAtMost(RETRY_MAX_DELAY)
                         .also { currentDelay = it }
                         .let { Random.nextLong(RETRY_MIN_DELAY, it) }
                 handler.delay(actualDelay, ::refresh)
@@ -192,7 +211,7 @@ abstract class AuthService : Service(), LoginListener {
         configRegistration?.let { removeLoginListener(it) }
         handler.stop {
             loginManagers.forEach { it.onDestroy() }
-            appAuth.addToPreferences(this)
+            authSerializers.first().store(appAuth)
         }
     }
 
@@ -247,7 +266,7 @@ abstract class AuthService : Service(), LoginListener {
                     manager.invalidate(appAuth, disableRefresh)
                             ?.also { appAuth = it } != null
                 }) {
-                    appAuth.addToPreferences(this)
+                    authSerializers.first().store(appAuth)
                     startLogin()
                 }
             }
