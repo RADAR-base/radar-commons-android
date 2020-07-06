@@ -28,7 +28,12 @@ dependencies {
     api ('org.radarcns:radar-schemas-commons:0.5.10.1') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api 'org.apache.avro:avro:1.8.2'
+    api ('org.apache.avro:avro:1.8.2') {
+        exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
+        exclude group: 'org.xerial.snappy', module: 'snappy-java'
+        exclude group: 'org.tukaani', module: 'xz'
+        exclude group: 'org.apache.commons', module: 'commons-compress'
+    }
     api "androidx.appcompat:appcompat:1.1.0"
 
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
