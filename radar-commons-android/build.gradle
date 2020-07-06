@@ -35,6 +35,13 @@ dependencies {
         exclude group: 'org.apache.commons', module: 'commons-compress'
     }
     api "androidx.appcompat:appcompat:1.1.0"
+    //noinspection GradleDependency
+    api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
+        exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
+        exclude group: 'org.apache.commons', module: 'commons-compress'
+        exclude group: 'org.xerial.snappy', module: 'snappy-java'
+        exclude group: 'org.tukaani', module: 'xz'
+    }
 
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
