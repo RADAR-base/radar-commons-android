@@ -21,12 +21,18 @@ apply from: "$rootDir/gradle/android.gradle"
 description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarbase:radar-commons:0.12.3') {
+    api ('org.radarbase:radar-commons:0.13.0') {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarcns:radar-schemas-commons:0.5.10') {
+    api ('org.radarcns:radar-schemas-commons:0.5.10.1') {
         exclude group: 'org.apache.avro', module: 'avro'
+    }
+    api ('org.apache.avro:avro:1.8.2') {
+        exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
+        exclude group: 'org.xerial.snappy', module: 'snappy-java'
+        exclude group: 'org.tukaani', module: 'xz'
+        exclude group: 'org.apache.commons', module: 'commons-compress'
     }
     api "androidx.appcompat:appcompat:1.1.0"
     //noinspection GradleDependency

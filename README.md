@@ -41,7 +41,7 @@ repositories {
     maven { url 'http://dl.bintray.com/radar-base/org.radarbase' }
 }
 dependencies {
-    api 'org.radarbase:radar-commons-android:1.0.0-alpha2'
+    api 'org.radarbase:radar-commons-android:1.0.0-alpha3'
 }
 ```
 
@@ -49,7 +49,7 @@ Include additional plugins by adding:
 
 ```gradle
 dependencies {
-    implementation 'org.radarbase:<plugin name>:1.0.0-alpha2'
+    implementation 'org.radarbase:<plugin name>:1.0.0-alpha3'
 }
 ```
 

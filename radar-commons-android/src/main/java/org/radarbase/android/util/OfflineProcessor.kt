@@ -213,7 +213,7 @@ class OfflineProcessor(private val context: Context,
             handlerReference = CountedReference({
                 value.apply { start() }
             }, {
-                stop { }
+                stop()
             })
         }
     }

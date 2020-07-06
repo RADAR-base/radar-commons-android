@@ -55,7 +55,15 @@ subprojects {
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
-    ext.versionCode = 31
+
+    version = '1.0.0-alpha3'
+    ext.versionCode = 32
+    group = 'org.radarbase'
+    ext.githubRepoName = 'RADAR-base/radar-commons-android'
+
+    ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
+    ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
+    ext.website = 'http://radar-base.org'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
@@ -65,6 +73,7 @@ subprojects {
         google()
         jcenter()
         mavenCentral()
+        maven { url 'https://repo.thehyve.nl/content/repositories/snapshots' }
     }
 
     dependencies {

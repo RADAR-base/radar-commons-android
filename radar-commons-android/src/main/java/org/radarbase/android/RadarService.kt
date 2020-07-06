@@ -283,7 +283,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
                         val schemaRegistry = ServerConfig(it).apply {
                             isUnsafe = unsafeConnection
                         }
-                        SchemaRetriever(schemaRegistry, 30)
+                        SchemaRetriever(schemaRegistry, 30, 7200L)
                     }
                     hasBinaryContent = configuration.getBoolean(SEND_BINARY_CONTENT, SEND_BINARY_CONTENT_DEFAULT)
                     useCompression = configuration.getBoolean(SEND_WITH_COMPRESSION, false)
