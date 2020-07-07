@@ -17,10 +17,10 @@ repositories {
 dependencies {
     api project(':radar-commons-android')
 
-    implementation 'com.empatica:empalink:2.2@aar'
+    implementation 'com.empatica:E4Link:1.0.0@aar'
     //specified by empalink binary
     //noinspection GradleDependency
-    runtimeOnly 'com.squareup.okhttp:okhttp:2.5.0'
+    runtimeOnly 'com.squareup.okhttp:okhttp:2.7.4'
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"
