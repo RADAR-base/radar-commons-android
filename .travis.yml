@@ -39,7 +39,7 @@ android:
 
 # bug https://github.com/travis-ci/travis-ci/issues/8874
 before_install:
-  - if [ ${$encrypted_463b84ff039c_key+x} ]; then
+  - if [ ${encrypted_463b84ff039c_key+x} ]; then
       openssl aes-256-cbc -K $encrypted_463b84ff039c_key -iv $encrypted_463b84ff039c_iv -in plugins/radar-android-empatica/libs/E4link-1.0.0.aar.enc -out plugins/radar-android-empatica/libs/E4link-1.0.0.aar -d
       rm plugins/radar-android-empatica/gradle.skip;
     fi
