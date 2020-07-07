@@ -28,7 +28,7 @@ dependencies {
     api ('org.radarcns:radar-schemas-commons:0.5.10.1') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.apache.avro:avro:1.8.2') {
+    api ('org.apache.avro:avro:1.10.0') {
         exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
         exclude group: 'org.xerial.snappy', module: 'snappy-java'
         exclude group: 'org.tukaani', module: 'xz'
