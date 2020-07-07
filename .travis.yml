@@ -16,7 +16,7 @@ cache:
 
 env:
   global:
-    - ANDROID_MINIMUM_API_LEVEL=21
+    - ANDROID_MINIMUM_API_LEVEL=24
     - ANDROID_TARGET_API_LEVEL=29
     - ANDROID_BUILD_TOOLS_VERSION=29.0.3
 
@@ -45,7 +45,7 @@ before_install:
     fi
   - yes | sdkmanager "platforms;android-${ANDROID_TARGET_API_LEVEL}"
   - yes | sdkmanager "ndk-bundle"
-  - android-update-sdk --components=sys-img-armeabi-v7a-android-$ANDROID_MINIMUM_API_LEVEL --accept-licenses='android-sdk-license-[0-9a-f]{8}'
+  - android-update-sdk --components=sys-img-arm64-v8a-android-$ANDROID_MINIMUM_API_LEVEL --accept-licenses='android-sdk-license-[0-9a-f]{8}'
 
 # Emulator Management: Create, Start and Wait
 before_script:
