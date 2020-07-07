@@ -56,7 +56,7 @@ subprojects {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-    version = '1.0.0-alpha3'
+    version = '1.0.0-SNAPSHOT'
     ext.versionCode = 32
     group = 'org.radarbase'
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
