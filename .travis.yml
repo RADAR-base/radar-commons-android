@@ -12,7 +12,7 @@ cache:
 
 env:
   global:
-    - ANDROID_EMULATOR_ABI=x86_64
+    - ANDROID_EMULATOR_ABI=armeabi-v7a
     - ANDROID_MINIMUM_API_LEVEL=21
     - ANDROID_TARGET_API_LEVEL=29
     - ANDROID_BUILD_TOOLS_VERSION=29.0.3
@@ -51,10 +51,10 @@ before_script:
   - emulator -avd test -no-audio -no-window &
 
 script:
-  - ./gradlew --daemon assembleDebug lintDebug testDebug
+  - ./gradlew assembleDebug lintDebug testDebug --info
   - android-wait-for-emulator
   - adb shell input keyevent 82 &
-  - ./gradlew --daemon connectedCheck
+  - ./gradlew connectedCheck
 
 deploy:
   - provider: releases
