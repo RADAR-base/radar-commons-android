@@ -171,9 +171,13 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             }
             hasClosed = true
         }
-        status = SourceStatusListener.Status.DISCONNECTING
+        if (status != SourceStatusListener.Status.UNAVAILABLE) {
+            status = SourceStatusListener.Status.DISCONNECTING
+        }
         onClose()
-        status = SourceStatusListener.Status.DISCONNECTED
+        if (status != SourceStatusListener.Status.UNAVAILABLE) {
+            status = SourceStatusListener.Status.DISCONNECTED
+        }
     }
 
     protected open fun onClose() {

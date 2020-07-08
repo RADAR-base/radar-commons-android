@@ -67,7 +67,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         }
 
         status = if (sensorManager == null) {
-            SourceStatusListener.Status.DISCONNECTED
+            SourceStatusListener.Status.UNAVAILABLE
         } else {
             SourceStatusListener.Status.READY
         }

@@ -38,7 +38,14 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Manages scanning for an Empatica E4 wearable and connecting to it  */
-class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager, private val handler: SafeHandler) : AbstractSourceManager<E4Service, E4State>(e4Service), EmpaDataDelegate, EmpaStatusDelegate, EmpaSessionManagerDelegate {
+class E4Manager(
+        e4Service: E4Service,
+        private val empaManager: EmpaDeviceManager,
+        private val handler: SafeHandler
+) : AbstractSourceManager<E4Service, E4State>(e4Service),
+        EmpaDataDelegate,
+        EmpaStatusDelegate,
+        EmpaSessionManagerDelegate {
     private var doNotify: Boolean = false
     private val accelerationTopic = createCache("android_empatica_e4_acceleration", EmpaticaE4Acceleration())
     private val batteryLevelTopic = createCache("android_empatica_e4_battery_level", EmpaticaE4BatteryLevel())
@@ -50,7 +57,11 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
 
     private val isScanning = AtomicBoolean(false)
     private var hasBeenConnecting = false
-    lateinit var apiKey: String
+    private var apiKey: String? = null
+
+    init {
+        status = SourceStatusListener.Status.UNAVAILABLE
+    }
 
     override fun start(acceptableIds: Set<String>) {
         logger.info("Starting scanning")
@@ -272,6 +283,15 @@ class E4Manager(e4Service: E4Service, private val empaManager: EmpaDeviceManager
 
     fun notifyDisconnect(doNotify: Boolean) {
         this.doNotify = doNotify
+    }
+
+    fun updateApiKey(key: String?) {
+        if (key != null && apiKey == null) {
+            apiKey = key
+            status = SourceStatusListener.Status.READY
+        } else if (key != apiKey) {
+            disconnect()  // API key changed or got removed
+        }
     }
 
     companion object {

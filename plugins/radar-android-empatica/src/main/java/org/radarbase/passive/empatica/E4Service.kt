@@ -44,8 +44,8 @@ class E4Service : SourceService<E4State>() {
     override fun createSourceManager() = E4Manager(this, empaManager, mHandler)
 
     override fun configureSourceManager(manager: SourceManager<E4State>, configuration: RadarConfiguration) {
-        if (manager !is E4Manager) return
-        manager.apiKey = configuration.getString(EMPATICA_API_KEY)
+        manager as E4Manager
+        manager.updateApiKey(configuration.optString(EMPATICA_API_KEY))
         manager.notifyDisconnect(configuration.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
     }
 

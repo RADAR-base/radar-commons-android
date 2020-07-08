@@ -19,6 +19,8 @@ package org.radarbase.android.source
 /** Listen for updates of sources.  */
 interface SourceStatusListener {
     enum class Status {
+        /** When a source cannot be started because some initial conditions are not met. */
+        UNAVAILABLE,
         /** A source is found and the source manager is trying to connect to it. No data is yet received.  */
         CONNECTING,
         /** A source is currently disconnecting. It may still stream data. */

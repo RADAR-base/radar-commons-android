@@ -40,7 +40,9 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
         get() = serviceBinder?.sourceName
 
     val isRecording: Boolean
-        get() = sourceStatus != SourceStatusListener.Status.DISCONNECTED
+        get() = sourceStatus !in arrayOf(
+                SourceStatusListener.Status.DISCONNECTED,
+                SourceStatusListener.Status.UNAVAILABLE)
 
     val serverStatus: ServerStatusListener.Status?
         get() = serviceBinder?.serverStatus
@@ -53,7 +55,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
 
     init {
         this.serviceBinder = null
-        this.sourceStatus = SourceStatusListener.Status.DISCONNECTED
+        this.sourceStatus = SourceStatusListener.Status.UNAVAILABLE
     }
 
     override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
@@ -102,7 +104,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
         if (hasService()) {
             synchronized(this) {
                 serviceBinder = null
-                sourceStatus = SourceStatusListener.Status.DISCONNECTED
+                sourceStatus = SourceStatusListener.Status.UNAVAILABLE
             }
         }
     }

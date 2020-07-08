@@ -422,6 +422,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
                     startScanning()
                     R.string.device_disconnected
                 }
+                SourceStatusListener.Status.UNAVAILABLE -> R.string.device_unavailable
             }
             Boast.makeText(this@RadarService, showRes).show()
         }
@@ -434,7 +435,9 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     protected fun startScanning() {
         mHandler.executeReentrant {
             mConnections
-                    .filter { it.connection.hasService() && !it.connection.isRecording && checkPermissions(it) }
+                    .filter { it.connection.hasService()
+                            && !it.connection.isRecording
+                            && checkPermissions(it) }
                     .forEach { provider ->
                         val connection = provider.connection
                         logger.info("Starting recording on connection {}", connection)

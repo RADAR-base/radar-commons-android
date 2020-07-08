@@ -49,8 +49,8 @@ class WeatherApiService : SourceService<BaseSourceState>() {
         val weatherManager = manager as WeatherApiManager
         weatherManager.setQueryInterval(configuration.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
         weatherManager.setSource(
-                configuration.getString(WEATHER_API_KEY, WEATHER_API_KEY_DEFAULT),
-                configuration.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT))
+                configuration.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
+                configuration.optString(WEATHER_API_KEY))
     }
 
     companion object {
@@ -60,6 +60,5 @@ class WeatherApiService : SourceService<BaseSourceState>() {
 
         internal val WEATHER_QUERY_INTERVAL_DEFAULT = TimeUnit.HOURS.toSeconds(3)
         internal const val WEATHER_API_SOURCE_DEFAULT = SOURCE_OPENWEATHERMAP
-        internal const val WEATHER_API_KEY_DEFAULT = ""
     }
 }

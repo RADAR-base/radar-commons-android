@@ -237,7 +237,9 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
                     createSourceManager().also { manager ->
                         sourceManager = manager
                         configureSourceManager(manager, config)
-                        manager.start(actualIds)
+                        if (state.status != SourceStatusListener.Status.UNAVAILABLE) {
+                            manager.start(actualIds)
+                        }
                     }
                 } else {
                     logger.warn("A SourceManager is already registered in the mean time for {}", javaClass.simpleName)
