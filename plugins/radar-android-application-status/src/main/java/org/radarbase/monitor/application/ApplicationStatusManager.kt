@@ -80,11 +80,11 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
     init {
         this.processor = OfflineProcessor(service) {
             process = listOf(
-                    this@ApplicationStatusManager::processServerStatus,
-                    this@ApplicationStatusManager::processUptime,
-                    this@ApplicationStatusManager::processRecordsSent,
-                    this@ApplicationStatusManager::processReferenceTime,
-                    this@ApplicationStatusManager::processDeviceInfo)
+                    ::processServerStatus,
+                    ::processUptime,
+                    ::processRecordsSent,
+                    ::processReferenceTime,
+                    ::processDeviceInfo)
             requestCode = APPLICATION_PROCESSOR_REQUEST_CODE
             requestName = APPLICATION_PROCESSOR_REQUEST_NAME
             interval(UPDATE_RATE_DEFAULT, SECONDS)
