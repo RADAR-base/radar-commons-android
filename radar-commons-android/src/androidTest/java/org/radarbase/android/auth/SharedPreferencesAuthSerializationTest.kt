@@ -7,12 +7,11 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_BEARER
-import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
+import org.radarbase.android.auth.portal.ManagementPortalClient
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
-class AppAuthStateTest {
+class SharedPreferencesAuthSerializationTest {
     private lateinit var state: AppAuthState
     private lateinit var sources: List<SourceMetadata>
 
@@ -25,10 +24,10 @@ class AppAuthStateTest {
 
         state = AppAuthState {
             token = "abcd"
-            tokenType = AUTH_TYPE_BEARER
+            tokenType = LoginManager.AUTH_TYPE_BEARER
             projectId = "p"
             userId = "u"
-            attributes[MP_REFRESH_TOKEN_PROPERTY] = "efgh"
+            attributes[ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY] = "efgh"
             sourceMetadata += sources
             addHeader("Authorization", "Bearer abcd")
             expiration = System.currentTimeMillis() + 10_000L
@@ -41,32 +40,24 @@ class AppAuthStateTest {
     @Test
     fun addToPreferences() {
         val readState = ApplicationProvider.getApplicationContext<Context>().let { context ->
-            state.addToPreferences(context)
-            AppAuthState.from(context)
+            val authSerializer = SharedPreferencesAuthSerialization(context)
+            authSerializer.store(state)
+            authSerializer.load()
         }
 
-        testProperties(readState)
+        assertNotNull(readState)
+        testProperties(readState!!)
     }
 
     private fun testProperties(state: AppAuthState, refreshToken: String = "efgh") {
         assertEquals("abcd", state.token)
-        assertEquals(refreshToken, state.getAttribute(MP_REFRESH_TOKEN_PROPERTY))
+        assertEquals(refreshToken, state.getAttribute(ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY))
         assertEquals("p", state.projectId)
         assertEquals("u", state.userId)
         assertTrue(state.isValidFor(9, TimeUnit.SECONDS))
         assertFalse(state.isValidFor(11, TimeUnit.SECONDS))
-        assertEquals(AUTH_TYPE_BEARER.toLong(), state.tokenType.toLong())
+        assertEquals(LoginManager.AUTH_TYPE_BEARER.toLong(), state.tokenType.toLong())
         assertEquals("Bearer abcd", state.headers[0].value)
         assertEquals(sources, state.sourceMetadata)
-    }
-
-    @Test
-    fun newBuilder() {
-        val builtState = state.alter {
-            attributes[MP_REFRESH_TOKEN_PROPERTY] = "else"
-        }
-
-        testProperties(builtState, "else")
-        testProperties(state)
     }
 }

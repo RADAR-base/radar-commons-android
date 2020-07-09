@@ -19,7 +19,6 @@ package org.radarbase.util
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.ExpectedException
 import org.junit.rules.TemporaryFolder
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -30,10 +29,6 @@ class QueueFileTest {
     @Rule
     @JvmField
     var folder = TemporaryFolder()
-
-    @Rule
-    @JvmField
-    var exception: ExpectedException = ExpectedException.none()
 
     @Test
     @Throws(Exception::class)
@@ -47,8 +42,7 @@ class QueueFileTest {
             out.next()
             out.write(buffer)
             out.next()
-            exception.expect(IllegalStateException::class.java)
-            out.write(buffer)
+            assertThrows(IllegalStateException::class.java) { out.write(buffer) }
         }
     }
 
@@ -75,8 +69,7 @@ class QueueFileTest {
                 out.next()
                 out.write(buffer)
                 out.next()
-                exception.expect(IllegalStateException::class.java)
-                out.write(buffer)
+                assertThrows(IllegalStateException::class.java) { out.write(buffer) }
             }
         } catch (ex: IOException) {
             logger.info("Queue file cannot be written to {}", queue)
@@ -178,8 +171,9 @@ class QueueFileTest {
         iter.next().use { `in` -> assertEquals(2, `in`.read()) }
         assertFalse(iter.hasNext())
 
-        exception.expect(NoSuchElementException::class.java)
-        iter.next()
+        assertThrows(NoSuchElementException::class.java) {
+            iter.next()
+        }
     }
 
     @Test

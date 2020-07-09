@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory
 /**
  * RADAR service provider, to bind and configure to a service. It is not thread-safe.
  * @param <T> state that the Service will provide.
-</T> */
+ */
 @Keep
 abstract class SourceProvider<T : BaseSourceState>(protected val radarService: RadarService) {
     private var _connection: SourceServiceConnection<T>? = null

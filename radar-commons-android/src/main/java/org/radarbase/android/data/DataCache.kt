@@ -25,7 +25,7 @@ interface DataCache<K, V> : Flushable, ReadableDataCache {
     val topic: AvroTopic<K, V>
 
     /** Add a new measurement to the cache.  */
-    fun addMeasurement(key: K?, value: V?)
+    fun addMeasurement(key: K, value: V)
 
     /** Configuration. */
     var config: CacheConfiguration

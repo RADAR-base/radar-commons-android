@@ -16,6 +16,7 @@
 
 package org.radarbase.android.data
 
+import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.data.RecordData
 import org.radarbase.topic.AvroTopic
 import java.io.Closeable
@@ -25,6 +26,7 @@ import java.io.IOException
 interface ReadableDataCache : Closeable {
     /** Get the topic the cache stores.  */
     val readTopic: AvroTopic<Any, Any>
+    val serialization: SerializationFactory
 
     val file: File
     /**

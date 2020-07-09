@@ -227,8 +227,10 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
             logger.debug("Parsing source from {}", body)
             val responseObject = JSONObject(body)
             source.sourceId = responseObject.getString("sourceId")
-            source.sourceName = responseObject.optString("sourceName", source.sourceId)
-            source.expectedSourceName = responseObject.optString("expectedSourceName", null)
+            source.sourceName = responseObject.optString("sourceName", source.sourceId ?: "")
+                    .takeIf { it.isNotEmpty() }
+            source.expectedSourceName = responseObject.optString("expectedSourceName")
+                    .takeIf { it.isNotEmpty() }
             source.attributes = GetSubjectParser.attributesToMap(
                     responseObject.optJSONObject("attributes"))
         }

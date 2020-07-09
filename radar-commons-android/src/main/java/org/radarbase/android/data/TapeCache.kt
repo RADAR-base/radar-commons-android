@@ -17,7 +17,7 @@
 package org.radarbase.android.data
 
 import com.crashlytics.android.Crashlytics
-import org.apache.avro.generic.GenericData
+import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.android.kafka.KafkaDataSubmitter.Companion.SIZE_LIMIT_DEFAULT
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
@@ -53,13 +53,12 @@ constructor(override val file: File,
             override val topic: AvroTopic<K, V>,
             override val readTopic: AvroTopic<Any, Any>,
             private val executor: SafeHandler,
-            private val inputFormat: GenericData,
-            outputFormat: GenericData,
+            override val serialization: SerializationFactory,
             config: DataCache.CacheConfiguration) : DataCache<K, V> {
 
     private val measurementsToAdd = mutableListOf<Record<K, V>>()
-    private val serializer = TapeAvroSerializer(topic, inputFormat)
-    private val deserializer = TapeAvroDeserializer<Any, Any>(readTopic, outputFormat)
+    private val serializer = serialization.createSerializer(topic)
+    private val deserializer = serialization.createDeserializer(readTopic)
 
     private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
@@ -97,25 +96,25 @@ constructor(override val file: File,
     @Throws(IOException::class)
     override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any?>? {
         logger.debug("Trying to retrieve records from topic {}", topic)
-        try {
-            return executor.compute {
+        return try {
+             executor.compute {
                 try {
-                    val (currentKey, values) = getValidUnsentRecords(limit, sizeLimit)
-                            ?: return@compute null
-
-                    return@compute AvroRecordData<Any, Any>(readTopic, currentKey, values)
+                    getValidUnsentRecords(limit, sizeLimit)
+                            ?.let { (key, values) ->
+                                AvroRecordData<Any, Any>(readTopic, key, values)
+                            }
                 } catch (ex: IOException) {
                     fixCorruptQueue(ex)
-                    return@compute null
+                    null
                 } catch (ex: IllegalStateException) {
                     fixCorruptQueue(ex)
-                    return@compute null
+                    null
                 }
             }
         } catch (ex: InterruptedException) {
             logger.warn("getUnsentRecords was interrupted, returning an empty list", ex)
             Thread.currentThread().interrupt()
-            return null
+            null
         } catch (ex: ExecutionException) {
             logger.warn("Failed to retrieve records for topic {}", topic, ex)
             val cause = ex.cause
@@ -132,8 +131,9 @@ constructor(override val file: File,
         lateinit var records: List<Record<Any, Any>?>
 
         while (currentKey == null) {
-            records = queue.peek(limit, sizeLimit).takeUnless { it.isEmpty() }
-                    ?: return null
+            records = queue.peek(limit, sizeLimit)
+
+            if (records.isEmpty()) return null
 
             val nullSize = records.indexOfFirst { it != null }
                     .takeIf { it != -1 }
@@ -146,11 +146,12 @@ constructor(override val file: File,
             currentKey = records.firstOrNull()?.key
         }
 
-        return Pair(currentKey, records.asSequence()
-                .takeWhile { it?.key == currentKey }
-                .filterNotNull()
-                .map(Record<Any, Any>::value)
-                .toList())
+        val differentKeyIndex = records.indexOfFirst { it?.key != currentKey }
+        if (differentKeyIndex > 0) {
+            records = records.subList(0, differentKeyIndex)
+        }
+
+        return Pair(currentKey, records.mapNotNull { it?.value })
     }
 
     @Throws(IOException::class)
@@ -166,7 +167,7 @@ constructor(override val file: File,
     @Throws(IOException::class)
     override fun remove(number: Int) {
         return executor.execute {
-            val actualNumber = Math.min(number, queue.size)
+            val actualNumber = number.coerceAtMost(queue.size)
             if (actualNumber > 0) {
                 logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
                 queue.remove(actualNumber)
@@ -174,14 +175,15 @@ constructor(override val file: File,
         }
     }
 
-    override fun addMeasurement(key: K?, value: V?) {
-        require(inputFormat.validate(topic.keySchema, key)
-                && inputFormat.validate(topic.valueSchema, value)) {
+    override fun addMeasurement(key: K, value: V) {
+        val record = Record(key, value)
+
+        require(serializer.canSerialize(record)) {
             "Cannot send invalid record to topic $topic with {key: $key, value: $value}"
         }
 
         executor.execute {
-            measurementsToAdd.add(Record<K, V>(key, value))
+            measurementsToAdd.add(record)
 
             if (addMeasurementFuture == null) {
                 addMeasurementFuture = executor.delay(config.commitRate, ::doFlush)
