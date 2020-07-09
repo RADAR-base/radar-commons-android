@@ -29,6 +29,6 @@ To enable notifications when an Empatica device is disconnected, set `empatica_n
 
 ## Contributing
 
-To build this repository, download the Empatica Android SDK from the [Empatica Developer Area][1]. Copy the `empalink-2.2.aar` from the Empatica Android SDK package to the `libs` directory. Remove the `gradle.skip` file in the project directory to enable building it.
+To build this repository, download the Empatica Android SDK from the [Empatica Developer Area][1]. Copy the `E4Link-1.0.0.aar` from the Empatica Android SDK package to the `libs` directory. Remove the `gradle.skip` file in the project directory to enable building it.
 
 [1]: https://www.empatica.com/connect/developer.php

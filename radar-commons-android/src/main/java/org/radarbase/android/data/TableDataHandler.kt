@@ -19,7 +19,6 @@ package org.radarbase.android.data
 import android.content.Context
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import org.apache.avro.specific.SpecificData
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.kafka.KafkaDataSubmitter
 import org.radarbase.android.kafka.ServerStatusListener
@@ -45,13 +44,14 @@ import kotlin.collections.HashMap
  * Stores data in databases and sends it to the server. If kafkaConfig is null, data will only be
  * stored to disk, not uploaded.
  */
-class TableDataHandler(private val context: Context) : DataHandler<ObservationKey, SpecificRecord> {
-
+class TableDataHandler(
+        private val context: Context,
+        private val cacheStore: CacheStore
+) : DataHandler<ObservationKey, SpecificRecord> {
     private val tables: ConcurrentMap<String, DataCacheGroup<*, *>> = ConcurrentHashMap()
     private val statusSync = Any()
     private val batteryLevelReceiver: BatteryStageReceiver
     private val networkConnectedReceiver: NetworkConnectedReceiver
-    private val specificData: SpecificData
     private val dataHandler: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
     private val broadcaster = LocalBroadcastManager.getInstance(context)
 
@@ -116,7 +116,6 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
                 start()
             }
         }
-        this.specificData = CacheStore.specificData
 
         submitter = null
         sender = null
@@ -314,10 +313,10 @@ class TableDataHandler(private val context: Context) : DataHandler<ObservationKe
 
     @Throws(IOException::class)
     override fun <V: SpecificRecord> registerCache(topic: AvroTopic<ObservationKey, V>): DataCache<ObservationKey, V> {
-        return CacheStore
+        return cacheStore
                 .getOrCreateCaches(context.applicationContext, topic, config.cacheConfig)
                 .also { tables[topic.name] = it }
-                .let { it.activeDataCache }
+                .activeDataCache
     }
 
     @Synchronized

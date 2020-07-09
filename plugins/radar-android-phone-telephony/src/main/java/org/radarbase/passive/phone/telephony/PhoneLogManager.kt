@@ -43,7 +43,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     private val smsTopic: DataCache<ObservationKey, PhoneSms> = createCache("android_phone_sms", PhoneSms())
     private val smsUnreadTopic: DataCache<ObservationKey, PhoneSmsUnread> = createCache("android_phone_sms_unread", PhoneSmsUnread())
     private val preferences: SharedPreferences = context.getSharedPreferences(PhoneLogService::class.java.name, Context.MODE_PRIVATE)
-    private val hashGenerator: HashGenerator = HashGenerator(preferences)
+    private val hashGenerator = HashGenerator(context, PhoneLogService::class.java.name)
     private val db: ContentResolver = context.contentResolver
     private val logProcessor: OfflineProcessor
     private var lastSmsTimestamp: Long = 0

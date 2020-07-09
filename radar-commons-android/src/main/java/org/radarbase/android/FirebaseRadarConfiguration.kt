@@ -20,7 +20,7 @@ import android.content.Context
 import android.os.Handler
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.gms.common.GoogleApiAvailabilityLight
 import com.google.android.gms.tasks.OnCompleteListener
 import com.google.android.gms.tasks.OnFailureListener
 import com.google.android.gms.tasks.Task
@@ -95,7 +95,7 @@ class FirebaseRadarConfiguration(context: Context, inDevelopmentMode: Boolean, d
                 broadcaster.send(RADAR_CONFIGURATION_CHANGED)            }
         }
 
-        val googleApi = GoogleApiAvailability.getInstance()
+        val googleApi = GoogleApiAvailabilityLight.getInstance()
         if (googleApi.isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS) {
             status = RadarConfiguration.RemoteConfigStatus.READY
             this.handler.postDelayed(object : Runnable {

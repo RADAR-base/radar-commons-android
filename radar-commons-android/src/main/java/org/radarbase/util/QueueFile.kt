@@ -405,7 +405,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         }
 
         override fun skip(byteCount: Long): Long {
-            val countAvailable = Math.min(byteCount, (totalLength - bytesRead).toLong()).toInt()
+            val countAvailable = byteCount.coerceAtMost((totalLength - bytesRead).toLong()).toInt()
             bytesRead += countAvailable
             storagePosition = header.wrapPosition(storagePosition + countAvailable)
             return countAvailable.toLong()

@@ -19,9 +19,10 @@ package org.radarbase.android.data
 import android.content.Context
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import org.apache.avro.Schema
-import org.apache.avro.generic.GenericData
-import org.apache.avro.specific.SpecificData
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.BuildConfig
+import org.radarbase.android.data.serialization.SerializationFactory
+import org.radarbase.android.data.serialization.TapeAvroSerializationFactory
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
 import org.radarbase.util.SynchronizedReference
@@ -31,21 +32,34 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStreamWriter
+import java.lang.Exception
 import java.nio.charset.StandardCharsets
 import java.util.*
 
-object CacheStore {
+class CacheStore(
+        private val serializationFactories: List<SerializationFactory> = listOf(TapeAvroSerializationFactory())
+) {
     private val tables: MutableMap<String, SynchronizedReference<DataCacheGroup<*, *>>> = HashMap()
     private val handler = SafeHandler.getInstance("DataCache", THREAD_PRIORITY_BACKGROUND)
 
     init {
+        require(serializationFactories.isNotEmpty()) { "Need to specify at least one serialization method" }
+        if (BuildConfig.DEBUG) {
+            check(serializationFactories.none { s1 ->
+                serializationFactories.any { s2 -> s1.fileExtension.endsWith(s2.fileExtension, ignoreCase = true) }
+            }) { "Serialization factories cannot have overlapping extensions, to avoid the wrong deserialization method being chosen."}
+        }
         handler.start()
     }
 
     @Suppress("UNCHECKED_CAST")
     @Synchronized
     @Throws(IOException::class)
-    fun <K: ObservationKey, V: SpecificRecord> getOrCreateCaches(context: Context, topic: AvroTopic<K, V>, config: DataCache.CacheConfiguration): DataCacheGroup<K, V> {
+    fun <K: ObservationKey, V: SpecificRecord> getOrCreateCaches(
+            context: Context,
+            topic: AvroTopic<K, V>,
+            config: DataCache.CacheConfiguration
+    ): DataCacheGroup<K, V> {
         val ref = tables[topic.name] as SynchronizedReference<DataCacheGroup<K, V>>?
                 ?: SynchronizedReference {
                     loadCache(context.cacheDir.absolutePath + "/" + topic.name, topic, config)
@@ -55,61 +69,40 @@ object CacheStore {
     }
 
     @Throws(IOException::class)
-    private fun <K: Any, V: Any> loadCache(base: String, topic: AvroTopic<K, V>, config: DataCache.CacheConfiguration): DataCacheGroup<K, V> {
+    private fun <K: Any, V: Any> loadCache(
+            base: String,
+            topic: AvroTopic<K, V>,
+            config: DataCache.CacheConfiguration
+    ): DataCacheGroup<K, V> {
         val fileBases = getFileBases(base)
         logger.debug("Files for topic {}: {}", topic.name, fileBases)
 
         var activeDataCache: DataCache<K, V>? = null
         val deprecatedDataCaches = ArrayList<ReadableDataCache>()
 
-        for (fileBase in fileBases) {
-            val parser = Schema.Parser()
-            val keySchemaFile = File(fileBase + KEY_SCHEMA_EXTENSION)
-            val valueSchemaFile = File(fileBase + VALUE_SCHEMA_EXTENSION)
-            var keySchema = loadSchema(parser, keySchemaFile)
-            var valueSchema = loadSchema(parser, valueSchemaFile)
-
-            val tapeFile = File(fileBase + TAPE_EXTENSION)
-            var matches = false
-
-            if (keySchema == null) {
-                if (valueSchema == null || valueSchema == topic.valueSchema) {
-                    keySchema = topic.keySchema
-                    matches = true
-                    storeSchema(keySchema, keySchemaFile)
-                } else {
-                    logger.error("Cannot load partially specified schema")
-                }
-            }
-
-            if (valueSchema == null) {
-                if (keySchema == topic.keySchema) {
-                    valueSchema = topic.valueSchema
-                    matches = true
-                    storeSchema(valueSchema, valueSchemaFile)
-                } else {
-                    logger.error("Cannot load partially specified schema")
-                }
-            }
+        for ((fileBase, serialization) in fileBases) {
+            val tapeFile = File(fileBase + serialization.fileExtension)
+            val (keySchema, valueSchema) = loadSchemas(topic, fileBase)
+                    ?: continue  // no use in reading without valid schemas
 
             val outputTopic = AvroTopic(topic.name,
                     keySchema, valueSchema,
                     Any::class.java, Any::class.java)
 
-            if (matches
-                    || (keySchema == topic.keySchema && valueSchema == topic.valueSchema)) {
+            if (keySchema == topic.keySchema
+                    && valueSchema == topic.valueSchema
+                    && serialization == serializationFactories.first()) {
                 if (activeDataCache != null) {
                     logger.error("Cannot have more than one active cache")
                 }
 
                 logger.info("Loading matching data store with schemas {}", tapeFile)
                 activeDataCache = TapeCache(
-                        tapeFile, topic, outputTopic, handler,
-                        specificData, genericData, config)
+                        tapeFile, topic, outputTopic, handler, serialization, config)
             } else {
                 logger.debug("Loading deprecated data store {}", tapeFile)
-                deprecatedDataCaches.add(TapeCache(tapeFile, outputTopic as AvroTopic<*, *>,
-                        outputTopic, handler, specificData, genericData, config))
+                deprecatedDataCaches.add(TapeCache(
+                        tapeFile, outputTopic, outputTopic, handler, serialization, config))
             }
         }
 
@@ -118,90 +111,72 @@ object CacheStore {
             if (!baseDir.exists() && !baseDir.mkdirs()) {
                 throw IOException("Cannot make data cache directory")
             }
+            val serialization = serializationFactories.first()
             activeDataCache = IntRange(0, 99)
                     .map { "$base/cache-$it" }
-                    .find { it !in fileBases }
+                    .find { fileBase -> fileBases.none { it.first == fileBase } }
                     ?.let { fileBase ->
-                        val tapeFile = File(fileBase + TAPE_EXTENSION)
-                        val keySchemaFile = File(fileBase + KEY_SCHEMA_EXTENSION)
-                        val valueSchemaFile = File(fileBase + VALUE_SCHEMA_EXTENSION)
+                        storeSchema(topic.keySchema, File(fileBase + KEY_SCHEMA_EXTENSION))
+                        storeSchema(topic.valueSchema, File(fileBase + VALUE_SCHEMA_EXTENSION))
 
                         val outputTopic = AvroTopic(topic.name,
                                 topic.keySchema, topic.valueSchema,
                                 Any::class.java, Any::class.java)
 
-                        storeSchema(topic.keySchema, keySchemaFile)
-                        storeSchema(topic.valueSchema, valueSchemaFile)
-
+                        val tapeFile = File(fileBase + serialization.fileExtension)
                         logger.info("Creating new data store {}", tapeFile)
-                        TapeCache(tapeFile, topic, outputTopic, handler, specificData, genericData, config)
+                        TapeCache(
+                                tapeFile, topic, outputTopic, handler, serialization, config)
                     } ?: throw IOException("No empty slot to store active data cache in.")
         }
 
         return DataCacheGroup(activeDataCache, deprecatedDataCaches)
     }
 
-    private fun getFileBases(base: String): List<String> {
-        val files = ArrayList<String>(2)
-        if (File(base + TAPE_EXTENSION).isFile) {
-            files += base
-        }
-        val baseDir = File(base)
-        if (baseDir.isDirectory) {
-            files += baseDir.listFiles { _, name -> name.endsWith(TAPE_EXTENSION, ignoreCase = true) }
-                    .map {
-                        val name = it.name
-                        base + "/" + name.substring(0, name.length - TAPE_EXTENSION.length)
-                    }
-        }
-        return files
-    }
+    private fun loadSchemas(topic: AvroTopic<*, *>, base: String): Pair<Schema, Schema>? {
+        val parser = Schema.Parser()
 
-    private val logger = LoggerFactory.getLogger(CacheStore::class.java)
+        val keySchemaFile = File(base + KEY_SCHEMA_EXTENSION)
+        val valueSchemaFile = File(base + VALUE_SCHEMA_EXTENSION)
+        val keySchema = loadSchema(parser, keySchemaFile)
+        val valueSchema = loadSchema(parser, valueSchemaFile)
 
-    internal const val TAPE_EXTENSION = ".tape"
-    internal const val KEY_SCHEMA_EXTENSION = ".key.avsc"
-    internal const val VALUE_SCHEMA_EXTENSION = ".value.avsc"
-
-    val genericData: GenericData = object : GenericData(CacheStore::class.java.classLoader) {
-        override fun isFloat(`object`: Any?): Boolean {
-            return (`object` is Float
-                    && !`object`.isNaN()
-                    && !`object`.isInfinite())
-        }
-
-        override fun isDouble(`object`: Any?): Boolean {
-            return (`object` is Double
-                    && !`object`.isNaN()
-                    && !`object`.isInfinite())
+        return when {
+            keySchema != null && valueSchema != null -> Pair(keySchema, valueSchema)
+            keySchema == null && valueSchema == null -> Pair(topic.keySchema, topic.valueSchema)
+            keySchema == null && valueSchema == topic.valueSchema -> Pair(topic.keySchema, topic.valueSchema)
+            keySchema == topic.keySchema && valueSchema == null -> Pair(topic.keySchema, topic.valueSchema)
+            else -> {
+                logger.error("Cannot load partially specified schema")
+                null
+            }
         }
     }
 
-    val specificData: SpecificData = object : SpecificData(CacheStore::class.java.classLoader) {
-        override fun isFloat(`object`: Any?): Boolean {
-            return (`object` is Float
-                    && !`object`.isNaN()
-                    && !`object`.isInfinite())
-        }
+    private fun getFileBases(base: String): List<Pair<String, SerializationFactory>> {
+        val regularFiles = serializationFactories
+                .filter { sf -> File(base + sf.fileExtension).isFile }
+                .map { sf -> Pair(base + sf.fileExtension, sf) }
 
-        override fun isDouble(`object`: Any?): Boolean {
-            return (`object` is Double
-                    && !`object`.isNaN()
-                    && !`object`.isInfinite())
-        }
+        val dirFiles = File(base)
+                .takeIf { it.isDirectory }
+                ?.listFiles { _, fileName -> serializationFactories.any { sf -> fileName.endsWith(sf.fileExtension) } }
+                ?.map { f ->
+                    val fileName = f.name
+                    val sf = serializationFactories.first { fileName.endsWith(it.fileExtension) }
+                    Pair(base + "/" + fileName.substring(0, fileName.length - sf.fileExtension.length), sf)
+                }
+
+        return if (dirFiles != null) regularFiles + dirFiles else regularFiles
     }
 
     private fun loadSchema(parser: Schema.Parser, file: File): Schema? {
         return try {
             if (file.isFile) parser.parse(file) else null
-        } catch (ex: RuntimeException) {
-            logger.error("Failed to load schema", ex)
-            null
-        } catch (ex: IOException) {
+        } catch (ex: Exception) {
             logger.error("Failed to load schema", ex)
             null
         }
-
     }
 
     private fun storeSchema(schema: Schema, file: File) {
@@ -214,6 +189,12 @@ object CacheStore {
         } catch (ex: IOException) {
             logger.error("Cannot write schema", ex)
         }
+    }
 
+    companion object {
+        private val logger = LoggerFactory.getLogger(CacheStore::class.java)
+
+        internal const val KEY_SCHEMA_EXTENSION = ".key.avsc"
+        internal const val VALUE_SCHEMA_EXTENSION = ".value.avsc"
     }
 }

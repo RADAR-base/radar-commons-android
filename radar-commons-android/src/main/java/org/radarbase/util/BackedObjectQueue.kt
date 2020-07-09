@@ -147,6 +147,12 @@ class BackedObjectQueue<S, T>(
     /** Converts objects into streams.  */
     interface Serializer<S> {
         /**
+         * Check whether given object can be serialized by this serializer.
+         * @return true if the value can be serialized, false otherwise.
+         */
+        fun canSerialize(value: S): Boolean
+
+        /**
          * Serialize an object to given output stream.
          * @param output output, which will not be closed after this call.
          * @throws IOException if a valid object could not be serialized to the stream

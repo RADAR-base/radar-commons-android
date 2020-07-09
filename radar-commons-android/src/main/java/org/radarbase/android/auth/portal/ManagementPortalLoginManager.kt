@@ -211,11 +211,13 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
         val url = config.getString(MANAGEMENT_PORTAL_URL_KEY)
         val unsafe = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
         try {
-            val portalConfig = ServerConfig(url)
-            portalConfig.isUnsafe = unsafe
+            val portalConfig = ServerConfig(url).apply {
+                isUnsafe = unsafe
+            }
             client = ManagementPortalClient(portalConfig,
                     config.getString(OAUTH2_CLIENT_ID),
-                    config.getString(OAUTH2_CLIENT_SECRET, ""), client = restClient)
+                    config.getString(OAUTH2_CLIENT_SECRET, ""),
+                    client = restClient)
                     .also { restClient = it.client }
         } catch (e: MalformedURLException) {
             logger.error("Cannot construct ManagementPortalClient with malformed URL")

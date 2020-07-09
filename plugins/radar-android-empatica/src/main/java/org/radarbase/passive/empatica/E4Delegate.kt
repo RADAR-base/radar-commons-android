@@ -21,10 +21,14 @@ class E4Delegate(private val e4Service: E4Service) : EmpaDataDelegate, EmpaStatu
     override fun didReceiveTag(timestamp: Double) = deviceManager?.didReceiveTag(timestamp) ?: Unit
 
     override fun didUpdateStatus(status: EmpaStatus) = deviceManager?.didUpdateStatus(status) ?: Unit
+    override fun bluetoothStateChanged() = deviceManager?.bluetoothStateChanged() ?: Unit
+
     override fun didEstablishConnection() = deviceManager?.didEstablishConnection() ?: Unit
     override fun didUpdateSensorStatus(status: Int, type: EmpaSensorType) = deviceManager?.didUpdateSensorStatus(status, type) ?: Unit
     override fun didDiscoverDevice(device: EmpaticaDevice, deviceLabel: String, rssi: Int, allowed: Boolean) = deviceManager?.didDiscoverDevice(device, deviceLabel, rssi, allowed) ?: Unit
     override fun didRequestEnableBluetooth() = deviceManager?.didRequestEnableBluetooth() ?: Unit
+    override fun didFailedScanning(errorCode: Int) = deviceManager?.didFailedScanning(errorCode) ?: Unit
+
     override fun didUpdateOnWristStatus(status: Int) = deviceManager?.didUpdateOnWristStatus(status) ?: Unit
 
     override fun didUpdateSessionStatus(event: EmpaSessionEvent?, progress: Float) = deviceManager?.didUpdateSessionStatus(event, progress) ?: Unit

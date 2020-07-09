@@ -29,6 +29,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
+import org.radarbase.android.data.serialization.TapeAvroSerializationFactory
 import org.radarbase.android.kafka.KafkaDataSubmitter.Companion.SIZE_LIMIT_DEFAULT
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
@@ -46,8 +47,7 @@ class TapeCacheTest {
     private lateinit var tapeCache: TapeCache<ObservationKey, ApplicationUptime>
     private lateinit var key: ObservationKey
     private lateinit var value: ApplicationUptime
-    private val specificData = CacheStore.specificData
-    private val genericData = CacheStore.genericData
+    private val serializationFactory = TapeAvroSerializationFactory()
 
     @Rule @JvmField
     var folder = TemporaryFolder()
@@ -63,7 +63,7 @@ class TapeCacheTest {
                     Any::class.java, Any::class.java)
 
             return TapeCache(
-                    folder.newFile(), topic, outputTopic, handler, specificData, genericData,
+                    folder.newFile(), topic, outputTopic, handler, serializationFactory,
                     DataCache.CacheConfiguration(100L))
         }
 
@@ -83,7 +83,7 @@ class TapeCacheTest {
             start()
         }
         tapeCache = TapeCache(folder.newFile(), topic,
-                outputTopic, handler, specificData, genericData,
+                outputTopic, handler, serializationFactory,
                 DataCache.CacheConfiguration(100, 4096))
 
         key = ObservationKey("test", "a", "b")

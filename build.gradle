@@ -39,8 +39,10 @@ allprojects {
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = '1.0.0-alpha2'
+    version = '1.0.0-alpha4'
     group = 'org.radarbase'
+
+    ext.versionCode = 33
 }
 
 subprojects {
@@ -51,19 +53,6 @@ subprojects {
     apply plugin: 'kotlin-android'
     apply plugin: 'idea'
     apply plugin: 'org.owasp.dependencycheck'
-
-//---------------------------------------------------------------------------//
-// Configuration                                                             //
-//---------------------------------------------------------------------------//
-
-    version = '1.0.0-alpha3'
-    ext.versionCode = 32
-    group = 'org.radarbase'
-    ext.githubRepoName = 'RADAR-base/radar-commons-android'
-
-    ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
-    ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
-    ext.website = 'http://radar-base.org'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //

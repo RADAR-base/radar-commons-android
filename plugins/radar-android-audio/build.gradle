@@ -1,6 +1,9 @@
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
+    // Matches Github Actions
+    ndkVersion "21.3.6528147"
+
     defaultConfig {
         ndk {
             moduleName rootProject.name

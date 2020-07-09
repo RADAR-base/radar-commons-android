@@ -54,9 +54,9 @@ class SourceMetadata {
         } catch (ex: JSONException) {
             null
         }
-        this.sourceId = json.optString("sourceId", null)
-        this.sourceName = json.optString("sourceName", null)
-        this.expectedSourceName = json.optString("expectedSourceName", null)
+        this.sourceId = json.optString("sourceId").takeIf { it.isNotEmpty() }
+        this.sourceName = json.optString("sourceName").takeIf { it.isNotEmpty() }
+        this.expectedSourceName = json.optString("expectedSourceName").takeIf { it.isNotEmpty() }
 
         val attr = HashMap<String, String>()
         val attributesJson = json.optJSONObject("attributes")

@@ -61,6 +61,7 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.data.CacheStore
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.TableDataHandler
 import org.radarbase.android.kafka.ServerStatusListener
@@ -85,6 +86,8 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
         private set
+
+    open val cacheStore: CacheStore = CacheStore()
 
     private lateinit var mHandler: SafeHandler
     private var needsBluetooth: Boolean = false
@@ -147,9 +150,11 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
         broadcaster.run {
             permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
+                val extraPermissions = intent.getStringArrayExtra(EXTRA_PERMISSIONS) ?: return@register
+                val extraGrants = intent.getIntArrayExtra(EXTRA_GRANT_RESULTS) ?: return@register
                 onPermissionsGranted(
-                        intent.getStringArrayExtra(EXTRA_PERMISSIONS),
-                        intent.getIntArrayExtra(EXTRA_GRANT_RESULTS))
+                        extraPermissions,
+                        extraGrants)
             }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
@@ -247,7 +252,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         val unsafeConnection = configuration.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
 
         synchronized(this) {
-            dataHandler ?: TableDataHandler(this)
+            dataHandler ?: TableDataHandler(this, cacheStore)
                     .also {
                         dataHandler = it
                         it.statusListener = this
@@ -477,6 +482,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
                         || powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
             } ?: true
             PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager, Boolean>(Context.APP_OPS_SERVICE) { appOps ->
+                @Suppress("DEPRECATION")
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                         || MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName)
             } ?: true
