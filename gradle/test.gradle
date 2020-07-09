@@ -50,20 +50,6 @@ dependencies {
     unmock 'org.robolectric:android-all:5.0.2_r3-robolectric-r0'
 }
 
-android.testOptions.unitTests.all {
-    // Configure whether failing tests should fail the build
-    ignoreFailures false
-
-    testLogging {
-        exceptionFormat "full"
-        showCauses true
-        showExceptions true
-        showStackTraces true
-        showStandardStreams true
-        events = ["passed", "skipped", "failed", "standardOut", "standardError"]
-    }
-}
-
 unMock {
     keep "android.widget.BaseAdapter"
     keep "android.widget.ArrayAdapter"
