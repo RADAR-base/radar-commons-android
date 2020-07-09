@@ -33,6 +33,7 @@ jobs:
                       ~/.gradle/caches/modules-2/metadata-2.96/
                       ~/.gradle/native
                       ~/.gradle/wrapper
+                      ~/.android/build-cache
                   # Key for restoring and saving the cache
                   key: ${{ runner.os }}-gradle
 
