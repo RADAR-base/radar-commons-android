@@ -81,41 +81,16 @@ class CacheStore(
         val deprecatedDataCaches = ArrayList<ReadableDataCache>()
 
         for ((fileBase, serialization) in fileBases) {
-            val parser = Schema.Parser()
-            val keySchemaFile = File(fileBase + KEY_SCHEMA_EXTENSION)
-            val valueSchemaFile = File(fileBase + VALUE_SCHEMA_EXTENSION)
-            var keySchema = loadSchema(parser, keySchemaFile)
-            var valueSchema = loadSchema(parser, valueSchemaFile)
-
             val tapeFile = File(fileBase + serialization.fileExtension)
-            var matches = false
-
-            if (keySchema == null) {
-                if (valueSchema == null || valueSchema == topic.valueSchema) {
-                    keySchema = topic.keySchema
-                    matches = true
-                    storeSchema(keySchema, keySchemaFile)
-                } else {
-                    logger.error("Cannot load partially specified schema")
-                }
-            }
-
-            if (valueSchema == null) {
-                if (keySchema == topic.keySchema) {
-                    valueSchema = topic.valueSchema
-                    matches = true
-                    storeSchema(valueSchema, valueSchemaFile)
-                } else {
-                    logger.error("Cannot load partially specified schema")
-                }
-            }
+            val (keySchema, valueSchema) = loadSchemas(topic, fileBase)
+                    ?: continue  // no use in reading without valid schemas
 
             val outputTopic = AvroTopic(topic.name,
                     keySchema, valueSchema,
                     Any::class.java, Any::class.java)
 
-            if ((matches
-                    || (keySchema == topic.keySchema && valueSchema == topic.valueSchema))
+            if (keySchema == topic.keySchema
+                    && valueSchema == topic.valueSchema
                     && serialization == serializationFactories.first()) {
                 if (activeDataCache != null) {
                     logger.error("Cannot have more than one active cache")
@@ -123,12 +98,11 @@ class CacheStore(
 
                 logger.info("Loading matching data store with schemas {}", tapeFile)
                 activeDataCache = TapeCache(
-                        tapeFile, topic, outputTopic, handler,
-                        serialization, config)
+                        tapeFile, topic, outputTopic, handler, serialization, config)
             } else {
                 logger.debug("Loading deprecated data store {}", tapeFile)
-                deprecatedDataCaches.add(TapeCache(tapeFile, outputTopic as AvroTopic<*, *>,
-                        outputTopic, handler, serialization, config))
+                deprecatedDataCaches.add(TapeCache(
+                        tapeFile, outputTopic, outputTopic, handler, serialization, config))
             }
         }
 
@@ -142,36 +116,66 @@ class CacheStore(
                     .map { "$base/cache-$it" }
                     .find { fileBase -> fileBases.none { it.first == fileBase } }
                     ?.let { fileBase ->
-                        val tapeFile = File(fileBase + serialization.fileExtension)
-                        val keySchemaFile = File(fileBase + KEY_SCHEMA_EXTENSION)
-                        val valueSchemaFile = File(fileBase + VALUE_SCHEMA_EXTENSION)
+                        storeSchema(topic.keySchema, File(fileBase + KEY_SCHEMA_EXTENSION))
+                        storeSchema(topic.valueSchema, File(fileBase + VALUE_SCHEMA_EXTENSION))
 
                         val outputTopic = AvroTopic(topic.name,
                                 topic.keySchema, topic.valueSchema,
                                 Any::class.java, Any::class.java)
 
-                        storeSchema(topic.keySchema, keySchemaFile)
-                        storeSchema(topic.valueSchema, valueSchemaFile)
-
+                        val tapeFile = File(fileBase + serialization.fileExtension)
                         logger.info("Creating new data store {}", tapeFile)
-                        TapeCache(tapeFile, topic, outputTopic, handler, serialization, config)
+                        TapeCache(
+                                tapeFile, topic, outputTopic, handler, serialization, config)
                     } ?: throw IOException("No empty slot to store active data cache in.")
         }
 
         return DataCacheGroup(activeDataCache, deprecatedDataCaches)
     }
 
+    private fun loadSchemas(topic: AvroTopic<*, *>, base: String): Pair<Schema, Schema>? {
+        val parser = Schema.Parser()
+
+        val keySchemaFile = File(base + KEY_SCHEMA_EXTENSION)
+        val valueSchemaFile = File(base + VALUE_SCHEMA_EXTENSION)
+        var keySchema = loadSchema(parser, keySchemaFile)
+        var valueSchema = loadSchema(parser, valueSchemaFile)
+
+        if (keySchema == null) {
+            if (valueSchema == null || valueSchema == topic.valueSchema) {
+                keySchema = topic.keySchema
+                storeSchema(keySchema, keySchemaFile)
+            } else {
+                logger.error("Cannot load partially specified schema")
+            }
+        }
+
+        if (valueSchema == null) {
+            if (keySchema == topic.keySchema) {
+                valueSchema = topic.valueSchema
+                storeSchema(valueSchema, valueSchemaFile)
+            } else {
+                logger.error("Cannot load partially specified schema")
+            }
+        }
+
+        return if (keySchema != null && valueSchema != null) {
+            Pair(keySchema, valueSchema)
+        } else null
+    }
+
     private fun getFileBases(base: String): List<Pair<String, SerializationFactory>> {
-        val regularFiles = serializationFactories.filter { File(base + it.fileExtension).isFile }
-                .map { base + it.fileExtension to it }
+        val regularFiles = serializationFactories
+                .filter { sf -> File(base + sf.fileExtension).isFile }
+                .map { sf -> Pair(base + sf.fileExtension, sf) }
 
         val dirFiles = File(base)
                 .takeIf { it.isDirectory }
-                ?.listFiles { _, name -> serializationFactories.any { name.endsWith(it.fileExtension, ignoreCase = true) } }
+                ?.listFiles { _, fileName -> serializationFactories.any { sf -> fileName.endsWith(sf.fileExtension) } }
                 ?.map { f ->
-                    val name = f.name
-                    val factory = serializationFactories.first { name.endsWith(it.fileExtension, ignoreCase = true) }
-                    base + "/" + name.substring(0, name.length - factory.fileExtension.length) to factory
+                    val fileName = f.name
+                    val sf = serializationFactories.first { fileName.endsWith(it.fileExtension) }
+                    Pair(base + "/" + fileName.substring(0, fileName.length - sf.fileExtension.length), sf)
                 }
 
         return if (dirFiles != null) regularFiles + dirFiles else regularFiles
