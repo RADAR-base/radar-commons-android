@@ -138,30 +138,19 @@ class CacheStore(
 
         val keySchemaFile = File(base + KEY_SCHEMA_EXTENSION)
         val valueSchemaFile = File(base + VALUE_SCHEMA_EXTENSION)
-        var keySchema = loadSchema(parser, keySchemaFile)
-        var valueSchema = loadSchema(parser, valueSchemaFile)
+        val keySchema = loadSchema(parser, keySchemaFile)
+        val valueSchema = loadSchema(parser, valueSchemaFile)
 
-        if (keySchema == null) {
-            if (valueSchema == null || valueSchema == topic.valueSchema) {
-                keySchema = topic.keySchema
-                storeSchema(keySchema, keySchemaFile)
-            } else {
+        return when {
+            keySchema != null && valueSchema != null -> Pair(keySchema, valueSchema)
+            keySchema == null && valueSchema == null -> Pair(topic.keySchema, topic.valueSchema)
+            keySchema == null && valueSchema == topic.valueSchema -> Pair(topic.keySchema, topic.valueSchema)
+            keySchema == topic.keySchema && valueSchema == null -> Pair(topic.keySchema, topic.valueSchema)
+            else -> {
                 logger.error("Cannot load partially specified schema")
+                null
             }
         }
-
-        if (valueSchema == null) {
-            if (keySchema == topic.keySchema) {
-                valueSchema = topic.valueSchema
-                storeSchema(valueSchema, valueSchemaFile)
-            } else {
-                logger.error("Cannot load partially specified schema")
-            }
-        }
-
-        return if (keySchema != null && valueSchema != null) {
-            Pair(keySchema, valueSchema)
-        } else null
     }
 
     private fun getFileBases(base: String): List<Pair<String, SerializationFactory>> {
