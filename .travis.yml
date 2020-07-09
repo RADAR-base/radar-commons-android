@@ -9,6 +9,7 @@ cache:
     - $HOME/.gradle/caches/modules-2/files-2.1/
     - $HOME/.gradle/native
     - $HOME/.gradle/wrapper
+    - $HOME/.android/build-cache
 
 env:
   global:
