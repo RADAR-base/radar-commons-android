@@ -25,7 +25,7 @@ dependencies {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarcns:radar-schemas-commons:0.5.10.1') {
+    api ('org.radarcns:radar-schemas-commons:0.5.11.1') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api ('org.apache.avro:avro:1.8.2') {
