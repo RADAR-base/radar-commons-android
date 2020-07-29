@@ -236,9 +236,9 @@ abstract class AuthService : Service(), LoginListener {
         }
     }
 
-    private fun applyState(apply: (AppAuthState) -> Unit) {
+    private fun applyState(function: AppAuthState.() -> Unit) {
         handler.executeReentrant {
-            apply(appAuth)
+            appAuth.function()
         }
     }
 
@@ -287,7 +287,7 @@ abstract class AuthService : Service(), LoginListener {
 
         fun refreshIfOnline() = this@AuthService.refreshIfOnline()
 
-        fun applyState(apply: (AppAuthState) -> Unit) = this@AuthService.applyState(apply)
+        fun applyState(apply: AppAuthState.() -> Unit) = this@AuthService.applyState(apply)
 
         @Suppress("unused")
         fun updateState(update: AppAuthState.Builder.() -> Unit) = this@AuthService.updateState(update)
