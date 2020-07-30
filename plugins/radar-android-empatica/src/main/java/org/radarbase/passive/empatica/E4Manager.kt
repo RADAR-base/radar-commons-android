@@ -16,7 +16,6 @@
 
 package org.radarbase.passive.empatica
 
-import android.bluetooth.BluetoothAdapter
 import com.empatica.empalink.ConnectionNotAllowedException
 import com.empatica.empalink.EmpaDeviceManager
 import com.empatica.empalink.EmpaticaDevice
@@ -123,6 +122,10 @@ class E4Manager(
                 // not handling all cases
             }
         }
+    }
+
+    override fun bluetoothStateChanged() {
+        logger.info("E4 bluetooth state has changed.")
     }
 
     override fun didEstablishConnection() {
@@ -273,6 +276,10 @@ class E4Manager(
     override fun hashCode() = System.identityHashCode(this)
 
     override fun equals(other: Any?) = this === other
+
+    override fun didFailedScanning(errorCode: Int) {
+        logger.warn("Failed scanning device: error code {}", errorCode)
+    }
 
     override fun didUpdateSessionStatus(event: EmpaSessionEvent?, progress: Float) {
         logger.info("Empatica session event {} with progress {}", event, progress)

@@ -32,6 +32,11 @@ abstract class AuthService : Service(), LoginListener {
     private var configRegistration: LoginListenerRegistration? = null
     private var currentDelay: Long? = null
     private var isConnected: Boolean = false
+
+    open val authSerialization: AuthSerialization by lazy {
+        SharedPreferencesAuthSerialization(this)
+    }
+
     @Volatile
     private var isInLoginActivity: Boolean = false
 
@@ -40,7 +45,7 @@ abstract class AuthService : Service(), LoginListener {
     override fun onCreate() {
         super.onCreate()
         broadcaster = LocalBroadcastManager.getInstance(this)
-        appAuth = AppAuthState.from(this)
+        appAuth = authSerialization.load() ?: AppAuthState()
         config = radarConfig
         config.updateWithAuthState(this, appAuth)
         handler.start()
@@ -66,7 +71,7 @@ abstract class AuthService : Service(), LoginListener {
                 currentDelay = null
                 config.updateWithAuthState(this@AuthService, appAuth)
                 config.persistChanges()
-                appAuth.addToPreferences(this@AuthService)
+                authSerialization.store(appAuth)
             }
         })
     }
@@ -141,7 +146,7 @@ abstract class AuthService : Service(), LoginListener {
             if (ex is ConnectException) {
                 isConnected = false
 
-                val actualDelay = Math.min(2 * (currentDelay ?: RETRY_MIN_DELAY), RETRY_MAX_DELAY)
+                val actualDelay = (2 * (currentDelay ?: RETRY_MIN_DELAY)).coerceAtMost(RETRY_MAX_DELAY)
                         .also { currentDelay = it }
                         .let { Random.nextLong(RETRY_MIN_DELAY, it) }
                 handler.delay(actualDelay, ::refresh)
@@ -192,7 +197,7 @@ abstract class AuthService : Service(), LoginListener {
         configRegistration?.let { removeLoginListener(it) }
         handler.stop {
             loginManagers.forEach { it.onDestroy() }
-            appAuth.addToPreferences(this)
+            authSerialization.store(appAuth)
         }
     }
 
@@ -231,9 +236,9 @@ abstract class AuthService : Service(), LoginListener {
         }
     }
 
-    private fun applyState(apply: (AppAuthState) -> Unit) {
+    private fun applyState(function: AppAuthState.() -> Unit) {
         handler.executeReentrant {
-            apply(appAuth)
+            appAuth.function()
         }
     }
 
@@ -247,7 +252,7 @@ abstract class AuthService : Service(), LoginListener {
                     manager.invalidate(appAuth, disableRefresh)
                             ?.also { appAuth = it } != null
                 }) {
-                    appAuth.addToPreferences(this)
+                    authSerialization.store(appAuth)
                     startLogin()
                 }
             }
@@ -282,7 +287,7 @@ abstract class AuthService : Service(), LoginListener {
 
         fun refreshIfOnline() = this@AuthService.refreshIfOnline()
 
-        fun applyState(apply: (AppAuthState) -> Unit) = this@AuthService.applyState(apply)
+        fun applyState(apply: AppAuthState.() -> Unit) = this@AuthService.applyState(apply)
 
         @Suppress("unused")
         fun updateState(update: AppAuthState.Builder.() -> Unit) = this@AuthService.updateState(update)

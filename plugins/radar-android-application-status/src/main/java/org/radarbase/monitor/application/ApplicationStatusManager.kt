@@ -132,7 +132,7 @@ class ApplicationStatusManager internal constructor(service: ApplicationStatusSe
                 state.addRecordsSent(max(numberOfRecordsSent, 0))
             }
             cacheReceiver = register(CACHE_TOPIC) { _, intent ->
-                val topic = intent.getStringExtra(CACHE_TOPIC)
+                val topic = intent.getStringExtra(CACHE_TOPIC) ?: return@register
                 val records = intent.getLongExtra(CACHE_RECORDS_UNSENT_NUMBER, 0)
                 state.cachedRecords[topic] = max(records, 0)
             }

@@ -16,15 +16,20 @@
 
 package org.radarbase.android.util
 
-import android.content.SharedPreferences
+import android.content.Context
+import android.content.Context.MODE_PRIVATE
+import android.os.Build
+import android.security.keystore.KeyProperties.PURPOSE_SIGN
 import android.util.Base64
 import org.radarbase.util.Serialization
 import java.nio.ByteBuffer
 import java.security.InvalidKeyException
+import java.security.Key
 import java.security.NoSuchAlgorithmException
 import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+
 
 /**
  * Hash generator that uses the HmacSHA256 algorithm to hash data. This algorithm ensures that
@@ -36,14 +41,18 @@ import javax.crypto.spec.SecretKeySpec
  * HashGenerator must be used from a single thread or synchronized externally.
  * This persists the hash.key property in the given preferences.
  */
-class HashGenerator(private val preferences: SharedPreferences) {
+class HashGenerator(
+        context: Context,
+        private val name: String
+) {
     private val sha256: Mac
     private val hashBuffer = ByteArray(4)
+    private val preferences = context.getSharedPreferences(name, MODE_PRIVATE)
 
     init {
         try {
-            this.sha256 = Mac.getInstance("HmacSHA256")
-            sha256.init(SecretKeySpec(loadHashKey(), "HmacSHA256"))
+            sha256 = Mac.getInstance(HMAC_SHA256)
+            sha256.init(loadKey())
         } catch (ex: NoSuchAlgorithmException) {
             throw IllegalStateException("Cannot retrieve hashing algorithm", ex)
         } catch (ex: InvalidKeyException) {
@@ -52,15 +61,20 @@ class HashGenerator(private val preferences: SharedPreferences) {
 
     }
 
-    private fun loadHashKey(): ByteArray {
-        var b64Salt = preferences.getString(HASH_KEY, null)
-        return b64Salt?.let { Base64.decode(it, Base64.NO_WRAP) }
-                ?: ByteArray(16).also { byteSalt ->
-                    SecureRandom().nextBytes(byteSalt)
-
-                    b64Salt = Base64.encodeToString(byteSalt, Base64.NO_WRAP)
-                    preferences.edit().putString(HASH_KEY, b64Salt).apply()
-                }
+    private fun loadKey(): Key {
+        val b64Salt = preferences.getString(HASH_KEY, null)
+        return when {
+            b64Salt != null -> SecretKeySpec(Base64.decode(b64Salt, Base64.NO_WRAP), HMAC_SHA256)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> AndroidKeyStore.getOrCreateSecretKey("$name.$HASH_KEY", HMAC_SHA256, PURPOSE_SIGN)
+            else -> {
+                val byteSalt = ByteArray(16)
+                SecureRandom().nextBytes(byteSalt)
+                preferences.edit()
+                        .putString(HASH_KEY, Base64.encodeToString(byteSalt, Base64.NO_WRAP))
+                        .apply()
+                SecretKeySpec(byteSalt, HMAC_SHA256)
+            }
+        }
     }
 
     /** Create a unique hash for a given target.  */
@@ -86,5 +100,6 @@ class HashGenerator(private val preferences: SharedPreferences) {
 
     companion object {
         private const val HASH_KEY = "hash.key"
+        private const val HMAC_SHA256 = "HmacSHA256"
     }
 }

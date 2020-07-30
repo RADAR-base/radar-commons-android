@@ -50,8 +50,8 @@ open class ManagedServiceConnection<T: IBinder>(val context: Context, private va
         }
     }
 
-    open fun applyBinder(callback: (T) -> Unit) {
-        binder?.also(callback)
+    open fun applyBinder(callback: T.() -> Unit) {
+        binder?.apply(callback)
     }
 
     fun unbind(): Boolean {

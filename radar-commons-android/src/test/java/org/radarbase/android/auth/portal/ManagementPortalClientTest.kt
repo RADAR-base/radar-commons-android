@@ -127,9 +127,9 @@ class ManagementPortalClientTest {
         assertEquals("something", `object`.getString("sourceName"))
         assertEquals(0, `object`.getInt("sourceTypeId").toLong())
         val attr = `object`.getJSONObject("attributes")
-        assertEquals(3, `object`.names().length().toLong())
+        assertEquals(3L, `object`.names()?.length()?.toLong())
         assertEquals("0.11", attr.getString("firmware"))
-        assertEquals(1, attr.names().length().toLong())
+        assertEquals(1L, attr.names()?.length()?.toLong())
     }
 
     @Test
@@ -144,7 +144,7 @@ class ManagementPortalClientTest {
         val `object` = JSONObject(body)
         assertEquals("something-With-_others-", `object`.getString("sourceName"))
         assertEquals(0, `object`.getInt("sourceTypeId").toLong())
-        assertEquals(2, `object`.names().length().toLong())
+        assertEquals(2L, `object`.names()?.length()?.toLong())
     }
 
     @Test

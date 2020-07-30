@@ -245,9 +245,9 @@ abstract class MainActivity : AppCompatActivity() {
     }
 
     private fun testBindBluetooth() {
-        radarConnection.applyBinder { binder ->
-            bluetoothReceiverIsEnabled.applyIfChanged(binder.needsBluetooth()) {
-                if (it && enableBluetoothRequests.value) {
+        radarConnection.applyBinder {
+            bluetoothReceiverIsEnabled.applyIfChanged(needsBluetooth()) { doesNeedBluetooth ->
+                if (doesNeedBluetooth && enableBluetoothRequests.value) {
                     bluetoothReceiver.register()
                     requestEnableBt()
                 } else {
@@ -287,7 +287,7 @@ abstract class MainActivity : AppCompatActivity() {
      * still valid.
      */
     protected fun logout(disableRefresh: Boolean) {
-        authConnection.applyBinder { it.invalidate(null, disableRefresh) }
+        authConnection.applyBinder { invalidate(null, disableRefresh) }
     }
 
     companion object {

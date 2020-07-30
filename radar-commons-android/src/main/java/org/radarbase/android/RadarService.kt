@@ -61,6 +61,7 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.data.CacheStore
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.TableDataHandler
 import org.radarbase.android.kafka.ServerStatusListener
@@ -85,6 +86,8 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
         private set
+
+    open val cacheStore: CacheStore = CacheStore()
 
     private lateinit var mHandler: SafeHandler
     private var needsBluetooth: Boolean = false
@@ -147,9 +150,11 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
         broadcaster.run {
             permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
+                val extraPermissions = intent.getStringArrayExtra(EXTRA_PERMISSIONS) ?: return@register
+                val extraGrants = intent.getIntArrayExtra(EXTRA_GRANT_RESULTS) ?: return@register
                 onPermissionsGranted(
-                        intent.getStringArrayExtra(EXTRA_PERMISSIONS),
-                        intent.getIntArrayExtra(EXTRA_GRANT_RESULTS))
+                        extraPermissions,
+                        extraGrants)
             }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
@@ -161,10 +166,10 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
                 serverStatus = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
                 if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
                     logger.debug("Status unauthorized")
-                    authConnection.applyBinder { authBinder ->
+                    authConnection.applyBinder {
                         if (isMakingAuthRequest.compareAndSet(false, true)) {
-                            authBinder.invalidate(null, false)
-                            authBinder.refresh()
+                            invalidate(null, false)
+                            refresh()
                         }
                     }
                 }
@@ -247,7 +252,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         val unsafeConnection = configuration.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
 
         synchronized(this) {
-            dataHandler ?: TableDataHandler(this)
+            dataHandler ?: TableDataHandler(this, cacheStore)
                     .also {
                         dataHandler = it
                         it.statusListener = this
@@ -292,9 +297,9 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
             }
         }
 
-        authConnection.applyBinder { authBinder ->
-            authBinder.applyState { appAuthState ->
-                loginSucceeded(null, appAuthState)
+        authConnection.applyBinder {
+            applyState {
+                loginSucceeded(null, this)
             }
         }
 
@@ -307,7 +312,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         } != false
     }
 
-    protected fun requestPermissions(permissions: Collection<String>) {
+    private fun requestPermissions(permissions: Collection<String>) {
         startActivity(Intent(this, radarApp.mainActivity).apply {
             action = ACTION_CHECK_PERMISSIONS
             addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -316,7 +321,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         })
     }
 
-    protected fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
+    private fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
         val grantedPermissions = permissions.indices
                 .filter {
                     if (grantResults[it] == PERMISSION_GRANTED) {
@@ -480,6 +485,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
                         || powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
             } ?: true
             PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager, Boolean>(Context.APP_OPS_SERVICE) { appOps ->
+                @Suppress("DEPRECATION")
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                         || MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName)
             } ?: true
@@ -492,19 +498,8 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         return provider.permissionsNeeded.none(needsPermissions::contains)
     }
 
-    /** Disconnect from all services.  */
-    protected open fun disconnect() = mConnections.forEach { disconnect(it.connection) }
-
-    /** Disconnect from given service.  */
-    open fun disconnect(connection: SourceServiceConnection<*>) {
-        mHandler.executeReentrant {
-            if (connection.isRecording) {
-                connection.stopRecording()
-            }
-        }
-    }
-
     /** Configure whether a boot listener should start this application at boot.  */
+    @Suppress("unused")
     protected open fun configureRunAtBoot(bootReceiver: Class<*>) {
         val receiver = ComponentName(applicationContext, bootReceiver)
         val pm = applicationContext.packageManager
@@ -525,6 +520,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        isMakingAuthRequest.set(false)
         mHandler.execute {
             dataHandler?.handler {
                 logger.info("Setting data submission authentication")
@@ -581,7 +577,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
-
+        isMakingAuthRequest.set(false)
     }
 
     protected inner class RadarBinder : Binder(), IRadarBinder {

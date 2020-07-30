@@ -35,7 +35,25 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
     private val connectivityManager: ConnectivityManager? = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private var isReceiverRegistered: Boolean = false
     private var receiver: BroadcastReceiver? = null
-    private var callback: ConnectivityManager.NetworkCallback? = null
+    private val callback: NetworkCallback by lazy {
+        object : NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                state = NetworkState(isConnected = true, hasWifiOrEthernet = state.hasWifiOrEthernet)
+            }
+
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                state = NetworkState(state.isConnected, capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+            }
+
+            override fun onUnavailable() {
+                // nothing happened
+            }
+
+            override fun onLost(network: Network) {
+                state = NetworkState(isConnected = false, hasWifiOrEthernet = false)
+            }
+        }
+    }
 
     constructor(context: Context, listener: NetworkConnectedListener) : this(context, listener::onNetworkConnectionChanged)
 
@@ -85,25 +103,6 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
 
     @RequiresApi(Build.VERSION_CODES.N)
     private fun registerCallback(cm: ConnectivityManager) {
-        if (callback == null) {
-            callback = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) {
-                    state = NetworkState(isConnected = true, hasWifiOrEthernet = state.hasWifiOrEthernet)
-                }
-
-                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                    state = NetworkState(state.isConnected, capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
-                }
-
-                override fun onUnavailable() {
-                    // nothing happened
-                }
-
-                override fun onLost(network: Network) {
-                    state = NetworkState(isConnected = false, hasWifiOrEthernet = false)
-                }
-            }
-        }
         cm.registerDefaultNetworkCallback(callback)
         isReceiverRegistered = true
 

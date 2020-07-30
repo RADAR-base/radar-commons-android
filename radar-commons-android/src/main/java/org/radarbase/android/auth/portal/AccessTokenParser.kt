@@ -18,7 +18,9 @@ class AccessTokenParser(private val state: AppAuthState) : AuthStringParser {
         try {
             val json = JSONObject(value)
             val accessToken = json.getString("access_token")
-            refreshToken = json.optString("refresh_token", refreshToken)
+            refreshToken = json.optString("refresh_token", refreshToken ?: "")
+                    .takeIf { it.isNotEmpty() }
+                    ?: throw IOException("Missing refresh token")
             return state.alter {
                 attributes[MP_REFRESH_TOKEN_PROPERTY] = refreshToken
                 setHeader("Authorization", "Bearer $accessToken")
