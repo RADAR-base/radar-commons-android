@@ -114,6 +114,21 @@ class SafeHandler(val name: String, private val priority: Int) {
 
     /**
      * Executes [runnable] on this handler. If this method called from the handler itself,
+     * runnable is executed immediately, instead of putting it in the queue.  If the handler has
+     * been stopped and [defaultToCurrentThread] is true, runnable will still be executed on the
+     * current thread. If the handler is stopped and [defaultToCurrentThread] is false, the runnable
+     * will not be executed.
+     */
+    fun executeReentrant(defaultToCurrentThread: Boolean, runnable: () -> Unit) {
+        if (Thread.currentThread() == handlerThread) {
+            runnable.tryRunOrNull()
+        } else {
+            execute(defaultToCurrentThread, runnable)
+        }
+    }
+
+    /**
+     * Executes [runnable] on this handler. If this method called from the handler itself,
      * runnable is executed immediately, instead of putting it in the queue.
      */
     fun executeReentrant(runnable: Runnable) = executeReentrant(runnable::run)

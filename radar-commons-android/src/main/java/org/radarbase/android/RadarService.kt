@@ -90,7 +90,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     open val cacheStore: CacheStore = CacheStore()
 
     private lateinit var mHandler: SafeHandler
-    private var needsBluetooth: Boolean = false
+    private var needsBluetooth = ChangeRunner(false)
     protected lateinit var configuration: RadarConfiguration
 
     /** Filters to only listen to certain source IDs or source names.  */
@@ -143,7 +143,6 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         mainHandler = Handler()
 
         configurationCache = ChangeRunner()
-        needsBluetooth = false
         configuration = radarConfig
         providerLoader = SourceProviderLoader(plugins)
         broadcaster = LocalBroadcastManager.getInstance(this)
@@ -223,7 +222,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
     }
 
     override fun onDestroy() {
-        if (needsBluetooth) {
+        if (needsBluetooth.value) {
             bluetoothReceiver.unregister()
         }
         permissionsBroadcastReceiver.unregister()
@@ -352,8 +351,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
                     ?.also { logger.debug("Initial server status: {}", it) }
                     ?.also(::updateServerStatus)
 
-            if (!needsBluetooth && connection.needsBluetooth()) {
-                needsBluetooth = true
+            needsBluetooth.applyIfChanged(needsBluetooth.value || connection.needsBluetooth()) {
                 bluetoothReceiver.register()
 
                 broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
@@ -539,10 +537,9 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
             mConnections = mConnections.filterNot(providersToRemove::contains)
             providersToRemove.forEach(SourceProvider<*>::unbind)
 
-            val anyNeedsBluetooth = mConnections.any { it.isConnected && it.connection.needsBluetooth() }
-            if (!anyNeedsBluetooth && needsBluetooth) {
+            val noneNeedsBluetooth = mConnections.none { it.isConnected && it.connection.needsBluetooth() }
+            needsBluetooth.applyIfChanged(noneNeedsBluetooth) {
                 bluetoothReceiver.unregister()
-                needsBluetooth = false
 
                 broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
                     putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NOT_NEEDED)
@@ -585,13 +582,13 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         override fun stopScanning() = this@RadarService.stopActiveScanning()
 
         override val serverStatus: ServerStatusListener.Status
-                get() = this@RadarService.serverStatus
+            get() = this@RadarService.serverStatus
 
         override val latestNumberOfRecordsSent: TimedLong
-                get() = this@RadarService.latestNumberOfRecordsSent
+            get() = this@RadarService.latestNumberOfRecordsSent
 
         override val connections: List<SourceProvider<*>>
-                get() = mConnections
+            get() = mConnections
 
         override fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>) {
             sourceFilters[connection] = sanitizedIds(allowedIds)
@@ -613,7 +610,7 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
         override val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
             get() = this@RadarService.dataHandler
 
-        override fun needsBluetooth(): Boolean = needsBluetooth
+        override fun needsBluetooth(): Boolean = needsBluetooth.value
     }
 
     private fun stopActiveScanning() {
@@ -650,8 +647,10 @@ abstract class RadarService : Service(), ServerStatusListener, LoginListener {
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
-        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
-        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
+        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
         private val providerSeparator = ",".toRegex()
 
         fun sanitizedIds(ids: Collection<String>): Set<String> = HashSet(ids

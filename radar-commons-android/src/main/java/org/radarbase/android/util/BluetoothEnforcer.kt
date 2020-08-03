@@ -1,6 +1,6 @@
 package org.radarbase.android.util
 
-import android.app.Activity.RESULT_CANCELED
+import android.app.Activity.RESULT_OK
 import android.bluetooth.BluetoothAdapter
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
@@ -22,9 +22,7 @@ class BluetoothEnforcer(
     private val bluetoothIsNeeded = ChangeRunner(false)
     private lateinit var bluetoothNeededRegistration: BroadcastRegistration
 
-    private val bluetoothStateReceiver: BluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
-        if (!enabled) requestEnableBt()
-    }
+    private val bluetoothStateReceiver: BluetoothStateReceiver
 
     var isEnabled: Boolean
         get() = enableBluetoothRequests.value
@@ -44,11 +42,21 @@ class BluetoothEnforcer(
 
     init {
         val lastRequest = prefs.getLong(LAST_REQUEST, 0L)
-        val cooldown = TimeUnit.SECONDS.toMillis(config.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3)))
+        val cooldown = TimeUnit.SECONDS.toMillis(
+                config.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3)))
         if (lastRequest + cooldown < System.currentTimeMillis()) {
             config.reset(ENABLE_BLUETOOTH_REQUESTS)
         }
-        enableBluetoothRequests = ChangeRunner(config.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true))
+
+        radarConnection.onBoundListeners += {
+            updateNeedsBluetooth(it.needsBluetooth())
+        }
+        enableBluetoothRequests = ChangeRunner(
+                config.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true))
+
+        bluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
+            if (!enabled) requestEnableBt()
+        }
     }
 
     fun start() {
@@ -68,17 +76,20 @@ class BluetoothEnforcer(
         }
     }
 
+    private fun updateNeedsBluetooth(value: Boolean) {
+        bluetoothIsNeeded.applyIfChanged(value) { doesNeedBluetooth ->
+            if (doesNeedBluetooth && isEnabled) {
+                bluetoothStateReceiver.register()
+                requestEnableBt()
+            } else {
+                bluetoothStateReceiver.unregister()
+            }
+        }
+    }
 
     private fun testBindBluetooth() {
         radarConnection.applyBinder {
-            bluetoothIsNeeded.applyIfChanged(needsBluetooth()) { doesNeedBluetooth ->
-                if (doesNeedBluetooth && isEnabled) {
-                    bluetoothStateReceiver.register()
-                    requestEnableBt()
-                } else {
-                    bluetoothStateReceiver.unregister()
-                }
-            }
+            updateNeedsBluetooth(needsBluetooth())
         }
     }
 
@@ -100,7 +111,7 @@ class BluetoothEnforcer(
 
     fun onActivityResult(requestCode: Int, resultCode: Int) {
         if (requestCode == REQUEST_ENABLE_BT) {
-            isEnabled = resultCode != RESULT_CANCELED
+            isEnabled = resultCode == RESULT_OK
         }
     }
 

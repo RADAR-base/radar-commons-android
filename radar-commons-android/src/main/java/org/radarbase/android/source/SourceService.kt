@@ -130,7 +130,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         radarConnection.unbind()
         authConnection.unbind()
 
-        handler.stop { stopSourceManager(unsetSourceManager()) }
+        stopRecording()
 
         radarApp.onSourceServiceDestroy(this)
     }
@@ -196,7 +196,6 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     private fun unsetSourceManager(): SourceManager<*>? {
         return sourceManager.also {
             sourceManager = null
-            handler.stop { }
         }
     }
 
@@ -265,20 +264,22 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
 
     fun restartRecording(acceptableIds: Set<String>) {
         handler.execute {
-            stopRecording()
+            doStop()
             doStart(acceptableIds)
         }
     }
 
     fun stopRecording() {
-        handler.executeReentrant {
-            startFuture?.let {
-                it.cancel()
-                startFuture = null
-            }
-            stopSourceManager(unsetSourceManager())
-            logger.info("Stopped recording {}", this)
+        handler.stop { doStop() }
+    }
+
+    private fun doStop() {
+        startFuture?.let {
+            it.cancel()
+            startFuture = null
         }
+        stopSourceManager(unsetSourceManager())
+        logger.info("Stopped recording {}", this)
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {

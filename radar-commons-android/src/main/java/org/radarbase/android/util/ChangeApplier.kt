@@ -40,15 +40,15 @@ open class ChangeApplier<T: Any, V: Any>(
     ) : this(null, applier, comparator)
 
     init {
-        if (initialValue != null) doApply(initialValue)
+        if (initialValue != null)  {
+            update(initialValue, applier(initialValue))
+        }
     }
 
     @Synchronized
-    private fun doApply(value: T): V {
-        val result = applier(value)
+    private fun update(value: T, result: V) {
         _value = value
         lastResult = result
-        return result
     }
 
     /**
@@ -56,13 +56,22 @@ open class ChangeApplier<T: Any, V: Any>(
      * is performed but the last result is returned. Only if the value is newly computed, an
      * optional block is run on the result.
      */
-    @Synchronized
     fun applyIfChanged(value: T, block: ((V) -> Unit)? = null): V {
-        return if (!isSame(value)) {
-            doApply(value).also {
-                if (block != null) block(it)
+        if (isSame(value)) return lastResult
+
+        val result = applier(value)
+
+        val (actualResult, didChange) = synchronized(this) {
+            if (!isSame(value)) {
+                update(value, result)
+                result to true
+            } else {
+                lastResult to false
             }
-        } else lastResult
+        }
+        if (didChange && block != null) block(actualResult)
+
+        return actualResult
     }
 
     /** Whether given value matches the currently cached value. */
