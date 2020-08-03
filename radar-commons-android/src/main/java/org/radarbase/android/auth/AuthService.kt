@@ -264,7 +264,13 @@ abstract class AuthService : Service(), LoginListener {
             logger.info("Registering source with {}: {}", source.type, source.sourceId)
 
             relevantManagers.any {
-                it.registerSource(appAuth, source, success, failure)
+                it.registerSource(appAuth, source, { newAppAuth, newSource ->
+                    if (newAppAuth != appAuth) {
+                        appAuth = newAppAuth
+                        authSerialization.store(appAuth)
+                    }
+                    success(newAppAuth, newSource)
+                }, failure)
             }
         }
     }

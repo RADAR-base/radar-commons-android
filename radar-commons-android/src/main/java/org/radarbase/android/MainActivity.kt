@@ -16,7 +16,7 @@
 
 package org.radarbase.android
 
-import android.bluetooth.BluetoothAdapter
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -27,18 +27,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
-import org.radarbase.android.RadarConfiguration.Companion.ENABLE_BLUETOOTH_REQUESTS
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
 import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
 import org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
-import org.radarbase.android.RadarService.Companion.ACTION_BLUETOOTH_NEEDED_CHANGED
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.util.*
-import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
+import org.radarbase.android.util.BluetoothEnforcer.Companion.REQUEST_ENABLE_BT
 import org.slf4j.LoggerFactory
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
@@ -61,11 +59,7 @@ abstract class MainActivity : AppCompatActivity() {
     protected lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     protected lateinit var radarConnection: ManagedServiceConnection<IRadarBinder>
 
-    /** Defines callbacks for service binding, passed to bindService()  */
-    private lateinit var bluetoothReceiver: BluetoothStateReceiver
-    private var bluetoothNeededReceiver: BroadcastRegistration? = null
-    private lateinit var enableBluetoothRequests: ChangeRunner<Boolean>
-    private val bluetoothReceiverIsEnabled = ChangeRunner(false)
+    private lateinit var bluetoothEnforcer: BluetoothEnforcer
 
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
@@ -92,13 +86,7 @@ abstract class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
-        enableBluetoothRequests = ChangeRunner(configuration.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true))
         mHandler = SafeHandler.getInstance("Main background handler", Process.THREAD_PRIORITY_BACKGROUND)
-        bluetoothReceiver = BluetoothStateReceiver(this) { enabled ->
-            if (!enabled) {
-                requestEnableBt()
-            }
-        }
         permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeoutMs)
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
@@ -110,6 +98,7 @@ abstract class MainActivity : AppCompatActivity() {
             onUnboundListeners += IRadarBinder::stopScanning
         }
 
+        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
         authConnection = ManagedServiceConnection(this, radarApp.authService)
         create()
     }
@@ -172,6 +161,7 @@ abstract class MainActivity : AppCompatActivity() {
         super.onStart()
         mHandler.start()
         authConnection.bind()
+        bluetoothEnforcer.start()
 
         val radarServiceCls = radarApp.radarService
         try {
@@ -189,12 +179,7 @@ abstract class MainActivity : AppCompatActivity() {
 
         permissionHandler.invalidateCache()
 
-        testBindBluetooth()
-
         LocalBroadcastManager.getInstance(this).apply {
-            bluetoothNeededReceiver = register(ACTION_BLUETOOTH_NEEDED_CHANGED) { _, _ ->
-                testBindBluetooth()
-            }
             connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
                 synchronized(this@MainActivity) {
                     view = createView()
@@ -222,52 +207,14 @@ abstract class MainActivity : AppCompatActivity() {
 
         radarConnection.unbind()
         authConnection.unbind()
+        bluetoothEnforcer.stop()
 
-        bluetoothNeededReceiver?.unregister()
         connectionsUpdatedReceiver?.unregister()
-
-        bluetoothReceiverIsEnabled.applyIfChanged(false) {
-            bluetoothReceiver.unregister()
-        }
-    }
-
-    /**
-     * Sends an intent to request bluetooth to be turned on.
-     */
-    protected fun requestEnableBt() {
-        if (enableBluetoothRequests.value
-                && !bluetoothIsEnabled) {
-            startActivityForResult(Intent().apply {
-                action = BluetoothAdapter.ACTION_REQUEST_ENABLE
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }, REQUEST_ENABLE_BT)
-        }
-    }
-
-    private fun testBindBluetooth() {
-        radarConnection.applyBinder {
-            bluetoothReceiverIsEnabled.applyIfChanged(needsBluetooth()) { doesNeedBluetooth ->
-                if (doesNeedBluetooth && enableBluetoothRequests.value) {
-                    bluetoothReceiver.register()
-                    requestEnableBt()
-                } else {
-                    bluetoothReceiver.unregister()
-                }
-            }
-        }
     }
 
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         when (requestCode) {
-            REQUEST_ENABLE_BT -> enableBluetoothRequests.applyIfChanged(resultCode == RESULT_OK) { enableRequests ->
-                configuration.put(ENABLE_BLUETOOTH_REQUESTS, enableRequests)
-                configuration.persistChanges()
-                if (bluetoothReceiverIsEnabled.value) {
-                    bluetoothReceiver.register()
-                } else {
-                    bluetoothReceiver.unregister()
-                }
-            }
+            REQUEST_ENABLE_BT -> bluetoothEnforcer.isEnabled = resultCode == Activity.RESULT_OK
             else -> {
                 super.onActivityResult(requestCode, resultCode, result)
                 permissionHandler.onActivityResult(requestCode, resultCode)
@@ -294,6 +241,5 @@ abstract class MainActivity : AppCompatActivity() {
         private val logger = LoggerFactory.getLogger(MainActivity::class.java)
 
         private const val REQUEST_PERMISSION_TIMEOUT_MS = 86_400_000L // 1 day
-        private const val REQUEST_ENABLE_BT: Int = 6944
     }
 }

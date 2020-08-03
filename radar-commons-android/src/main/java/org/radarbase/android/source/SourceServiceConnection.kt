@@ -27,7 +27,10 @@ import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.register
 import org.slf4j.LoggerFactory
 
-class SourceServiceConnection<S : BaseSourceState>(private val radarService: RadarService, val serviceClassName: String) : BaseServiceConnection<S>(serviceClassName) {
+class SourceServiceConnection<S : BaseSourceState>(
+        private val radarService: RadarService,
+        val serviceClassName: String
+) : BaseServiceConnection<S>(serviceClassName) {
     val context: Context
         get() = radarService
     private val broadcaster = LocalBroadcastManager.getInstance(radarService)

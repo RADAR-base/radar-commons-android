@@ -91,6 +91,15 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
         }
     }
 
+    fun restartRecording(acceptableIds: Set<String>) {
+        try {
+            serviceBinder?.restartRecording(acceptableIds)
+            sourceStatus = serviceBinder?.sourceState?.status
+        } catch (ex: IllegalStateException) {
+            logger.error("Cannot restart service {}: {}", this, ex.message)
+        }
+    }
+
     fun stopRecording() {
         serviceBinder?.stopRecording()
     }

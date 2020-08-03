@@ -37,6 +37,9 @@ interface SourceBinder<T : BaseSourceState> {
      */
     fun startRecording(acceptableIds: Set<String>)
 
+    /** Stop recording and immediately start recording after that */
+    fun restartRecording(acceptableIds: Set<String>)
+
     /** Stop scanning and recording  */
     fun stopRecording()
 

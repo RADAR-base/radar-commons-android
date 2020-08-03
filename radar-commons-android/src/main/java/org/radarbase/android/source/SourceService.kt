@@ -69,6 +69,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     private lateinit var broadcaster: LocalBroadcastManager
     private lateinit var sourceModel: String
     private lateinit var sourceProducer: String
+    private val name = javaClass.simpleName
 
     val state: T
         get() {
@@ -113,7 +114,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
             }
         }
         radarConnection.bind()
-        handler = SafeHandler.getInstance("SourceService-$javaClass", THREAD_PRIORITY_BACKGROUND)
+        handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
         config = radarConfig
 
@@ -215,49 +216,44 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     fun startRecording(acceptableIds: Set<String>) {
         checkNotNull(key.getUserId()) { "Cannot start recording: user ID is not set." }
 
-        handler.takeUnless(SafeHandler::isStarted)?.start()
-        handler.execute {
-            doStart(acceptableIds)
-        }
+        if (!handler.isStarted) handler.start()
+        handler.execute { doStart(acceptableIds) }
     }
 
     private fun doStart(acceptableIds: Set<String>) {
         val expectedNames = expectedSourceNames
         val actualIds = if (expectedNames.isEmpty()) acceptableIds else expectedNames
 
-        if (sourceManager == null) {
-            if (isBluetoothConnectionRequired
-                    && !bluetoothIsEnabled) {
-                logger.error("Cannot start recording without Bluetooth")
-                return
-            }
-            if (dataHandler != null) {
-                logger.info("Starting recording now for {}", javaClass.simpleName)
-                if (sourceManager == null) {
-                    createSourceManager().also { manager ->
-                        sourceManager = manager
-                        configureSourceManager(manager, config)
-                        if (state.status != SourceStatusListener.Status.UNAVAILABLE) {
-                            manager.start(actualIds)
-                        }
-                    }
-                } else {
-                    logger.warn("A SourceManager is already registered in the mean time for {}", javaClass.simpleName)
-                }
-            } else {
+        when {
+            sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED -> {
+                logger.warn("A disconnected SourceManager is still registered for {}. Retrying later.", name)
                 startAfterDelay(acceptableIds)
             }
-        } else if (sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED) {
-            logger.warn("A disconnected SourceManager is still registered for {}", javaClass.simpleName)
-            startAfterDelay(acceptableIds)
-        } else {
-            logger.warn("A SourceManager is already registered for {}", javaClass.simpleName)
+            sourceManager != null ->
+                logger.warn("A SourceManager is already registered for {}", name)
+            isBluetoothConnectionRequired && !bluetoothIsEnabled ->
+                logger.error("Cannot start recording for {} without Bluetooth", name)
+            dataHandler != null -> {
+                logger.info("Starting recording now for {}", name)
+                val manager = createSourceManager()
+                sourceManager = manager
+                configureSourceManager(manager, config)
+                if (state.status == SourceStatusListener.Status.UNAVAILABLE) {
+                    logger.info("Status is unavailable. Not starting manager yet.")
+                } else {
+                    manager.start(actualIds)
+                }
+            }
+            else -> {
+                logger.info("DataHandler is not ready. Retrying later")
+                startAfterDelay(acceptableIds)
+            }
         }
     }
 
     private fun startAfterDelay(acceptableIds: Set<String>) {
         if (startFuture == null) {
-            logger.warn("Starting recording soon for {}", javaClass.simpleName)
+            logger.warn("Starting recording soon for {}", name)
             startFuture = handler.delay(100) {
                 startFuture?.let {
                     startFuture = null
@@ -267,8 +263,15 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         }
     }
 
-    fun stopRecording() {
+    fun restartRecording(acceptableIds: Set<String>) {
         handler.execute {
+            stopRecording()
+            doStart(acceptableIds)
+        }
+    }
+
+    fun stopRecording() {
+        handler.executeReentrant {
             startFuture?.let {
                 it.cancel()
                 startFuture = null
@@ -368,7 +371,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
                 .sortedBy { if (it.catalogVersion[0] == 'v') it.catalogVersion.substring(1) else it.catalogVersion }
                 .lastOrNull()
 
-    override fun toString() = "${javaClass.simpleName}<${sourceManager?.name}"
+    override fun toString() = "$name<${sourceManager?.name}"
 
     companion object {
         private const val PREFIX = "org.radarcns.android."

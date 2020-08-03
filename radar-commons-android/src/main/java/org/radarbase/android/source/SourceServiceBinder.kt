@@ -24,6 +24,10 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
         sourceService.startRecording(acceptableIds)
     }
 
+    override fun restartRecording(acceptableIds: Set<String>) {
+        sourceService.restartRecording(acceptableIds)
+    }
+
     override fun stopRecording() {
         sourceService.stopRecording()
     }
