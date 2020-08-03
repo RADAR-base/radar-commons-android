@@ -213,13 +213,9 @@ abstract class MainActivity : AppCompatActivity() {
     }
 
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
-        when (requestCode) {
-            REQUEST_ENABLE_BT -> bluetoothEnforcer.isEnabled = resultCode == Activity.RESULT_OK
-            else -> {
-                super.onActivityResult(requestCode, resultCode, result)
-                permissionHandler.onActivityResult(requestCode, resultCode)
-            }
-        }
+        super.onActivityResult(requestCode, resultCode, result)
+        bluetoothEnforcer.onActivityResult(requestCode, resultCode)
+        permissionHandler.onActivityResult(requestCode, resultCode)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {

@@ -29,7 +29,7 @@ import com.empatica.empalink.delegate.EmpaStatusDelegate
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.passive.empatica.*

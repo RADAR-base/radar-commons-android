@@ -46,10 +46,8 @@ open class ChangeApplier<T: Any, V: Any>(
     @Synchronized
     private fun doApply(value: T): V {
         val result = applier(value)
-        synchronized(this) {
-            _value = value
-            lastResult = result
-        }
+        _value = value
+        lastResult = result
         return result
     }
 
@@ -58,6 +56,7 @@ open class ChangeApplier<T: Any, V: Any>(
      * is performed but the last result is returned. Only if the value is newly computed, an
      * optional block is run on the result.
      */
+    @Synchronized
     fun applyIfChanged(value: T, block: ((V) -> Unit)? = null): V {
         return if (!isSame(value)) {
             doApply(value).also {

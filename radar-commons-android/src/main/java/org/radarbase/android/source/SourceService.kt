@@ -34,7 +34,7 @@ import org.radarbase.android.source.SourceProvider.Companion.MODEL_KEY
 import org.radarbase.android.source.SourceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
 import org.radarbase.android.util.*
-import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException

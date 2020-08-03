@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
 import org.slf4j.LoggerFactory
 
 class BluetoothStateReceiver(
@@ -59,5 +58,8 @@ class BluetoothStateReceiver(
 
     companion object {
         private val logger = LoggerFactory.getLogger(BluetoothStateReceiver::class.java)
+
+        val bluetoothIsEnabled: Boolean
+            get() = BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
     }
 }
