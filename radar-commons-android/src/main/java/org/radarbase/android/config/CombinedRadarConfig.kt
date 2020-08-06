@@ -23,13 +23,7 @@ class CombinedRadarConfig(
 
         remoteConfigs.forEach { remoteConfig ->
             remoteConfig.onStatusUpdateListener = { newStatus ->
-                if (remoteConfigs.all { status == RadarConfiguration.RemoteConfigStatus.FETCHED
-                                || status == RadarConfiguration.RemoteConfigStatus.UNAVAILABLE } &&
-                        remoteConfigs.any { status == RadarConfiguration.RemoteConfigStatus.FETCHED }) {
-                    status = RadarConfiguration.RemoteConfigStatus.FETCHED
-                } else if (newStatus != RadarConfiguration.RemoteConfigStatus.FETCHED) {
-                    status = newStatus
-                }
+                status = newStatus
 
                 if (newStatus == RadarConfiguration.RemoteConfigStatus.FETCHED) {
                     val newConfig = readConfig()

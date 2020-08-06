@@ -25,6 +25,9 @@ import android.os.Bundle
 import androidx.annotation.CallSuper
 import com.crashlytics.android.Crashlytics
 import io.fabric.sdk.android.Fabric
+import org.radarbase.android.config.CombinedRadarConfig
+import org.radarbase.android.config.LocalConfiguration
+import org.radarbase.android.config.RemoteConfig
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.NotificationHandler
 import org.slf4j.impl.HandroidLoggerAdapter
@@ -79,7 +82,25 @@ abstract class RadarApplication : Application() {
      *
      * @return configured RadarConfiguration
      */
-    protected abstract fun createConfiguration(): RadarConfiguration
+    protected open fun createConfiguration(): RadarConfiguration {
+        return CombinedRadarConfig(
+                LocalConfiguration(this),
+                createRemoteConfiguration(),
+                ::createDefaultConfiguration)
+    }
+
+    /**
+     * Create remote configuration objects. For example,
+     * [org.radarbase.android.config.FirebaseRemoteConfiguration].
+     *
+     * @return configured RadarConfiguration
+     */
+    protected open fun createRemoteConfiguration(): List<RemoteConfig> = listOf()
+
+    /**
+     * Create default configuration for the app.
+     */
+    protected open fun createDefaultConfiguration(): Map<String, String> = mapOf()
 
     companion object {
         val Context.radarApp: RadarApplication
