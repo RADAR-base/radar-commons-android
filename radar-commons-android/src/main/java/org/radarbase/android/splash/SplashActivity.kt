@@ -10,7 +10,7 @@ import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.lifecycle.Observer
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
@@ -18,9 +18,9 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.NetworkConnectedReceiver
-import org.radarbase.android.util.register
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 
@@ -43,6 +43,16 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected lateinit var handler: Handler
     protected var startActivityFuture: Runnable? = null
+    private val configObserver: Observer<SingleRadarConfiguration> = Observer {
+        if ((lifecycle.currentState == Lifecycle.State.RESUMED
+                        || lifecycle.currentState == Lifecycle.State.STARTED)
+                && it.status == RadarConfiguration.RemoteConfigStatus.FETCHED
+                && state != STATE_AUTHORIZING) {
+            logger.info("Config has been fetched, checking authentication")
+            stopConfigListener()
+            startAuthConnection()
+        }
+    }
 
     @CallSuper
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -161,18 +171,8 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun startConfigReceiver() {
         updateState(STATE_FETCHING_CONFIG)
-        LocalBroadcastManager.getInstance(this)
-                .register(RadarConfiguration.RADAR_CONFIGURATION_CHANGED) { _, _ ->
-                    if ((lifecycle.currentState == Lifecycle.State.RESUMED
-                                    || lifecycle.currentState == Lifecycle.State.STARTED)
-                            && config.status == RadarConfiguration.RemoteConfigStatus.FETCHED
-                            && state != STATE_AUTHORIZING) {
-                        logger.info("Config has been fetched, checking authentication")
-                        stopConfigListener()
-                        startAuthConnection()
-                    }
-                }
         config.fetch()
+        radarConfig.config.observe(this, configObserver)
         configReceiver = true
     }
 
@@ -185,7 +185,7 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun stopConfigListener() {
         if (configReceiver) {
-            receiveConfigUpdates?.unregister()
+            radarConfig.config.removeObserver(configObserver)
             configReceiver = false
         }
     }
