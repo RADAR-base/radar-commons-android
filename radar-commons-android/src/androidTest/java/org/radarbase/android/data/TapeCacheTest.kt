@@ -64,7 +64,7 @@ class TapeCacheTest {
 
             return TapeCache(
                     folder.newFile(), topic, outputTopic, handler, serializationFactory,
-                    DataCache.CacheConfiguration(100L))
+                    CacheConfiguration(100L))
         }
 
     @Before
@@ -84,7 +84,7 @@ class TapeCacheTest {
         }
         tapeCache = TapeCache(folder.newFile(), topic,
                 outputTopic, handler, serializationFactory,
-                DataCache.CacheConfiguration(100, 4096))
+                CacheConfiguration(100, 4096))
 
         key = ObservationKey("test", "a", "b")
         val time = System.currentTimeMillis() / 1000.0

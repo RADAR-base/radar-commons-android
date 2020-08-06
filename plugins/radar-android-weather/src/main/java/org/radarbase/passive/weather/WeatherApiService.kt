@@ -17,7 +17,7 @@
 package org.radarbase.passive.weather
 
 import okhttp3.OkHttpClient
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -45,12 +45,12 @@ class WeatherApiService : SourceService<BaseSourceState>() {
         return WeatherApiManager(this, client)
     }
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
         val weatherManager = manager as WeatherApiManager
-        weatherManager.setQueryInterval(configuration.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
+        weatherManager.setQueryInterval(config.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
         weatherManager.setSource(
-                configuration.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
-                configuration.optString(WEATHER_API_KEY))
+                config.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
+                config.optString(WEATHER_API_KEY))
     }
 
     companion object {

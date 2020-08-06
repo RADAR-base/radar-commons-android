@@ -30,6 +30,7 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.slf4j.LoggerFactory
 
 class OAuth2StateManager(context: Context) {
@@ -43,7 +44,7 @@ class OAuth2StateManager(context: Context) {
 
     @AnyThread
     @Synchronized
-    fun login(context: AuthService, activityClass: Class<out Activity>, config: RadarConfiguration) {
+    fun login(context: AuthService, activityClass: Class<out Activity>, config: SingleRadarConfiguration) {
         val authorizeUri = Uri.parse(config.getString(RadarConfiguration.OAUTH2_AUTHORIZE_URL))
         val tokenUri = Uri.parse(config.getString(RadarConfiguration.OAUTH2_TOKEN_URL))
         val redirectUri = Uri.parse(config.getString(RadarConfiguration.OAUTH2_REDIRECT_URL))

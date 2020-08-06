@@ -70,7 +70,6 @@ abstract class AuthService : Service(), LoginListener {
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 currentDelay = null
                 config.updateWithAuthState(this@AuthService, appAuth)
-                config.persistChanges()
                 authSerialization.store(appAuth)
             }
         })

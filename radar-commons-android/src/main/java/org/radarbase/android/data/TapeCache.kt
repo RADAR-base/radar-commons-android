@@ -18,7 +18,6 @@ package org.radarbase.android.data
 
 import com.crashlytics.android.Crashlytics
 import org.radarbase.android.data.serialization.SerializationFactory
-import org.radarbase.android.kafka.KafkaDataSubmitter.Companion.SIZE_LIMIT_DEFAULT
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.data.AvroRecordData
@@ -54,7 +53,7 @@ constructor(override val file: File,
             override val readTopic: AvroTopic<Any, Any>,
             private val executor: SafeHandler,
             override val serialization: SerializationFactory,
-            config: DataCache.CacheConfiguration) : DataCache<K, V> {
+            config: CacheConfiguration) : DataCache<K, V> {
 
     private val measurementsToAdd = mutableListOf<Record<K, V>>()
     private val serializer = serialization.createSerializer(topic)
@@ -156,7 +155,7 @@ constructor(override val file: File,
 
     @Throws(IOException::class)
     override fun getRecords(limit: Int): RecordData<Any, Any>? {
-        return getUnsentRecords(limit, SIZE_LIMIT_DEFAULT)?.let { records ->
+        return getUnsentRecords(limit, maximumSize)?.let { records ->
             AvroRecordData<Any, Any>(records.topic, records.key, records.filterNotNull())
         }
     }

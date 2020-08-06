@@ -16,7 +16,7 @@
 
 package org.radarbase.passive.phone
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -34,9 +34,9 @@ class PhoneContactsListService : SourceService<BaseSourceState>() {
         return PhoneContactListManager(this)
     }
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
         (manager as PhoneContactListManager).setCheckInterval(
-                configuration.getLong(PHONE_CONTACTS_LIST_INTERVAL, PHONE_CONTACTS_LIST_INTERVAL_DEFAULT),
+                config.getLong(PHONE_CONTACTS_LIST_INTERVAL, PHONE_CONTACTS_LIST_INTERVAL_DEFAULT),
                 TimeUnit.SECONDS)
     }
 

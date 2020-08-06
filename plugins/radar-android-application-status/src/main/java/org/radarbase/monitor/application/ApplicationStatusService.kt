@@ -16,10 +16,9 @@
 
 package org.radarbase.monitor.application
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
-
 import java.util.concurrent.TimeUnit
 
 class ApplicationStatusService : SourceService<ApplicationState>() {
@@ -31,7 +30,7 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
         return ApplicationStatusManager(this)
     }
 
-    override fun configureSourceManager(manager: SourceManager<ApplicationState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<ApplicationState>, config: SingleRadarConfiguration) {
         (manager as ApplicationStatusManager).apply {
             setApplicationStatusUpdateRate(config.getLong(UPDATE_RATE, UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
             setTzUpdateRate(config.getLong(TZ_UPDATE_RATE, TZ_UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)

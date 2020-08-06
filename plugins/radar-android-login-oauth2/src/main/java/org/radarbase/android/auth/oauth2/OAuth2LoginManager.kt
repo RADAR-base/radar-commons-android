@@ -25,7 +25,11 @@ import org.radarbase.producer.AuthenticationException
 /**
  * Authenticates against the RADAR Management Portal.
  */
-class OAuth2LoginManager(private val service: AuthService, private val projectIdClaim: String, private val userIdClaim: String) : LoginManager, LoginListener {
+class OAuth2LoginManager(
+        private val service: AuthService,
+        private val projectIdClaim: String,
+        private val userIdClaim: String
+) : LoginManager, LoginListener {
     private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
 
     override fun refresh(authState: AppAuthState): Boolean {
@@ -42,7 +46,7 @@ class OAuth2LoginManager(private val service: AuthService, private val projectId
 
     override fun start(authState: AppAuthState) {
         service.radarApp.let { app ->
-            stateManager.login(service, app.loginActivity, app.configuration)
+            stateManager.login(service, app.loginActivity, app.configuration.latestConfig)
         }
     }
 

@@ -41,9 +41,10 @@ class BluetoothEnforcer(
     private val prefs = context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
 
     init {
+        val latestConfig = config.latestConfig
         val lastRequest = prefs.getLong(LAST_REQUEST, 0L)
         val cooldown = TimeUnit.SECONDS.toMillis(
-                config.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3)))
+                latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3)))
         if (lastRequest + cooldown < System.currentTimeMillis()) {
             config.reset(ENABLE_BLUETOOTH_REQUESTS)
         }
@@ -52,7 +53,7 @@ class BluetoothEnforcer(
             updateNeedsBluetooth(it.needsBluetooth())
         }
         enableBluetoothRequests = ChangeRunner(
-                config.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true))
+                latestConfig.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true))
 
         bluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
             if (!enabled) requestEnableBt()

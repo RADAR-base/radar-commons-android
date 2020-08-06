@@ -16,7 +16,6 @@
 
 package org.radarbase.android
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -36,7 +35,6 @@ import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.util.*
-import org.radarbase.android.util.BluetoothEnforcer.Companion.REQUEST_ENABLE_BT
 import org.slf4j.LoggerFactory
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
@@ -71,10 +69,10 @@ abstract class MainActivity : AppCompatActivity() {
         get() = radarConnection.binder
 
     val userId: String?
-        get() = configuration.optString(USER_ID_KEY)
+        get() = configuration.latestConfig.optString(USER_ID_KEY)
 
     val projectId: String?
-        get() = configuration.optString(PROJECT_ID_KEY)
+        get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
 
     @CallSuper
     override fun onSaveInstanceState(savedInstanceState: Bundle) {
@@ -112,7 +110,7 @@ abstract class MainActivity : AppCompatActivity() {
                 .register(RADAR_CONFIGURATION_CHANGED) { _, _ -> onConfigChanged() }
 
         // Start the UI thread
-        uiRefreshRate = configuration.getLong(UI_REFRESH_RATE_KEY)
+        uiRefreshRate = configuration.latestConfig.getLong(UI_REFRESH_RATE_KEY)
     }
 
     @CallSuper

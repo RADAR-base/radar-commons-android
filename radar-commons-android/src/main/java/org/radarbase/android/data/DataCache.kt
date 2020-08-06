@@ -30,10 +30,4 @@ interface DataCache<K, V> : Flushable, ReadableDataCache {
     /** Configuration. */
     var config: CacheConfiguration
 
-    data class CacheConfiguration(
-            /** Time in milliseconds until data is committed to disk. */
-            var commitRate: Long = 10_000L,
-            /** Maximum size the data cache may have in bytes.  */
-            var maximumSize: Long = 450_000_000
-    )
 }

@@ -16,11 +16,11 @@
 
 package org.radarbase.passive.phone
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
-import org.radarbase.android.util.BatteryStageReceiver
+import org.radarbase.android.util.StageLevels
 
 class PhoneLocationService : SourceService<BaseSourceState>() {
     override val defaultState: BaseSourceState
@@ -32,17 +32,17 @@ class PhoneLocationService : SourceService<BaseSourceState>() {
         return PhoneLocationManager(this)
     }
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
         val locationManager = manager as PhoneLocationManager
-        locationManager.setBatteryLevels(BatteryStageReceiver.StageLevels(
-                minimum = configuration.getFloat(PHONE_LOCATION_BATTERY_LEVEL_MINIMUM, MINIMUM_BATTERY_LEVEL_DEFAULT),
-                reduced = configuration.getFloat(PHONE_LOCATION_BATTERY_LEVEL_REDUCED, REDUCED_BATTERY_LEVEL_DEFAULT)))
+        locationManager.setBatteryLevels(StageLevels(
+                minimum = config.getFloat(PHONE_LOCATION_BATTERY_LEVEL_MINIMUM, MINIMUM_BATTERY_LEVEL_DEFAULT),
+                reduced = config.getFloat(PHONE_LOCATION_BATTERY_LEVEL_REDUCED, REDUCED_BATTERY_LEVEL_DEFAULT)))
         locationManager.setIntervals(PhoneLocationManager.LocationPollingIntervals(
-                gps = configuration.getLong(PHONE_LOCATION_GPS_INTERVAL, LOCATION_GPS_INTERVAL_DEFAULT),
-                gpsReduced = configuration.getLong(PHONE_LOCATION_GPS_INTERVAL_REDUCED, LOCATION_GPS_INTERVAL_REDUCED_DEFAULT),
-                network = configuration.getLong(PHONE_LOCATION_NETWORK_INTERVAL, LOCATION_NETWORK_INTERVAL_DEFAULT),
-                networkReduced = configuration.getLong(PHONE_LOCATION_NETWORK_INTERVAL_REDUCED, LOCATION_NETWORK_INTERVAL_REDUCED_DEFAULT)))
-        locationManager.isAbsoluteLocation = !configuration.getBoolean(PHONE_LOCATION_RELATIVE, true)
+                gps = config.getLong(PHONE_LOCATION_GPS_INTERVAL, LOCATION_GPS_INTERVAL_DEFAULT),
+                gpsReduced = config.getLong(PHONE_LOCATION_GPS_INTERVAL_REDUCED, LOCATION_GPS_INTERVAL_REDUCED_DEFAULT),
+                network = config.getLong(PHONE_LOCATION_NETWORK_INTERVAL, LOCATION_NETWORK_INTERVAL_DEFAULT),
+                networkReduced = config.getLong(PHONE_LOCATION_NETWORK_INTERVAL_REDUCED, LOCATION_NETWORK_INTERVAL_REDUCED_DEFAULT)))
+        locationManager.isAbsoluteLocation = !config.getBoolean(PHONE_LOCATION_RELATIVE, true)
 
     }
 

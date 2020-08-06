@@ -16,25 +16,28 @@
 
 package org.radarbase.android.source
 
-import android.app.Service
-import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.os.Bundle
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
+import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.*
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.source.SourceProvider.Companion.MODEL_KEY
 import org.radarbase.android.source.SourceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
-import org.radarbase.android.util.*
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
+import org.radarbase.android.util.BundleSerialization
+import org.radarbase.android.util.ManagedServiceConnection
+import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -48,7 +51,7 @@ import kotlin.collections.HashMap
  * Specific wearables should extend this class.
  */
 @Keep
-abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListener, LoginListener {
+abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceStatusListener, LoginListener {
     val key = ObservationKey()
 
     @get:Synchronized
@@ -116,6 +119,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         radarConnection.bind()
         handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
+        radarConfig.config.observe(this, androidx.lifecycle.Observer { configure(it) })
         config = radarConfig
 
         sourceManager = null
@@ -136,13 +140,14 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     }
 
     @CallSuper
-    protected open fun configure(configuration: RadarConfiguration) {
-        sourceManager?.let { configureSourceManager(it, configuration) }
+    protected open fun configure(config: SingleRadarConfiguration) {
+        sourceManager?.let { configureSourceManager(it, config) }
     }
 
-    protected open fun configureSourceManager(manager: SourceManager<T>, configuration: RadarConfiguration) {}
+    protected open fun configureSourceManager(manager: SourceManager<T>, config: SingleRadarConfiguration) {}
 
     override fun onBind(intent: Intent): SourceServiceBinder<T> {
+        super.onBind(intent)
         doBind(intent, true)
         return mBinder
     }
@@ -236,7 +241,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
                 logger.info("Starting recording now for {}", name)
                 val manager = createSourceManager()
                 sourceManager = manager
-                configureSourceManager(manager, config)
+                configureSourceManager(manager, radarConfig.latestConfig)
                 if (state.status == SourceStatusListener.Status.UNAVAILABLE) {
                     logger.info("Status is unavailable. Not starting manager yet.")
                 } else {
@@ -303,7 +308,6 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         hasBluetoothPermission = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false)
         sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
         sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
-        configure(config)
     }
 
     /** Get the service local binder.  */

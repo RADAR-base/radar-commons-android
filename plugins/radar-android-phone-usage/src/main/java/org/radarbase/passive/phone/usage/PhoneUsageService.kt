@@ -16,7 +16,7 @@
 
 package org.radarbase.passive.phone.usage
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -39,10 +39,10 @@ class PhoneUsageService : SourceService<BaseSourceState>() {
         return PhoneUsageManager(this)
     }
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
         val phoneManager = manager as PhoneUsageManager
         phoneManager.setUsageEventUpdateRate(
-                configuration.getLong(PHONE_USAGE_INTERVAL, USAGE_EVENT_PERIOD_DEFAULT),
+                config.getLong(PHONE_USAGE_INTERVAL, USAGE_EVENT_PERIOD_DEFAULT),
                 TimeUnit.SECONDS)
     }
 

@@ -55,7 +55,7 @@ class TableDataHandler(
     private val dataHandler: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
     private val broadcaster = LocalBroadcastManager.getInstance(context)
 
-    private var config = DataHandler.DataHandlerConfiguration()
+    private var config = DataHandlerConfiguration()
 
     override var status: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
         get() = synchronized(statusSync) { field }
@@ -320,7 +320,7 @@ class TableDataHandler(
     }
 
     @Synchronized
-    override fun handler(build: DataHandler.DataHandlerConfiguration.() -> Unit) {
+    override fun handler(build: DataHandlerConfiguration.() -> Unit) {
         val oldConfig = config
 
         config = config.copy().apply(build)

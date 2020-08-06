@@ -1,21 +1,19 @@
 package org.radarbase.android.auth.portal
 
 import android.app.Activity
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.lifecycle.Observer
 import org.json.JSONException
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
-import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.util.BroadcastRegistration
-import org.radarbase.android.util.register
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.rest.RestClient
@@ -26,18 +24,18 @@ import java.util.concurrent.locks.ReentrantLock
 
 class ManagementPortalLoginManager(private val listener: AuthService, state: AppAuthState) : LoginManager {
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
-    private val firebaseUpdateReceiver: BroadcastRegistration
 
     private var client: ManagementPortalClient? = null
     private var restClient: RestClient? = null
     private val refreshLock: ReentrantLock
     private val config = listener.radarConfig
+    private val configUpdateObserver = Observer<SingleRadarConfiguration> {
+        ensureClientConnectivity(it)
+    }
 
     init {
-        ensureClientConnectivity()
-
-        firebaseUpdateReceiver = LocalBroadcastManager.getInstance(listener)
-                .register(RADAR_CONFIGURATION_CHANGED) { _, _ -> ensureClientConnectivity() }
+        ensureClientConnectivity(config.latestConfig)
+        config.config.observeForever(configUpdateObserver)
         updateSources(state)
         refreshLock = ReentrantLock()
     }
@@ -57,9 +55,8 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                     client.getRefreshToken(refreshTokenUrl, parser).let { authState ->
                         // update radarConfig
                         if (config.updateWithAuthState(listener, authState)) {
-                            config.persistChanges()
                             // refresh client
-                            ensureClientConnectivity()
+                            ensureClientConnectivity(config.latestConfig)
                         }
                         logger.info("Retrieved refreshToken from url")
                         // refresh token
@@ -203,11 +200,11 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     override fun onDestroy() {
-        firebaseUpdateReceiver.unregister()
+        config.config.removeObserver(configUpdateObserver)
     }
 
     @Synchronized
-    private fun ensureClientConnectivity() {
+    private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
         val url = config.getString(MANAGEMENT_PORTAL_URL_KEY)
         val unsafe = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
         try {

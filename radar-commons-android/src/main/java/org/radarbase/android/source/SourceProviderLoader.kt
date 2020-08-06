@@ -1,6 +1,7 @@
 package org.radarbase.android.source
 
 import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.ChangeApplier
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -29,7 +30,7 @@ class SourceProviderLoader(private var plugins: List<SourceProvider<*>>) {
      * loaded service providers.
      */
     @Synchronized
-    fun loadProvidersFromNames(config: RadarConfiguration): List<SourceProvider<*>> {
+    fun loadProvidersFromNames(config: SingleRadarConfiguration): List<SourceProvider<*>> {
         val pluginString = listOf(
                 config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT, ""),
                 config.getString(RadarConfiguration.PLUGINS, ""))
