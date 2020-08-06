@@ -18,6 +18,7 @@ package org.radarbase.android.config
 
 import android.content.Context
 import android.os.Handler
+import androidx.annotation.XmlRes
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
 import com.google.android.gms.tasks.OnFailureListener
@@ -28,7 +29,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Suppress("unused")
-class FirebaseRemoteConfiguration(context: Context, inDevelopmentMode: Boolean, defaultSettings: Int) : RemoteConfig {
+class FirebaseRemoteConfiguration(context: Context, inDevelopmentMode: Boolean, @XmlRes defaultSettings: Int) : RemoteConfig {
     private val firebase = FirebaseRemoteConfig.getInstance().apply {
         setDefaultsAsync(defaultSettings)
         isInDevelopmentMode = inDevelopmentMode
