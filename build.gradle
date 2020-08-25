@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 buildscript {
-    ext.kotlin_version = '1.3.72'
+    ext.kotlin_version = '1.4.0'
     repositories {
         google()
         jcenter()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.0.0'
+        classpath 'com.android.tools.build:gradle:4.0.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.5'
         classpath 'de.mobilej.unmock:UnMockPlugin:0.7.6'
@@ -34,12 +34,13 @@ buildscript {
 
 allprojects {
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
+    ext.versionCode = 32
 
     ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = '1.0.0-alpha2'
+    version = '1.0.0-SNAPSHOT'
     group = 'org.radarbase'
 }
 
@@ -51,19 +52,6 @@ subprojects {
     apply plugin: 'kotlin-android'
     apply plugin: 'idea'
     apply plugin: 'org.owasp.dependencycheck'
-
-//---------------------------------------------------------------------------//
-// Configuration                                                             //
-//---------------------------------------------------------------------------//
-
-    version = '1.0.0-SNAPSHOT'
-    ext.versionCode = 32
-    group = 'org.radarbase'
-    ext.githubRepoName = 'RADAR-base/radar-commons-android'
-
-    ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
-    ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
-    ext.website = 'http://radar-base.org'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
@@ -115,5 +103,5 @@ subprojects {
 }
 
 wrapper {
-    gradleVersion '6.4.1'
+    gradleVersion '6.6'
 }
