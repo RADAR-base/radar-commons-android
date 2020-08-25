@@ -22,6 +22,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.CallSuper
+import androidx.annotation.DrawableRes
 import androidx.annotation.Keep
 import org.radarbase.android.MainActivity
 import org.radarbase.android.RadarApplication.Companion.radarApp
@@ -235,7 +236,10 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
 
     open val actions: List<Action> = emptyList()
 
-    data class Action(val name: String, val activate: MainActivity.() -> Unit)
+    data class Action(
+            val name: String,
+            @DrawableRes val icon: Int? = null,
+            val activate: MainActivity.() -> Unit)
 
     companion object {
         const val NEEDS_BLUETOOTH_KEY = "org.radarbase.android.source.SourceProvider.needsBluetooth"

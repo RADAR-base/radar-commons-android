@@ -30,7 +30,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.radarbase.android.data.serialization.TapeAvroSerializationFactory
-import org.radarbase.android.kafka.KafkaDataSubmitter.Companion.SIZE_LIMIT_DEFAULT
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
@@ -202,5 +201,9 @@ class TapeCacheTest {
         assertNotNull(unsent)
         assertEquals(1, unsent?.size())
         assertEquals(1L, tapeCache.numberOfRecords)
+    }
+
+    companion object {
+        private const val SIZE_LIMIT_DEFAULT = 5_000_000L
     }
 }
