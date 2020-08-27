@@ -67,7 +67,6 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
 
     /**
      * Get a string indexed by key, or null if it does not exist.
-     * @throws IllegalArgumentException if the key does not have a value
      */
     fun optString(key: String): String? = config[key]
 

@@ -1,9 +1,12 @@
 package org.radarbase.android.config
 
+import android.content.Context
 import androidx.lifecycle.MutableLiveData
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_DEFAULT
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_KEY
+import org.radarbase.android.auth.AppAuthState
+import org.slf4j.LoggerFactory
 
 class CombinedRadarConfig(
         private val localConfig: LocalConfig,
@@ -23,14 +26,11 @@ class CombinedRadarConfig(
 
         remoteConfigs.forEach { remoteConfig ->
             remoteConfig.onStatusUpdateListener = { newStatus ->
+                logger.info("Got updated status {}", newStatus)
                 status = newStatus
 
                 if (newStatus == RadarConfiguration.RemoteConfigStatus.FETCHED) {
-                    val newConfig = readConfig()
-                    if (newConfig != latestConfig) {
-                        latestConfig = newConfig
-                        config.postValue(newConfig)
-                    }
+                    updateConfig()
                 }
             }
         }
@@ -39,8 +39,12 @@ class CombinedRadarConfig(
     private fun updateConfig() {
         val newConfig = readConfig()
         if (newConfig != latestConfig) {
+            logger.info("Updating config to {}", newConfig)
             latestConfig = newConfig
             config.postValue(newConfig)
+            remoteConfigs.forEach { it.updateWithConfig(newConfig) }
+        } else {
+            logger.info("No change to config. Skipping.")
         }
     }
 
@@ -53,11 +57,11 @@ class CombinedRadarConfig(
     }
 
     private fun readConfig() = SingleRadarConfiguration(status, HashMap<String, String>().apply {
-        putAll(defaults)
+        this += defaults
         remoteConfigs.forEach {
-            putAll(it.cache)
+            this += it.cache
         }
-        putAll(localConfig.config)
+        this += localConfig.config
     })
 
     override fun reset(vararg keys: String) {
@@ -74,4 +78,16 @@ class CombinedRadarConfig(
     }
 
     override fun toString(): String = latestConfig.toString()
+
+    override fun updateWithAuthState(context: Context, appAuthState: AppAuthState?): Boolean {
+        val result = super.updateWithAuthState(context, appAuthState)
+        remoteConfigs.forEach {
+            it.updateWithAuthState(appAuthState)
+        }
+        return result
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(CombinedRadarConfig::class.java)
+    }
 }

@@ -47,7 +47,6 @@ class FirebaseRemoteConfiguration(context: Context, inDevelopmentMode: Boolean, 
     override var onStatusUpdateListener: (RadarConfiguration.RemoteConfigStatus) -> Unit = {}
 
     override var lastFetch: Long = 0L
-        private set
     override var cache: Map<String, String> = mapOf()
         private set
 

@@ -1,12 +1,13 @@
 package org.radarbase.android.config
 
 import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.auth.AppAuthState
 import org.slf4j.LoggerFactory
 
 interface RemoteConfig {
     val status: RadarConfiguration.RemoteConfigStatus
     var onStatusUpdateListener: (RadarConfiguration.RemoteConfigStatus) -> Unit
-    val lastFetch: Long
+    var lastFetch: Long
     val cache: Map<String, String>
 
     fun doFetch(maxCacheAge: Long)
@@ -19,7 +20,13 @@ interface RemoteConfig {
         }
     }
 
-    fun forceFetch() = doFetch(0)
+    fun forceFetch() {
+        lastFetch = 0
+        doFetch(0)
+    }
+
+    fun updateWithConfig(config: SingleRadarConfiguration?) = Unit
+    fun updateWithAuthState(appAuthState: AppAuthState?) = Unit
 
     companion object {
         private val logger = LoggerFactory.getLogger(RemoteConfig::class.java)

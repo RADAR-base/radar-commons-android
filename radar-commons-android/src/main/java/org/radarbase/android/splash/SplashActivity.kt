@@ -19,7 +19,6 @@ import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.config.SingleRadarConfiguration
-import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
@@ -32,7 +31,6 @@ abstract class SplashActivity : AppCompatActivity() {
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var loginListener: LoginListener
     private lateinit var config: RadarConfiguration
-    private var receiveConfigUpdates: BroadcastRegistration? = null
     private lateinit var networkReceiver: NetworkConnectedReceiver
 
     protected var configReceiver: Boolean = false
