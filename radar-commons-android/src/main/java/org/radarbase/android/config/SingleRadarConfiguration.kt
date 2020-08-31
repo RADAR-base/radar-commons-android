@@ -29,7 +29,7 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
      * @throws IllegalArgumentException if the key does not have a value
      */
     fun getString(key: String): String {
-        return requireNotNull(optString(key)) { "Key does not have a value" }
+        return requireNotNull(optString(key)) { "Key $key does not have a value" }
     }
 
     /**
@@ -112,8 +112,7 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
         return when {
             IS_TRUE.matcher(str).find() -> true
             IS_FALSE.matcher(str).find() -> false
-            else -> throw NumberFormatException("String '" + str + "' of property '" + key
-                    + "' is not a boolean")
+            else -> throw NumberFormatException("String '$str' of property $key is not a boolean")
         }
     }
 
