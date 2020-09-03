@@ -34,7 +34,7 @@ dependencies {
         exclude group: 'org.tukaani', module: 'xz'
         exclude group: 'org.apache.commons', module: 'commons-compress'
     }
-    api "androidx.appcompat:appcompat:1.1.0"
+    api "androidx.appcompat:appcompat:1.2.0"
     //noinspection GradleDependency
     api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
         exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
