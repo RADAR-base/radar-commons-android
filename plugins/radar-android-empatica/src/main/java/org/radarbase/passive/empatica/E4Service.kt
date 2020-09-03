@@ -18,7 +18,7 @@ package org.radarbase.passive.empatica
 
 import android.os.Process
 import com.empatica.empalink.EmpaDeviceManager
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.SafeHandler
@@ -43,10 +43,10 @@ class E4Service : SourceService<E4State>() {
 
     override fun createSourceManager() = E4Manager(this, empaManager, mHandler)
 
-    override fun configureSourceManager(manager: SourceManager<E4State>, configuration: RadarConfiguration) {
+    override fun configureSourceManager(manager: SourceManager<E4State>, config: SingleRadarConfiguration) {
         manager as E4Manager
-        manager.updateApiKey(configuration.optString(EMPATICA_API_KEY))
-        manager.notifyDisconnect(configuration.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
+        manager.updateApiKey(config.optString(EMPATICA_API_KEY))
+        manager.notifyDisconnect(config.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
     }
 
     override val defaultState = E4State()
@@ -54,12 +54,13 @@ class E4Service : SourceService<E4State>() {
     override fun onDestroy() {
         super.onDestroy()
 
-        try {
-            empaManager.cleanUp()
-        } catch (ex: RuntimeException) {
-            logger.error("Failed to clean up Empatica manager", ex)
+        mHandler.stop {
+            try {
+                empaManager.cleanUp()
+            } catch (ex: RuntimeException) {
+                logger.error("Failed to clean up Empatica manager", ex)
+            }
         }
-        mHandler.stop()
     }
 
     companion object {

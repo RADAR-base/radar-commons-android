@@ -30,12 +30,11 @@ class PhoneContactsListService : SourceService<BaseSourceState>() {
 
     override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createSourceManager(): PhoneContactListManager {
-        return PhoneContactListManager(this)
-    }
+    override fun createSourceManager(): PhoneContactListManager = PhoneContactListManager(this)
 
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
-        (manager as PhoneContactListManager).setCheckInterval(
+        manager as PhoneContactListManager
+        manager.setCheckInterval(
                 config.getLong(PHONE_CONTACTS_LIST_INTERVAL, PHONE_CONTACTS_LIST_INTERVAL_DEFAULT),
                 TimeUnit.SECONDS)
     }

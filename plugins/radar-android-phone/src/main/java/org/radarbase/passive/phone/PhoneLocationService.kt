@@ -28,21 +28,19 @@ class PhoneLocationService : SourceService<BaseSourceState>() {
 
     override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createSourceManager(): PhoneLocationManager {
-        return PhoneLocationManager(this)
-    }
+    override fun createSourceManager() = PhoneLocationManager(this)
 
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
-        val locationManager = manager as PhoneLocationManager
-        locationManager.setBatteryLevels(StageLevels(
+        manager as PhoneLocationManager
+        manager.setBatteryLevels(StageLevels(
                 minimum = config.getFloat(PHONE_LOCATION_BATTERY_LEVEL_MINIMUM, MINIMUM_BATTERY_LEVEL_DEFAULT),
                 reduced = config.getFloat(PHONE_LOCATION_BATTERY_LEVEL_REDUCED, REDUCED_BATTERY_LEVEL_DEFAULT)))
-        locationManager.setIntervals(PhoneLocationManager.LocationPollingIntervals(
+        manager.setIntervals(PhoneLocationManager.LocationPollingIntervals(
                 gps = config.getLong(PHONE_LOCATION_GPS_INTERVAL, LOCATION_GPS_INTERVAL_DEFAULT),
                 gpsReduced = config.getLong(PHONE_LOCATION_GPS_INTERVAL_REDUCED, LOCATION_GPS_INTERVAL_REDUCED_DEFAULT),
                 network = config.getLong(PHONE_LOCATION_NETWORK_INTERVAL, LOCATION_NETWORK_INTERVAL_DEFAULT),
                 networkReduced = config.getLong(PHONE_LOCATION_NETWORK_INTERVAL_REDUCED, LOCATION_NETWORK_INTERVAL_REDUCED_DEFAULT)))
-        locationManager.isAbsoluteLocation = !config.getBoolean(PHONE_LOCATION_RELATIVE, true)
+        manager.isAbsoluteLocation = !config.getBoolean(PHONE_LOCATION_RELATIVE, true)
 
     }
 

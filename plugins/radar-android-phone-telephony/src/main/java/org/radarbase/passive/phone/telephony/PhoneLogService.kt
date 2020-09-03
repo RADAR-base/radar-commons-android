@@ -30,13 +30,11 @@ class PhoneLogService : SourceService<BaseSourceState>() {
 
     override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createSourceManager(): PhoneLogManager {
-        return PhoneLogManager(this)
-    }
+    override fun createSourceManager() = PhoneLogManager(this)
 
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
-        val phoneManager = manager as PhoneLogManager
-        phoneManager.setCallAndSmsLogUpdateRate(
+        manager as PhoneLogManager
+        manager.setCallAndSmsLogUpdateRate(
                 config.getLong(CALL_SMS_LOG_INTERVAL, CALL_SMS_LOG_INTERVAL_DEFAULT),
                 TimeUnit.SECONDS)
     }

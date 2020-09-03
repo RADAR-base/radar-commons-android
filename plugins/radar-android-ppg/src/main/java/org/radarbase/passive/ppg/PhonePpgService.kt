@@ -26,14 +26,14 @@ class PhonePpgService : SourceService<PhonePpgState>() {
     override val defaultState: PhonePpgState
         get() = PhonePpgState()
 
-    override fun createSourceManager(): PhonePpgManager = PhonePpgManager(this)
+    override fun createSourceManager() = PhonePpgManager(this)
 
     override fun configureSourceManager(manager: SourceManager<PhonePpgState>, config: SingleRadarConfiguration) {
-        (manager as PhonePpgManager).configure(
+        manager as PhonePpgManager
+        manager.configure(
                 config.getLong(PPG_MEASUREMENT_TIME_NAME, PPG_MEASUREMENT_TIME_DEFAULT),
                 Size(config.getInt(PPG_MEASUREMENT_WIDTH_NAME, PPG_MEASUREMENT_WIDTH_DEFAULT),
-                        config.getInt(PPG_MEASUREMENT_HEIGHT_NAME, PPG_MEASUREMENT_HEIGHT_DEFAULT))
-        )
+                        config.getInt(PPG_MEASUREMENT_HEIGHT_NAME, PPG_MEASUREMENT_HEIGHT_DEFAULT)))
     }
 
     companion object {

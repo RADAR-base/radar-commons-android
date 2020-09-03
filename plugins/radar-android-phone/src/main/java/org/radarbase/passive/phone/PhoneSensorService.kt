@@ -29,24 +29,15 @@ import java.util.concurrent.TimeUnit
  * the phone sensors and send it to a Kafka REST proxy.
  */
 class PhoneSensorService : SourceService<PhoneState>() {
-
-    private lateinit var sensorDelays: SparseIntArray
+    private val sensorDelays: SparseIntArray = SparseIntArray(5)
 
     override val defaultState: PhoneState
         get() = PhoneState()
 
-    override fun onCreate() {
-        super.onCreate()
-        sensorDelays = SparseIntArray(5)
-    }
-
-    override fun createSourceManager(): PhoneSensorManager {
-        logger.info("Creating PhoneSensorManager")
-        return PhoneSensorManager(this)
-    }
+    override fun createSourceManager() = PhoneSensorManager(this)
 
     override fun configureSourceManager(manager: SourceManager<PhoneState>, config: SingleRadarConfiguration) {
-        val phoneManager = manager as PhoneSensorManager
+        manager as PhoneSensorManager
 
         val defaultInterval = config.getInt(PHONE_SENSOR_INTERVAL, PHONE_SENSOR_INTERVAL_DEFAULT)
 
@@ -58,8 +49,8 @@ class PhoneSensorService : SourceService<PhoneState>() {
             put(Sensor.TYPE_STEP_COUNTER, config.getInt(PHONE_SENSOR_STEP_COUNT_INTERVAL, defaultInterval))
         }
 
-        phoneManager.setSensorDelays(sensorDelays)
-        phoneManager.setBatteryUpdateInterval(
+        manager.setSensorDelays(sensorDelays)
+        manager.setBatteryUpdateInterval(
                 config.getLong(PHONE_SENSOR_BATTERY_INTERVAL_SECONDS, PHONE_SENSOR_BATTERY_INTERVAL_DEFAULT_SECONDS),
                 TimeUnit.SECONDS)
 
@@ -75,7 +66,5 @@ class PhoneSensorService : SourceService<PhoneState>() {
         internal const val PHONE_SENSOR_ACCELERATION_INTERVAL = "phone_sensor_acceleration_interval"
         internal const val PHONE_SENSOR_LIGHT_INTERVAL = "phone_sensor_light_interval"
         internal const val PHONE_SENSOR_BATTERY_INTERVAL_SECONDS = "phone_sensor_battery_interval_seconds"
-
-        private val logger = LoggerFactory.getLogger(PhoneSensorService::class.java)
     }
 }

@@ -33,14 +33,12 @@ class OpenSmileAudioService : SourceService<BaseSourceState>() {
         get() = BaseSourceState()
 
 
-    override fun createSourceManager(): OpensmileAudioManager {
-        return OpensmileAudioManager(this)
-    }
+    override fun createSourceManager() = OpensmileAudioManager(this)
 
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
-        val audioManager = manager as OpensmileAudioManager
-        audioManager.setRecordRate(config.getLong(AUDIO_RECORD_RATE_S, DEFAULT_RECORD_RATE))
-        audioManager.config = OpensmileAudioManager.AudioConfiguration(
+        manager as OpensmileAudioManager
+        manager.setRecordRate(config.getLong(AUDIO_RECORD_RATE_S, DEFAULT_RECORD_RATE))
+        manager.config = OpensmileAudioManager.AudioConfiguration(
                 config.getString(AUDIO_CONFIG_FILE, "ComParE_2016.conf"),
                 config.getLong(AUDIO_DURATION_S, 15L),
                 TimeUnit.SECONDS

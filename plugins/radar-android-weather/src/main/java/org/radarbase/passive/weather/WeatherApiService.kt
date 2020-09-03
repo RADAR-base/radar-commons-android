@@ -27,7 +27,6 @@ import org.radarbase.producer.rest.RestClient
 import java.util.concurrent.TimeUnit
 
 class WeatherApiService : SourceService<BaseSourceState>() {
-
     private lateinit var client: OkHttpClient
 
     override val defaultState: BaseSourceState
@@ -38,17 +37,15 @@ class WeatherApiService : SourceService<BaseSourceState>() {
         client = RestClient.global()
                 .server(ServerConfig())
                 .build()
-                .httpClient
+                .httpClient  // global OkHttpClient
     }
 
-    override fun createSourceManager(): WeatherApiManager {
-        return WeatherApiManager(this, client)
-    }
+    override fun createSourceManager() = WeatherApiManager(this, client)
 
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
-        val weatherManager = manager as WeatherApiManager
-        weatherManager.setQueryInterval(config.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
-        weatherManager.setSource(
+        manager as WeatherApiManager
+        manager.setQueryInterval(config.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
+        manager.setSource(
                 config.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
                 config.optString(WEATHER_API_KEY))
     }

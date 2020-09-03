@@ -32,16 +32,13 @@ class PhoneUsageService : SourceService<BaseSourceState>() {
     override val defaultState: BaseSourceState
         get() = BaseSourceState()
 
-    override val isBluetoothConnectionRequired: Boolean
-        get() = false
+    override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createSourceManager(): PhoneUsageManager {
-        return PhoneUsageManager(this)
-    }
+    override fun createSourceManager() = PhoneUsageManager(this)
 
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
-        val phoneManager = manager as PhoneUsageManager
-        phoneManager.setUsageEventUpdateRate(
+        manager as PhoneUsageManager
+        manager.setUsageEventUpdateRate(
                 config.getLong(PHONE_USAGE_INTERVAL, USAGE_EVENT_PERIOD_DEFAULT),
                 TimeUnit.SECONDS)
     }

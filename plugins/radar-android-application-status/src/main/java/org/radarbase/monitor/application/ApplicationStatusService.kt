@@ -26,17 +26,14 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
     override val defaultState: ApplicationState
         get() = ApplicationState()
 
-    override fun createSourceManager(): ApplicationStatusManager {
-        return ApplicationStatusManager(this)
-    }
+    override fun createSourceManager() = ApplicationStatusManager(this)
 
     override fun configureSourceManager(manager: SourceManager<ApplicationState>, config: SingleRadarConfiguration) {
-        (manager as ApplicationStatusManager).apply {
-            setApplicationStatusUpdateRate(config.getLong(UPDATE_RATE, UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
-            setTzUpdateRate(config.getLong(TZ_UPDATE_RATE, TZ_UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
-            ntpServer = config.optString(NTP_SERVER_CONFIG)
-            isProcessingIp = config.getBoolean(SEND_IP, false)
-        }
+        manager as ApplicationStatusManager
+        manager.setApplicationStatusUpdateRate(config.getLong(UPDATE_RATE, UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
+        manager.setTzUpdateRate(config.getLong(TZ_UPDATE_RATE, TZ_UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
+        manager.ntpServer = config.optString(NTP_SERVER_CONFIG)
+        manager.isProcessingIp = config.getBoolean(SEND_IP, false)
     }
 
     companion object {

@@ -43,7 +43,7 @@ class FarosService : SourceService<FarosState>() {
     override fun createSourceManager() = FarosManager(this, farosFactory, handler)
 
     override fun configureSourceManager(manager: SourceManager<FarosState>, config: SingleRadarConfiguration) {
-        if (manager !is FarosManager) return
+        manager as FarosManager
         manager.applySettings(farosFactory.defaultSettingsBuilder()
                 .accelerometerRate(config.getInt(ACC_RATE, ACC_RATE_DEFAULT))
                 .accelerometerResolution(config.getFloat(ACC_RESOLUTION, ACC_RESOLUTION_DEFAULT))
