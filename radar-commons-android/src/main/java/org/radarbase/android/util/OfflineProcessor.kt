@@ -29,7 +29,6 @@ import android.os.Debug
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.os.SystemClock
-import com.crashlytics.android.Crashlytics
 import org.radarbase.util.CountedReference
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -116,7 +115,6 @@ class OfflineProcessor(private val context: Context,
                         try {
                             runnable()
                         } catch (ex: RuntimeException) {
-                            Crashlytics.logException(ex)
                             logger.error("OfflineProcessor task failed.", ex)
                         }
                     }

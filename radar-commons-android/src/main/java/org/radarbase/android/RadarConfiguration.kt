@@ -19,9 +19,8 @@ package org.radarbase.android
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.lifecycle.LiveData
-import com.crashlytics.android.Crashlytics
-import com.google.android.gms.tasks.Task
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.portal.GetSubjectParser
@@ -75,47 +74,7 @@ interface RadarConfiguration {
      * Adds base URL from auth state to configuration.
      * @return true if the base URL configuration was updated, false otherwise.
      */
-    fun updateWithAuthState(context: Context, appAuthState: AppAuthState?): Boolean {
-        if (appAuthState == null) {
-            return false
-        }
-        val baseUrl = appAuthState.getAttribute(BASE_URL_PROPERTY).stripEndSlashes()
-        val projectId = appAuthState.projectId
-        val userId = appAuthState.userId
-
-        val baseUrlChanged = baseUrl != null
-                && baseUrl != latestConfig.optString(BASE_URL_KEY)
-
-        if (baseUrlChanged) {
-            put(BASE_URL_KEY, baseUrl!!)
-            put(KAFKA_REST_PROXY_URL_KEY, "$baseUrl/kafka/")
-            put(SCHEMA_REGISTRY_URL_KEY, "$baseUrl/schema/")
-            put(MANAGEMENT_PORTAL_URL_KEY, "$baseUrl/managementportal/")
-            put(OAUTH2_TOKEN_URL, "$baseUrl/managementportal/oauth/token")
-            put(OAUTH2_AUTHORIZE_URL, "$baseUrl/managementportal/oauth/authorize")
-            logger.info("Broadcast config changed based on base URL {}", baseUrl)
-        }
-
-        projectId?.let {
-            put(PROJECT_ID_KEY, it)
-        }
-        userId?.let {
-            put(USER_ID_KEY, it)
-            put(READABLE_USER_ID_KEY, GetSubjectParser.getHumanReadableUserId(appAuthState) ?: it)
-        }
-
-        FirebaseAnalytics.getInstance(context).apply {
-            setUserId(userId)
-            setUserProperty(USER_ID_KEY, userId.limit(36))
-            setUserProperty(PROJECT_ID_KEY, projectId.limit(36))
-            setUserProperty(BASE_URL_KEY, baseUrl.limit(36))
-        }
-        Crashlytics.setUserIdentifier(userId)
-
-        persistChanges()
-
-        return baseUrlChanged
-    }
+    fun updateWithAuthState(context: Context, appAuthState: AppAuthState?): Boolean
 
 //    fun toMap(): Map<String, String> = keys.map { Pair(it, getString(it)) }.toMap()
 
@@ -182,34 +141,6 @@ interface RadarConfiguration {
                                         .commit() // commit immediately to avoid races
                                 }
             }
-        }
-
-        private fun String?.limit(numChars: Int): String? {
-            return if (this != null && length > numChars) {
-                substring(0, numChars)
-            } else {
-                this
-            }
-        }
-
-        /**
-         * Strips all slashes from the end of a URL.
-         * @param url string to strip
-         * @return stripped URL or null if that would result in an empty or null string.
-         */
-        private fun String?.stripEndSlashes(): String? {
-            if (this == null) {
-                return null
-            }
-            var lastIndex = length - 1
-            while (lastIndex >= 0 && this[lastIndex] == '/') {
-                lastIndex--
-            }
-            if (lastIndex == -1) {
-                logger.warn("Base URL '{}' should be a valid URL.", this)
-                return null
-            }
-            return substring(0, lastIndex + 1)
         }
     }
 }

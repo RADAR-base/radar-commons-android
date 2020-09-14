@@ -34,7 +34,7 @@ dependencies {
         exclude group: 'org.tukaani', module: 'xz'
         exclude group: 'org.apache.commons', module: 'commons-compress'
     }
-    api "androidx.appcompat:appcompat:1.1.0"
+    api "androidx.appcompat:appcompat:1.2.0"
     //noinspection GradleDependency
     api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
         exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
@@ -49,8 +49,8 @@ dependencies {
     api "androidx.lifecycle:lifecycle-service:2.2.0"
 
     implementation 'com.google.firebase:firebase-config:19.2.0'
-    implementation 'com.google.firebase:firebase-core:17.4.4'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
+    implementation 'com.google.firebase:firebase-core:17.5.0'
+    implementation 'com.google.firebase:firebase-crashlytics:17.2.1'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.31'
 }
 

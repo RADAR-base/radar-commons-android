@@ -2,10 +2,12 @@ package org.radarbase.android.config
 
 import android.content.Context
 import androidx.lifecycle.MutableLiveData
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_DEFAULT
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_KEY
 import org.radarbase.android.auth.AppAuthState
+import org.radarbase.android.auth.portal.GetSubjectParser
 import org.slf4j.LoggerFactory
 
 class CombinedRadarConfig(
@@ -80,11 +82,52 @@ class CombinedRadarConfig(
     override fun toString(): String = latestConfig.toString()
 
     override fun updateWithAuthState(context: Context, appAuthState: AppAuthState?): Boolean {
-        val result = super.updateWithAuthState(context, appAuthState)
+        if (appAuthState == null) {
+            return false
+        }
+        val baseUrl = appAuthState.baseUrl
+        val projectId = appAuthState.projectId
+        val userId = appAuthState.userId
+
+        val baseUrlChanged = baseUrl != null
+                && baseUrl != latestConfig.optString(RadarConfiguration.BASE_URL_KEY)
+
+        if (baseUrlChanged) {
+            put(RadarConfiguration.BASE_URL_KEY, baseUrl!!)
+            put(RadarConfiguration.KAFKA_REST_PROXY_URL_KEY, "$baseUrl/kafka/")
+            put(RadarConfiguration.SCHEMA_REGISTRY_URL_KEY, "$baseUrl/schema/")
+            put(RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY, "$baseUrl/managementportal/")
+            put(RadarConfiguration.OAUTH2_TOKEN_URL, "$baseUrl/managementportal/oauth/token")
+            put(RadarConfiguration.OAUTH2_AUTHORIZE_URL, "$baseUrl/managementportal/oauth/authorize")
+            logger.info("Broadcast config changed based on base URL {}", baseUrl)
+        }
+
+        projectId?.let {
+            put(RadarConfiguration.PROJECT_ID_KEY, it)
+        }
+        userId?.let {
+            put(RadarConfiguration.USER_ID_KEY, it)
+            put(RadarConfiguration.READABLE_USER_ID_KEY, GetSubjectParser.getHumanReadableUserId(appAuthState) ?: it)
+        }
+
+        FirebaseCrashlytics.getInstance().apply {
+            userId?.let {
+                setUserId(userId)
+                setCustomKey(RadarConfiguration.USER_ID_KEY, userId)
+            }
+            projectId?.let {
+                setCustomKey(RadarConfiguration.PROJECT_ID_KEY, projectId)
+            }
+            baseUrl?.let {
+                setCustomKey(RadarConfiguration.BASE_URL_KEY, baseUrl)
+            }
+        }
+
+        persistChanges()
         remoteConfigs.forEach {
             it.updateWithAuthState(appAuthState)
         }
-        return result
+        return baseUrlChanged
     }
 
     companion object {

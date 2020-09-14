@@ -16,7 +16,6 @@
 
 package org.radarbase.android.data
 
-import com.crashlytics.android.Crashlytics
 import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
@@ -81,8 +80,7 @@ constructor(override val file: File,
         queueFile = try {
             QueueFile.newMapped(Objects.requireNonNull(file), maximumSize)
         } catch (ex: IOException) {
-            logger.error("TapeCache {} was corrupted. Removing old cache.", file)
-            Crashlytics.logException(ex)
+            logger.error("TapeCache {} was corrupted. Removing old cache.", file, ex)
             if (file.delete()) {
                 QueueFile.newMapped(file, maximumSize)
             } else {
@@ -224,16 +222,15 @@ constructor(override val file: File,
         } catch (ex: IllegalStateException) {
             logger.error("Queue {} is full, not adding records", topic.name)
         } catch (ex: IllegalArgumentException) {
-            logger.error("Failed to validate all records; adding individual records instead: {}", ex.message)
+            logger.error("Failed to validate all records; adding individual records instead", ex)
             try {
                 logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
                 for (record in measurementsToAdd) {
                     try {
                         queue.add(record)
                     } catch (ex2: IllegalArgumentException) {
-                        Crashlytics.logException(ex2)
+                        logger.error("Failed to write individual record {}", record, ex)
                     }
-
                 }
             } catch (illEx: IllegalStateException) {
                 logger.error("Queue {} is full, not adding records", topic.name)
@@ -249,7 +246,6 @@ constructor(override val file: File,
     @Throws(IOException::class)
     private fun fixCorruptQueue(ex: Exception) {
         logger.error("Queue {} was corrupted. Removing cache.", topic.name, ex)
-        Crashlytics.logException(ex)
         try {
             queue.close()
         } catch (ioex: IOException) {

@@ -23,13 +23,17 @@ import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
 import com.google.android.gms.tasks.OnFailureListener
 import com.google.android.gms.tasks.OnSuccessListener
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
+import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
+import org.radarbase.android.auth.AppAuthState
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Suppress("unused")
-class FirebaseRemoteConfiguration(context: Context, inDevelopmentMode: Boolean, @XmlRes defaultSettings: Int) : RemoteConfig {
+class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMode: Boolean, @XmlRes defaultSettings: Int) : RemoteConfig {
     private val firebase = FirebaseRemoteConfig.getInstance().apply {
         setDefaultsAsync(defaultSettings)
         isInDevelopmentMode = inDevelopmentMode
@@ -104,8 +108,30 @@ class FirebaseRemoteConfiguration(context: Context, inDevelopmentMode: Boolean, 
         }
     }
 
+    override fun updateWithAuthState(appAuthState: AppAuthState?) {
+        appAuthState ?: return
+        val userId = appAuthState.userId ?: return
+        val projectId = appAuthState.projectId ?: return
+        val baseUrl = appAuthState.baseUrl ?: return
+        FirebaseAnalytics.getInstance(context).apply {
+            setUserId(userId)
+            setUserProperty(USER_ID_KEY, userId.limit(36))
+            setUserProperty(PROJECT_ID_KEY, projectId.limit(36))
+            setUserProperty(RadarConfiguration.BASE_URL_KEY, baseUrl.limit(36))
+        }
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(FirebaseRemoteConfiguration::class.java)
         private const val FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12 * 60 * 60 * 1000L
+
+
+        private fun String?.limit(numChars: Int): String? {
+            return if (this != null && length > numChars) {
+                substring(0, numChars)
+            } else {
+                this
+            }
+        }
     }
 }

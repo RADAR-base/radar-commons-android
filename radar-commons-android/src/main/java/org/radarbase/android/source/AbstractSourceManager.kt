@@ -18,7 +18,6 @@ package org.radarbase.android.source
 
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
-import com.crashlytics.android.Crashlytics
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.SOURCE_ID_KEY
@@ -141,9 +140,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             try {
                 dataCache.addMeasurement(key, value)
             } catch (ex: IllegalArgumentException) {
-                Crashlytics.log("Cannot send measurement for " + state.id)
-                Crashlytics.logException(ex)
-                logger.error("Cannot send to dataCache {}: {}", dataCache.topic.name, ex.message)
+                logger.error("Cannot send for {} to dataCache {}: {}", state.id, dataCache.topic.name, ex)
             }
 
         } else if (!didWarn) {

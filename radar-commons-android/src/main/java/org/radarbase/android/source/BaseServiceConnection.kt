@@ -20,7 +20,6 @@ import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
-import com.crashlytics.android.Crashlytics
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
 import org.radarbase.util.Strings
@@ -66,7 +65,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
                 serviceBinder = service as SourceBinder<S>
                 sourceStatus = sourceState?.status
             } catch (ex: ClassCastException) {
-                Crashlytics.logException(IllegalStateException("Cannot process remote source services.", ex))
+                logger.error("Cannot process remote source services.", ex)
             }
         } else {
             logger.info("Trying to re-bind service, from {} to {}", serviceBinder, service)

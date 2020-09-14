@@ -20,8 +20,6 @@ import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import androidx.annotation.CallSuper
-import com.crashlytics.android.Crashlytics
-import io.fabric.sdk.android.Fabric
 import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.config.LocalConfiguration
 import org.radarbase.android.config.RemoteConfig
@@ -52,7 +50,6 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
 
     protected open fun setupLogging() {
         // initialize crashlytics
-        Fabric.with(this, Crashlytics())
         HandroidLoggerAdapter.DEBUG = BuildConfig.DEBUG
         HandroidLoggerAdapter.APP_NAME = packageName
         HandroidLoggerAdapter.enableLoggingToCrashlytics()

@@ -42,9 +42,7 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
 
     private val preferences = context.getSharedPreferences("org.radarbase.android.config.AppConfigRadarConfiguration", MODE_PRIVATE)
 
-
     override fun updateWithAuthState(appAuthState: AppAuthState?) {
-        super.updateWithAuthState(appAuthState)
         auth = appAuthState
         updateConfiguration(appAuthState, config)
     }

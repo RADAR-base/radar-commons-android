@@ -26,7 +26,7 @@ interface RemoteConfig {
     }
 
     fun updateWithConfig(config: SingleRadarConfiguration?) = Unit
-    fun updateWithAuthState(appAuthState: AppAuthState?) = Unit
+    fun updateWithAuthState(appAuthState: AppAuthState?)
 
     companion object {
         private val logger = LoggerFactory.getLogger(RemoteConfig::class.java)

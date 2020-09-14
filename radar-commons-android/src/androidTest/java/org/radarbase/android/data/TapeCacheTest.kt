@@ -17,10 +17,7 @@
 package org.radarbase.android.data
 
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crashlytics.android.Crashlytics
-import io.fabric.sdk.android.Fabric
 import org.apache.avro.generic.GenericRecord
 import org.junit.After
 import org.junit.Assert.*
@@ -69,7 +66,6 @@ class TapeCacheTest {
     @Before
     @Throws(IOException::class)
     fun setUp() {
-        Fabric.with(ApplicationProvider.getApplicationContext(), Crashlytics())
         HandroidLoggerAdapter.APP_NAME = "Test"
         val topic = AvroTopic("test",
                 ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),

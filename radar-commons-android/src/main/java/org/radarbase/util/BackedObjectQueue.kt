@@ -16,7 +16,6 @@
 
 package org.radarbase.util
 
-import com.crashlytics.android.Crashlytics
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
@@ -112,8 +111,7 @@ class BackedObjectQueue<S, T>(
                     try {
                         results.add(deserializer.deserialize(input))
                     } catch (ex: IllegalStateException) {
-                        Crashlytics.logException(ex)
-                        logger.warn("Invalid record ignored: {}", ex.message)
+                        logger.warn("Invalid record ignored", ex)
                         results.add(null)
                     }
                 }
