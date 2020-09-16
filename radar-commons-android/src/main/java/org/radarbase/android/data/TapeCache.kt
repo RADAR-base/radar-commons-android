@@ -92,7 +92,7 @@ constructor(override val file: File,
 
     @Throws(IOException::class)
     override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any?>? {
-        logger.debug("Trying to retrieve records from topic {}", topic)
+        logger.debug("Trying to retrieve records from topic {}", topic.name)
         return try {
              executor.compute {
                 try {

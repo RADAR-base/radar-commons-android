@@ -26,6 +26,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
 
     private var client: ManagementPortalClient? = null
+    private var clientConfig: ManagementPortalConfig? = null
     private var restClient: RestClient? = null
     private val refreshLock: ReentrantLock
     private val config = listener.radarConfig
@@ -34,7 +35,6 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     init {
-        ensureClientConnectivity(config.latestConfig)
         config.config.observeForever(configUpdateObserver)
         updateSources(state)
         refreshLock = ReentrantLock()
@@ -54,10 +54,9 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                     // retrieve token and update authState
                     client.getRefreshToken(refreshTokenUrl, parser).let { authState ->
                         // update radarConfig
-                        if (config.updateWithAuthState(listener, authState)) {
+                        config.updateWithAuthState(listener, authState)
                             // refresh client
-                            ensureClientConnectivity(config.latestConfig)
-                        }
+                        ensureClientConnectivity(config.latestConfig)
                         logger.info("Retrieved refreshToken from url")
                         // refresh token
                         refresh(authState)
@@ -205,23 +204,30 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
 
     @Synchronized
     private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
-        val url = config.getString(MANAGEMENT_PORTAL_URL_KEY)
-        val unsafe = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
-        try {
-            val portalConfig = ServerConfig(url).apply {
-                isUnsafe = unsafe
-            }
-            client = ManagementPortalClient(portalConfig,
+        val newClientConfig = try {
+            ManagementPortalConfig(
+                    config.getString(MANAGEMENT_PORTAL_URL_KEY),
+                    config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
+                    config.getString(OAUTH2_CLIENT_ID),
+                    config.getString(OAUTH2_CLIENT_SECRET, ""),
+            )
+        } catch (e: MalformedURLException) {
+            logger.error("Cannot construct ManagementPortalClient with malformed URL")
+            null
+        } catch (e: IllegalArgumentException) {
+            logger.error("Cannot construct ManagementPortalClient without client credentials")
+            null
+        }
+
+        if (newClientConfig == clientConfig) return
+
+        client = newClientConfig?.let {
+            ManagementPortalClient(
+                    newClientConfig.serverConfig,
                     config.getString(OAUTH2_CLIENT_ID),
                     config.getString(OAUTH2_CLIENT_SECRET, ""),
                     client = restClient)
                     .also { restClient = it.client }
-        } catch (e: MalformedURLException) {
-            logger.error("Cannot construct ManagementPortalClient with malformed URL")
-            client = null
-        } catch (e: IllegalArgumentException) {
-            logger.error("Cannot construct ManagementPortalClient without client credentials")
-            client = null
         }
     }
 
@@ -249,5 +255,12 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
         const val SOURCE_TYPE = "org.radarcns.auth.portal.ManagementPortal"
         private val logger = LoggerFactory.getLogger(ManagementPortalLoginManager::class.java)
         val sourceTypeList = listOf(SOURCE_TYPE)
+    }
+
+    private data class ManagementPortalConfig(
+            val serverConfig: ServerConfig,
+            val clientId: String,
+            val clientSecret: String) {
+        constructor(url: String, unsafe: Boolean, clientId: String, clientSecret: String) : this(ServerConfig(url).apply { isUnsafe = unsafe }, clientId, clientSecret)
     }
 }

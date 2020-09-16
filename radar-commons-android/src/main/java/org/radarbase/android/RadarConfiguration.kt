@@ -72,9 +72,8 @@ interface RadarConfiguration {
 
     /**
      * Adds base URL from auth state to configuration.
-     * @return true if the base URL configuration was updated, false otherwise.
      */
-    fun updateWithAuthState(context: Context, appAuthState: AppAuthState?): Boolean
+    fun updateWithAuthState(context: Context, appAuthState: AppAuthState?)
 
 //    fun toMap(): Map<String, String> = keys.map { Pair(it, getString(it)) }.toMap()
 
