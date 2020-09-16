@@ -275,7 +275,7 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
     private fun chooseOptimalSize(sizes: Array<Size>): Size {
         val prefSize = preferredDimensions
 
-        val minSize = checkNotNull(sizes.asSequence().minBy {
+        val minSize = checkNotNull(sizes.minByOrNull {
             logger.debug("Available preview size {}x{}", it.width, it.height)
             val wDiff = (it.width - prefSize.width).toLong()
             val hDiff = (it.height - prefSize.height).toLong()
