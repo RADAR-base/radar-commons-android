@@ -29,9 +29,11 @@ import android.os.Debug
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.os.SystemClock
+import okhttp3.internal.threadName
 import org.radarbase.util.CountedReference
 import org.slf4j.LoggerFactory
 import java.io.Closeable
+import java.lang.IllegalArgumentException
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
@@ -114,9 +116,14 @@ class OfflineProcessor(private val context: Context,
                     if (!isDone) {
                         try {
                             runnable()
-                        } catch (ex: RuntimeException) {
+                        } catch (ex: InterruptedException) {
+                            logger.error("OfflineProcessor task was interrupted.", ex)
+                        } catch (ex: Throwable) {
                             logger.error("OfflineProcessor task failed.", ex)
                         }
+                    }
+                    if (Thread.interrupted()) {
+                        logger.debug("OfflineProcessor handler thread was interrupted but no blocking calls were invoked.")
                     }
                 }
             }
@@ -174,7 +181,11 @@ class OfflineProcessor(private val context: Context,
             isDone = true
         }
         alarmManager.cancel(pendingIntent)
-        context.unregisterReceiver(receiver)
+        try {
+            context.unregisterReceiver(receiver)
+        } catch (ex: IllegalArgumentException) {
+            logger.info("OfflineProcessor {} not yet started, cannot unregister", config.requestName)
+        }
 
         try {
             isRunning.acquire()
@@ -208,23 +219,19 @@ class OfflineProcessor(private val context: Context,
         }
 
         fun handler(value: SafeHandler) {
-            handlerReference = CountedReference({
-                value.apply { start() }
-            }, {
-                stop()
-            })
+            handlerReference = value.toCountedReference()
         }
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(OfflineProcessor::class.java)
         private val safeHandler = SafeHandler("OfflineProcessor", THREAD_PRIORITY_BACKGROUND)
-        private val DEFAULT_HANDLER_THREAD = CountedReference({
-            safeHandler.apply {
-                start()
-            }
+        private val DEFAULT_HANDLER_THREAD = safeHandler.toCountedReference()
+
+        private fun SafeHandler.toCountedReference() = CountedReference({
+            apply { start() }
         }, {
-            stop { }
+            stop()
         })
 
         @SuppressLint("WakelockTimeout")

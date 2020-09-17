@@ -37,9 +37,9 @@ class SafeHandler(val name: String, private val priority: Int) {
             return
         }
 
-        handlerThread = HandlerThread(name, priority).also {
-            it.start()
-            handler = Handler(it.looper)
+        handlerThread = HandlerThread(name, priority).apply {
+            start()
+            handler = Handler(looper)
         }
     }
 
@@ -208,23 +208,30 @@ class SafeHandler(val name: String, private val priority: Int) {
     fun stop(finalization: Runnable) = stop(finalization::run)
 
     @Synchronized
-    fun interrupt() = handlerThread.interrupt()
+    fun interrupt() = handlerThread?.interrupt()
 
     /**
      * Stop the handler, running [finalization], if any, as the last operation. If the handler
      * was already stopped, the finalization is still run, but on the current thread.
      */
     @Synchronized
-    fun stop(finalization: (() -> Unit)? = null) {
-        handlerThread?.let { thread ->
-            val oldHandler = handler
+    fun stop(finalization: (() -> Unit)? = null, currentThreadFinalization: (() -> Unit)? = null) {
+        val thread = handlerThread ?: return
+
+        currentThreadFinalization?.tryRunOrNull()
+
+        val oldHandler = handler
+        if (oldHandler != null) {
             handler = null
             finalization?.let {
-                oldHandler?.post { it.tryRunOrNull() } ?: it.tryRunOrNull()
+                oldHandler.post { it.tryRunOrNull() } ?: it.tryRunOrNull()
             }
-            thread.quitSafely()
-            handlerThread = null
-        } ?: logger.warn("Tried to stop SafeHandler multiple times.")
+        } else {
+            finalization?.tryRunOrNull()
+        }
+        thread.quitSafely()
+
+        handlerThread = null
     }
 
     /**
