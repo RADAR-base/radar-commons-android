@@ -207,6 +207,9 @@ class SafeHandler(val name: String, private val priority: Int) {
      */
     fun stop(finalization: Runnable) = stop(finalization::run)
 
+    @Synchronized
+    fun interrupt() = handlerThread.interrupt()
+
     /**
      * Stop the handler, running [finalization], if any, as the last operation. If the handler
      * was already stopped, the finalization is still run, but on the current thread.
