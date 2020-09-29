@@ -180,11 +180,11 @@ class OfflineProcessor(private val context: Context,
             }
             isDone = true
         }
-        alarmManager.cancel(pendingIntent)
-        try {
-            context.unregisterReceiver(receiver)
-        } catch (ex: IllegalArgumentException) {
-            logger.info("OfflineProcessor {} not yet started, cannot unregister", config.requestName)
+        handler.execute {
+            if (didStart) {
+                alarmManager.cancel(pendingIntent)
+                context.unregisterReceiver(receiver)
+            }
         }
 
         try {
