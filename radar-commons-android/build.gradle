@@ -50,7 +50,7 @@ dependencies {
 
     implementation 'com.google.firebase:firebase-config:19.2.0'
     implementation 'com.google.firebase:firebase-core:17.5.0'
-    implementation 'com.google.firebase:firebase-crashlytics:17.2.1'
+    implementation 'com.google.firebase:firebase-crashlytics:17.2.2'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.31'
 }
 
