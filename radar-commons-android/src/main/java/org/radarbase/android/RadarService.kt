@@ -37,6 +37,8 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
+import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_DEFAULT
+import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_KEY
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthServiceConnection
@@ -61,6 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.ArrayList
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
+    private var configurationUpdateFuture: SafeHandler.HandlerFuture? = null
     private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
 
@@ -156,9 +159,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
         }
 
-        configuration.config.observe(this, androidx.lifecycle.Observer<SingleRadarConfiguration> { config ->
-            configure(config)
-        })
+        configuration.config.observe(this, ::configure)
 
         authConnection = AuthServiceConnection(this, this).apply {
             bind()
@@ -214,7 +215,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         sourceFailedReceiver.unregister()
         serverStatusReceiver.unregister()
 
-        mHandler.stop { }
+        mHandler.stop()
         authConnection.unbind()
 
         mConnections.filter(SourceProvider<*>::isBound)
@@ -226,7 +227,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     @CallSuper
     protected open fun configure(config: SingleRadarConfiguration) {
        mHandler.executeReentrant {
-            doConfigure(config)
+           doConfigure(config)
+
+           configurationUpdateFuture?.cancel()
+           configurationUpdateFuture = mHandler.repeat(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) {
+               configuration.fetch()
+           }
        }
     }
 

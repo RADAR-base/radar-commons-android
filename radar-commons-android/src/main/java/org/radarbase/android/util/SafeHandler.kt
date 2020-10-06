@@ -224,7 +224,7 @@ class SafeHandler(val name: String, private val priority: Int) {
         if (oldHandler != null) {
             handler = null
             finalization?.let {
-                oldHandler.post { it.tryRunOrNull() } ?: it.tryRunOrNull()
+                oldHandler.post { it.tryRunOrNull() }
             }
         } else {
             finalization?.tryRunOrNull()
