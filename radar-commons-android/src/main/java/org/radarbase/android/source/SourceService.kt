@@ -341,40 +341,60 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
     open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>): Boolean {
         if (sourceTypes.isEmpty()) {
+            logger.warn("Cannot register source {} yet: allowed source types are empty", id)
             handler.delay(5_000L) { ensureRegistration(id, name, attributes) }
         }
 
-        val fullAttributes = HashMap(attributes).apply {
-            this["physicalId"] = id ?: ""
-            this["physicalName"] = name
-        }
-        return if (sources.isEmpty()) {
-            matchingSourceType?.let { registerSource(it, name, fullAttributes) } != null
-        } else {
-            val matchingSource = sources
-                    .find { source ->
-                        when {
-                            source.matches(id, name) -> true
-                            id != null && source.attributes["physicalId"]?.isEmpty() == false -> source.attributes["physicalId"] == id
-                            source.attributes["physicalName"]?.isEmpty() == false -> source.attributes["physicalName"] == name
-                            else -> false
+        val matchingSource = sources
+                .find { source ->
+                    val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
+                    val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
+                    when {
+                        source.matches(id, name) -> true
+                        id != null && physicalId != null && id in physicalId -> true
+                        id != null && physicalId != null -> {
+                            logger.warn("Physical id {} does not match registered id {}", physicalId, id)
+                            false
                         }
+                        physicalName != null && name in physicalName -> true
+                        physicalName != null -> {
+                            logger.warn("Physical name {} does not match registered name {}", physicalName, name)
+                            false
+                        }
+                        else -> false
                     }
+                }
 
-            if (matchingSource == null) {
-                matchingSourceType?.let { registerSource(it, name, fullAttributes) } != null
+        return if (matchingSource == null) {
+            val match = matchingSourceType
+            if (match == null) {
+                logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
+                false
             } else {
-                sourceManager?.didRegister(matchingSource)
+                registerSource(match, name, HashMap(attributes).apply {
+                    this["physicalId"] = id ?: ""
+                    this["physicalName"] = name
+                })
                 true
             }
+        } else {
+            sourceManager?.didRegister(matchingSource)
+            true
         }
     }
 
     private val matchingSourceType: SourceType?
-        get() = sourceTypes
-                .filter { it.producer == sourceProducer && it.model == sourceModel }
-                .sortedBy { if (it.catalogVersion[0] == 'v') it.catalogVersion.substring(1) else it.catalogVersion }
-                .lastOrNull()
+        get() {
+            val result = sourceTypes
+                    .filter { it.producer == sourceProducer && it.model == sourceModel }
+                    .maxByOrNull {
+                        if (it.catalogVersion[0] == 'v') {
+                            it.catalogVersion.substring(1)
+                        } else it.catalogVersion
+                    }
+
+            return result
+        }
 
     override fun toString() = "$name<${sourceManager?.name}"
 

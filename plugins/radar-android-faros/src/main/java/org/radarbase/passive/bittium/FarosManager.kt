@@ -182,9 +182,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
     }
 
     override fun disconnect() {
-        if (isClosed) return
-
-        if (doNotify) {
+        if (!isClosed && doNotify) {
             service.radarApp.notificationHandler.notify(
                     id = FAROS_DISCONNECTED_NOTIFICATION_ID,
                     channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,

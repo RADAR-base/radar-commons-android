@@ -2,11 +2,14 @@ package org.radarbase.android.auth
 
 import org.json.JSONException
 import org.json.JSONObject
-import org.radarbase.android.RadarService.Companion.sanitizedIds
+import org.radarbase.android.RadarService.Companion.sanitizeIds
+import org.radarbase.android.auth.SourceMetadata.Companion.matches
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.util.Strings
 import org.radarcns.android.auth.AppSource
+import org.slf4j.LoggerFactory
 import java.util.*
+import java.util.regex.Pattern
 import kotlin.collections.HashMap
 
 class SourceMetadata {
@@ -133,9 +136,26 @@ class SourceMetadata {
 
     fun matches(vararg names: String?): Boolean {
         val actualNames = names.filterNotNull()
-        return expectedSourceName?.split(",".toRegex())?.let { expected ->
-            Strings.containsPatterns(sanitizedIds(expected))
-                    .any { pattern -> actualNames.any { pattern.matcher(it).find() } }
-        } ?: true
+        if (actualNames.isEmpty()) {
+            return false
+        }
+        val expectedSourceName = expectedSourceName ?: return true
+        val hasMatch = Strings.containsPatterns(expectedSourceName
+                .split(expectedNameSplit)
+                .sanitizeIds())
+                .any { pattern -> actualNames.any { pattern.matches(it) } }
+
+        return if (hasMatch) {
+            true
+        } else {
+            logger.warn("Source names {} were not matched by {}", actualNames, expectedSourceName)
+            false
+        }
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(SourceMetadata::class.java)
+        private val expectedNameSplit: Regex = ",".toRegex()
+        private fun Pattern.matches(string: String): Boolean = matcher(string).find()
     }
 }

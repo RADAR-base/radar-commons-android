@@ -540,7 +540,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             get() = mConnections
 
         override fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>) {
-            sourceFilters[connection] = sanitizedIds(allowedIds)
+            sourceFilters[connection] = allowedIds.sanitizeIds()
 
             mHandler.execute {
                 val status = connection.sourceStatus
@@ -607,7 +607,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             return (getSystemService(type) as T?)?.let(callback)
         }
 
-        fun sanitizedIds(ids: Collection<String>): Set<String> = HashSet(ids
-                .mapNotNull(String::takeTrimmedIfNotEmpty))
+        fun Collection<String>.sanitizeIds(): Set<String> = HashSet(mapNotNull(String::takeTrimmedIfNotEmpty))
     }
 }
