@@ -281,17 +281,7 @@ class KafkaDataSubmitter(
         return size
     }
 
-    data class SubmitterConfiguration(
-            var userId: String? = null,
-            var amountLimit: Int = SEND_LIMIT_DEFAULT,
-            var sizeLimit: Long = SIZE_LIMIT_DEFAULT,
-            var uploadRate: Long = UPLOAD_RATE_DEFAULT,
-            var uploadRateMultiplier: Int = 1)
-
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaDataSubmitter::class.java)
-        const val SIZE_LIMIT_DEFAULT = 5000000L  // 5 MB
-        private const val SEND_LIMIT_DEFAULT = 1000
-        private const val UPLOAD_RATE_DEFAULT = 10L
     }
 }

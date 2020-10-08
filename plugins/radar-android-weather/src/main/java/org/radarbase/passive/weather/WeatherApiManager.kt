@@ -55,21 +55,23 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
         }
 
         networkReceiver = NetworkConnectedReceiver(service)
+        status = SourceStatusListener.Status.UNAVAILABLE
     }
 
     @Synchronized
-    fun setSource(source: String, apiKey: String) {
-        if (source.equals(SOURCE_OPENWEATHERMAP, ignoreCase = true)) {
-            weatherApi = OpenWeatherMapApi(apiKey, client)
-            logger.info("WeatherApiManager created with key {}", apiKey)
-        } else {
-            logger.error("The weather api '{}' is not recognised. Please set a different weather api source.", source)
+    fun setSource(source: String, apiKey: String?) {
+        when {
+            !source.equals(SOURCE_OPENWEATHERMAP, ignoreCase = true) -> logger.error("The weather api '{}' is not recognised. Please set a different weather api source.", source)
+            apiKey == null -> logger.error("Weather api '{}' has no API key.", source)
+            else -> {
+                weatherApi = OpenWeatherMapApi(apiKey, client)
+                status = SourceStatusListener.Status.READY
+                logger.info("WeatherApiManager created with key {}", apiKey)
+            }
         }
     }
 
     override fun start(acceptableIds: Set<String>) {
-        status = SourceStatusListener.Status.READY
-
         register(name = "OpenWeatherMap")
 
         logger.info("Starting WeatherApiManager")

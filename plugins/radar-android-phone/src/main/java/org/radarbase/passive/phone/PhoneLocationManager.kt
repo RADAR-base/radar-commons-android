@@ -31,6 +31,7 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.StageLevels
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_REDUCED_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_NETWORK_INTERVAL_DEFAULT
@@ -46,7 +47,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private val locationTopic: DataCache<ObservationKey, PhoneRelativeLocation> = createCache("android_phone_relative_location", PhoneRelativeLocation())
     private val locationManager = service.getSystemService(Context.LOCATION_SERVICE) as LocationManager?
     private val handler = SafeHandler.getInstance("PhoneLocation", Process.THREAD_PRIORITY_BACKGROUND)
-    private val batteryLevelReceiver = BatteryStageReceiver(context, BatteryStageReceiver.StageLevels(0.1f, 0.3f), ::onBatteryLevelChanged)
+    private val batteryLevelReceiver = BatteryStageReceiver(context, StageLevels(0.1f, 0.3f), ::onBatteryLevelChanged)
     private var latitudeReference: BigDecimal? = null
     private var longitudeReference: BigDecimal? = null
     private var altitudeReference: Double = 0.toDouble()
@@ -278,7 +279,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         }
     }
 
-    fun setBatteryLevels(stageLevels: BatteryStageReceiver.StageLevels) {
+    fun setBatteryLevels(stageLevels: StageLevels) {
         handler.execute {
             batteryLevelReceiver.stageLevels = stageLevels
         }

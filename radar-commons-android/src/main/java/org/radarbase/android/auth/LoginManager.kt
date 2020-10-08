@@ -86,6 +86,8 @@ interface LoginManager {
 
     fun onDestroy()
 
+    fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean
+
     companion object {
         /** HTTP basic authentication.  */
         const val AUTH_TYPE_UNKNOWN = 0

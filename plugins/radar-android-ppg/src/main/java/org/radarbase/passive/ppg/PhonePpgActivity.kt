@@ -82,7 +82,7 @@ class PhonePpgActivity : AppCompatActivity(), Runnable {
         ml.bringToFront()
 
         val config = (application as RadarApplication).configuration
-        val totalTime = config.getInt(PPG_MEASUREMENT_TIME_NAME, PPG_MEASUREMENT_TIME_DEFAULT.toInt())
+        val totalTime = config.latestConfig.getInt(PPG_MEASUREMENT_TIME_NAME, PPG_MEASUREMENT_TIME_DEFAULT.toInt())
         this.findViewById<TextView>(R.id.ppgMainDescription).text = resources.getQuantityString(
                 R.plurals.ppgMainDescription, totalTime, totalTime)
         mTextField = findViewById(R.id.ppgMeasurementStatus)

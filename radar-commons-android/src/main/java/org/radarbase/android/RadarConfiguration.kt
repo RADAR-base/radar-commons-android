@@ -18,12 +18,13 @@ package org.radarbase.android
 
 import android.annotation.SuppressLint
 import android.content.Context
-import com.crashlytics.android.Crashlytics
-import com.google.android.gms.tasks.Task
+import androidx.lifecycle.LiveData
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.portal.GetSubjectParser
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.regex.Pattern
@@ -31,6 +32,8 @@ import java.util.regex.Pattern.CASE_INSENSITIVE
 
 interface RadarConfiguration {
     val status: RemoteConfigStatus
+    val latestConfig: SingleRadarConfiguration
+    val config: LiveData<SingleRadarConfiguration>
 
     enum class RemoteConfigStatus {
         UNAVAILABLE, INITIAL, ERROR, READY, FETCHING, FETCHED
@@ -59,183 +62,22 @@ interface RadarConfiguration {
 
     /**
      * Fetch the remote configuration from server if it is outdated.
-     * @return fetch task or null status is [RemoteConfigStatus.UNAVAILABLE].
      */
-    fun fetch(): Task<Void>?
+    fun fetch()
 
     /**
      * Force fetching the remote configuration from server, even if it is not outdated.
-     * @return fetch task or null status is [RemoteConfigStatus.UNAVAILABLE].
      */
-    fun forceFetch(): Task<Void>?
-
-    /**
-     * Activate the fetched configuration.
-     */
-    fun activateFetched(): Task<Boolean>
-
-    /**
-     * Get a string indexed by key.
-     * @throws IllegalArgumentException if the key does not have a value
-     */
-    fun getString(key: String): String {
-        return requireNotNull(optString(key)) { "Key does not have a value" }
-    }
-
-    /**
-     * Get a configured long value.
-     * @param key key of the value
-     * @return long value
-     * @throws NumberFormatException if the configured value is not a Long
-     * @throws IllegalArgumentException if the key does not have an associated value
-     */
-    fun getLong(key: String): Long = java.lang.Long.parseLong(getString(key))
-
-    /**
-     * Get a configured int value.
-     * @param key key of the value
-     * @return int value
-     * @throws NumberFormatException if the configured value is not an Integer
-     * @throws IllegalArgumentException if the key does not have an associated value
-     */
-    fun getInt(key: String): Int = Integer.parseInt(getString(key))
-
-    /**
-     * Get a configured float value.
-     * @param key key of the value
-     * @return float value
-     * @throws NumberFormatException if the configured value is not an Float
-     * @throws IllegalArgumentException if the key does not have an associated value
-     */
-    fun getFloat(key: String): Float = java.lang.Float.parseFloat(getString(key))
-
-    /**
-     * Get a string indexed by key, or a default value if it does not exist.
-     * @throws IllegalArgumentException if the key does not have a value
-     */
-    fun getString(key: String, defaultValue: String): String = optString(key) ?: defaultValue
-
-    /**
-     * Get a string indexed by key, or null if it does not exist.
-     * @throws IllegalArgumentException if the key does not have a value
-     */
-    fun optString(key: String): String?
-
-    /**
-     * Get a configured long value. If the configured value is not present or not a valid long,
-     * return a default value.
-     * @param key key of the value
-     * @param defaultValue default value
-     * @return configured long value, or defaultValue if no suitable value was found.
-     */
-    fun getLong(key: String, defaultValue: Long): Long {
-        return optString(key)?.toLongOrNull()
-                ?: defaultValue
-    }
-
-    /**
-     * Get a configured int value. If the configured value is not present or not a valid int,
-     * return a default value.
-     * @param key key of the value
-     * @param defaultValue default value
-     * @return configured int value, or defaultValue if no suitable value was found.
-     */
-    fun getInt(key: String, defaultValue: Int): Int {
-        return optString(key)?.toIntOrNull()
-                ?: defaultValue
-    }
-
-
-    /**
-     * Get a configured float value. If the configured value is not present or not a valid float,
-     * return a default value.
-     * @param key key of the value
-     * @param defaultValue default value
-     * @return configured float value, or defaultValue if no suitable value was found.
-     */
-    fun getFloat(key: String, defaultValue: Float): Float {
-        return optString(key)?.toFloatOrNull()
-                ?: defaultValue
-    }
-
-    /**
-     * Configuration has a value for given key.
-     */
-    fun containsKey(key: String): Boolean
-
-    fun getBoolean(key: String): Boolean {
-        val str = getString(key)
-        return when {
-            IS_TRUE.matcher(str).find() -> true
-            IS_FALSE.matcher(str).find() -> false
-            else -> throw NumberFormatException("String '" + str + "' of property '" + key
-                    + "' is not a boolean")
-        }
-    }
-
-    fun getBoolean(key: String, defaultValue: Boolean): Boolean {
-        val str = optString(key) ?: return defaultValue
-        return when {
-            IS_TRUE.matcher(str).find() -> true
-            IS_FALSE.matcher(str).find() -> false
-            else -> defaultValue
-        }
-    }
-
-    val keys: Set<String>
-
-    /** There is a non-empty configuration for given key. */
-    fun has(key: String): Boolean
+    fun forceFetch()
 
     /**
      * Adds base URL from auth state to configuration.
-     * @return true if the base URL configuration was updated, false otherwise.
      */
-    fun updateWithAuthState(context: Context, appAuthState: AppAuthState?): Boolean {
-        if (appAuthState == null) {
-            return false
-        }
-        val baseUrl = appAuthState.getAttribute(BASE_URL_PROPERTY).stripEndSlashes()
-        val projectId = appAuthState.projectId
-        val userId = appAuthState.userId
+    fun updateWithAuthState(context: Context, appAuthState: AppAuthState?)
 
-        val baseUrlChanged = baseUrl != null
-                && baseUrl != optString(BASE_URL_KEY)
-
-        if (baseUrlChanged) {
-            put(BASE_URL_KEY, baseUrl!!)
-            put(KAFKA_REST_PROXY_URL_KEY, "$baseUrl/kafka/")
-            put(SCHEMA_REGISTRY_URL_KEY, "$baseUrl/schema/")
-            put(MANAGEMENT_PORTAL_URL_KEY, "$baseUrl/managementportal/")
-            put(OAUTH2_TOKEN_URL, "$baseUrl/managementportal/oauth/token")
-            put(OAUTH2_AUTHORIZE_URL, "$baseUrl/managementportal/oauth/authorize")
-            logger.info("Broadcast config changed based on base URL {}", baseUrl)
-        }
-
-        projectId?.let {
-            put(PROJECT_ID_KEY, it)
-        }
-        userId?.let {
-            put(USER_ID_KEY, it)
-            put(READABLE_USER_ID_KEY, GetSubjectParser.getHumanReadableUserId(appAuthState) ?: it)
-        }
-
-        FirebaseAnalytics.getInstance(context).apply {
-            setUserId(userId)
-            setUserProperty(USER_ID_KEY, userId.limit(36))
-            setUserProperty(PROJECT_ID_KEY, projectId.limit(36))
-            setUserProperty(BASE_URL_KEY, baseUrl.limit(36))
-        }
-        Crashlytics.setUserIdentifier(userId)
-
-        return baseUrlChanged
-    }
-
-    fun toMap(): Map<String, String> = keys.map { Pair(it, getString(it)) }.toMap()
+//    fun toMap(): Map<String, String> = keys.map { Pair(it, getString(it)) }.toMap()
 
     companion object {
-        private val logger = LoggerFactory.getLogger(RadarConfiguration::class.java)
-
         const val RADAR_PREFIX = "org.radarcns.android."
 
         const val RADAR_CONFIGURATION_CHANGED = RADAR_PREFIX + "RadarConfiguration.CHANGED"
@@ -257,6 +99,8 @@ interface RadarConfiguration {
         const val KAFKA_RECORDS_SIZE_LIMIT_KEY = "kafka_records_size_limit"
         const val SENDER_CONNECTION_TIMEOUT_KEY = "sender_connection_timeout"
         const val FIREBASE_FETCH_TIMEOUT_MS_KEY = "firebase_fetch_timeout_ms"
+        const val FETCH_TIMEOUT_MS_KEY = "fetch_timeout_ms"
+        const val FETCH_TIMEOUT_MS_DEFAULT = 14_400_000L
         const val START_AT_BOOT = "start_at_boot"
         const val DEVICE_SERVICES_TO_CONNECT = "device_services_to_connect"
         const val PLUGINS = "plugins"
@@ -294,34 +138,6 @@ interface RadarConfiguration {
                                         .commit() // commit immediately to avoid races
                                 }
             }
-        }
-
-        private fun String?.limit(numChars: Int): String? {
-            return if (this != null && length > numChars) {
-                substring(0, numChars)
-            } else {
-                this
-            }
-        }
-
-        /**
-         * Strips all slashes from the end of a URL.
-         * @param url string to strip
-         * @return stripped URL or null if that would result in an empty or null string.
-         */
-        private fun String?.stripEndSlashes(): String? {
-            if (this == null) {
-                return null
-            }
-            var lastIndex = length - 1
-            while (lastIndex >= 0 && this[lastIndex] == '/') {
-                lastIndex--
-            }
-            if (lastIndex == -1) {
-                logger.warn("Base URL '{}' should be a valid URL.", this)
-                return null
-            }
-            return substring(0, lastIndex + 1)
         }
     }
 }

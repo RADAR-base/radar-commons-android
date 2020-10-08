@@ -16,7 +16,7 @@
 
 package org.radarbase.passive.phone.telephony
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -30,14 +30,12 @@ class PhoneLogService : SourceService<BaseSourceState>() {
 
     override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createSourceManager(): PhoneLogManager {
-        return PhoneLogManager(this)
-    }
+    override fun createSourceManager() = PhoneLogManager(this)
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
-        val phoneManager = manager as PhoneLogManager
-        phoneManager.setCallAndSmsLogUpdateRate(
-                configuration.getLong(CALL_SMS_LOG_INTERVAL, CALL_SMS_LOG_INTERVAL_DEFAULT),
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
+        manager as PhoneLogManager
+        manager.setCallAndSmsLogUpdateRate(
+                config.getLong(CALL_SMS_LOG_INTERVAL, CALL_SMS_LOG_INTERVAL_DEFAULT),
                 TimeUnit.SECONDS)
     }
 

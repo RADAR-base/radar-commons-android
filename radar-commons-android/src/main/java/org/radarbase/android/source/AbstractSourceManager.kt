@@ -18,7 +18,6 @@ package org.radarbase.android.source
 
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
-import com.crashlytics.android.Crashlytics
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.SOURCE_ID_KEY
@@ -101,11 +100,15 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
     protected fun register(
             physicalId: String? = null,
             name: String = this.name,
-            attributes: Map<String, String> = emptyMap()): Boolean {
+            attributes: Map<String, String> = emptyMap(),
+            onMapping: ((SourceMetadata?) -> Unit)? = null) {
         this.name = name
-        return service.ensureRegistration(
+        service.ensureRegistration(
                 physicalId ?: RadarConfiguration.getOrSetUUID(service, SOURCE_ID_KEY),
-                name, attributes)
+                name, attributes) { source ->
+            source?.let { didRegister(it) }
+            onMapping?.let { it(source) }
+        }
     }
 
     /**
@@ -141,11 +144,8 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             try {
                 dataCache.addMeasurement(key, value)
             } catch (ex: IllegalArgumentException) {
-                Crashlytics.log("Cannot send measurement for " + state.id)
-                Crashlytics.logException(ex)
-                logger.error("Cannot send to dataCache {}: {}", dataCache.topic.name, ex.message)
+                logger.error("Cannot send for {} to dataCache {}: {}", state.id, dataCache.topic.name, ex)
             }
-
         } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID to topic {}", dataCache.topic.name)
             didWarn = true
@@ -154,7 +154,6 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
 
     @CallSuper
     override fun didRegister(source: SourceMetadata) {
-        name = source.sourceName!!
         state.id.setSourceId(source.sourceId)
     }
 
@@ -171,9 +170,13 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             }
             hasClosed = true
         }
-        status = SourceStatusListener.Status.DISCONNECTING
+        if (status != SourceStatusListener.Status.UNAVAILABLE) {
+            status = SourceStatusListener.Status.DISCONNECTING
+        }
         onClose()
-        status = SourceStatusListener.Status.DISCONNECTED
+        if (status != SourceStatusListener.Status.UNAVAILABLE) {
+            status = SourceStatusListener.Status.DISCONNECTED
+        }
     }
 
     protected open fun onClose() {

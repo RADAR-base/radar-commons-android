@@ -25,7 +25,7 @@ dependencies {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarcns:radar-schemas-commons:0.5.10.1') {
+    api ('org.radarcns:radar-schemas-commons:0.5.14') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api ('org.apache.avro:avro:1.8.2') {
@@ -34,7 +34,7 @@ dependencies {
         exclude group: 'org.tukaani', module: 'xz'
         exclude group: 'org.apache.commons', module: 'commons-compress'
     }
-    api "androidx.appcompat:appcompat:1.1.0"
+    api "androidx.appcompat:appcompat:1.2.0"
     //noinspection GradleDependency
     api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
         exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
@@ -45,10 +45,13 @@ dependencies {
 
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
+
+    api "androidx.lifecycle:lifecycle-service:2.2.0"
+
     implementation 'com.google.firebase:firebase-config:19.2.0'
-    implementation 'com.google.firebase:firebase-core:17.4.4'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
-    implementation 'sk.baka.slf4j:slf4j-handroid:1.7.31'
+    implementation 'com.google.firebase:firebase-core:17.5.0'
+    implementation 'com.google.firebase:firebase-crashlytics:17.2.2'
+    implementation 'sk.baka.slf4j:slf4j-handroid:1.7.32'
 }
 
 apply from: "$rootDir/gradle/test.gradle"

@@ -41,7 +41,7 @@ repositories {
     maven { url 'http://dl.bintray.com/radar-base/org.radarbase' }
 }
 dependencies {
-    api 'org.radarbase:radar-commons-android:1.0.0-alpha4'
+    api 'org.radarbase:radar-commons-android:1.0.0-alpha5'
 }
 ```
 
@@ -49,7 +49,7 @@ Include additional plugins by adding:
 
 ```gradle
 dependencies {
-    implementation 'org.radarbase:<plugin name>:1.0.0-alpha4'
+    implementation 'org.radarbase:<plugin name>:1.0.0-alpha5'
 }
 ```
 
@@ -82,7 +82,7 @@ To create an Android App, follow the following steps:
 2. Update your code with
      - A main activity that extends `org.radarbase.android.MainActivity`.
      - A main activity view that extends `org.radarbase.android.MainActivityView`. This should reference a layout and update its values based on the services that are connected to the main activity.
-     - An application class that extends `org.radarbase.android.RadarApplication`.
+     - An application class that implements `org.radarbase.android.RadarApplication` or extends `org.radarbase.android.AbstractRadarApplication`.
      - A service class that extends `org.radarbase.android.RadarService`. Add all plugins that should be enabled in the app to the `plugins` value.
      - A service class that extends `org.radarbase.android.auth.AuthService`. Implement any `org.radarbase.android.auth.LoginManager` classes to be able to log in.
      - A login activity that extends `org.radarbase.android.auth.LoginActivity`.

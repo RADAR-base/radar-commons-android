@@ -16,7 +16,7 @@
 
 package org.radarbase.passive.phone.usage
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -32,17 +32,14 @@ class PhoneUsageService : SourceService<BaseSourceState>() {
     override val defaultState: BaseSourceState
         get() = BaseSourceState()
 
-    override val isBluetoothConnectionRequired: Boolean
-        get() = false
+    override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createSourceManager(): PhoneUsageManager {
-        return PhoneUsageManager(this)
-    }
+    override fun createSourceManager() = PhoneUsageManager(this)
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
-        val phoneManager = manager as PhoneUsageManager
-        phoneManager.setUsageEventUpdateRate(
-                configuration.getLong(PHONE_USAGE_INTERVAL, USAGE_EVENT_PERIOD_DEFAULT),
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
+        manager as PhoneUsageManager
+        manager.setUsageEventUpdateRate(
+                config.getLong(PHONE_USAGE_INTERVAL, USAGE_EVENT_PERIOD_DEFAULT),
                 TimeUnit.SECONDS)
     }
 

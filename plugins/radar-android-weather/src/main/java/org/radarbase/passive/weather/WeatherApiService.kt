@@ -17,7 +17,7 @@
 package org.radarbase.passive.weather
 
 import okhttp3.OkHttpClient
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -27,7 +27,6 @@ import org.radarbase.producer.rest.RestClient
 import java.util.concurrent.TimeUnit
 
 class WeatherApiService : SourceService<BaseSourceState>() {
-
     private lateinit var client: OkHttpClient
 
     override val defaultState: BaseSourceState
@@ -38,19 +37,17 @@ class WeatherApiService : SourceService<BaseSourceState>() {
         client = RestClient.global()
                 .server(ServerConfig())
                 .build()
-                .httpClient
+                .httpClient  // global OkHttpClient
     }
 
-    override fun createSourceManager(): WeatherApiManager {
-        return WeatherApiManager(this, client)
-    }
+    override fun createSourceManager() = WeatherApiManager(this, client)
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
-        val weatherManager = manager as WeatherApiManager
-        weatherManager.setQueryInterval(configuration.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
-        weatherManager.setSource(
-                configuration.getString(WEATHER_API_KEY, WEATHER_API_KEY_DEFAULT),
-                configuration.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT))
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
+        manager as WeatherApiManager
+        manager.setQueryInterval(config.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
+        manager.setSource(
+                config.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
+                config.optString(WEATHER_API_KEY))
     }
 
     companion object {
@@ -60,6 +57,5 @@ class WeatherApiService : SourceService<BaseSourceState>() {
 
         internal val WEATHER_QUERY_INTERVAL_DEFAULT = TimeUnit.HOURS.toSeconds(3)
         internal const val WEATHER_API_SOURCE_DEFAULT = SOURCE_OPENWEATHERMAP
-        internal const val WEATHER_API_KEY_DEFAULT = ""
     }
 }

@@ -10,6 +10,7 @@ import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
+import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
 import org.radarbase.android.util.Parser
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
@@ -101,7 +102,6 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
         }
     }
 
-
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
     fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
@@ -178,6 +178,7 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
         private val logger = LoggerFactory.getLogger(ManagementPortalClient::class.java)
 
         const val SOURCES_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.sources"
+        const val SOURCE_IDS_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.sourceIds"
         const val MP_REFRESH_TOKEN_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.refreshToken"
         private const val APPLICATION_JSON = "application/json"
         private const val APPLICATION_JSON_UTF8 = "$APPLICATION_JSON; charset=utf-8"
@@ -227,10 +228,8 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
             logger.debug("Parsing source from {}", body)
             val responseObject = JSONObject(body)
             source.sourceId = responseObject.getString("sourceId")
-            source.sourceName = responseObject.optString("sourceName", source.sourceId ?: "")
-                    .takeIf { it.isNotEmpty() }
-            source.expectedSourceName = responseObject.optString("expectedSourceName")
-                    .takeIf { it.isNotEmpty() }
+            source.sourceName = responseObject.optNonEmptyString("sourceName") ?: source.sourceId
+            source.expectedSourceName = responseObject.optNonEmptyString("expectedSourceName")
             source.attributes = GetSubjectParser.attributesToMap(
                     responseObject.optJSONObject("attributes"))
         }

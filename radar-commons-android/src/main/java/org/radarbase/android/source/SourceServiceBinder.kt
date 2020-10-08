@@ -24,6 +24,10 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
         sourceService.startRecording(acceptableIds)
     }
 
+    override fun restartRecording(acceptableIds: Set<String>) {
+        sourceService.restartRecording(acceptableIds)
+    }
+
     override fun stopRecording() {
         sourceService.stopRecording()
     }
@@ -50,7 +54,9 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
     }
 
     override fun shouldRemainInBackground(): Boolean {
-        return sourceService.state.status != SourceStatusListener.Status.DISCONNECTED
+        return sourceService.state.status !in arrayOf(
+                SourceStatusListener.Status.DISCONNECTED,
+                SourceStatusListener.Status.UNAVAILABLE)
     }
 
     public override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {

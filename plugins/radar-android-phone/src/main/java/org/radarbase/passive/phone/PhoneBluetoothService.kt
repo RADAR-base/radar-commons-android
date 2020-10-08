@@ -16,7 +16,7 @@
 
 package org.radarbase.passive.phone
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -30,14 +30,12 @@ class PhoneBluetoothService : SourceService<BaseSourceState>() {
 
     override val isBluetoothConnectionRequired: Boolean = false
 
-    override fun createSourceManager(): PhoneBluetoothManager {
-        return PhoneBluetoothManager(this)
-    }
+    override fun createSourceManager(): PhoneBluetoothManager = PhoneBluetoothManager(this)
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
-        val phoneManager = manager as PhoneBluetoothManager
-        phoneManager.setCheckInterval(
-                configuration.getLong(PHONE_BLUETOOTH_DEVICES_SCAN_INTERVAL,
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
+        manager as PhoneBluetoothManager
+        manager.setCheckInterval(
+                config.getLong(PHONE_BLUETOOTH_DEVICES_SCAN_INTERVAL,
                         BLUETOOTH_DEVICES_SCAN_INTERVAL_DEFAULT),
                 TimeUnit.SECONDS)
     }

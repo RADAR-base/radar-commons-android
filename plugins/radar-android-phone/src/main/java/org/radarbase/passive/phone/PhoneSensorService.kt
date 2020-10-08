@@ -18,7 +18,7 @@ package org.radarbase.passive.phone
 
 import android.hardware.Sensor
 import android.util.SparseIntArray
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
 import org.slf4j.LoggerFactory
@@ -29,38 +29,29 @@ import java.util.concurrent.TimeUnit
  * the phone sensors and send it to a Kafka REST proxy.
  */
 class PhoneSensorService : SourceService<PhoneState>() {
-
-    private lateinit var sensorDelays: SparseIntArray
+    private val sensorDelays: SparseIntArray = SparseIntArray(5)
 
     override val defaultState: PhoneState
         get() = PhoneState()
 
-    override fun onCreate() {
-        super.onCreate()
-        sensorDelays = SparseIntArray(5)
-    }
+    override fun createSourceManager() = PhoneSensorManager(this)
 
-    override fun createSourceManager(): PhoneSensorManager {
-        logger.info("Creating PhoneSensorManager")
-        return PhoneSensorManager(this)
-    }
+    override fun configureSourceManager(manager: SourceManager<PhoneState>, config: SingleRadarConfiguration) {
+        manager as PhoneSensorManager
 
-    override fun configureSourceManager(manager: SourceManager<PhoneState>, configuration: RadarConfiguration) {
-        val phoneManager = manager as PhoneSensorManager
-
-        val defaultInterval = configuration.getInt(PHONE_SENSOR_INTERVAL, PHONE_SENSOR_INTERVAL_DEFAULT)
+        val defaultInterval = config.getInt(PHONE_SENSOR_INTERVAL, PHONE_SENSOR_INTERVAL_DEFAULT)
 
         sensorDelays.apply {
-            put(Sensor.TYPE_ACCELEROMETER, configuration.getInt(PHONE_SENSOR_ACCELERATION_INTERVAL, defaultInterval))
-            put(Sensor.TYPE_MAGNETIC_FIELD, configuration.getInt(PHONE_SENSOR_MAGNETIC_FIELD_INTERVAL, defaultInterval))
-            put(Sensor.TYPE_GYROSCOPE, configuration.getInt(PHONE_SENSOR_GYROSCOPE_INTERVAL, defaultInterval))
-            put(Sensor.TYPE_LIGHT, configuration.getInt(PHONE_SENSOR_LIGHT_INTERVAL, defaultInterval))
-            put(Sensor.TYPE_STEP_COUNTER, configuration.getInt(PHONE_SENSOR_STEP_COUNT_INTERVAL, defaultInterval))
+            put(Sensor.TYPE_ACCELEROMETER, config.getInt(PHONE_SENSOR_ACCELERATION_INTERVAL, defaultInterval))
+            put(Sensor.TYPE_MAGNETIC_FIELD, config.getInt(PHONE_SENSOR_MAGNETIC_FIELD_INTERVAL, defaultInterval))
+            put(Sensor.TYPE_GYROSCOPE, config.getInt(PHONE_SENSOR_GYROSCOPE_INTERVAL, defaultInterval))
+            put(Sensor.TYPE_LIGHT, config.getInt(PHONE_SENSOR_LIGHT_INTERVAL, defaultInterval))
+            put(Sensor.TYPE_STEP_COUNTER, config.getInt(PHONE_SENSOR_STEP_COUNT_INTERVAL, defaultInterval))
         }
 
-        phoneManager.setSensorDelays(sensorDelays)
-        phoneManager.setBatteryUpdateInterval(
-                configuration.getLong(PHONE_SENSOR_BATTERY_INTERVAL_SECONDS, PHONE_SENSOR_BATTERY_INTERVAL_DEFAULT_SECONDS),
+        manager.setSensorDelays(sensorDelays)
+        manager.setBatteryUpdateInterval(
+                config.getLong(PHONE_SENSOR_BATTERY_INTERVAL_SECONDS, PHONE_SENSOR_BATTERY_INTERVAL_DEFAULT_SECONDS),
                 TimeUnit.SECONDS)
 
     }
@@ -75,7 +66,5 @@ class PhoneSensorService : SourceService<PhoneState>() {
         internal const val PHONE_SENSOR_ACCELERATION_INTERVAL = "phone_sensor_acceleration_interval"
         internal const val PHONE_SENSOR_LIGHT_INTERVAL = "phone_sensor_light_interval"
         internal const val PHONE_SENSOR_BATTERY_INTERVAL_SECONDS = "phone_sensor_battery_interval_seconds"
-
-        private val logger = LoggerFactory.getLogger(PhoneSensorService::class.java)
     }
 }

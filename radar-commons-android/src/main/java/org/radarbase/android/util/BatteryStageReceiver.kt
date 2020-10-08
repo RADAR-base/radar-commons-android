@@ -38,6 +38,4 @@ class BatteryStageReceiver(context: Context, stageLevels: StageLevels = StageLev
     override fun notifyListener() = batteryLevelReceiver.notifyListener()
 
     override fun unregister() = batteryLevelReceiver.unregister()
-
-    data class StageLevels(var minimum: Float, var reduced: Float)
 }

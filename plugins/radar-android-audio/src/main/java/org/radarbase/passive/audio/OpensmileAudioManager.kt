@@ -55,20 +55,17 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             wake = true
         }
         val externalDirectory = service.getExternalFilesDir("")
-        if (externalDirectory != null) {
+        status = if (externalDirectory != null) {
             dataDirectory = File(externalDirectory, "org.radarbase.passive.audio")
-            status = SourceStatusListener.Status.READY
             clearDataDirectory()
+            SourceStatusListener.Status.READY
         } else {
             dataDirectory = null
-            status = SourceStatusListener.Status.DISCONNECTED
+            SourceStatusListener.Status.UNAVAILABLE
         }
     }
 
     override fun start(acceptableIds: Set<String>) {
-        if (status == SourceStatusListener.Status.DISCONNECTED) {
-            return
-        }
         isRunning = true
         processor.start {
             SmileJNI.init(service)
@@ -131,8 +128,9 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
 
     private fun clearDataDirectory() {
         dataDirectory?.let { audioDir ->
-            audioDir.parentFile.list { _, name -> name.startsWith("audio_") && name.endsWith(".bin") }
-                    .forEach { File(audioDir.parentFile, it).delete() }
+            audioDir.parentFile
+                    ?.list { _, name -> name.startsWith("audio_") && name.endsWith(".bin") }
+                    ?.forEach { File(audioDir.parentFile, it).delete() }
 
             audioDir.walk().filter { it.startsWith("audio_") && it.endsWith(".bin") }
                     .forEach { it.delete() }

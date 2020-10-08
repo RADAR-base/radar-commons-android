@@ -12,13 +12,13 @@ import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.LoginActivity.Companion.ACTION_LOGIN_SUCCESS
+import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.util.concurrent.TimeUnit
-import kotlin.random.Random
 
 @Keep
 abstract class AuthService : Service(), LoginListener {
@@ -30,8 +30,10 @@ abstract class AuthService : Service(), LoginListener {
     var loginListenerId: Long = 0
     private lateinit var networkConnectedListener: NetworkConnectedReceiver
     private var configRegistration: LoginListenerRegistration? = null
-    private var currentDelay: Long? = null
+    private var refreshDelay = DelayedRetry(RETRY_MIN_DELAY, RETRY_MAX_DELAY)
     private var isConnected: Boolean = false
+    private var sourceRegistrationStarted: Boolean = false
+    private val successHandlers: MutableList<() -> Unit> = mutableListOf()
 
     open val authSerialization: AuthSerialization by lazy {
         SharedPreferencesAuthSerialization(this)
@@ -68,9 +70,8 @@ abstract class AuthService : Service(), LoginListener {
             }
 
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
-                currentDelay = null
+                refreshDelay.reset()
                 config.updateWithAuthState(this@AuthService, appAuth)
-                config.persistChanges()
                 authSerialization.store(appAuth)
             }
         })
@@ -90,10 +91,14 @@ abstract class AuthService : Service(), LoginListener {
                     it.loginListener.loginSucceeded(null, appAuth)
                 }
             } else {
-                if (!relevantManagers.any { it.refresh(appAuth)}) {
-                    startLogin()
-                }
+                doRefresh()
             }
+        }
+    }
+
+    private fun doRefresh() {
+        if (relevantManagers.none { it.refresh(appAuth) }) {
+            startLogin()
         }
     }
 
@@ -105,17 +110,18 @@ abstract class AuthService : Service(), LoginListener {
      */
     fun refreshIfOnline() {
         handler.execute {
-            if (isConnected) {
-                refresh()
-            } else if (appAuth.isValid
-                    || relevantManagers.any { it.isRefreshable(appAuth) }) {
-                logger.info("Retrieving active authentication state without refreshing")
-                callListeners(sinceUpdate = appAuth.lastUpdate) {
-                    it.loginListener.loginSucceeded(null, appAuth)
+            when {
+                isConnected -> refresh()
+                appAuth.isValid || relevantManagers.any { it.isRefreshable(appAuth) } -> {
+                    logger.info("Retrieving active authentication state without refreshing")
+                    callListeners(sinceUpdate = appAuth.lastUpdate) {
+                        it.loginListener.loginSucceeded(null, appAuth)
+                    }
                 }
-            } else {
-                logger.info("Failed to retrieve authentication state without refreshing")
-                startLogin()
+                else -> {
+                    logger.info("Failed to retrieve authentication state without refreshing")
+                    startLogin()
+                }
             }
         }
     }
@@ -146,13 +152,10 @@ abstract class AuthService : Service(), LoginListener {
             if (ex is ConnectException) {
                 isConnected = false
 
-                val actualDelay = (2 * (currentDelay ?: RETRY_MIN_DELAY)).coerceAtMost(RETRY_MAX_DELAY)
-                        .also { currentDelay = it }
-                        .let { Random.nextLong(RETRY_MIN_DELAY, it) }
-                handler.delay(actualDelay, ::refresh)
+                handler.delay(refreshDelay.nextDelay(), ::refresh)
             } else {
                 if (networkConnectedListener.state.isConnected) {
-                    startLogin()
+                    refresh()
                 }
             }
         }
@@ -182,6 +185,7 @@ abstract class AuthService : Service(), LoginListener {
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         handler.executeReentrant {
             logger.info("Log in succeeded.")
+            refreshDelay.reset()
             appAuth = authState
 
             broadcaster.send(ACTION_LOGIN_SUCCESS)
@@ -209,10 +213,16 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     fun addLoginListener(loginListener: LoginListener): LoginListenerRegistration {
-        return synchronized(listeners) {
-            LoginListenerRegistration(loginListener)
-                    .also { listeners += it }
+        handler.execute {
+            if (appAuth.isValid) {
+                loginListener.loginSucceeded(null, appAuth)
+            }
         }
+
+        return LoginListenerRegistration(loginListener)
+                .also {
+                    synchronized(listeners) { listeners += it }
+                }
     }
 
     fun removeLoginListener(registration: LoginListenerRegistration) {
@@ -236,9 +246,9 @@ abstract class AuthService : Service(), LoginListener {
         }
     }
 
-    private fun applyState(apply: (AppAuthState) -> Unit) {
+    private fun applyState(function: AppAuthState.() -> Unit) {
         handler.executeReentrant {
-            apply(appAuth)
+            appAuth.function()
         }
     }
 
@@ -253,7 +263,7 @@ abstract class AuthService : Service(), LoginListener {
                             ?.also { appAuth = it } != null
                 }) {
                     authSerialization.store(appAuth)
-                    startLogin()
+                    refresh()
                 }
             }
         }
@@ -263,8 +273,29 @@ abstract class AuthService : Service(), LoginListener {
         handler.execute {
             logger.info("Registering source with {}: {}", source.type, source.sourceId)
 
-            relevantManagers.any {
-                it.registerSource(appAuth, source, success, failure)
+            relevantManagers.any { manager ->
+                manager.registerSource(appAuth, source, { newAppAuth, newSource ->
+                    if (newAppAuth != appAuth) {
+                        appAuth = newAppAuth
+                        authSerialization.store(appAuth)
+                    }
+                    successHandlers += { success(newAppAuth, newSource) }
+                    if (!sourceRegistrationStarted) {
+                        handler.delay(1_000L) {
+                            doRefresh()
+                            successHandlers.forEach { it() }
+                            successHandlers.clear()
+                            sourceRegistrationStarted = false
+                        }
+                        sourceRegistrationStarted = true
+                    }
+                }, { ex ->
+                    appAuth.alter {
+                        sourceMetadata.removeAll(source::matches)
+                    }
+                    authSerialization.store(appAuth)
+                    failure(ex)
+                })
             }
         }
     }
@@ -287,13 +318,19 @@ abstract class AuthService : Service(), LoginListener {
 
         fun refreshIfOnline() = this@AuthService.refreshIfOnline()
 
-        fun applyState(apply: (AppAuthState) -> Unit) = this@AuthService.applyState(apply)
+        fun applyState(apply: AppAuthState.() -> Unit) = this@AuthService.applyState(apply)
 
         @Suppress("unused")
         fun updateState(update: AppAuthState.Builder.() -> Unit) = this@AuthService.updateState(update)
 
         fun registerSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) =
                 this@AuthService.registerSource(source, success, failure)
+
+        fun updateSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) =
+                this@AuthService.updateSource(source, success, failure)
+
+        fun unregisterSources(sources: Iterable<SourceMetadata>) =
+                this@AuthService.unregisterSources(sources)
 
         fun invalidate(token: String?, disableRefresh: Boolean) = this@AuthService.invalidate(token, disableRefresh)
 
@@ -304,6 +341,23 @@ abstract class AuthService : Service(), LoginListener {
             }
     }
 
+    private fun updateSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) {
+        handler.execute {
+            relevantManagers.any { manager ->
+                manager.updateSource(appAuth, source, success, failure)
+            }
+        }
+    }
+
+    private fun unregisterSources(sources: Iterable<SourceMetadata>) {
+        handler.execute {
+            updateState {
+                sourceMetadata -= sources
+            }
+            doRefresh()
+        }
+    }
+
     inner class LoginListenerRegistration(val loginListener: LoginListener) {
         val id = ++loginListenerId
         var lastUpdate = 0L
@@ -311,8 +365,8 @@ abstract class AuthService : Service(), LoginListener {
 
     companion object {
         private val logger = LoggerFactory.getLogger(AuthService::class.java)
-        private const val RETRY_MIN_DELAY = 300L
-        private const val RETRY_MAX_DELAY = 86400L
+        const val RETRY_MIN_DELAY = 300L
+        const val RETRY_MAX_DELAY = 86400L
         const val PRIVACY_POLICY_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.privacyPolicyUrl"
         const val BASE_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.baseUrl"
     }

@@ -17,6 +17,7 @@
 package org.radarbase.android.source
 
 import org.radarcns.kafka.ObservationKey
+import kotlin.math.sqrt
 
 /** Current state of a source.  */
 open class BaseSourceState {
@@ -58,7 +59,7 @@ open class BaseSourceState {
     open val accelerationMagnitude: Float
         get() {
             val acceleration = acceleration
-            return Math.sqrt(
+            return sqrt(
                     (acceleration[0] * acceleration[0]
                             + acceleration[1] * acceleration[1]
                             + acceleration[2] * acceleration[2]).toDouble()).toFloat()

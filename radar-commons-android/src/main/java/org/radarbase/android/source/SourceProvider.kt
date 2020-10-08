@@ -22,6 +22,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.CallSuper
+import androidx.annotation.DrawableRes
 import androidx.annotation.Keep
 import org.radarbase.android.MainActivity
 import org.radarbase.android.RadarApplication.Companion.radarApp
@@ -207,7 +208,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      * @param sourceType source type
      * @param checkVersion whether to do a strict version check
      */
-    private fun matches(sourceType: SourceType?, checkVersion: Boolean): Boolean {
+    fun matches(sourceType: SourceType?, checkVersion: Boolean): Boolean {
         return (sourceType != null
                 && sourceType.producer.equals(sourceProducer, ignoreCase = true)
                 && sourceType.model.equals(sourceModel, ignoreCase = true)
@@ -219,7 +220,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      * required, this always returns true. A source with matching type is always considered a match.
      * If no source is registered but registration is dynamic, a match is also made.
      */
-    fun isAuthorizedFor(state: AppAuthState, checkVersion: Boolean): Boolean {
+    fun canRegisterFor(state: AppAuthState, checkVersion: Boolean): Boolean {
         return !state.needsRegisteredSources
                 || state.sourceMetadata.any { matches(it.type, checkVersion) }
                 || state.sourceTypes.any { it.hasDynamicRegistration && matches(it, checkVersion) }
@@ -233,9 +234,17 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         return other != null && other.javaClass == javaClass
     }
 
+    fun isRegisteredFor(authState: AppAuthState, checkVersion: Boolean): Boolean {
+        return !authState.needsRegisteredSources
+                || authState.sourceMetadata.any { matches(it.type, checkVersion) && authState.isAuthorizedForSource(it.sourceId) }
+    }
+
     open val actions: List<Action> = emptyList()
 
-    data class Action(val name: String, val activate: MainActivity.() -> Unit)
+    data class Action(
+            val name: String,
+            @DrawableRes val icon: Int? = null,
+            val activate: MainActivity.() -> Unit)
 
     companion object {
         const val NEEDS_BLUETOOTH_KEY = "org.radarbase.android.source.SourceProvider.needsBluetooth"

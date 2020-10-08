@@ -55,7 +55,7 @@ class TableDataHandler(
     private val dataHandler: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
     private val broadcaster = LocalBroadcastManager.getInstance(context)
 
-    private var config = DataHandler.DataHandlerConfiguration()
+    private var config = DataHandlerConfiguration()
 
     override var status: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
         get() = synchronized(statusSync) { field }
@@ -123,6 +123,7 @@ class TableDataHandler(
         if (config.restConfig.kafkaConfig != null) {
             doEnableSubmitter()
         } else {
+            logger.info("Submitter is disabled: no kafkaConfig provided in init")
             updateServerStatus(ServerStatusListener.Status.DISABLED)
         }
     }
@@ -150,8 +151,19 @@ class TableDataHandler(
                 || status === ServerStatusListener.Status.DISABLED
                 || !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi)
                 || batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY) {
+            when {
+                config.submitterConfig.userId == null ->
+                    logger.info("Submitter has no user ID set. Not starting.")
+                status === ServerStatusListener.Status.DISABLED ->
+                    logger.info("Submitter has been disabled earlier. Not starting")
+                !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi) ->
+                    logger.info("No networkconnection available. Not starting")
+                batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY ->
+                    logger.info("Battery is empty. Not starting")
+            }
             return
         }
+        logger.info("Starting data submitter")
 
         val kafkaConfig = config.restConfig.kafkaConfig ?: return
 
@@ -193,6 +205,7 @@ class TableDataHandler(
     @Synchronized
     fun disableSubmitter() {
         if (status !== ServerStatusListener.Status.DISABLED) {
+            logger.info("Submitter is disabled")
             updateServerStatus(ServerStatusListener.Status.DISABLED)
             if (isStarted) {
                 stop()
@@ -212,9 +225,10 @@ class TableDataHandler(
     }
 
     private fun doEnableSubmitter() {
+        logger.info("Submitter is enabled")
+        updateServerStatus(ServerStatusListener.Status.READY)
         networkConnectedReceiver.register()
         batteryLevelReceiver.register()
-        updateServerStatus(ServerStatusListener.Status.READY)
     }
 
     /**
@@ -279,7 +293,7 @@ class TableDataHandler(
             return if (submitter == null) {
                 emptyList()
             } else if (networkConnectedReceiver.state.hasWifiOrEthernet || !config.sendOverDataHighPriority) {
-                ArrayList<DataCacheGroup<*, *>>(tables.values)
+                ArrayList(tables.values)
             } else {
                 tables.values.filter { it.topicName in config.highPriorityTopics }
             }
@@ -320,7 +334,7 @@ class TableDataHandler(
     }
 
     @Synchronized
-    override fun handler(build: DataHandler.DataHandlerConfiguration.() -> Unit) {
+    override fun handler(build: DataHandlerConfiguration.() -> Unit) {
         val oldConfig = config
 
         config = config.copy().apply(build)
@@ -333,6 +347,15 @@ class TableDataHandler(
                 && config.submitterConfig.userId != null) {
             enableSubmitter()
         } else {
+            if (config.restConfig.kafkaConfig == null) {
+                logger.info("No kafka configuration given. Disabling submitter")
+            }
+            if (config.restConfig.schemaRetriever == null) {
+                logger.info("No schema registry configuration given. Disabling submitter")
+            }
+            if (config.submitterConfig.userId == null) {
+                logger.info("No user ID given. Disabling submitter")
+            }
             disableSubmitter()
         }
 

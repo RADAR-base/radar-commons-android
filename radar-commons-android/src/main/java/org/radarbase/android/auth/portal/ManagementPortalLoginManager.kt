@@ -1,21 +1,19 @@
 package org.radarbase.android.auth.portal
 
 import android.app.Activity
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.lifecycle.Observer
 import org.json.JSONException
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
-import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.util.BroadcastRegistration
-import org.radarbase.android.util.register
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.rest.RestClient
@@ -26,18 +24,18 @@ import java.util.concurrent.locks.ReentrantLock
 
 class ManagementPortalLoginManager(private val listener: AuthService, state: AppAuthState) : LoginManager {
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
-    private val firebaseUpdateReceiver: BroadcastRegistration
 
     private var client: ManagementPortalClient? = null
+    private var clientConfig: ManagementPortalConfig? = null
     private var restClient: RestClient? = null
     private val refreshLock: ReentrantLock
     private val config = listener.radarConfig
+    private val configUpdateObserver = Observer<SingleRadarConfiguration> {
+        ensureClientConnectivity(it)
+    }
 
     init {
-        ensureClientConnectivity()
-
-        firebaseUpdateReceiver = LocalBroadcastManager.getInstance(listener)
-                .register(RADAR_CONFIGURATION_CHANGED) { _, _ -> ensureClientConnectivity() }
+        config.config.observeForever(configUpdateObserver)
         updateSources(state)
         refreshLock = ReentrantLock()
     }
@@ -56,11 +54,9 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                     // retrieve token and update authState
                     client.getRefreshToken(refreshTokenUrl, parser).let { authState ->
                         // update radarConfig
-                        if (config.updateWithAuthState(listener, authState)) {
-                            config.persistChanges()
+                        config.updateWithAuthState(listener, authState)
                             // refresh client
-                            ensureClientConnectivity()
-                        }
+                        ensureClientConnectivity(config.latestConfig)
                         logger.info("Retrieved refreshToken from url")
                         // refresh token
                         refresh(authState)
@@ -116,24 +112,58 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
-        if (authState.authenticationSource != SOURCE_TYPE) {
-            return null
-        }
-        return authState.alter {
-            attributes -= MP_REFRESH_TOKEN_PROPERTY
-            isPrivacyPolicyAccepted = false
+        return when {
+            authState.authenticationSource != SOURCE_TYPE -> null
+            disableRefresh -> authState.alter {
+                attributes -= MP_REFRESH_TOKEN_PROPERTY
+                isPrivacyPolicyAccepted = false
+            }
+            else -> authState
         }
     }
 
     override val sourceTypes: List<String> = sourceTypeList
+
+    override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
+        logger.debug("Handling source update")
+
+        client?.let { client ->
+            try {
+                val updatedSource = client.updateSource(appAuth, source)
+                success(addSource(appAuth, updatedSource), updatedSource)
+            } catch (ex: UnsupportedOperationException) {
+                logger.warn("ManagementPortal does not support updating the app source.")
+                success(addSource(appAuth, source), source)
+            } catch (ex: java.lang.IllegalArgumentException) {
+                logger.error("Source {} is not valid", source)
+                failure(ex)
+            } catch (ex: AuthenticationException) {
+                listener.invalidate(appAuth.token, false)
+                logger.error("Authentication error; failed to update source {} of type {}",
+                        source.sourceName, source.type, ex)
+                failure(ex)
+            } catch (ex: IOException) {
+                logger.error("Failed to update source {} with {}",
+                        source.sourceName, source.type, ex)
+                failure(ex)
+            } catch (ex: JSONException) {
+                logger.error("Failed to update source {} with {}",
+                        source.sourceName, source.type, ex)
+                failure(ex)
+            }
+        } ?: failure(IllegalStateException("Cannot update source without a client"))
+
+        return true
+    }
 
     override fun registerSource(authState: AppAuthState, source: SourceMetadata,
                                 success: (AppAuthState, SourceMetadata) -> Unit,
                                 failure: (Exception?) -> Unit): Boolean {
         logger.debug("Handling source registration")
 
-        sources[source.sourceId]?.also { resultSource ->
-            success(authState, resultSource)
+        val existingSource = sources[source.sourceId]
+        if (existingSource != null) {
+            success(authState, existingSource)
             return true
         }
 
@@ -203,28 +233,35 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     override fun onDestroy() {
-        firebaseUpdateReceiver.unregister()
+        config.config.removeObserver(configUpdateObserver)
     }
 
     @Synchronized
-    private fun ensureClientConnectivity() {
-        val url = config.getString(MANAGEMENT_PORTAL_URL_KEY)
-        val unsafe = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
-        try {
-            val portalConfig = ServerConfig(url).apply {
-                isUnsafe = unsafe
-            }
-            client = ManagementPortalClient(portalConfig,
+    private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
+        val newClientConfig = try {
+            ManagementPortalConfig(
+                    config.getString(MANAGEMENT_PORTAL_URL_KEY),
+                    config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
+                    config.getString(OAUTH2_CLIENT_ID),
+                    config.getString(OAUTH2_CLIENT_SECRET, ""),
+            )
+        } catch (e: MalformedURLException) {
+            logger.error("Cannot construct ManagementPortalClient with malformed URL")
+            null
+        } catch (e: IllegalArgumentException) {
+            logger.error("Cannot construct ManagementPortalClient without client credentials")
+            null
+        }
+
+        if (newClientConfig == clientConfig) return
+
+        client = newClientConfig?.let {
+            ManagementPortalClient(
+                    newClientConfig.serverConfig,
                     config.getString(OAUTH2_CLIENT_ID),
                     config.getString(OAUTH2_CLIENT_SECRET, ""),
                     client = restClient)
                     .also { restClient = it.client }
-        } catch (e: MalformedURLException) {
-            logger.error("Cannot construct ManagementPortalClient with malformed URL")
-            client = null
-        } catch (e: IllegalArgumentException) {
-            logger.error("Cannot construct ManagementPortalClient without client credentials")
-            client = null
         }
     }
 
@@ -252,5 +289,12 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
         const val SOURCE_TYPE = "org.radarcns.auth.portal.ManagementPortal"
         private val logger = LoggerFactory.getLogger(ManagementPortalLoginManager::class.java)
         val sourceTypeList = listOf(SOURCE_TYPE)
+    }
+
+    private data class ManagementPortalConfig(
+            val serverConfig: ServerConfig,
+            val clientId: String,
+            val clientSecret: String) {
+        constructor(url: String, unsafe: Boolean, clientId: String, clientSecret: String) : this(ServerConfig(url).apply { isUnsafe = unsafe }, clientId, clientSecret)
     }
 }

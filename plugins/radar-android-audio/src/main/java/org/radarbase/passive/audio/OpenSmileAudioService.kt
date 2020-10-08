@@ -16,7 +16,7 @@
 
 package org.radarbase.passive.audio
 
-import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -33,16 +33,14 @@ class OpenSmileAudioService : SourceService<BaseSourceState>() {
         get() = BaseSourceState()
 
 
-    override fun createSourceManager(): OpensmileAudioManager {
-        return OpensmileAudioManager(this)
-    }
+    override fun createSourceManager() = OpensmileAudioManager(this)
 
-    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, configuration: RadarConfiguration) {
-        val audioManager = manager as OpensmileAudioManager
-        audioManager.setRecordRate(configuration.getLong(AUDIO_RECORD_RATE_S, DEFAULT_RECORD_RATE))
-        audioManager.config = OpensmileAudioManager.AudioConfiguration(
-                configuration.getString(AUDIO_CONFIG_FILE, "ComParE_2016.conf"),
-                configuration.getLong(AUDIO_DURATION_S, 15L),
+    override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
+        manager as OpensmileAudioManager
+        manager.setRecordRate(config.getLong(AUDIO_RECORD_RATE_S, DEFAULT_RECORD_RATE))
+        manager.config = OpensmileAudioManager.AudioConfiguration(
+                config.getString(AUDIO_CONFIG_FILE, "ComParE_2016.conf"),
+                config.getLong(AUDIO_DURATION_S, 15L),
                 TimeUnit.SECONDS
         )
     }

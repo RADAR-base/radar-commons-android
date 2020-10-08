@@ -17,10 +17,7 @@
 package org.radarbase.android.data
 
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crashlytics.android.Crashlytics
-import io.fabric.sdk.android.Fabric
 import org.apache.avro.generic.GenericRecord
 import org.junit.After
 import org.junit.Assert.*
@@ -30,7 +27,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.radarbase.android.data.serialization.TapeAvroSerializationFactory
-import org.radarbase.android.kafka.KafkaDataSubmitter.Companion.SIZE_LIMIT_DEFAULT
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
@@ -64,13 +60,12 @@ class TapeCacheTest {
 
             return TapeCache(
                     folder.newFile(), topic, outputTopic, handler, serializationFactory,
-                    DataCache.CacheConfiguration(100L))
+                    CacheConfiguration(100L))
         }
 
     @Before
     @Throws(IOException::class)
     fun setUp() {
-        Fabric.with(ApplicationProvider.getApplicationContext(), Crashlytics())
         HandroidLoggerAdapter.APP_NAME = "Test"
         val topic = AvroTopic("test",
                 ObservationKey.getClassSchema(), ApplicationUptime.getClassSchema(),
@@ -84,7 +79,7 @@ class TapeCacheTest {
         }
         tapeCache = TapeCache(folder.newFile(), topic,
                 outputTopic, handler, serializationFactory,
-                DataCache.CacheConfiguration(100, 4096))
+                CacheConfiguration(100, 4096))
 
         key = ObservationKey("test", "a", "b")
         val time = System.currentTimeMillis() / 1000.0
@@ -202,5 +197,9 @@ class TapeCacheTest {
         assertNotNull(unsent)
         assertEquals(1, unsent?.size())
         assertEquals(1L, tapeCache.numberOfRecords)
+    }
+
+    companion object {
+        private const val SIZE_LIMIT_DEFAULT = 5_000_000L
     }
 }

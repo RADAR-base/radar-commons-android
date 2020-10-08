@@ -58,7 +58,7 @@ class CacheStore(
     fun <K: ObservationKey, V: SpecificRecord> getOrCreateCaches(
             context: Context,
             topic: AvroTopic<K, V>,
-            config: DataCache.CacheConfiguration
+            config: CacheConfiguration
     ): DataCacheGroup<K, V> {
         val ref = tables[topic.name] as SynchronizedReference<DataCacheGroup<K, V>>?
                 ?: SynchronizedReference {
@@ -72,7 +72,7 @@ class CacheStore(
     private fun <K: Any, V: Any> loadCache(
             base: String,
             topic: AvroTopic<K, V>,
-            config: DataCache.CacheConfiguration
+            config: CacheConfiguration
     ): DataCacheGroup<K, V> {
         val fileBases = getFileBases(base)
         logger.debug("Files for topic {}: {}", topic.name, fileBases)

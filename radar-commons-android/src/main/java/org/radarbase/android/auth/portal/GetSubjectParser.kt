@@ -6,6 +6,7 @@ import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
+import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
 import org.radarbase.android.auth.SourceType
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
@@ -89,8 +90,8 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                 val sourceTypeId = sourceObj.getInt("sourceTypeId")
                 sourceTypes.find { it.id == sourceTypeId }?.let {
                     actualSources.add(SourceMetadata(it).apply {
-                        expectedSourceName = sourceObj.optString("expectedSourceName")
-                        sourceName = sourceObj.optString("sourceName")
+                        expectedSourceName = sourceObj.optNonEmptyString("expectedSourceName")
+                        sourceName = sourceObj.optNonEmptyString("sourceName")
                         sourceId = id
                         attributes = attributesToMap(sourceObj.optJSONObject("attributes"))
                     })
@@ -125,9 +126,9 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
         }
 
         fun getHumanReadableUserId(state: AppAuthState): String? {
-            return state.attributes.entries
-                    .find { e -> e.key.equals("Human-readable-identifier", ignoreCase = true) }
-                    ?.let { entry -> entry.value.takeTrimmedIfNotEmpty() }
+            return state.attributes.values
+                    .find { it.equals("Human-readable-identifier", ignoreCase = true) }
+                    ?.takeTrimmedIfNotEmpty()
                     ?: state.userId
         }
     }

@@ -16,7 +16,6 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.crashlytics.android.Crashlytics
 import org.radarbase.android.R
 import org.radarbase.android.RadarService
 import org.slf4j.LoggerFactory
@@ -159,7 +158,6 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
                     activity.startActivityForResult(intent, USAGE_REQUEST_CODE)
                 } catch (ex: ActivityNotFoundException) {
                     logger.error("Failed to ask for usage code", ex)
-                    Crashlytics.logException(ex)
                 } catch (ex: IllegalStateException) {
                     logger.warn("Cannot start activity on closed app")
                 }

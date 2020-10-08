@@ -16,30 +16,31 @@
 
 package org.radarbase.android.source
 
-import android.app.Service
-import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.os.Bundle
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
+import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.*
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.source.SourceProvider.Companion.MODEL_KEY
 import org.radarbase.android.source.SourceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
-import org.radarbase.android.util.*
-import org.radarbase.android.util.BluetoothHelper.bluetoothIsEnabled
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
+import org.radarbase.android.util.BundleSerialization
+import org.radarbase.android.util.ManagedServiceConnection
+import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.*
-import kotlin.collections.HashMap
 
 /**
  * A service that manages a SourceManager and a TableDataHandler to send addToPreferences the data of a
@@ -48,7 +49,7 @@ import kotlin.collections.HashMap
  * Specific wearables should extend this class.
  */
 @Keep
-abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListener, LoginListener {
+abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceStatusListener, LoginListener {
     val key = ObservationKey()
 
     @get:Synchronized
@@ -59,7 +60,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         private set
     private lateinit var mBinder: SourceServiceBinder<T>
     private var hasBluetoothPermission: Boolean = false
-    lateinit var sources: Set<SourceMetadata>
+    lateinit var sources: List<SourceMetadata>
     lateinit var sourceTypes: Set<SourceType>
     private lateinit var authConnection: AuthServiceConnection
     protected lateinit var config: RadarConfiguration
@@ -69,6 +70,7 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     private lateinit var broadcaster: LocalBroadcastManager
     private lateinit var sourceModel: String
     private lateinit var sourceProducer: String
+    private val name = javaClass.simpleName
 
     val state: T
         get() {
@@ -96,8 +98,8 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     override fun onCreate() {
         logger.info("Creating SourceService {}", this)
         super.onCreate()
-        sources = HashSet()
-        sourceTypes = HashSet()
+        sources = emptyList()
+        sourceTypes = emptySet()
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         mBinder = createBinder()
@@ -113,8 +115,9 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
             }
         }
         radarConnection.bind()
-        handler = SafeHandler.getInstance("SourceService-$javaClass", THREAD_PRIORITY_BACKGROUND)
+        handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
+        radarConfig.config.observe(this, ::configure)
         config = radarConfig
 
         sourceManager = null
@@ -129,19 +132,20 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         radarConnection.unbind()
         authConnection.unbind()
 
-        handler.stop { stopSourceManager(unsetSourceManager()) }
+        stopRecording()
 
         radarApp.onSourceServiceDestroy(this)
     }
 
     @CallSuper
-    protected open fun configure(configuration: RadarConfiguration) {
-        sourceManager?.let { configureSourceManager(it, configuration) }
+    protected open fun configure(config: SingleRadarConfiguration) {
+        sourceManager?.let { configureSourceManager(it, config) }
     }
 
-    protected open fun configureSourceManager(manager: SourceManager<T>, configuration: RadarConfiguration) {}
+    protected open fun configureSourceManager(manager: SourceManager<T>, config: SingleRadarConfiguration) {}
 
     override fun onBind(intent: Intent): SourceServiceBinder<T> {
+        super.onBind(intent)
         doBind(intent, true)
         return mBinder
     }
@@ -195,7 +199,6 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     private fun unsetSourceManager(): SourceManager<*>? {
         return sourceManager.also {
             sourceManager = null
-            handler.stop { }
         }
     }
 
@@ -215,47 +218,48 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
     fun startRecording(acceptableIds: Set<String>) {
         checkNotNull(key.getUserId()) { "Cannot start recording: user ID is not set." }
 
-        handler.takeUnless(SafeHandler::isStarted)?.start()
-        handler.execute {
-            doStart(acceptableIds)
-        }
+        if (!handler.isStarted) handler.start()
+        handler.execute { doStart(acceptableIds) }
     }
 
     private fun doStart(acceptableIds: Set<String>) {
         val expectedNames = expectedSourceNames
         val actualIds = if (expectedNames.isEmpty()) acceptableIds else expectedNames
 
-        if (sourceManager == null) {
-            if (isBluetoothConnectionRequired
-                    && !bluetoothIsEnabled) {
-                logger.error("Cannot start recording without Bluetooth")
-                return
-            }
-            if (dataHandler != null) {
-                logger.info("Starting recording now for {}", javaClass.simpleName)
-                if (sourceManager == null) {
-                    createSourceManager().also { manager ->
-                        sourceManager = manager
-                        configureSourceManager(manager, config)
-                        manager.start(actualIds)
-                    }
-                } else {
-                    logger.warn("A SourceManager is already registered in the mean time for {}", javaClass.simpleName)
-                }
-            } else {
+        when {
+            sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED -> {
+                logger.warn("A disconnected SourceManager is still registered for {}. Retrying later.", name)
                 startAfterDelay(acceptableIds)
             }
-        } else if (sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED) {
-            logger.warn("A disconnected SourceManager is still registered for {}", javaClass.simpleName)
-            startAfterDelay(acceptableIds)
-        } else {
-            logger.warn("A SourceManager is already registered for {}", javaClass.simpleName)
+            sourceTypes.isEmpty() -> {
+                logger.warn("Sources have not been registered {}. Retrying later.", name)
+                startAfterDelay(acceptableIds)
+            }
+            sourceManager != null ->
+                logger.warn("A SourceManager is already registered for {}", name)
+            isBluetoothConnectionRequired && !bluetoothIsEnabled ->
+                logger.error("Cannot start recording for {} without Bluetooth", name)
+            dataHandler != null -> {
+                logger.info("Starting recording now for {}", name)
+                val manager = createSourceManager()
+                sourceManager = manager
+                configureSourceManager(manager, radarConfig.latestConfig)
+                if (state.status == SourceStatusListener.Status.UNAVAILABLE) {
+                    logger.info("Status is unavailable. Not starting manager yet.")
+                } else {
+                    manager.start(actualIds)
+                }
+            }
+            else -> {
+                logger.info("DataHandler is not ready. Retrying later")
+                startAfterDelay(acceptableIds)
+            }
         }
     }
 
     private fun startAfterDelay(acceptableIds: Set<String>) {
         if (startFuture == null) {
-            logger.warn("Starting recording soon for {}", javaClass.simpleName)
+            logger.warn("Starting recording soon for {}", name)
             startFuture = handler.delay(100) {
                 startFuture?.let {
                     startFuture = null
@@ -265,21 +269,31 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         }
     }
 
-    fun stopRecording() {
+    fun restartRecording(acceptableIds: Set<String>) {
         handler.execute {
-            startFuture?.let {
-                it.cancel()
-                startFuture = null
-            }
-            stopSourceManager(unsetSourceManager())
-            logger.info("Stopped recording {}", this)
+            doStop()
+            doStart(acceptableIds)
         }
+    }
+
+    fun stopRecording() {
+        handler.stop { doStop() }
+    }
+
+    private fun doStop() {
+        startFuture?.let {
+            it.cancel()
+            startFuture = null
+        }
+        stopSourceManager(unsetSourceManager())
+        logger.info("Stopped recording {}", this)
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         key.setProjectId(authState.projectId)
         key.setUserId(authState.userId)
-        sourceTypes = HashSet(authState.sourceTypes)
+        sourceTypes = authState.sourceTypes.filterTo(HashSet()) { it.producer.equals(sourceProducer, ignoreCase = true) && it.model.equals(sourceModel, ignoreCase = true) }
+        sources = authState.sourceMetadata.filter { it.type in sourceTypes }
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
@@ -297,26 +311,26 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
         hasBluetoothPermission = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false)
         sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
         sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
-        configure(config)
     }
 
     /** Get the service local binder.  */
     private fun createBinder() = SourceServiceBinder(this)
 
-    private fun registerSource(type: SourceType, name: String, attributes: Map<String, String>) {
+    private fun registerSource(existingSource: SourceMetadata, type: SourceType, attributes: Map<String, String>) {
         logger.info("Registering source {} with attributes {}", type, attributes)
 
         val source = SourceMetadata(type).apply {
-            sourceName = name
+            sourceId = existingSource.sourceId
+            sourceName = existingSource.sourceName
             this.attributes = attributes
         }
 
         val onFail: (Exception?) -> Unit = {
             logger.warn("Failed to register source: {}", it.toString())
-            handler.delay(300_000L) { registerSource(type, name, attributes) }
+            handler.delay(300_000L) { registerSource(existingSource, type, attributes) }
         }
 
-        authConnection.binder?.registerSource(source,
+        authConnection.binder?.updateSource(source,
                 { authState, updatedSource ->
                     key.setProjectId(authState.projectId)
                     key.setUserId(authState.userId)
@@ -324,49 +338,51 @@ abstract class SourceService<T : BaseSourceState> : Service(), SourceStatusListe
                     source.sourceId = updatedSource.sourceId
                     source.sourceName = updatedSource.sourceName
                     source.expectedSourceName = updatedSource.expectedSourceName
-                    sourceManager?.didRegister(source)
                 }, onFail)
                 ?: onFail(null)
     }
 
-    open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>): Boolean {
+    open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
         if (sourceTypes.isEmpty()) {
-            handler.delay(5_000L) { ensureRegistration(id, name, attributes) }
+            logger.warn("Cannot register source {} yet: allowed source types are empty", id)
+            handler.delay(5_000L) { ensureRegistration(id, name, attributes, onMapping) }
         }
 
-        val fullAttributes = HashMap(attributes).apply {
-            this["physicalId"] = id ?: ""
-            this["physicalName"] = name
-        }
-        return if (sources.isEmpty()) {
-            matchingSourceType?.let { registerSource(it, name, fullAttributes) } != null
-        } else {
-            val matchingSource = sources
-                    .find { source ->
-                        when {
-                            source.matches(id, name) -> true
-                            id != null && source.attributes["physicalId"]?.isEmpty() == false -> source.attributes["physicalId"] == id
-                            source.attributes["physicalName"]?.isEmpty() == false -> source.attributes["physicalName"] == name
-                            else -> false
+        val matchingSource = sources
+                .find { source ->
+                    val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
+                    val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
+                    when {
+                        source.matches(id, name) -> true
+                        id != null && physicalId != null && id in physicalId -> true
+                        id != null && physicalId != null -> {
+                            logger.warn("Physical id {} does not match registered id {}", physicalId, id)
+                            false
                         }
+                        physicalName != null && name in physicalName -> true
+                        physicalName != null -> {
+                            logger.warn("Physical name {} does not match registered name {}", physicalName, name)
+                            false
+                        }
+                        else -> false
                     }
+                }
 
-            if (matchingSource == null) {
-                matchingSourceType?.let { registerSource(it, name, fullAttributes) } != null
-            } else {
-                sourceManager?.didRegister(matchingSource)
-                true
+        if (matchingSource == null) {
+            logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
+        } else {
+            val registeredAttributes = attributes + mapOf(
+                    "physicalId" to (id ?: ""),
+                    "physicalName" to name,
+            )
+            if (registeredAttributes.any { (k, v) -> matchingSource.attributes[k] != v }) {
+                registerSource(matchingSource, matchingSource.type!!, registeredAttributes)
             }
         }
+        onMapping(matchingSource)
     }
 
-    private val matchingSourceType: SourceType?
-        get() = sourceTypes
-                .filter { it.producer == sourceProducer && it.model == sourceModel }
-                .sortedBy { if (it.catalogVersion[0] == 'v') it.catalogVersion.substring(1) else it.catalogVersion }
-                .lastOrNull()
-
-    override fun toString() = "${javaClass.simpleName}<${sourceManager?.name}"
+    override fun toString() = "$name<${sourceManager?.name}"
 
     companion object {
         private const val PREFIX = "org.radarcns.android."
