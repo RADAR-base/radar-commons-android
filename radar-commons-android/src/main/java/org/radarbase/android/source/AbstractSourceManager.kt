@@ -100,11 +100,15 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
     protected fun register(
             physicalId: String? = null,
             name: String = this.name,
-            attributes: Map<String, String> = emptyMap()): Boolean {
+            attributes: Map<String, String> = emptyMap(),
+            onMapping: ((SourceMetadata?) -> Unit)? = null) {
         this.name = name
-        return service.ensureRegistration(
+        service.ensureRegistration(
                 physicalId ?: RadarConfiguration.getOrSetUUID(service, SOURCE_ID_KEY),
-                name, attributes)
+                name, attributes) { source ->
+            source?.let { didRegister(it) }
+            onMapping?.let { it(source) }
+        }
     }
 
     /**
@@ -142,7 +146,6 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             } catch (ex: IllegalArgumentException) {
                 logger.error("Cannot send for {} to dataCache {}: {}", state.id, dataCache.topic.name, ex)
             }
-
         } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID to topic {}", dataCache.topic.name)
             didWarn = true
@@ -151,7 +154,6 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
 
     @CallSuper
     override fun didRegister(source: SourceMetadata) {
-        name = source.sourceName!!
         state.id.setSourceId(source.sourceId)
     }
 

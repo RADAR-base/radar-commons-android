@@ -124,16 +124,16 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
                         val retrieved = response.body!!
                         val json = JSONObject(retrieved.string())
 
-                        val properties = HashMap<String, String>()
-                        properties.mergeConfig(json.getJSONArray("defaults"))
-                        properties.mergeConfig(json.getJSONArray("config"))
-                        cache = properties
+                        cache = HashMap<String, String>().apply {
+                            json.optJSONArray("defaults")?.let { mergeConfig(it) }
+                            json.optJSONArray("config")?.let { mergeConfig(it) }
+                        }
                         lastFetch = System.currentTimeMillis()
 
                         RadarConfiguration.RemoteConfigStatus.FETCHED
                     } else {
-                        logger.error("Failed to fetch remote config at {}; headers {} (HTTP status {}): {}",
-                                call.request().url, call.request().headers, response.code, response.body?.string())
+                        logger.error("Failed to fetch remote config using {} (HTTP status {}): {}",
+                                call.request(), response.code, response.body?.string())
                         RadarConfiguration.RemoteConfigStatus.ERROR
                     }
                 } catch (ex: java.lang.Exception) {

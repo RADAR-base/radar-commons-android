@@ -93,11 +93,10 @@ class FarosManager internal constructor(service: FarosService, private val faros
     }
 
     override fun onDeviceScanned(device: FarosDevice) {
-        handler.executeReentrant {
             logger.info("Found Faros device {}", device.name)
             if (faros != null) {
                 logger.info("Faros device {} already set", device.name)
-                return@executeReentrant
+                return
             }
 
             val attributes: Map<String, String> = mapOf(
@@ -108,16 +107,22 @@ class FarosManager internal constructor(service: FarosService, private val faros
                         else -> "unknown"
                     }))
 
-            if ((acceptableIds.isEmpty() || Strings.findAny(acceptableIds, device.name))
-                    && register(device.name, device.name, attributes)) {
-                logger.info("Stopping scanning")
-                apiManager.stopScanning()
+            if ((acceptableIds.isEmpty() || Strings.findAny(acceptableIds, device.name))) {
+                register(device.name, device.name, attributes) {
+                    if (it != null) {
+                        handler.executeReentrant {
+                            logger.info("Stopping scanning")
+                            apiManager.stopScanning()
 
-                logger.info("Connecting to device {}", device.name)
-                device.connect(this, handler.handler)
-                this.faros = device
-                status = SourceStatusListener.Status.CONNECTING
-            }
+                            logger.info("Connecting to device {}", device.name)
+                            device.connect(this, handler.handler)
+                            this.faros = device
+                            status = SourceStatusListener.Status.CONNECTING
+                        }
+                    } else {
+                        logger.warn("Cannot register a Faros device")
+                    }
+                }
         }
     }
 

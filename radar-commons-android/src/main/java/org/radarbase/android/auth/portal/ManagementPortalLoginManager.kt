@@ -112,24 +112,58 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
-        if (authState.authenticationSource != SOURCE_TYPE) {
-            return null
-        }
-        return authState.alter {
-            attributes -= MP_REFRESH_TOKEN_PROPERTY
-            isPrivacyPolicyAccepted = false
+        return when {
+            authState.authenticationSource != SOURCE_TYPE -> null
+            disableRefresh -> authState.alter {
+                attributes -= MP_REFRESH_TOKEN_PROPERTY
+                isPrivacyPolicyAccepted = false
+            }
+            else -> authState
         }
     }
 
     override val sourceTypes: List<String> = sourceTypeList
+
+    override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
+        logger.debug("Handling source update")
+
+        client?.let { client ->
+            try {
+                val updatedSource = client.updateSource(appAuth, source)
+                success(addSource(appAuth, updatedSource), updatedSource)
+            } catch (ex: UnsupportedOperationException) {
+                logger.warn("ManagementPortal does not support updating the app source.")
+                success(addSource(appAuth, source), source)
+            } catch (ex: java.lang.IllegalArgumentException) {
+                logger.error("Source {} is not valid", source)
+                failure(ex)
+            } catch (ex: AuthenticationException) {
+                listener.invalidate(appAuth.token, false)
+                logger.error("Authentication error; failed to update source {} of type {}",
+                        source.sourceName, source.type, ex)
+                failure(ex)
+            } catch (ex: IOException) {
+                logger.error("Failed to update source {} with {}",
+                        source.sourceName, source.type, ex)
+                failure(ex)
+            } catch (ex: JSONException) {
+                logger.error("Failed to update source {} with {}",
+                        source.sourceName, source.type, ex)
+                failure(ex)
+            }
+        } ?: failure(IllegalStateException("Cannot update source without a client"))
+
+        return true
+    }
 
     override fun registerSource(authState: AppAuthState, source: SourceMetadata,
                                 success: (AppAuthState, SourceMetadata) -> Unit,
                                 failure: (Exception?) -> Unit): Boolean {
         logger.debug("Handling source registration")
 
-        sources[source.sourceId]?.also { resultSource ->
-            success(authState, resultSource)
+        val existingSource = sources[source.sourceId]
+        if (existingSource != null) {
+            success(authState, existingSource)
             return true
         }
 

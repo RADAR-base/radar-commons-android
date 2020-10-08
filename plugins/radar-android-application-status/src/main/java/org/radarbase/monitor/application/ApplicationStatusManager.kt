@@ -44,7 +44,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.math.max
 
-class ApplicationStatusManager internal constructor(service: ApplicationStatusService) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
+class ApplicationStatusManager(
+        service: ApplicationStatusService
+) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
     private val serverTopic: DataCache<ObservationKey, ApplicationServerStatus> = createCache("application_server_status", ApplicationServerStatus())
     private val recordCountsTopic: DataCache<ObservationKey, ApplicationRecordCounts> = createCache("application_record_counts", ApplicationRecordCounts())
     private val uptimeTopic: DataCache<ObservationKey, ApplicationUptime> = createCache("application_uptime", ApplicationUptime())

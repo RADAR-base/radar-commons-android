@@ -103,9 +103,6 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
 
     @RequiresApi(Build.VERSION_CODES.N)
     private fun registerCallback(cm: ConnectivityManager) {
-        cm.registerDefaultNetworkCallback(callback)
-        isReceiverRegistered = true
-
         val network = cm.activeNetwork
         val networkInfo = network?.let { cm.getNetworkInfo(it) }
         state = if (networkInfo?.isConnected == true) {
@@ -116,6 +113,9 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
         } else {
             NetworkState(isConnected = false, hasWifiOrEthernet = false)
         }
+
+        cm.registerDefaultNetworkCallback(callback)
+        isReceiverRegistered = true
     }
 
     override fun unregister() {

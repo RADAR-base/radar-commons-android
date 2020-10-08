@@ -23,7 +23,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCES_PROPERTY
-import org.radarbase.android.config.CombinedRadarConfig
+import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
 import org.radarcns.android.auth.AppSource
 import org.slf4j.LoggerFactory
 import java.io.Serializable
@@ -91,6 +91,11 @@ class AppAuthState private constructor(builder: Builder) {
 
     fun isValidFor(time: Long, unit: TimeUnit) = isPrivacyPolicyAccepted
             && expiration - unit.toMillis(time) > System.currentTimeMillis()
+
+    fun isAuthorizedForSource(sourceId: String?): Boolean {
+        return !this.needsRegisteredSources
+                || (sourceId != null && attributes[SOURCE_IDS_PROPERTY]?.let { sourceId in it } == true)
+    }
 
     val timeSinceLastUpdate: Long
             get() = SystemClock.elapsedRealtime() - lastUpdate

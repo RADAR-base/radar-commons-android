@@ -21,7 +21,6 @@ import android.app.usage.UsageEvents.Event.*
 import android.app.usage.UsageStatsManager
 import android.content.*
 import android.os.Build
-import android.util.SparseArray
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -175,8 +174,8 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     private fun sendLastEvent() {
         // Event type conversion to Schema defined
         val usageEventType = when (lastEventType) {
-            MOVE_TO_FOREGROUND -> UsageEventType.FOREGROUND
-            MOVE_TO_BACKGROUND -> UsageEventType.BACKGROUND
+            ACTIVITY_RESUMED -> UsageEventType.FOREGROUND
+            ACTIVITY_PAUSED -> UsageEventType.BACKGROUND
             CONFIGURATION_CHANGE -> UsageEventType.CONFIG
             SHORTCUT_INVOCATION_COMPAT -> UsageEventType.SHORTCUT
             USER_INTERACTION_COMPAT -> UsageEventType.INTERACTION
@@ -228,20 +227,6 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     companion object {
         private val logger = LoggerFactory.getLogger(PhoneUsageManager::class.java)
-
-        private val EVENT_TYPES = SparseArray<UsageEventType>(6)
-
-        init {
-            EVENT_TYPES.append(MOVE_TO_FOREGROUND, UsageEventType.FOREGROUND)
-            EVENT_TYPES.append(MOVE_TO_BACKGROUND, UsageEventType.BACKGROUND)
-            EVENT_TYPES.append(CONFIGURATION_CHANGE, UsageEventType.CONFIG)
-            if (Build.VERSION.SDK_INT >= 25) {
-                EVENT_TYPES.append(SHORTCUT_INVOCATION, UsageEventType.SHORTCUT)
-            }
-            if (Build.VERSION.SDK_INT >= 23) {
-                EVENT_TYPES.append(USER_INTERACTION, UsageEventType.INTERACTION)
-            }
-        }
 
         private val SHORTCUT_INVOCATION_COMPAT = if (Build.VERSION.SDK_INT >= 25) SHORTCUT_INVOCATION else 8
         private val USER_INTERACTION_COMPAT = if (Build.VERSION.SDK_INT >= 23) USER_INTERACTION else 7

@@ -98,7 +98,7 @@ constructor(override val file: File,
                 try {
                     getValidUnsentRecords(limit, sizeLimit)
                             ?.let { (key, values) ->
-                                AvroRecordData<Any, Any>(readTopic, key, values)
+                                AvroRecordData(readTopic, key, values)
                             }
                 } catch (ex: IOException) {
                     fixCorruptQueue(ex)

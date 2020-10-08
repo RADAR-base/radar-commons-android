@@ -41,8 +41,6 @@ import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.*
-import kotlin.collections.HashMap
 
 /**
  * A service that manages a SourceManager and a TableDataHandler to send addToPreferences the data of a
@@ -62,7 +60,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         private set
     private lateinit var mBinder: SourceServiceBinder<T>
     private var hasBluetoothPermission: Boolean = false
-    lateinit var sources: Set<SourceMetadata>
+    lateinit var sources: List<SourceMetadata>
     lateinit var sourceTypes: Set<SourceType>
     private lateinit var authConnection: AuthServiceConnection
     protected lateinit var config: RadarConfiguration
@@ -100,8 +98,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     override fun onCreate() {
         logger.info("Creating SourceService {}", this)
         super.onCreate()
-        sources = HashSet()
-        sourceTypes = HashSet()
+        sources = emptyList()
+        sourceTypes = emptySet()
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         mBinder = createBinder()
@@ -119,7 +117,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         radarConnection.bind()
         handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
-        radarConfig.config.observe(this, androidx.lifecycle.Observer { configure(it) })
+        radarConfig.config.observe(this, ::configure)
         config = radarConfig
 
         sourceManager = null
@@ -233,6 +231,10 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 logger.warn("A disconnected SourceManager is still registered for {}. Retrying later.", name)
                 startAfterDelay(acceptableIds)
             }
+            sourceTypes.isEmpty() -> {
+                logger.warn("Sources have not been registered {}. Retrying later.", name)
+                startAfterDelay(acceptableIds)
+            }
             sourceManager != null ->
                 logger.warn("A SourceManager is already registered for {}", name)
             isBluetoothConnectionRequired && !bluetoothIsEnabled ->
@@ -290,7 +292,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         key.setProjectId(authState.projectId)
         key.setUserId(authState.userId)
-        sourceTypes = HashSet(authState.sourceTypes)
+        sourceTypes = authState.sourceTypes.filterTo(HashSet()) { it.producer.equals(sourceProducer, ignoreCase = true) && it.model.equals(sourceModel, ignoreCase = true) }
+        sources = authState.sourceMetadata.filter { it.type in sourceTypes }
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
@@ -313,20 +316,21 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     /** Get the service local binder.  */
     private fun createBinder() = SourceServiceBinder(this)
 
-    private fun registerSource(type: SourceType, name: String, attributes: Map<String, String>) {
+    private fun registerSource(existingSource: SourceMetadata, type: SourceType, attributes: Map<String, String>) {
         logger.info("Registering source {} with attributes {}", type, attributes)
 
         val source = SourceMetadata(type).apply {
-            sourceName = name
+            sourceId = existingSource.sourceId
+            sourceName = existingSource.sourceName
             this.attributes = attributes
         }
 
         val onFail: (Exception?) -> Unit = {
             logger.warn("Failed to register source: {}", it.toString())
-            handler.delay(300_000L) { registerSource(type, name, attributes) }
+            handler.delay(300_000L) { registerSource(existingSource, type, attributes) }
         }
 
-        authConnection.binder?.registerSource(source,
+        authConnection.binder?.updateSource(source,
                 { authState, updatedSource ->
                     key.setProjectId(authState.projectId)
                     key.setUserId(authState.userId)
@@ -334,15 +338,14 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                     source.sourceId = updatedSource.sourceId
                     source.sourceName = updatedSource.sourceName
                     source.expectedSourceName = updatedSource.expectedSourceName
-                    sourceManager?.didRegister(source)
                 }, onFail)
                 ?: onFail(null)
     }
 
-    open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>): Boolean {
+    open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
         if (sourceTypes.isEmpty()) {
             logger.warn("Cannot register source {} yet: allowed source types are empty", id)
-            handler.delay(5_000L) { ensureRegistration(id, name, attributes) }
+            handler.delay(5_000L) { ensureRegistration(id, name, attributes, onMapping) }
         }
 
         val matchingSource = sources
@@ -365,36 +368,19 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                     }
                 }
 
-        return if (matchingSource == null) {
-            val match = matchingSourceType
-            if (match == null) {
-                logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
-                false
-            } else {
-                registerSource(match, name, HashMap(attributes).apply {
-                    this["physicalId"] = id ?: ""
-                    this["physicalName"] = name
-                })
-                true
-            }
+        if (matchingSource == null) {
+            logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
         } else {
-            sourceManager?.didRegister(matchingSource)
-            true
+            val registeredAttributes = attributes + mapOf(
+                    "physicalId" to (id ?: ""),
+                    "physicalName" to name,
+            )
+            if (registeredAttributes.any { (k, v) -> matchingSource.attributes[k] != v }) {
+                registerSource(matchingSource, matchingSource.type!!, registeredAttributes)
+            }
         }
+        onMapping(matchingSource)
     }
-
-    private val matchingSourceType: SourceType?
-        get() {
-            val result = sourceTypes
-                    .filter { it.producer == sourceProducer && it.model == sourceModel }
-                    .maxByOrNull {
-                        if (it.catalogVersion[0] == 'v') {
-                            it.catalogVersion.substring(1)
-                        } else it.catalogVersion
-                    }
-
-            return result
-        }
 
     override fun toString() = "$name<${sourceManager?.name}"
 

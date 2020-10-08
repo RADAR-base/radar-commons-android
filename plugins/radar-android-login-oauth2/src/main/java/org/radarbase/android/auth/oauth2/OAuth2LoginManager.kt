@@ -76,6 +76,14 @@ class OAuth2LoginManager(
         return true
     }
 
+    @Throws(AuthenticationException::class)
+    override fun updateSource(appAuth: AppAuthState, source: SourceMetadata,
+                              success: (AppAuthState, SourceMetadata) -> Unit,
+                              failure: (Exception?) -> Unit): Boolean {
+        success(appAuth, source)
+        return true
+    }
+
     override fun onDestroy() = Unit
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {

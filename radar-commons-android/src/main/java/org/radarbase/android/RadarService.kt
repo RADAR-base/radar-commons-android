@@ -39,11 +39,7 @@ import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_DEFAULT
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_KEY
-import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
-import org.radarbase.android.auth.AppAuthState
-import org.radarbase.android.auth.AuthServiceConnection
-import org.radarbase.android.auth.LoginListener
-import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.auth.*
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.data.CacheStore
 import org.radarbase.android.data.DataHandler
@@ -60,10 +56,10 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.ArrayList
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private var configurationUpdateFuture: SafeHandler.HandlerFuture? = null
+    private val fetchTimeout = ChangeRunner<Long>()
     private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
 
@@ -80,11 +76,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private val sourceFilters: MutableMap<SourceServiceConnection<*>, Set<String>> = HashMap()
 
     private lateinit var providerLoader: SourceProviderLoader
-    private lateinit var configurationCache: ChangeRunner<Map<String, String>>
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
     private lateinit var serverStatusReceiver: BroadcastRegistration
+    private var sourceRegistrar: SourceProviderRegistrar? = null
+    private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
 
     private val isMakingAuthRequest = AtomicBoolean(false)
 
@@ -126,7 +123,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         mainHandler = Handler()
 
-        configurationCache = ChangeRunner()
         configuration = radarConfig
         providerLoader = SourceProviderLoader(plugins)
         broadcaster = LocalBroadcastManager.getInstance(this)
@@ -163,6 +159,14 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         authConnection = AuthServiceConnection(this, this).apply {
             bind()
+        }
+        authConnection.onUnboundListeners += {
+            mHandler.execute {
+                sourceRegistrar?.let {
+                    it.close()
+                    sourceRegistrar = null
+                }
+            }
         }
 
         bluetoothReceiver = BluetoothStateReceiver(this) { enabled ->
@@ -215,7 +219,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         sourceFailedReceiver.unregister()
         serverStatusReceiver.unregister()
 
-        mHandler.stop()
+        mHandler.stop {
+            sourceRegistrar?.let {
+                it.close()
+                sourceRegistrar = null
+            }
+        }
         authConnection.unbind()
 
         mConnections.filter(SourceProvider<*>::isBound)
@@ -229,17 +238,17 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
        mHandler.executeReentrant {
            doConfigure(config)
 
-           configurationUpdateFuture?.cancel()
-           configurationUpdateFuture = mHandler.repeat(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) {
-               configuration.fetch()
+           fetchTimeout.applyIfChanged(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) { timeout ->
+               configurationUpdateFuture?.cancel()
+               configurationUpdateFuture = mHandler.repeat(timeout) {
+                   configuration.fetch()
+               }
            }
        }
     }
 
     @CallSuper
     protected open fun doConfigure(config: SingleRadarConfiguration) {
-        val unsafeConnection = config.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
-
         synchronized(this) {
             dataHandler ?: TableDataHandler(this, cacheStore)
                     .also {
@@ -275,20 +284,24 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     private fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
-        val grantedPermissions = permissions.indices
-                .filter {
-                    if (grantResults[it] == PERMISSION_GRANTED) {
-                        true
+        val grantedPermissions = grantResults.asList()
+                .mapIndexedNotNull { index, granted ->
+                    val permission = permissions[index]
+                    if (granted == PERMISSION_GRANTED) {
+                        permission
                     } else {
-                        logger.info("Denied permission {}", it)
-                        false
+                        logger.info("Denied permission {}", permission)
+                        null
                     }
                 }
 
         if (grantedPermissions.isNotEmpty()) {
-            logger.info("Granted permissions {}", grantedPermissions.map(permissions::get))
-            // Permission granted.
-            startScanning()
+            mHandler.execute {
+                logger.info("Granted permissions {}", grantedPermissions)
+                // Permission granted.
+                needsPermissions -= grantedPermissions
+                startScanning()
+            }
         }
     }
 
@@ -305,14 +318,26 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     ?.also { logger.debug("Initial server status: {}", it) }
                     ?.also(::updateServerStatus)
 
-            needsBluetooth.applyIfChanged(needsBluetooth.value || connection.needsBluetooth()) {
+            updateBluetoothNeeded(needsBluetooth.value || connection.needsBluetooth())
+            startScanning()
+        }
+    }
+
+    private fun updateBluetoothNeeded(newValue: Boolean) {
+        needsBluetooth.applyIfChanged(newValue) {
+            if (newValue) {
                 bluetoothReceiver.register()
 
                 broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
                     putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NEEDED)
                 }
+            } else {
+                bluetoothReceiver.unregister()
+
+                broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
+                    putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NOT_NEEDED)
+                }
             }
-            startScanning()
         }
     }
 
@@ -441,10 +466,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
 
-    protected open fun SourceProvider<*>.checkPermissions(): Boolean {
-        return permissionsNeeded.none(needsPermissions::contains)
-    }
-
     /** Configure whether a boot listener should start this application at boot.  */
     @Suppress("unused")
     protected open fun configureRunAtBoot(config: SingleRadarConfiguration, bootReceiver: Class<*>) {
@@ -466,10 +487,56 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
+    protected open fun SourceProvider<*>.checkPermissions(): Boolean {
+        val stillNeeded = permissionsNeeded.filter(needsPermissions::contains)
+        return if (stillNeeded.isEmpty()) {
+            true
+        } else {
+            logger.info("Need permissions {} to start plugin {}", stillNeeded, pluginName)
+            false
+        }
+    }
+
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         isMakingAuthRequest.set(false)
         mHandler.execute {
             updateProviders(authState, configuration.latestConfig)
+        }
+    }
+
+    private fun removeProviders(sourceProviders: List<SourceProvider<*>>) {
+        if (sourceProviders.isEmpty()) {
+            return
+        }
+        logger.info("Removing plugins {}", sourceProviders.map { it.pluginName })
+        mConnections = mConnections.filterNot(sourceProviders::contains)
+        updateBluetoothNeeded(mConnections.any { it.isConnected && it.connection.needsBluetooth() })
+        sourceProviders.forEach(SourceProvider<*>::unbind)
+    }
+
+    private fun addProviders(sourceProviders: List<SourceProvider<*>>) {
+        if (sourceProviders.isEmpty()) {
+            return
+        }
+        logger.info("Adding plugins {}", sourceProviders.map { it.pluginName })
+        mConnections = mConnections + sourceProviders
+
+        sourceFilters += sourceProviders.map { Pair(it.connection, emptySet()) }
+
+        checkPermissions()
+        bindServices(mConnections, false)
+    }
+
+    private fun createRegistrar(authServiceBinder: AuthService.AuthServiceBinder, providers: List<SourceProvider<*>>) {
+        logger.info("Creating source registration")
+        sourceRegistrar = SourceProviderRegistrar(authServiceBinder, mHandler, providers) { unregisteredProviders, registeredProviders ->
+            logger.info("Registered providers: {}, unregistered providers: {}", registeredProviders.map { it.pluginName }, unregisteredProviders.map { it.pluginName })
+            val oldConnections = mConnections
+            removeProviders(unregisteredProviders.filter(mConnections::contains))
+            addProviders(registeredProviders.filterNot(mConnections::contains))
+            if (mConnections != oldConnections) {
+                broadcaster.send(ACTION_PROVIDERS_UPDATED)
+            }
         }
     }
 
@@ -484,41 +551,22 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
         }
 
-        val connections = providerLoader.loadProvidersFromNames(config)
-
-        val oldConnections = ArrayList(mConnections)
-        val providersToRemove = mConnections.filter { it !in connections }
-        mConnections = mConnections.filterNot(providersToRemove::contains)
-        providersToRemove.forEach(SourceProvider<*>::unbind)
-
-        val noneNeedsBluetooth = mConnections.none { it.isConnected && it.connection.needsBluetooth() }
-        needsBluetooth.applyIfChanged(noneNeedsBluetooth) {
-            bluetoothReceiver.unregister()
-
-            broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
-                putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NOT_NEEDED)
-            }
-        }
-
         val packageManager = packageManager
 
-        val providersToAdd = connections
-                .filter { provider ->
-                    provider !in mConnections // new provider
-                            && hasFeatures(provider, packageManager) // acceptable
-                            && provider.isAuthorizedFor(authState, false) }
+        configuredProviders.applyIfChanged(providerLoader.loadProvidersFromNames(config)
+                .filter { hasFeatures(it, packageManager) }) { providers ->
+            val oldConnections = mConnections
+            removeProviders(mConnections.filter { it !in providers })
 
-        if (providersToAdd.isNotEmpty()) {
-            mConnections = mConnections + providersToAdd
+            sourceRegistrar?.let {
+                it.close()
+                sourceRegistrar = null
+            }
+            authConnection.applyBinder { createRegistrar(this, providers) }
 
-            sourceFilters += providersToAdd.map { Pair(it.connection, emptySet<String>()) }
-
-            checkPermissions()
-            bindServices(mConnections, false)
-        }
-
-        if (mConnections != oldConnections) {
-            broadcaster.send(ACTION_PROVIDERS_UPDATED)
+            if (mConnections != oldConnections) {
+                broadcaster.send(ACTION_PROVIDERS_UPDATED)
+            }
         }
     }
 
@@ -600,7 +648,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
         val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
             PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
-        private val providerSeparator = ",".toRegex()
 
         @Suppress("UNCHECKED_CAST")
         private inline fun <reified T, U> Context.applySystemService(type: String, callback: (T) -> U): U? {

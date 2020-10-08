@@ -112,7 +112,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
         if (hasService()) {
             synchronized(this) {
                 serviceBinder = null
-                sourceStatus = SourceStatusListener.Status.UNAVAILABLE
+                sourceStatus = SourceStatusListener.Status.DISCONNECTED
             }
         }
     }

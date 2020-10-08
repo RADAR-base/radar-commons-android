@@ -25,7 +25,7 @@ open class BaseSourceState {
 
     @get:Synchronized
     @set:Synchronized
-    open var status: SourceStatusListener.Status = SourceStatusListener.Status.UNAVAILABLE
+    open var status: SourceStatusListener.Status = SourceStatusListener.Status.DISCONNECTED
 
     /**
      * Get the battery level, between 0 (empty) and 1 (full).

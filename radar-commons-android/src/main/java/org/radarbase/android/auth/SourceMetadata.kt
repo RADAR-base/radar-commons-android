@@ -3,7 +3,6 @@ package org.radarbase.android.auth
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.RadarService.Companion.sanitizeIds
-import org.radarbase.android.auth.SourceMetadata.Companion.matches
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.util.Strings
 import org.radarcns.android.auth.AppSource
@@ -57,9 +56,9 @@ class SourceMetadata {
         } catch (ex: JSONException) {
             null
         }
-        this.sourceId = json.optString("sourceId").takeIf { it.isNotEmpty() }
-        this.sourceName = json.optString("sourceName").takeIf { it.isNotEmpty() }
-        this.expectedSourceName = json.optString("expectedSourceName").takeIf { it.isNotEmpty() }
+        this.sourceId = json.optNonEmptyString("sourceId")
+        this.sourceName = json.optNonEmptyString("sourceName")
+        this.expectedSourceName = json.optNonEmptyString("expectedSourceName")
 
         val attr = HashMap<String, String>()
         val attributesJson = json.optJSONObject("attributes")
@@ -134,6 +133,16 @@ class SourceMetadata {
         }
     }
 
+    fun matches(other: SourceMetadata): Boolean {
+        val type = type ?: return false
+        val otherType = other.type ?: return false
+
+        return sourceId == other.sourceId
+                || type == otherType
+                || (type.producer.equals(otherType.producer, ignoreCase = true)
+                    && type.model.equals(otherType.model, ignoreCase = true))
+    }
+
     fun matches(vararg names: String?): Boolean {
         val actualNames = names.filterNotNull()
         if (actualNames.isEmpty()) {
@@ -157,5 +166,6 @@ class SourceMetadata {
         private val logger = LoggerFactory.getLogger(SourceMetadata::class.java)
         private val expectedNameSplit: Regex = ",".toRegex()
         private fun Pattern.matches(string: String): Boolean = matcher(string).find()
+        internal fun JSONObject.optNonEmptyString(key: String): String? = if (isNull(key)) null else optString(key).takeTrimmedIfNotEmpty().takeIf { it != "null" }
     }
 }

@@ -133,7 +133,7 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
             append("RadarConfiguration (")
             append(status)
             append("):\n")
-            for ((key, value) in config) {
+            for ((key, value) in config.toSortedMap()) {
                 append("  ")
                 append(key)
                 append(": ")

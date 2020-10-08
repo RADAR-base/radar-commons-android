@@ -139,27 +139,29 @@ class E4Manager(
         val address = empaDevice.device.address
         logger.info("{}: Bluetooth address: {}", System.identityHashCode(this), address)
         if (allowed) {
-            handler.execute {
-                if (register(
-                        name = deviceName,
-                        physicalId = empaDevice.hardwareId,
-                        attributes = mapOf(
-                                Pair("sdk", "empalink-2.2.aar"),
-                                Pair("macAddress", address),
-                                Pair("serialNumber", empaDevice.serialNumber)))) {
-                    stopScanning()
-                    logger.info("Will connect device {}", deviceName)
-                    try {
-                        // Connect to the device
-                        status = SourceStatusListener.Status.CONNECTING
-                        empaManager.connectDevice(empaDevice)
-                    } catch (e: ConnectionNotAllowedException) {
-                        // This should happen only if you try to connect when allowed == false.
-                        service.sourceFailedToConnect(deviceName)
-                    }
-                } else {
+            register(
+                    name = deviceName,
+                    physicalId = empaDevice.hardwareId,
+                    attributes = mapOf(
+                            Pair("sdk", "empalink-2.2.aar"),
+                            Pair("macAddress", address),
+                            Pair("serialNumber", empaDevice.serialNumber))) {
+                if (it == null) {
                     logger.info("Device {} with ID {} is not listed in acceptable device IDs", deviceName, address)
                     service.sourceFailedToConnect(deviceName)
+                } else {
+                    handler.execute {
+                        stopScanning()
+                        logger.info("Will connect device {}", deviceName)
+                        try {
+                            // Connect to the device
+                            status = SourceStatusListener.Status.CONNECTING
+                            empaManager.connectDevice(empaDevice)
+                        } catch (e: ConnectionNotAllowedException) {
+                            // This should happen only if you try to connect when allowed == false.
+                            service.sourceFailedToConnect(deviceName)
+                        }
+                    }
                 }
             }
         } else {

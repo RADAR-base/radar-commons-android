@@ -78,8 +78,6 @@ interface RadarConfiguration {
 //    fun toMap(): Map<String, String> = keys.map { Pair(it, getString(it)) }.toMap()
 
     companion object {
-        private val logger = LoggerFactory.getLogger(RadarConfiguration::class.java)
-
         const val RADAR_PREFIX = "org.radarcns.android."
 
         const val RADAR_CONFIGURATION_CHANGED = RADAR_PREFIX + "RadarConfiguration.CHANGED"
