@@ -42,6 +42,8 @@ allprojects {
 
     version = '1.0.0-alpha5'
     group = 'org.radarbase'
+
+    ext.versionCode = 33
 }
 
 subprojects {
