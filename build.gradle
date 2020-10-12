@@ -34,16 +34,15 @@ buildscript {
 
 allprojects {
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
-    ext.versionCode = 32
 
     ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = '1.0.0-SNAPSHOT'
+    version = '1.0.0'
     group = 'org.radarbase'
 
-    ext.versionCode = 33
+    ext.versionCode = 34
 }
 
 subprojects {
