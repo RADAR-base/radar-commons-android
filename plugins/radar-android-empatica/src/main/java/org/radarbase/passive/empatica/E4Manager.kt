@@ -60,6 +60,7 @@ class E4Manager(
 
     init {
         status = SourceStatusListener.Status.UNAVAILABLE
+        name = service.getString(R.string.empaticaE4DisplayName)
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -151,6 +152,7 @@ class E4Manager(
                     service.sourceFailedToConnect(deviceName)
                 } else {
                     handler.execute {
+                        name = service.getString(R.string.e4DeviceName, deviceName)
                         stopScanning()
                         logger.info("Will connect device {}", deviceName)
                         try {

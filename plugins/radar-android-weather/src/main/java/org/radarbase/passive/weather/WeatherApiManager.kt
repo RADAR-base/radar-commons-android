@@ -46,6 +46,8 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
     private var weatherApi: WeatherApi? = null
 
     init {
+        name = service.getString(R.string.weatherApiServiceDisplayName)
+
         processor = OfflineProcessor(service) {
             process = listOf(this@WeatherApiManager::processWeather)
             requestCode = WEATHER_UPDATE_REQUEST_CODE
@@ -72,7 +74,9 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
     }
 
     override fun start(acceptableIds: Set<String>) {
-        register(name = "OpenWeatherMap")
+        register(name = "OpenWeatherMap") {
+            name = "OpenWeatherMap"
+        }
 
         logger.info("Starting WeatherApiManager")
         networkReceiver.register()

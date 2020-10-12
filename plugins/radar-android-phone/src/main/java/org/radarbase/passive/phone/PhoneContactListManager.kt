@@ -38,6 +38,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
     private lateinit var savedContactLookups: Set<String>
 
     init {
+        name = service.getString(R.string.contact_list)
         processor = OfflineProcessor(service) {
             process = listOf(this@PhoneContactListManager::processContacts)
             requestCode = CONTACTS_LIST_UPDATE_REQUEST_CODE

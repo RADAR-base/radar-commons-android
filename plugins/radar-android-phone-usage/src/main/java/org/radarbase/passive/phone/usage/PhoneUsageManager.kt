@@ -51,6 +51,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     private var lastEventIsSent: Boolean = false
 
     init {
+        name = service.getString(R.string.phoneUsageServiceDisplayName)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
             this.usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager?
         } else {

@@ -47,6 +47,8 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
 
     override val version: String = BuildConfig.VERSION_NAME
 
+    override val isFilterable = true
+
     override val displayName: String
         get() = radarService.getString(R.string.farosLabel)
 }

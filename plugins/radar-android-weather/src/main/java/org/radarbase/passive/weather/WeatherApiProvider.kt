@@ -38,7 +38,7 @@ open class WeatherApiProvider(radarService: RadarService) : SourceProvider<BaseS
     override val serviceClass: Class<WeatherApiService> = WeatherApiService::class.java
 
     override val displayName: String
-        get() = radarService.getString(R.string.weatherApiServcieDisplayName)
+        get() = radarService.getString(R.string.weatherApiServiceDisplayName)
 
     override val permissionsNeeded: List<String> = Arrays.asList(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)
 

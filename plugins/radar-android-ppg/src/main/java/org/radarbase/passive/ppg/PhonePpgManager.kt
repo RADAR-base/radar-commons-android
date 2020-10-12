@@ -58,6 +58,7 @@ class PhonePpgManager(service: PhonePpgService) : AbstractSourceManager<PhonePpg
     private var measurementTime = 60_000L
 
     init {
+        name = service.getString(R.string.ppg_display_name)
         status = READY
 
         state.stateChangeListener = object : PhonePpgState.OnStateChangeListener {

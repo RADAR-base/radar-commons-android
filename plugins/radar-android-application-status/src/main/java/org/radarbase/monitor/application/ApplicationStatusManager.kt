@@ -80,6 +80,7 @@ class ApplicationStatusManager(
     private lateinit var cacheReceiver: BroadcastRegistration
 
     init {
+        name = service.getString(R.string.applicationServiceDisplayName)
         this.processor = OfflineProcessor(service) {
             process = listOf(
                     ::processServerStatus,

@@ -21,29 +21,27 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.0.1'
+        classpath 'com.android.tools.build:gradle:4.0.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.5'
         classpath 'de.mobilej.unmock:UnMockPlugin:0.7.6'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.1'
         classpath 'digital.wup:android-maven-publish:3.6.3'
         classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.18"
-        classpath 'org.owasp:dependency-check-gradle:5.3.2.1'
     }
 }
 
 allprojects {
     ext.githubRepoName = 'RADAR-base/radar-commons-android'
-    ext.versionCode = 32
 
     ext.githubUrl = 'https://github.com/' + githubRepoName + '.git'
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = '1.0.0-alpha5'
+    version = '1.0.0'
     group = 'org.radarbase'
 
-    ext.versionCode = 33
+    ext.versionCode = 34
 }
 
 subprojects {
@@ -53,7 +51,6 @@ subprojects {
     apply plugin: 'com.android.library'
     apply plugin: 'kotlin-android'
     apply plugin: 'idea'
-    apply plugin: 'org.owasp.dependencycheck'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
@@ -76,9 +73,6 @@ subprojects {
         }
     }
 
-    dependencyCheck {
-        format = "ALL"
-    }
     tasks.matching { it instanceof Test }.all {
         testLogging {
             showExceptions = true
@@ -93,9 +87,6 @@ subprojects {
     }
 
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-
         kotlinOptions {
             jvmTarget = '1.8'
             apiVersion = '1.4'
@@ -105,5 +96,5 @@ subprojects {
 }
 
 wrapper {
-    gradleVersion '6.6'
+    gradleVersion '6.6.1'
 }

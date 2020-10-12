@@ -71,6 +71,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private lateinit var sourceModel: String
     private lateinit var sourceProducer: String
     private val name = javaClass.simpleName
+    private var delayedStart: Set<String>? = null
 
     val state: T
         get() {
@@ -216,10 +217,15 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     protected abstract fun createSourceManager(): SourceManager<T>
 
     fun startRecording(acceptableIds: Set<String>) {
-        checkNotNull(key.getUserId()) { "Cannot start recording: user ID is not set." }
-
         if (!handler.isStarted) handler.start()
-        handler.execute { doStart(acceptableIds) }
+        handler.execute {
+            if (key.getUserId() == null) {
+                logger.error("Cannot start recording with service {}: user ID is not set.", this)
+                delayedStart = acceptableIds
+            } else {
+                doStart(acceptableIds)
+            }
+        }
     }
 
     private fun doStart(acceptableIds: Set<String>) {
@@ -258,12 +264,14 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     }
 
     private fun startAfterDelay(acceptableIds: Set<String>) {
-        if (startFuture == null) {
-            logger.warn("Starting recording soon for {}", name)
-            startFuture = handler.delay(100) {
-                startFuture?.let {
-                    startFuture = null
-                    doStart(acceptableIds)
+        handler.executeReentrant {
+            if (startFuture == null) {
+                logger.warn("Starting recording soon for {}", name)
+                startFuture = handler.delay(100) {
+                    startFuture?.let {
+                        startFuture = null
+                        doStart(acceptableIds)
+                    }
                 }
             }
         }
@@ -281,6 +289,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     }
 
     private fun doStop() {
+        delayedStart = null
         startFuture?.let {
             it.cancel()
             startFuture = null
@@ -290,10 +299,17 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
-        key.setProjectId(authState.projectId)
-        key.setUserId(authState.userId)
-        sourceTypes = authState.sourceTypes.filterTo(HashSet()) { it.producer.equals(sourceProducer, ignoreCase = true) && it.model.equals(sourceModel, ignoreCase = true) }
-        sources = authState.sourceMetadata.filter { it.type in sourceTypes }
+        if (!handler.isStarted) handler.start()
+        handler.execute {
+            key.setProjectId(authState.projectId)
+            key.setUserId(authState.userId)
+            sourceTypes = authState.sourceTypes.filterTo(HashSet()) { it.producer.equals(sourceProducer, ignoreCase = true) && it.model.equals(sourceModel, ignoreCase = true) }
+            sources = authState.sourceMetadata.filter { it.type in sourceTypes }
+            delayedStart?.let {
+                delayedStart = null
+                doStart(acceptableIds = it)
+            }
+        }
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
@@ -382,7 +398,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         onMapping(matchingSource)
     }
 
-    override fun toString() = "$name<${sourceManager?.name}"
+    override fun toString() = "$name<${sourceManager?.name}>"
 
     companion object {
         private const val PREFIX = "org.radarcns.android."
