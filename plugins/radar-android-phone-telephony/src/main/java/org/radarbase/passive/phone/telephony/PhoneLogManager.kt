@@ -50,6 +50,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     private var lastCallTimestamp: Long = 0
 
     init {
+        name = service.getString(R.string.phoneLogServiceDisplayName)
         logProcessor = OfflineProcessor(context) {
             process = listOf(
                     this@PhoneLogManager::processCallLog,

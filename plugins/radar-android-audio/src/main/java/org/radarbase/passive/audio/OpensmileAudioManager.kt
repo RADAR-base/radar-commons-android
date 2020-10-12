@@ -46,6 +46,8 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
     private val dataDirectory: File?
 
     init {
+        name = service.getString(R.string.header_audio_status)
+
         processor = OfflineProcessor(service) {
             process = listOf(this@OpensmileAudioManager::processAudio)
             requestCode = AUDIO_REQUEST_CODE

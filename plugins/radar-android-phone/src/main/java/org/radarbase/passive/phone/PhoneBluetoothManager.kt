@@ -38,6 +38,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
 
     init {
+        name = service.getString(R.string.bluetooth_devices)
         processor = OfflineProcessor(service) {
             process = listOf(this@PhoneBluetoothManager::processBluetoothDevices)
             requestCode = SCAN_DEVICES_REQUEST_CODE

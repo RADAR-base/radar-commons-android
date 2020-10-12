@@ -59,6 +59,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     private var wakeLock: PowerManager.WakeLock? = null
 
     init {
+        name = service.getString(R.string.phoneServiceDisplayName)
         batteryProcessor = OfflineProcessor(context) {
             process = listOf(this@PhoneSensorManager::processBatteryStatus)
             requestCode = REQUEST_CODE_PENDING_INTENT

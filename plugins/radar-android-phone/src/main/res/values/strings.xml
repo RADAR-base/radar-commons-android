@@ -1,5 +1,5 @@
 <resources>
-    <string name="phoneServiceDisplayName">Phone</string>
+    <string name="phoneServiceDisplayName">Phone sensors</string>
     <string name="phoneLocationServiceDisplayName">Location</string>
     <string name="location_manager_name">%1$s location</string>
     <string name="phone_location_description">Location is used for estimating distance travelled.

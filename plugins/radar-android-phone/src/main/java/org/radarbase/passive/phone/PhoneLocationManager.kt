@@ -62,6 +62,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         get() = service.getSharedPreferences(PhoneLocationService::class.java.name, Context.MODE_PRIVATE)
 
     init {
+        name = service.getString(R.string.phoneLocationServiceDisplayName)
         preferences.apply {
             latitudeReference = getString(LATITUDE_REFERENCE, null)
                     ?.let { BigDecimal(it) }

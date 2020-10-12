@@ -46,6 +46,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
 
     override fun start(acceptableIds: Set<String>) {
         logger.info("Faros searching for device.")
+        service.getString(R.string.farosLabel)
 
         handler.start()
         handler.execute {
@@ -113,6 +114,7 @@ class FarosManager internal constructor(service: FarosService, private val faros
                         handler.executeReentrant {
                             logger.info("Stopping scanning")
                             apiManager.stopScanning()
+                            name = service.getString(R.string.farosDeviceName, device.name)
 
                             logger.info("Connecting to device {}", device.name)
                             device.connect(this, handler.handler)
