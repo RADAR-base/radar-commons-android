@@ -21,6 +21,7 @@ import com.empatica.empalink.EmpaDeviceManager
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
 import org.slf4j.LoggerFactory
 
@@ -30,23 +31,60 @@ import org.slf4j.LoggerFactory
  */
 class E4Service : SourceService<E4State>() {
     private lateinit var mHandler: SafeHandler
-    private lateinit var empaManager: EmpaDeviceManager
+    private var empaManager: EmpaDeviceManager? = null
+    private var apiKey: String? = null
+    private var hasInvalidApiKey: Boolean = false
+    private val delegate = E4Delegate(this)
+
 
     override fun onCreate() {
         super.onCreate()
         mHandler = SafeHandler.getInstance("E4-device-handler", Process.THREAD_PRIORITY_MORE_FAVORABLE)
         mHandler.start()
-
-        val delegate = E4Delegate(this)
-        empaManager = EmpaDeviceManager(this, delegate, delegate, delegate)
     }
 
-    override fun createSourceManager() = E4Manager(this, empaManager, mHandler)
+    override fun createSourceManager(): E4Manager {
+        val localE4Manager = empaManager ?: EmpaDeviceManager(this, delegate, delegate, delegate)
+        return E4Manager(this, localE4Manager, mHandler)
+    }
 
     override fun configureSourceManager(manager: SourceManager<E4State>, config: SingleRadarConfiguration) {
         manager as E4Manager
-        manager.updateApiKey(config.optString(EMPATICA_API_KEY))
         manager.notifyDisconnect(config.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
+        config.optString(EMPATICA_API_KEY)?.let { newApiKey ->
+            when {
+                apiKey == null -> {
+                    apiKey = newApiKey
+                    manager.updateApiKey(apiKey)
+                }
+                apiKey != newApiKey -> {
+                    logger.error("Cannot change E4 API key. Please restart the app.")
+                    hasInvalidApiKey = true
+                    manager.startDisconnect()
+                }
+                else -> manager.updateApiKey(apiKey)
+            }
+        }
+    }
+
+    override fun sourceStatusUpdated(manager: SourceManager<*>, status: SourceStatusListener.Status) {
+        if (status == SourceStatusListener.Status.DISCONNECTED && hasInvalidApiKey) {
+            mHandler.execute {
+                try {
+                    empaManager?.let {
+                        empaManager = null
+                        it.cleanUp()
+                    }
+                    hasInvalidApiKey = false
+                    apiKey = null
+                } catch (ex: RuntimeException) {
+                    logger.error("Failed to clean up Empatica manager", ex)
+                }
+                super.sourceStatusUpdated(manager, status)
+            }
+        } else {
+            super.sourceStatusUpdated(manager, status)
+        }
     }
 
     override val defaultState = E4State()
@@ -56,7 +94,7 @@ class E4Service : SourceService<E4State>() {
 
         mHandler.stop {
             try {
-                empaManager.cleanUp()
+                empaManager?.cleanUp()
             } catch (ex: RuntimeException) {
                 logger.error("Failed to clean up Empatica manager", ex)
             }

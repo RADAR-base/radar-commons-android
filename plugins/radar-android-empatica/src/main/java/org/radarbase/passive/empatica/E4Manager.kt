@@ -34,6 +34,7 @@ import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.passive.empatica.*
 import org.slf4j.LoggerFactory
+import java.lang.Exception
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Manages scanning for an Empatica E4 wearable and connecting to it  */
@@ -69,7 +70,16 @@ class E4Manager(
             // Create a new EmpaDeviceManager. E4DeviceManager is both its data and status delegate.
             // Initialize the Device Manager using your API key. You need to have Internet access at this point.
             logger.info("Authenticating EmpaDeviceManager")
-            empaManager.authenticateWithAPIKey(apiKey)
+            try {
+                empaManager.authenticateWithAPIKey(apiKey)
+            } catch (ex: Throwable) {
+                if (ex.message == "Status is not INITIAL") {
+                    logger.info("Already authenticated with Empatica")
+                } else {
+                    logger.error("Failed to authenticate with Empatica", ex)
+                    disconnect()
+                }
+            }
             logger.info("Authenticated EmpaDeviceManager")
         }
 
@@ -189,10 +199,9 @@ class E4Manager(
             if (hasBeenConnecting) {
                 try {
                     empaManager.cancelConnection()
-                } catch (ex: NullPointerException) {
+                } catch (ex: Exception) {
                     logger.warn("Empatica internally already disconnected")
                 }
-
             }
             logger.info("Finished device {} stop-sequence", name)
         }
@@ -206,7 +215,7 @@ class E4Manager(
     }
 
     override fun disconnect() {
-        if (!isClosed && doNotify) {
+        if (status != SourceStatusListener.Status.UNAVAILABLE && !isClosed && doNotify) {
             service.radarApp.notificationHandler.notify(
                     id = EMPATICA_DISCONNECTED_NOTIFICATION_ID,
                     channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
@@ -301,6 +310,11 @@ class E4Manager(
         } else if (key != apiKey) {
             disconnect()  // API key changed or got removed
         }
+    }
+
+    fun startDisconnect() {
+        logger.info("Disconnecting E4 service")
+        disconnect()
     }
 
     companion object {
