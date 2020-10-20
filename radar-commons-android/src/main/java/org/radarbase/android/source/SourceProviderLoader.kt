@@ -10,16 +10,10 @@ class SourceProviderLoader(private var plugins: List<SourceProvider<*>>) {
     private val pluginCache = ChangeApplier<String, List<SourceProvider<*>>>(::loadProvidersFromNames)
 
     init {
-        plugins.forEach { plugin1 ->
-            plugins.filterNot { plugin1 === it }.forEach { plugin2 ->
-                plugin1.pluginNames.intersect(plugin2.pluginNames)
-                        .takeIf(Set<*>::isNotEmpty)
-                        ?.let {
-                            logger.warn(
-                                    "Providers {} and {} have overlapping plugin definitions {}.",
-                                    plugin1, plugin2, it)
-                        }
-            }
+        plugins.forEachIndexed { idx, p1 ->
+            plugins.subList(idx + 1, plugins.size).asSequence()
+                .filter { p2 -> p1.pluginNames.intersect(p2.pluginNames).isNotEmpty() }
+                .forEach { p2 -> logger.warn("Providers {} and {} have overlapping plugin names.", p1, p2) }
         }
     }
 
