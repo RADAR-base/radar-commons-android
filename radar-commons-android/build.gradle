@@ -18,6 +18,12 @@ apply plugin: 'kotlin-android-extensions'
 
 apply from: "$rootDir/gradle/android.gradle"
 
+android {
+    defaultConfig {
+        buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
+    }
+}
+
 description = 'Kafka backend for processing device data.'
 
 dependencies {

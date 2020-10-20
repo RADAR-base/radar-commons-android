@@ -17,6 +17,7 @@
 package org.radarbase.passive.phone.usage
 
 import android.os.Build
+import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider

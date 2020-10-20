@@ -16,6 +16,7 @@
 
 package org.radarbase.monitor.application
 
+import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
 
