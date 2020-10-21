@@ -16,6 +16,7 @@
 
 package org.radarbase.android.kafka
 
+import android.os.SystemClock
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
@@ -26,17 +27,17 @@ import kotlin.math.roundToLong
 
 /**
  * Checks the connection of a sender. It does so using two mechanisms: a regular
- * heartbeatInterval signal when the connection is assumed to be
+ * heartbeat signal when the connection is assumed to be
  * present, and a exponential back-off mechanism if the connection is severed. If the connection is
- * assessed to be present through another mechanism, [.didConnect] should be called,
- * conversely, if it is assessed to be severed, [.didDisconnect] should be
+ * assessed to be present through another mechanism, [didConnect] should be called,
+ * conversely, if it is assessed to be severed, [didDisconnect] should be
  * called.
  */
 internal class KafkaConnectionChecker(private val sender: KafkaSender,
                                       private val mHandler: SafeHandler,
                                       private val listener: ServerStatusListener,
                                       heartbeatSecondsInterval: Long) {
-    private val isConnectedBacking: AtomicBoolean = AtomicBoolean(true)
+    private val isConnectedBacking: AtomicBoolean = AtomicBoolean(false)
     private lateinit var random: Random
     private var future: SafeHandler.HandlerFuture? = null
     private val heartbeatInterval: Long = heartbeatSecondsInterval * 1000L
@@ -64,7 +65,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
                 } else {
                     retry()
                 }
-            } else if (System.currentTimeMillis() - lastConnection > 15_000L) {
+            } else if (SystemClock.uptimeMillis() - lastConnection > 15_000L) {
                 if (sender.isConnected) {
                     didConnect()
                 } else {
@@ -104,7 +105,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
     /** Signal that the sender successfully connected.  */
     fun didConnect() {
         mHandler.executeReentrant {
-            lastConnection = System.currentTimeMillis()
+            lastConnection = SystemClock.uptimeMillis()
             isConnectedBacking.set(true)
             post(heartbeatInterval)
             retries = 0

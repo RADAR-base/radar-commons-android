@@ -373,6 +373,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             return
         }
         this.serverStatus = status
+        if (status == ServerStatusListener.Status.DISCONNECTED) {
+            this.latestNumberOfRecordsSent = TimedLong(-1)
+        }
 
         broadcaster.send(SERVER_STATUS_CHANGED) {
             putExtra(SERVER_STATUS_CHANGED, status.ordinal)
