@@ -22,6 +22,7 @@ import org.radarbase.producer.KafkaSender
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToLong
 
 /**
  * Checks the connection of a sender. It does so using two mechanisms: a regular
@@ -94,9 +95,8 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
         mHandler.executeReentrant {
             val sample = random.nextDouble()
             retries++
-            val range = Math.min(INCREMENTAL_BACKOFF_MILLISECONDS * (1 shl retries - 1),
-                    MAX_BACKOFF_MILLISECONDS)
-            val nextWait = Math.round(sample * range.toDouble() * 1000.0)
+            val range = (INCREMENTAL_BACKOFF_MILLISECONDS * (1 shl retries - 1)).coerceAtMost(MAX_BACKOFF_MILLISECONDS)
+            val nextWait = (sample * range * 1000.0).roundToLong()
             post(nextWait)
         }
     }
