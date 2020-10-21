@@ -22,6 +22,7 @@ import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
 import org.slf4j.LoggerFactory
 import java.util.*
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToLong
 
@@ -38,7 +39,6 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
                                       private val listener: ServerStatusListener,
                                       heartbeatSecondsInterval: Long) {
     private val isConnectedBacking: AtomicBoolean = AtomicBoolean(false)
-    private lateinit var random: Random
     private var future: SafeHandler.HandlerFuture? = null
     private val heartbeatInterval: Long = heartbeatSecondsInterval * 1000L
     private var lastConnection: Long = -1L
@@ -48,14 +48,27 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
         get() = isConnectedBacking.get()
 
     init {
-        mHandler.execute { random = Random() }
+        mHandler.execute {
+            if (sender.isConnected) {
+                isConnectedBacking.set(false)
+                didConnect()
+            } else {
+                isConnectedBacking.set(true)
+                didDisconnect(null)
+            }
+        }
     }
+
+    /**
+     * Conditions:
+     * - isConnected: poll every heartbeat
+     * - isDisconnected: poll on disconnect; poll on with exponential retry interval
+     */
 
     /**
      * Check whether the connection was closed and try to reconnect.
      */
     private fun makeCheck() {
-        future = null
         try {
             if (!isConnected) {
                 if (sender.resetConnection()) {
@@ -66,48 +79,38 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
                     retry()
                 }
             } else if (SystemClock.uptimeMillis() - lastConnection > 15_000L) {
-                if (sender.isConnected) {
+                if (sender.isConnected || sender.resetConnection()) {
                     didConnect()
                 } else {
                     didDisconnect(null)
                 }
-            } else {
-                post(heartbeatInterval)
             }
         } catch (ex: AuthenticationException) {
             didDisconnect(ex)
         }
     }
 
-    private fun post(delay: Long) {
-        mHandler.executeReentrant {
-            future?.cancel()
-            future = mHandler.delay(delay, ::makeCheck)
-        }
-    }
-
     /** Check the connection as soon as possible.  */
     fun check() {
-        post(0)
+        mHandler.execute(::makeCheck)
     }
 
     /** Retry the connection with an incremental backoff.  */
     private fun retry() {
-        mHandler.executeReentrant {
-            val sample = random.nextDouble()
-            retries++
-            val range = (INCREMENTAL_BACKOFF_MILLISECONDS * (1 shl retries - 1)).coerceAtMost(MAX_BACKOFF_MILLISECONDS)
-            val nextWait = (sample * range * 1000.0).roundToLong()
-            post(nextWait)
-        }
+        retries++
+        val range = (INCREMENTAL_BACKOFF_MILLISECONDS * (1 shl retries - 1)).coerceAtMost(MAX_BACKOFF_MILLISECONDS)
+        val nextWait = (ThreadLocalRandom.current().nextDouble() * range * 1000.0).roundToLong()
+        future = mHandler.delay(nextWait, ::makeCheck)
     }
 
     /** Signal that the sender successfully connected.  */
     fun didConnect() {
         mHandler.executeReentrant {
             lastConnection = SystemClock.uptimeMillis()
-            isConnectedBacking.set(true)
-            post(heartbeatInterval)
+            if (isConnectedBacking.compareAndSet(false, true)) {
+                future?.cancel()
+                future = mHandler.repeat(heartbeatInterval, ::makeCheck)
+            }
             retries = 0
         }
     }
@@ -117,14 +120,18 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
      * @param ex exception the sender disconnected with, may be null
      */
     fun didDisconnect(ex: Exception?) {
-        logger.warn("Sender is disconnected", ex)
+        mHandler.executeReentrant {
+            logger.warn("Sender is disconnected", ex)
 
-        if (isConnectedBacking.compareAndSet(true, false)) {
-            if (ex is AuthenticationException) {
-                logger.warn("Failed to authenticate to server: {}", ex.message)
-                listener.updateServerStatus(ServerStatusListener.Status.UNAUTHORIZED)
-            } else {
-                listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED)
+            if (isConnectedBacking.compareAndSet(true, false)) {
+                future?.cancel()
+                future = mHandler.delay(INCREMENTAL_BACKOFF_MILLISECONDS, ::makeCheck)
+                if (ex is AuthenticationException) {
+                    logger.warn("Failed to authenticate to server: {}", ex.message)
+                    listener.updateServerStatus(ServerStatusListener.Status.UNAUTHORIZED)
+                } else {
+                    listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED)
+                }
             }
         }
     }
@@ -132,7 +139,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaConnectionChecker::class.java)
 
-        private const val INCREMENTAL_BACKOFF_MILLISECONDS = 60000
-        private const val MAX_BACKOFF_MILLISECONDS = 14400000 // 4 hours
+        private const val INCREMENTAL_BACKOFF_MILLISECONDS = 60 * 1000L // 1 minute
+        private const val MAX_BACKOFF_MILLISECONDS = 4 * 60 * 60 * 1000L // 4 hours
     }
 }

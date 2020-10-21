@@ -183,10 +183,7 @@ class KafkaDataSubmitter(
                 dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
                 connection.didConnect()
             }
-        } catch (ex: IOException) {
-            connection.didDisconnect(ex)
-            sendAgain = false
-        } catch (ex: SchemaValidationException) {
+        } catch (ex: Exception) {
             connection.didDisconnect(ex)
             sendAgain = false
         }
