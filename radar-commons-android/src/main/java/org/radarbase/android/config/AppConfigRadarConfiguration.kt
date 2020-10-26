@@ -29,6 +29,7 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
     @get:Synchronized
     private var appConfig: AppConfigClientConfig? = null
 
+    @Volatile
     override var status: RadarConfiguration.RemoteConfigStatus = RadarConfiguration.RemoteConfigStatus.INITIAL
         private set(value) {
             field = value

@@ -93,6 +93,34 @@ class TapeCacheTest {
         handler.stop {  }
     }
 
+    fun addMultipleMeasurements() {
+        assertNull(tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT))
+        assertEquals(0L, tapeCache.numberOfRecords)
+        assertNull(tapeCache.getRecords(100))
+
+        repeat(50) {
+            tapeCache.addMeasurement(key, value)
+        }
+
+        Thread.sleep(100)
+
+        assertEquals(50L, tapeCache.numberOfRecords)
+        var unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
+        assertEquals(50, unsent.size().toLong())
+        tapeCache.remove(50)
+        assertEquals(0L, tapeCache.numberOfRecords)
+
+        repeat(50) {
+            tapeCache.addMeasurement(key, value)
+        }
+        tapeCache.flush()
+        assertEquals(50L, tapeCache.numberOfRecords)
+        unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
+        assertEquals(50, unsent.size().toLong())
+        tapeCache.remove(50)
+        assertEquals(0L, tapeCache.numberOfRecords)
+    }
+
     @Test
     @Throws(Exception::class)
     fun addMeasurement() {

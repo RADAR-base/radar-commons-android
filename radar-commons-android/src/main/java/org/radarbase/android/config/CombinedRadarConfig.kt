@@ -9,6 +9,7 @@ import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_DEFAU
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_KEY
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
+import org.radarbase.android.RadarConfiguration.RemoteConfigStatus.*
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.portal.GetSubjectParser
 import org.slf4j.LoggerFactory
@@ -20,7 +21,7 @@ class CombinedRadarConfig(
     private val defaults = defaultsFactory()
             .filterValues { it.isNotEmpty() }
     @Volatile
-    override var status: RadarConfiguration.RemoteConfigStatus = RadarConfiguration.RemoteConfigStatus.INITIAL
+    override var status: RadarConfiguration.RemoteConfigStatus = INITIAL
 
     @Volatile
     override var latestConfig: SingleRadarConfiguration = readConfig()
@@ -32,12 +33,25 @@ class CombinedRadarConfig(
         remoteConfigs.forEach { remoteConfig ->
             remoteConfig.onStatusUpdateListener = { newStatus ->
                 logger.info("Got updated status {}", newStatus)
-                status = newStatus
 
-                if (newStatus == RadarConfiguration.RemoteConfigStatus.FETCHED) {
+                if (newStatus == FETCHED) {
                     updateConfig()
                 }
+
+                updateStatus()
             }
+        }
+    }
+
+    private fun updateStatus() {
+        val allStatus = remoteConfigs.map { it.status }
+        status = when {
+            FETCHING in allStatus -> FETCHING
+            FETCHED in allStatus -> FETCHED
+            ERROR in allStatus -> ERROR
+            READY in allStatus -> READY
+            INITIAL in allStatus -> INITIAL
+            else -> UNAVAILABLE
         }
     }
 
@@ -117,6 +131,7 @@ class CombinedRadarConfig(
         remoteConfigs.forEach {
             it.updateWithAuthState(appAuthState)
         }
+        forceFetch()
     }
 
     companion object {

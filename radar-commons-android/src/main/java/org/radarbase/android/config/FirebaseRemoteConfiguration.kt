@@ -40,6 +40,7 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
         fetch()
     }
 
+    @Volatile
     override var status: RadarConfiguration.RemoteConfigStatus = RadarConfiguration.RemoteConfigStatus.INITIAL
         private set(value) {
             field = value
