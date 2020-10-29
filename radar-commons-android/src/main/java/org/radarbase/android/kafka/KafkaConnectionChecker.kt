@@ -17,14 +17,12 @@
 package org.radarbase.android.kafka
 
 import android.os.SystemClock
+import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
 import org.slf4j.LoggerFactory
-import java.util.*
-import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.roundToLong
 
 /**
  * Checks the connection of a sender. It does so using two mechanisms: a regular
@@ -41,8 +39,8 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
     private val isConnectedBacking: AtomicBoolean = AtomicBoolean(false)
     private var future: SafeHandler.HandlerFuture? = null
     private val heartbeatInterval: Long = heartbeatSecondsInterval * 1000L
+    private val retryDelay = DelayedRetry(INCREMENTAL_BACKOFF_MILLISECONDS, MAX_BACKOFF_MILLISECONDS)
     private var lastConnection: Long = -1L
-    private var retries: Int = 0
 
     val isConnected: Boolean
         get() = isConnectedBacking.get()
@@ -91,10 +89,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
 
     /** Retry the connection with an incremental backoff.  */
     private fun retry() {
-        retries++
-        val range = (INCREMENTAL_BACKOFF_MILLISECONDS * (1 shl retries - 1)).coerceAtMost(MAX_BACKOFF_MILLISECONDS)
-        val nextWait = (ThreadLocalRandom.current().nextDouble() * range * 1000.0).roundToLong()
-        future = mHandler.delay(nextWait, ::makeCheck)
+        future = mHandler.delay(retryDelay.nextDelay(), ::makeCheck)
     }
 
     /** Signal that the sender successfully connected.  */
@@ -105,7 +100,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
                 future?.cancel()
                 future = mHandler.repeat(heartbeatInterval, ::makeCheck)
             }
-            retries = 0
+            retryDelay.reset()
         }
     }
 
