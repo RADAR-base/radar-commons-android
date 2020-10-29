@@ -41,7 +41,7 @@ public class Boast {
     /**
      * Internal reference to the {@link Toast} object that will be displayed.
      */
-    private Toast internalToast;
+    private final Toast internalToast;
 
     // ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,18 +90,6 @@ public class Boast {
     }
 
     /**
-     * Make a standard {@link Boast} that just contains a text view. Duration defaults to
-     * {@link Toast#LENGTH_SHORT}.
-     *
-     * @param context The context to use. Usually your {@link android.app.Application} or
-     *                {@link android.app.Activity} object.
-     * @param text    The text to show. Can be formatted text.
-     */
-    public static Boast makeText(Context context, CharSequence text) {
-        return new Boast(Toast.makeText(context, text, Toast.LENGTH_SHORT));
-    }
-
-    /**
      * Make a standard {@link Boast} that just contains a text view with the text from a resource.
      * Duration defaults to {@link Toast#LENGTH_SHORT}.
      *
@@ -112,61 +100,6 @@ public class Boast {
      */
     public static Boast makeText(Context context, int resId) throws Resources.NotFoundException {
         return new Boast(Toast.makeText(context, resId, Toast.LENGTH_SHORT));
-    }
-
-    // ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    /**
-     * Show a standard {@link Boast} that just contains a text view.
-     *
-     * @param context  The context to use. Usually your {@link android.app.Application} or
-     *                 {@link android.app.Activity} object.
-     * @param text     The text to show. Can be formatted text.
-     * @param duration How long to display the message. Either {@link Toast#LENGTH_SHORT} or
-     *                 {@link Toast#LENGTH_LONG}
-     */
-    public static void showText(Context context, CharSequence text, int duration) {
-        Boast.makeText(context, text, duration).show();
-    }
-
-    /**
-     * Show a standard {@link Boast} that just contains a text view with the text from a resource.
-     *
-     * @param context  The context to use. Usually your {@link android.app.Application} or
-     *                 {@link android.app.Activity} object.
-     * @param resId    The resource id of the string resource to use. Can be formatted text.
-     * @param duration How long to display the message. Either {@link Toast#LENGTH_SHORT} or
-     *                 {@link Toast#LENGTH_LONG}
-     * @throws Resources.NotFoundException if the resource can't be found.
-     */
-    public static void showText(Context context, int resId, int duration)
-            throws Resources.NotFoundException {
-        Boast.makeText(context, resId, duration).show();
-    }
-
-    /**
-     * Show a standard {@link Boast} that just contains a text view. Duration defaults to
-     * {@link Toast#LENGTH_SHORT}.
-     *
-     * @param context The context to use. Usually your {@link android.app.Application} or
-     *                {@link android.app.Activity} object.
-     * @param text    The text to show. Can be formatted text.
-     */
-    public static void showText(Context context, CharSequence text) {
-        Boast.makeText(context, text, Toast.LENGTH_SHORT).show();
-    }
-
-    /**
-     * Show a standard {@link Boast} that just contains a text view with the text from a resource.
-     * Duration defaults to {@link Toast#LENGTH_SHORT}.
-     *
-     * @param context The context to use. Usually your {@link android.app.Application} or
-     *                {@link android.app.Activity} object.
-     * @param resId   The resource id of the string resource to use. Can be formatted text.
-     * @throws Resources.NotFoundException if the resource can't be found.
-     */
-    public static void showText(Context context, int resId) throws Resources.NotFoundException {
-        Boast.makeText(context, resId, Toast.LENGTH_SHORT).show();
     }
 
     // ////////////////////////////////////////////////////////////////////////////////////////////////////////

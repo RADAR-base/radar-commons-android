@@ -16,6 +16,7 @@ import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.send
+import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.util.concurrent.TimeUnit
@@ -145,18 +146,17 @@ abstract class AuthService : Service(), LoginListener {
     override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
         handler.executeReentrant {
             logger.info("Login failed: {}", ex?.toString())
-            callListeners {
-                it.loginListener.loginFailed(manager, ex)
-            }
-
-            if (ex is ConnectException) {
-                isConnected = false
-
-                handler.delay(refreshDelay.nextDelay(), ::refresh)
-            } else {
-                if (networkConnectedListener.state.isConnected) {
-                    refresh()
+            when (ex) {
+                is ConnectException -> {
+                    isConnected = false
+                    handler.delay(refreshDelay.nextDelay(), ::refresh)
                 }
+                is AuthenticationException -> {
+                    callListeners {
+                        it.loginListener.loginFailed(manager, ex)
+                    }
+                }
+                else -> handler.delay(refreshDelay.nextDelay(), ::refresh)
             }
         }
     }
@@ -185,6 +185,7 @@ abstract class AuthService : Service(), LoginListener {
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         handler.executeReentrant {
             logger.info("Log in succeeded.")
+            isConnected = true
             refreshDelay.reset()
             appAuth = authState
 
@@ -365,7 +366,7 @@ abstract class AuthService : Service(), LoginListener {
 
     companion object {
         private val logger = LoggerFactory.getLogger(AuthService::class.java)
-        const val RETRY_MIN_DELAY = 300L
+        const val RETRY_MIN_DELAY = 5L
         const val RETRY_MAX_DELAY = 86400L
         const val PRIVACY_POLICY_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.privacyPolicyUrl"
         const val BASE_URL_PROPERTY = "org.radarcns.android.auth.portal.ManagementPortalClient.baseUrl"

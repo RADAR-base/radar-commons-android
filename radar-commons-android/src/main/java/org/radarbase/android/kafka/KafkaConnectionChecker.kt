@@ -60,12 +60,6 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
     }
 
     /**
-     * Conditions:
-     * - isConnected: poll every heartbeat
-     * - isDisconnected: poll on disconnect; poll on with exponential retry interval
-     */
-
-    /**
      * Check whether the connection was closed and try to reconnect.
      */
     private fun makeCheck() {

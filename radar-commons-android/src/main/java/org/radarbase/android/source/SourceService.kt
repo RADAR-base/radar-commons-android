@@ -66,13 +66,14 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private val acceptableSourceTypes: Set<SourceType>
         get() = sourceTypes.filterTo(HashSet()) {
             it.producer.equals(sourceProducer, ignoreCase = true)
-                    && it.model.equals(sourceModel, ignoreCase = true) }
+                    && it.model.equals(sourceModel, ignoreCase = true)
+        }
 
     private val acceptableSources: List<SourceMetadata>
-        get() = sources.filter { it.type in sourceTypes }
+        get() = sources.filter { it.type in acceptableSourceTypes }
 
     private val isAuthorizedForSource: Boolean
-        get() = !needsRegisteredSources || sources.isNotEmpty()
+        get() = !needsRegisteredSources || acceptableSources.isNotEmpty()
 
     private lateinit var authConnection: AuthServiceConnection
     protected lateinit var config: RadarConfiguration
@@ -119,7 +120,6 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         mBinder = createBinder()
 
         authConnection = AuthServiceConnection(this, this)
-        authConnection.bind()
 
         radarConnection = ManagedServiceConnection(this, radarApp.radarService)
         radarConnection.onBoundListeners.add { binder ->
@@ -341,6 +341,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         hasBluetoothPermission = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false)
         sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
         sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
+        if (!authConnection.isBound) {
+            authConnection.bind()
+        }
     }
 
     /** Get the service local binder.  */
@@ -383,7 +386,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
         if (!isAuthorizedForSource) {
             logger.warn("Cannot register source {} yet: allowed source types are empty", id)
-            handler.delay(5_000L) { ensureRegistration(id, name, attributes, onMapping) }
+            handler.delay(100L) { ensureRegistration(id, name, attributes, onMapping) }
         }
 
         val matchingSource = acceptableSources

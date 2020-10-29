@@ -11,7 +11,8 @@ import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarConfiguration.RemoteConfigStatus.*
 import org.radarbase.android.auth.AppAuthState
-import org.radarbase.android.auth.portal.GetSubjectParser
+import org.radarbase.android.auth.portal.GetSubjectParser.Companion.externalUserId
+import org.radarbase.android.auth.portal.GetSubjectParser.Companion.humanReadableUserId
 import org.slf4j.LoggerFactory
 
 class CombinedRadarConfig(
@@ -34,11 +35,11 @@ class CombinedRadarConfig(
             remoteConfig.onStatusUpdateListener = { newStatus ->
                 logger.info("Got updated status {}", newStatus)
 
+                updateStatus()
+
                 if (newStatus == FETCHED) {
                     updateConfig()
                 }
-
-                updateStatus()
             }
         }
     }
@@ -122,7 +123,8 @@ class CombinedRadarConfig(
         }
         userId?.let {
             put(USER_ID_KEY, it)
-            put(RadarConfiguration.READABLE_USER_ID_KEY, GetSubjectParser.getHumanReadableUserId(appAuthState) ?: it)
+            put(RadarConfiguration.READABLE_USER_ID_KEY, appAuthState.humanReadableUserId ?: it)
+            put(RadarConfiguration.EXTERNAL_USER_ID_KEY, appAuthState.externalUserId ?: it)
             crashlytics.setUserId(userId)
             crashlytics.setCustomKey(USER_ID_KEY, userId)
         }

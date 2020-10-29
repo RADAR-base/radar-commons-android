@@ -34,28 +34,22 @@ dependencies {
     api ('org.radarcns:radar-schemas-commons:0.5.14') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.apache.avro:avro:1.8.2') {
+    //noinspection GradleDependency
+    api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
         exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
         exclude group: 'org.xerial.snappy', module: 'snappy-java'
         exclude group: 'org.tukaani', module: 'xz'
         exclude group: 'org.apache.commons', module: 'commons-compress'
     }
     api "androidx.appcompat:appcompat:1.2.0"
-    //noinspection GradleDependency
-    api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
-        exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
-        exclude group: 'org.apache.commons', module: 'commons-compress'
-        exclude group: 'org.xerial.snappy', module: 'snappy-java'
-        exclude group: 'org.tukaani', module: 'xz'
-    }
 
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
     api "androidx.lifecycle:lifecycle-service:2.2.0"
 
-    implementation 'com.google.firebase:firebase-config:19.2.0'
-    implementation 'com.google.firebase:firebase-core:17.5.1'
+    implementation 'com.google.firebase:firebase-config:20.0.0'
+    implementation 'com.google.firebase:firebase-core:18.0.0'
     implementation 'com.google.firebase:firebase-crashlytics:17.2.2'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.32'
 }
