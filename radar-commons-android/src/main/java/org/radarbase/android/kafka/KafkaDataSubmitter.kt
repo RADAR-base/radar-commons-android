@@ -107,7 +107,7 @@ class KafkaDataSubmitter(
 
         // Get upload frequency from system property
         uploadFuture = this.submitHandler.repeat(uploadRate) {
-            val topicsToSend = HashSet<String>(dataHandler.activeCaches.map { it.topicName })
+            val topicsToSend = dataHandler.activeCaches.mapTo(HashSet()) { it.topicName }
             while (connection.isConnected && topicsToSend.isNotEmpty()) {
                 logger.debug("Uploading topics {}", topicsToSend)
                 uploadCaches(topicsToSend)
@@ -183,10 +183,7 @@ class KafkaDataSubmitter(
                 dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
                 connection.didConnect()
             }
-        } catch (ex: IOException) {
-            connection.didDisconnect(ex)
-            sendAgain = false
-        } catch (ex: SchemaValidationException) {
+        } catch (ex: Exception) {
             connection.didDisconnect(ex)
             sendAgain = false
         }
@@ -219,9 +216,7 @@ class KafkaDataSubmitter(
                 dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
                 connection.didConnect()
             }
-        } catch (ex: IOException) {
-            connection.didDisconnect(ex)
-        } catch (ex: SchemaValidationException) {
+        } catch (ex: Exception) {
             connection.didDisconnect(ex)
         }
     }
@@ -261,6 +256,7 @@ class KafkaDataSubmitter(
                         send(AvroRecordData<Any, Any>(data.topic, data.key, dataNonNull))
                         flush()
                     }
+                    dataHandler.updateRecordsSent(topic.name, size.toLong())
                 } catch (ex: AuthenticationException) {
                     dataHandler.updateRecordsSent(topic.name, -1)
                     throw ex
@@ -269,8 +265,6 @@ class KafkaDataSubmitter(
                     dataHandler.updateRecordsSent(topic.name, -1)
                     throw e
                 }
-
-                dataHandler.updateRecordsSent(topic.name, size.toLong())
 
                 logger.debug("uploaded {} {} records", size, topic.name)
             }

@@ -60,14 +60,28 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         private set
     private lateinit var mBinder: SourceServiceBinder<T>
     private var hasBluetoothPermission: Boolean = false
-    lateinit var sources: List<SourceMetadata>
-    lateinit var sourceTypes: Set<SourceType>
+    var sources: List<SourceMetadata> = emptyList()
+    var sourceTypes: Set<SourceType> = emptySet()
+
+    private val acceptableSourceTypes: Set<SourceType>
+        get() = sourceTypes.filterTo(HashSet()) {
+            it.producer.equals(sourceProducer, ignoreCase = true)
+                    && it.model.equals(sourceModel, ignoreCase = true)
+        }
+
+    private val acceptableSources: List<SourceMetadata>
+        get() = sources.filter { it.type in acceptableSourceTypes }
+
+    private val isAuthorizedForSource: Boolean
+        get() = !needsRegisteredSources || acceptableSources.isNotEmpty()
+
     private lateinit var authConnection: AuthServiceConnection
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
     private lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
     private lateinit var broadcaster: LocalBroadcastManager
+    private var needsRegisteredSources: Boolean = true
     private lateinit var sourceModel: String
     private lateinit var sourceProducer: String
     private val name = javaClass.simpleName
@@ -90,7 +104,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     protected abstract val defaultState: T
 
     private val expectedSourceNames: Set<String>
-        get() = HashSet(sources.mapNotNull { it.expectedSourceName })
+        get() = HashSet(acceptableSources.mapNotNull { it.expectedSourceName })
 
     open val isBluetoothConnectionRequired: Boolean
         get() = hasBluetoothPermission
@@ -106,7 +120,6 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         mBinder = createBinder()
 
         authConnection = AuthServiceConnection(this, this)
-        authConnection.bind()
 
         radarConnection = ManagedServiceConnection(this, radarApp.radarService)
         radarConnection.onBoundListeners.add { binder ->
@@ -237,7 +250,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 logger.warn("A disconnected SourceManager is still registered for {}. Retrying later.", name)
                 startAfterDelay(acceptableIds)
             }
-            sourceTypes.isEmpty() -> {
+            !isAuthorizedForSource -> {
                 logger.warn("Sources have not been registered {}. Retrying later.", name)
                 startAfterDelay(acceptableIds)
             }
@@ -303,8 +316,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         handler.execute {
             key.setProjectId(authState.projectId)
             key.setUserId(authState.userId)
-            sourceTypes = authState.sourceTypes.filterTo(HashSet()) { it.producer.equals(sourceProducer, ignoreCase = true) && it.model.equals(sourceModel, ignoreCase = true) }
-            sources = authState.sourceMetadata.filter { it.type in sourceTypes }
+            needsRegisteredSources = authState.needsRegisteredSources
+            sourceTypes = authState.sourceTypes.toHashSet()
+            sources = authState.sourceMetadata
             delayedStart?.let {
                 delayedStart = null
                 doStart(acceptableIds = it)
@@ -327,6 +341,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         hasBluetoothPermission = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false)
         sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
         sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
+        if (!authConnection.isBound) {
+            authConnection.bind()
+        }
     }
 
     /** Get the service local binder.  */
@@ -359,12 +376,20 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     }
 
     open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
-        if (sourceTypes.isEmpty()) {
+        if (!needsRegisteredSources) {
+            onMapping(SourceMetadata(SourceType(0, sourceProducer, sourceModel, "UNKNOWN", true)).apply {
+                sourceId = id
+                sourceName = name
+                this.attributes = attributes
+            })
+            return
+        }
+        if (!isAuthorizedForSource) {
             logger.warn("Cannot register source {} yet: allowed source types are empty", id)
-            handler.delay(5_000L) { ensureRegistration(id, name, attributes, onMapping) }
+            handler.delay(100L) { ensureRegistration(id, name, attributes, onMapping) }
         }
 
-        val matchingSource = sources
+        val matchingSource = acceptableSources
                 .find { source ->
                     val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
                     val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }

@@ -62,6 +62,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private val fetchTimeout = ChangeRunner<Long>()
     private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
+    protected open val showSourceStatus: Boolean = false
 
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
         private set
@@ -373,6 +374,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             return
         }
         this.serverStatus = status
+        if (status == ServerStatusListener.Status.DISCONNECTED) {
+            this.latestNumberOfRecordsSent = TimedLong(-1)
+        }
 
         broadcaster.send(SERVER_STATUS_CHANGED) {
             putExtra(SERVER_STATUS_CHANGED, status.ordinal)
@@ -391,22 +395,24 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     fun sourceStatusUpdated(connection: SourceServiceConnection<*>, status: SourceStatusListener.Status) {
         logger.info("Source of {} was updated to {}", connection, status)
-        mainHandler.post {
-            val showRes = when (status) {
-                SourceStatusListener.Status.READY -> R.string.device_ready
-                SourceStatusListener.Status.CONNECTED -> R.string.device_connected
-                SourceStatusListener.Status.CONNECTING -> {
-                    logger.info("Device name is {} while connecting.", connection.sourceName)
-                    R.string.device_connecting
+        if (status == SourceStatusListener.Status.CONNECTED) {
+            logger.info("Device name is {} while connecting.", connection.sourceName)
+        }
+        if (status == SourceStatusListener.Status.DISCONNECTED) {
+            startScanning()
+        }
+        if (showSourceStatus) {
+            mainHandler.post {
+                val showRes = when (status) {
+                    SourceStatusListener.Status.READY -> R.string.device_ready
+                    SourceStatusListener.Status.CONNECTED -> R.string.device_connected
+                    SourceStatusListener.Status.CONNECTING -> R.string.device_connecting
+                    SourceStatusListener.Status.DISCONNECTING -> return@post  // do not show toast
+                    SourceStatusListener.Status.DISCONNECTED -> R.string.device_disconnected
+                    SourceStatusListener.Status.UNAVAILABLE -> R.string.device_unavailable
                 }
-                SourceStatusListener.Status.DISCONNECTING -> return@post  // do not show toast
-                SourceStatusListener.Status.DISCONNECTED -> {
-                    startScanning()
-                    R.string.device_disconnected
-                }
-                SourceStatusListener.Status.UNAVAILABLE -> R.string.device_unavailable
+                Boast.makeText(this@RadarService, showRes).show()
             }
-            Boast.makeText(this@RadarService, showRes).show()
         }
     }
 

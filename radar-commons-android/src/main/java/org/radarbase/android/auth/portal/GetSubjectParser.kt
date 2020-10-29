@@ -45,6 +45,12 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                         attributes += attributesToMap(attrObjects as JSONObject)
                     }
                 }
+                jsonObject.optNonEmptyString("externalId")?.let {
+                    attributes[RADAR_EXTERNAL_ID] = it
+                }
+                jsonObject.optNonEmptyString("externalLink")?.let {
+                    attributes[RADAR_EXTERNAL_URL] = it
+                }
             }
         } catch (e: JSONException) {
             throw IOException(
@@ -54,6 +60,9 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
     companion object {
         private val logger = LoggerFactory.getLogger(GetSubjectParser::class.java)
+
+        const val RADAR_EXTERNAL_ID = "radar_external_id"
+        const val RADAR_EXTERNAL_URL = "radar_external_url"
 
         @Throws(JSONException::class)
         internal fun parseSourceTypes(project: JSONObject): List<SourceType> {
@@ -125,11 +134,13 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
             return jsonObject.getString("login")
         }
 
-        fun getHumanReadableUserId(state: AppAuthState): String? {
-            return state.attributes.values
+        val AppAuthState.externalUserId: String?
+            get() = attributes[RADAR_EXTERNAL_ID]
+
+        val AppAuthState.humanReadableUserId: String?
+            get() = attributes.values
                     .find { it.equals("Human-readable-identifier", ignoreCase = true) }
                     ?.takeTrimmedIfNotEmpty()
-                    ?: state.userId
-        }
+                    ?: userId
     }
 }

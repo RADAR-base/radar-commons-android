@@ -75,19 +75,15 @@ interface RadarConfiguration {
      */
     fun updateWithAuthState(context: Context, appAuthState: AppAuthState?)
 
-//    fun toMap(): Map<String, String> = keys.map { Pair(it, getString(it)) }.toMap()
-
     companion object {
-        const val RADAR_PREFIX = "org.radarcns.android."
-
-        const val RADAR_CONFIGURATION_CHANGED = RADAR_PREFIX + "RadarConfiguration.CHANGED"
-
+        const val RADAR_CONFIGURATION_CHANGED = "org.radarcns.android.RadarConfiguration.CHANGED"
         const val KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url"
         const val SCHEMA_REGISTRY_URL_KEY = "schema_registry_url"
         const val MANAGEMENT_PORTAL_URL_KEY = "management_portal_url"
         const val PROJECT_ID_KEY = "radar_project_id"
         const val USER_ID_KEY = "radar_user_id"
         const val READABLE_USER_ID_KEY = "readable_user_id"
+        const val EXTERNAL_USER_ID_KEY = "external_user_id"
         const val BASE_URL_KEY = "radar_base_url"
         const val SOURCE_ID_KEY = "source_id"
         const val SEND_OVER_DATA_HIGH_PRIORITY = "send_over_data_high_priority_only"
@@ -121,11 +117,6 @@ interface RadarConfiguration {
         const val SEND_ONLY_WITH_WIFI_DEFAULT = true
         const val SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true
         const val SEND_BINARY_CONTENT_DEFAULT = true
-
-        private val IS_TRUE = Pattern.compile(
-                "^(1|true|t|yes|y|on)$", CASE_INSENSITIVE)
-        private val IS_FALSE = Pattern.compile(
-                "^(0|false|f|no|n|off|)$", CASE_INSENSITIVE)
 
         @SuppressLint("ApplySharedPref")
         fun getOrSetUUID(context: Context, key: String): String {

@@ -50,7 +50,7 @@ class TapeCache<K: Any, V: Any>
 constructor(override val file: File,
             override val topic: AvroTopic<K, V>,
             override val readTopic: AvroTopic<Any, Any>,
-            private val executor: SafeHandler,
+            private val handler: SafeHandler,
             override val serialization: SerializationFactory,
             config: CacheConfiguration) : DataCache<K, V> {
 
@@ -66,8 +66,8 @@ constructor(override val file: File,
     private val configCache = ChangeRunner(config)
 
     override var config
-        get() = executor.compute { configCache.value }
-        set(value) = executor.execute {
+        get() = handler.compute { configCache.value }
+        set(value) = handler.execute {
             configCache.applyIfChanged(value.copy()) {
                 queueFile.maximumFileSize = it.maximumSize
             }
@@ -94,7 +94,7 @@ constructor(override val file: File,
     override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any?>? {
         logger.debug("Trying to retrieve records from topic {}", topic.name)
         return try {
-             executor.compute {
+             handler.compute {
                 try {
                     getValidUnsentRecords(limit, sizeLimit)
                             ?.let { (key, values) ->
@@ -159,11 +159,11 @@ constructor(override val file: File,
     }
 
     override val numberOfRecords: Long
-        get() = executor.compute { queue.size.toLong() }
+        get() = handler.compute { queue.size.toLong() }
 
     @Throws(IOException::class)
     override fun remove(number: Int) {
-        return executor.execute {
+        return handler.execute {
             val actualNumber = number.coerceAtMost(queue.size)
             if (actualNumber > 0) {
                 logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
@@ -179,11 +179,11 @@ constructor(override val file: File,
             "Cannot send invalid record to topic $topic with {key: $key, value: $value}"
         }
 
-        executor.execute {
-            measurementsToAdd.add(record)
+        handler.execute {
+            measurementsToAdd += record
 
             if (addMeasurementFuture == null) {
-                addMeasurementFuture = executor.delay(config.commitRate, ::doFlush)
+                addMeasurementFuture = handler.delay(config.commitRate, ::doFlush)
             }
         }
     }
@@ -196,7 +196,7 @@ constructor(override val file: File,
 
     override fun flush() {
         try {
-            executor.await {
+            handler.await {
                 addMeasurementFuture?.runNow()
             }
         } catch (e: InterruptedException) {
