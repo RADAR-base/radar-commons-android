@@ -231,7 +231,7 @@ class E4Manager(
     override fun didUpdateOnWristStatus(status: Int) {
         val now = currentTime
         send(sensorStatusTopic, EmpaticaE4SensorStatus(
-                now, now, "e4", empaStatusString(status)))
+                now, now, "e4", status.toEmpaStatusString()))
     }
 
     override fun didReceiveAcceleration(x: Int, y: Int, z: Int, timestamp: Double) {
@@ -277,7 +277,7 @@ class E4Manager(
     }
 
     override fun didUpdateSensorStatus(status: Int, type: EmpaSensorType) {
-        val statusString = empaStatusString(status)
+        val statusString = status.toEmpaStatusString()
         state.setSensorStatus(type, statusString)
         val now = currentTime
         val value = EmpaticaE4SensorStatus(now, now, type.name, statusString)
@@ -320,13 +320,11 @@ class E4Manager(
     companion object {
         private val logger = LoggerFactory.getLogger(E4Manager::class.java)
 
-        fun empaStatusString(status: Int): String {
-            return when(status) {
-                EmpaSensorStatus.ON_WRIST -> "ON_WRIST"
-                EmpaSensorStatus.NOT_ON_WRIST -> "NOT_ON_WRIST"
-                EmpaSensorStatus.DEAD -> "DEAD"
-                else -> "UNKNOWN"
-            }
+        fun Int.toEmpaStatusString(): String = when(this) {
+            EmpaSensorStatus.ON_WRIST -> "ON_WRIST"
+            EmpaSensorStatus.NOT_ON_WRIST -> "NOT_ON_WRIST"
+            EmpaSensorStatus.DEAD -> "DEAD"
+            else -> "UNKNOWN"
         }
 
         // BLE scan timeout
