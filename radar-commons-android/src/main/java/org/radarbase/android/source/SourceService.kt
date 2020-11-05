@@ -50,6 +50,7 @@ import java.io.IOException
  */
 @Keep
 abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceStatusListener, LoginListener {
+    private var registrationFuture: SafeHandler.HandlerFuture? = null
     val key = ObservationKey()
 
     @get:Synchronized
@@ -307,6 +308,10 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             it.cancel()
             startFuture = null
         }
+        registrationFuture?.let {
+            it.cancel()
+            registrationFuture = null
+        }
         stopSourceManager(unsetSourceManager())
         logger.info("Stopped recording {}", this)
     }
@@ -360,7 +365,15 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
         val onFail: (Exception?) -> Unit = {
             logger.warn("Failed to register source: {}", it.toString())
-            handler.delay(300_000L) { registerSource(existingSource, type, attributes) }
+            if (registrationFuture == null) {
+                registrationFuture = handler.delay(300_000L) {
+                    if (registrationFuture == null) {
+                        return@delay
+                    }
+                    registrationFuture = null
+                    registerSource(existingSource, type, attributes)
+                }
+            }
         }
 
         authConnection.binder?.updateSource(source,
@@ -376,51 +389,61 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     }
 
     open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
-        if (!needsRegisteredSources) {
-            onMapping(SourceMetadata(SourceType(0, sourceProducer, sourceModel, "UNKNOWN", true)).apply {
-                sourceId = id
-                sourceName = name
-                this.attributes = attributes
-            })
-            return
-        }
-        if (!isAuthorizedForSource) {
-            logger.warn("Cannot register source {} yet: allowed source types are empty", id)
-            handler.delay(100L) { ensureRegistration(id, name, attributes, onMapping) }
-        }
-
-        val matchingSource = acceptableSources
-                .find { source ->
-                    val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
-                    val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
-                    when {
-                        source.matches(id, name) -> true
-                        id != null && physicalId != null && id in physicalId -> true
-                        id != null && physicalId != null -> {
-                            logger.warn("Physical id {} does not match registered id {}", physicalId, id)
-                            false
-                        }
-                        physicalName != null && name in physicalName -> true
-                        physicalName != null -> {
-                            logger.warn("Physical name {} does not match registered name {}", physicalName, name)
-                            false
-                        }
-                        else -> false
-                    }
-                }
-
-        if (matchingSource == null) {
-            logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
-        } else {
-            val registeredAttributes = attributes + mapOf(
-                    "physicalId" to (id ?: ""),
-                    "physicalName" to name,
-            )
-            if (registeredAttributes.any { (k, v) -> matchingSource.attributes[k] != v }) {
-                registerSource(matchingSource, matchingSource.type!!, registeredAttributes)
+        handler.executeReentrant {
+            if (!needsRegisteredSources) {
+                onMapping(SourceMetadata(SourceType(0, sourceProducer, sourceModel, "UNKNOWN", true)).apply {
+                    sourceId = id
+                    sourceName = name
+                    this.attributes = attributes
+                })
+                return@executeReentrant
             }
+            if (!isAuthorizedForSource) {
+                logger.warn("Cannot register source {} yet: allowed source types are empty", id)
+                registrationFuture = handler.delay(100L) {
+                    if (registrationFuture == null) {
+                        return@delay
+                    }
+                    registrationFuture = null
+                    ensureRegistration(id, name, attributes, onMapping)
+
+                }
+            }
+
+            val matchingSource = acceptableSources
+                    .find { source ->
+                        val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
+                        val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
+                        when {
+                            source.matches(id, name) -> true
+                            id != null && physicalId != null && id in physicalId -> true
+                            id != null && physicalId != null -> {
+                                logger.warn("Physical id {} does not match registered id {}", physicalId, id)
+                                false
+                            }
+                            physicalName != null && name in physicalName -> true
+                            physicalName != null -> {
+                                logger.warn("Physical name {} does not match registered name {}", physicalName, name)
+                                false
+                            }
+                            else -> false
+                        }
+                    }
+
+            if (matchingSource == null) {
+                logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
+            } else {
+                key.setSourceId(matchingSource.sourceId)
+                val registeredAttributes = attributes + mapOf(
+                        "physicalId" to (id ?: ""),
+                        "physicalName" to name,
+                )
+                if (registeredAttributes.any { (k, v) -> matchingSource.attributes[k] != v }) {
+                    registerSource(matchingSource, matchingSource.type!!, registeredAttributes)
+                }
+            }
+            onMapping(matchingSource)
         }
-        onMapping(matchingSource)
     }
 
     override fun toString() = "$name<${sourceManager?.name}>"

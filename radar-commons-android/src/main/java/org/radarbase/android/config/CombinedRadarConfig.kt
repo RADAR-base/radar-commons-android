@@ -59,7 +59,12 @@ class CombinedRadarConfig(
     private fun updateConfig() {
         val newConfig = readConfig()
         if (newConfig != latestConfig) {
-            logger.info("Updating config to {}", newConfig)
+            if (newConfig.status != latestConfig.status) {
+                logger.info("Updating config status to {}", newConfig.status)
+            }
+            if (newConfig.config != latestConfig.config) {
+                logger.info("Updating config to {}", newConfig)
+            }
             latestConfig = newConfig
             config.postValue(newConfig)
             remoteConfigs.forEach { it.updateWithConfig(newConfig) }

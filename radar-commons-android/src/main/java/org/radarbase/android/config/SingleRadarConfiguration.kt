@@ -17,12 +17,12 @@
 package org.radarbase.android.config
 
 import org.radarbase.android.RadarConfiguration
+import java.util.*
 import java.util.regex.Pattern
 import java.util.regex.Pattern.CASE_INSENSITIVE
 
 class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus, val config: Map<String, String>) {
     val keys: Set<String> = config.keys
-    fun toMap(): Map<String, String> = config
 
     /**
      * Get a string indexed by key.
@@ -142,6 +142,17 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
             }
         }.toString()
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as SingleRadarConfiguration
+
+        return status == other.status && config == other.config
+    }
+
+    override fun hashCode(): Int = Objects.hash(status, config)
 
     companion object {
         private val IS_TRUE = Pattern.compile(

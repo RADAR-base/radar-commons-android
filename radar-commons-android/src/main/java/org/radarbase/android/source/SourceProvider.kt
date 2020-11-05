@@ -144,6 +144,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         check(isBound) { "Service is not bound" }
         logger.debug("Unbinding {}", this)
         isBound = false
+        connection.stopRecording()
         radarService.unbindService(connection)
         connection.onServiceDisconnected(null)
     }
