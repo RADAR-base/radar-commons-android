@@ -423,7 +423,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     protected fun startScanning() {
         mHandler.executeReentrant {
             mConnections
-                    .filter { it.connection.hasService()
+                    .filter { it.isBound
+                            && it.connection.hasService()
                             && !it.connection.isRecording
                             && it.checkPermissions() }
                     .forEach { provider ->
