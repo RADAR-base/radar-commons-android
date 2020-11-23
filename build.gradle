@@ -41,7 +41,7 @@ allprojects {
     version = '1.0.4'
     group = 'org.radarbase'
 
-    ext.versionCode = 38
+    ext.versionCode = 39
 }
 
 subprojects {
