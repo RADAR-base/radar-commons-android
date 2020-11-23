@@ -19,6 +19,7 @@ package org.radarbase.util
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
+import java.nio.ByteBuffer
 
 /**
  * Storage for a queue. Data in the queue must be written contiguously starting at position 0. The
@@ -54,7 +55,7 @@ interface QueueStorage : Closeable, Flushable {
      * @return wrapped position after the write)
      */
     @Throws(IOException::class)
-    fun write(position: Long, buffer: ByteArray, offset: Int, count: Int): Long
+    fun write(position: Long, buffer: ByteBuffer): Long
 
     /**
      * Read data from storage medium. The position will wrap around.
@@ -69,7 +70,7 @@ interface QueueStorage : Closeable, Flushable {
      * @return wrapped position after the read
      */
     @Throws(IOException::class)
-    fun read(position: Long, buffer: ByteArray, offset: Int, count: Int): Long
+    fun read(position: Long, buffer: ByteBuffer): Long
 
     /**
      * Move part of the storage to another location, overwriting any data on the previous location.

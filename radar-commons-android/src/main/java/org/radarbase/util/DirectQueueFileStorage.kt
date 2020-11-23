@@ -16,17 +16,16 @@
 
 package org.radarbase.util
 
+import java.io.EOFException
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
-import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
 /**
  * A storage backend for a QueueFile
- * @author Joris Borgdorff (joris@thehyve.nl)
- *
  * @param file file to use
  * @param initialLength initial length if the file does not exist.
  * @param maximumLength maximum length that the file may have.
@@ -36,7 +35,7 @@ import java.nio.channels.FileChannel
  * @throws IOException if the file could not be accessed or was smaller than
  *                     `QueueFileHeader.ELEMENT_HEADER_LENGTH`
  */
-class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Long) : QueueStorage {
+class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Long) : QueueStorage {
     /**
      * The underlying file. Uses a ring buffer to store entries.
      * <pre>
@@ -51,7 +50,6 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     /** Filename, for toString purposes  */
     private val fileName: String = file.name
 
-    private var byteBuffer: MappedByteBuffer
     override var isClosed: Boolean = false
         private set
 
@@ -89,8 +87,6 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
             initialLength
         }
         channel = randomAccessFile.channel
-        byteBuffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, length)
-        byteBuffer.clear()
     }
 
     @Throws(IOException::class)
@@ -102,32 +98,30 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         }
 
         val wrappedPosition = wrapPosition(position)
+        channel.position(wrappedPosition.toLong())
         return if (position + count <= length) {
-            val newPosition = wrappedPosition + count
-            buffer.put(byteBuffer.slice().apply {
-                position(wrappedPosition)
-                limit(newPosition)
-            })
-            byteBuffer.position(newPosition)
-            wrapPosition(newPosition.toLong()).toLong()
+            channel.read(buffer)
+            wrapPosition(wrappedPosition + count.toLong()).toLong()
         } else {
             // The read overlaps the EOF.
             // # of bytes to read before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
             val firstPart = (length - wrappedPosition).toInt()
+            readFully(buffer, firstPart)
+            channel.position(QueueFileHeader.QUEUE_HEADER_LENGTH.toLong())
+            readFully(buffer, count - firstPart)
+            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - firstPart).toLong()
+        }
+    }
 
-            buffer.put(byteBuffer.slice().apply {
-                position(wrappedPosition)
-                limit(wrappedPosition + firstPart)
-            })
-
-            val newPosition = QueueFileHeader.QUEUE_HEADER_LENGTH + count - firstPart
-            buffer.put(byteBuffer.slice().apply {
-                position(QueueFileHeader.QUEUE_HEADER_LENGTH)
-                limit(newPosition)
-            })
-
-            buffer.position(newPosition)
-            newPosition.toLong()
+    @Throws(IOException::class)
+    private fun readFully(buffer: ByteBuffer, count: Int) {
+        var n = 0
+        while (n < count) {
+            val numRead = channel.read(buffer).toLong()
+            if (numRead == -1L) {
+                throw EOFException()
+            }
+            n += numRead.toInt()
         }
     }
 
@@ -154,12 +148,12 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         flush()
         randomAccessFile.setLength(size)
         channel.force(true)
-        byteBuffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, size)
         length = size
     }
 
+    @Throws(IOException::class)
     override fun flush() {
-        byteBuffer.force()
+        channel.force(false)
     }
 
     @Throws(IOException::class)
@@ -170,24 +164,44 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
             "buffer count ${buffer.remaining()} exceeds storage length $length"
         }
         val wrappedPosition = wrapPosition(position)
-        byteBuffer.position(wrappedPosition)
+        channel.position(wrappedPosition.toLong())
         val linearPart = (length - wrappedPosition).toInt()
         return if (linearPart >= count) {
-            byteBuffer.put(buffer)
-            wrapPosition((wrappedPosition + count).toLong()).toLong()
+            writeFully(buffer, count)
+            wrapPosition(wrappedPosition + count.toLong()).toLong()
         } else {
             // The write overlaps the EOF.
             // # of bytes to write before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
             if (linearPart > 0) {
-                byteBuffer.put(buffer.slice().apply {
-                    limit(position() + linearPart)
-                })
+                writeFully(buffer, linearPart)
             }
-            byteBuffer.position(QueueFileHeader.QUEUE_HEADER_LENGTH)
-            byteBuffer.put(buffer.slice().apply {
-                position(position() + linearPart)
-            })
+            channel.position(QueueFileHeader.QUEUE_HEADER_LENGTH.toLong())
+            writeFully(buffer, count - linearPart)
             (QueueFileHeader.QUEUE_HEADER_LENGTH + count - linearPart).toLong()
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun writeFully(buffer: ByteBuffer, count: Int) {
+        var n = 0
+        val writeBuffer: ByteBuffer
+        if (buffer.remaining() == count) {
+            writeBuffer = buffer
+        } else if (buffer.remaining() > count) {
+            writeBuffer = buffer.slice()
+            writeBuffer.limit(count)
+        } else {
+            throw BufferUnderflowException()
+        }
+        while (n < count) {
+            val numWritten = channel.write(writeBuffer)
+            if (numWritten == -1) {
+                throw EOFException()
+            }
+            n += numWritten
+        }
+        if (writeBuffer !== buffer) {
+            buffer.position(buffer.position() + count)
         }
     }
 
@@ -224,7 +238,7 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     }
 
     override fun toString(): String {
-        return "MappedQueueFileStorage<$fileName>[length=$length]"
+        return "DirectQueueFileStorage<$fileName>[length=$length]"
     }
 
     companion object {

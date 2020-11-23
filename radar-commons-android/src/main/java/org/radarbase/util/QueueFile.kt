@@ -432,7 +432,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             }
             checkForCoModification()
 
-            val countAvailable = Math.min(count, totalLength - bytesRead)
+            val countAvailable = count.coerceAtMost(totalLength - bytesRead)
             storagePosition = storage.read(storagePosition, bytes, offset, countAvailable)
 
             bytesRead += countAvailable
@@ -506,6 +506,12 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         fun newMapped(file: File, maxSize: Long): QueueFile {
             return QueueFile(MappedQueueFileStorage(
                     file, MappedQueueFileStorage.MINIMUM_LENGTH, maxSize))
+        }
+
+        @Throws(IOException::class)
+        fun newDirect(file: File, maxSize: Long): QueueFile {
+            return QueueFile(DirectQueueFileStorage(
+                    file, DirectQueueFileStorage.MINIMUM_LENGTH, maxSize))
         }
 
         fun checkOffsetAndCount(bytes: ByteArray, offset: Int, length: Int) {

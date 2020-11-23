@@ -60,6 +60,7 @@ constructor(override val file: File,
 
     private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
+    private val queueFileFactory = config.queueFileType
 
     private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
 
@@ -78,11 +79,11 @@ constructor(override val file: File,
 
     init {
         queueFile = try {
-            QueueFile.newMapped(Objects.requireNonNull(file), maximumSize)
+            queueFileFactory.generate(Objects.requireNonNull(file), maximumSize)
         } catch (ex: IOException) {
             logger.error("TapeCache {} was corrupted. Removing old cache.", file, ex)
             if (file.delete()) {
-                QueueFile.newMapped(file, maximumSize)
+                queueFileFactory.generate(file, maximumSize)
             } else {
                 throw ex
             }
@@ -253,7 +254,7 @@ constructor(override val file: File,
         }
 
         if (file.delete()) {
-            queueFile = QueueFile.newMapped(file, maximumSize)
+            queueFile = queueFileFactory.generate(file, maximumSize)
             queue = BackedObjectQueue(queueFile, serializer, deserializer)
         } else {
             throw IOException("Cannot create new cache.")

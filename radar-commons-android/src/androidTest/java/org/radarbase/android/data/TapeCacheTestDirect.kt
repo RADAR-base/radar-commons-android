@@ -38,7 +38,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ThreadLocalRandom
 
 @RunWith(AndroidJUnit4::class)
-class TapeCacheTest {
+class TapeCacheTestDirect {
     private lateinit var handler: SafeHandler
     private lateinit var tapeCache: TapeCache<ObservationKey, ApplicationUptime>
     private lateinit var key: ObservationKey
@@ -79,7 +79,7 @@ class TapeCacheTest {
         }
         tapeCache = TapeCache(folder.newFile(), topic,
                 outputTopic, handler, serializationFactory,
-                CacheConfiguration(100, 4096, CacheConfiguration.QueueFileFactory.MAPPED))
+                CacheConfiguration(100, 4096, CacheConfiguration.QueueFileFactory.DIRECT))
 
         key = ObservationKey("test", "a", "b")
         val time = System.currentTimeMillis() / 1000.0
