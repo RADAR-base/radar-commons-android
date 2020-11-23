@@ -4,11 +4,14 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.BLUETOOTH"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
 
     <application android:allowBackup="true">
-        <service android:name=".E4Service"/>
+        <service
+            android:name=".E4Service"
+            android:foregroundServiceType="location"/>
     </application>
 </manifest>

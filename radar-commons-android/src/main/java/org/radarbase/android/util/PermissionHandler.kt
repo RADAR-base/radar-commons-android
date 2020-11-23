@@ -1,5 +1,7 @@
 package org.radarbase.android.util
 
+import android.Manifest.permission.ACCESS_COARSE_LOCATION
+import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -71,10 +73,17 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
                     }
                 }
                 else -> {
-                    addRequestingPermissions(currentlyNeeded)
+                    val compatiblePermissions = if (
+                            ACCESS_COARSE_LOCATION in currentlyNeeded
+                            || ACCESS_FINE_LOCATION in currentlyNeeded) {
+                        currentlyNeeded - RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT
+                    } else {
+                        currentlyNeeded
+                    }
+                    addRequestingPermissions(compatiblePermissions)
                     try {
                         ActivityCompat.requestPermissions(activity,
-                                currentlyNeeded.toTypedArray(), REQUEST_ENABLE_PERMISSIONS)
+                                compatiblePermissions.toTypedArray(), REQUEST_ENABLE_PERMISSIONS)
                     } catch (ex: IllegalStateException) {
                         logger.warn("Cannot request permission on closing activity")
                     }
@@ -189,7 +198,7 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
 
     fun invalidateCache() {
         mHandler.execute {
-            if (!isRequestingPermissions.isEmpty()) {
+            if (isRequestingPermissions.isNotEmpty()) {
                 val now = System.currentTimeMillis()
                 val expires = isRequestingPermissionsTime + requestPermissionTimeoutMs
                 if (expires <= now) {

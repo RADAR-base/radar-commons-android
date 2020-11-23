@@ -43,7 +43,18 @@ open class PhoneBluetoothProvider(radarService: RadarService) : SourceProvider<B
 
     override val isDisplayable: Boolean = false
 
-    override val permissionsNeeded: List<String> = listOf(Manifest.permission.BLUETOOTH_ADMIN)
+    override val permissionsNeeded: List<String> = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        listOf(
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+        )
+    } else {
+        listOf(
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+        )
+    }
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)
 
