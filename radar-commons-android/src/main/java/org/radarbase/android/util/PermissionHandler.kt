@@ -74,8 +74,8 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
                 }
                 else -> {
                     val compatiblePermissions = if (
-                            ACCESS_COARSE_LOCATION in currentlyNeeded
-                            || ACCESS_FINE_LOCATION in currentlyNeeded) {
+                            ACCESS_COARSE_LOCATION in needsPermissions
+                            || ACCESS_FINE_LOCATION in needsPermissions) {
                         currentlyNeeded - RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT
                     } else {
                         currentlyNeeded
