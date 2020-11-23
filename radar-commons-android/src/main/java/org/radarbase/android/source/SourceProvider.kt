@@ -251,6 +251,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         const val NEEDS_BLUETOOTH_KEY = "org.radarbase.android.source.SourceProvider.needsBluetooth"
         const val PRODUCER_KEY = "org.radarbase.android.source.SourceProvider.sourceProducer"
         const val MODEL_KEY = "org.radarbase.android.source.SourceProvider.sourceModel"
+
         private val logger = LoggerFactory.getLogger(SourceProvider::class.java)
     }
 }

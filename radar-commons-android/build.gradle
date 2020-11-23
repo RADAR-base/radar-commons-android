@@ -31,7 +31,7 @@ dependencies {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarcns:radar-schemas-commons:0.5.14') {
+    api ('org.radarcns:radar-schemas-commons:0.5.15') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     //noinspection GradleDependency
@@ -48,9 +48,9 @@ dependencies {
 
     api "androidx.lifecycle:lifecycle-service:2.2.0"
 
-    implementation 'com.google.firebase:firebase-config:20.0.0'
+    implementation 'com.google.firebase:firebase-config:20.0.1'
     implementation 'com.google.firebase:firebase-core:18.0.0'
-    implementation 'com.google.firebase:firebase-crashlytics:17.2.2'
+    implementation 'com.google.firebase:firebase-crashlytics:17.3.0'
     implementation 'sk.baka.slf4j:slf4j-handroid:1.7.32'
 }
 
