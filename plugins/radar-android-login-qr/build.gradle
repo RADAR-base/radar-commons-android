@@ -1,7 +1,12 @@
-apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-android'
 
 apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    buildFeatures {
+        viewBinding true
+    }
+}
 
 description = 'RADAR Android QR LoginManager.'
 

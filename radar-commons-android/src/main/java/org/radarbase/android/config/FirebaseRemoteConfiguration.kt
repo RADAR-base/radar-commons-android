@@ -18,6 +18,7 @@ package org.radarbase.android.config
 
 import android.content.Context
 import android.os.Handler
+import android.os.Looper
 import androidx.annotation.XmlRes
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
@@ -55,7 +56,7 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
     override var cache: Map<String, String> = mapOf()
         private set
 
-    private val handler: Handler = Handler()
+    private val handler: Handler = Handler(Looper.getMainLooper())
     private val onFetchCompleteHandler: OnSuccessListener<Void>
     private var isInDevelopmentMode: Boolean = false
     private var firebaseKeys: Set<String> = HashSet(firebase.getKeysByPrefix(""))

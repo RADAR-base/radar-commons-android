@@ -111,11 +111,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         }
     }
 
-    override fun onLocationChanged(location: Location?) {
-        if (location == null) {
-            return
-        }
-
+    override fun onLocationChanged(location: Location) {
         val eventTimestamp = location.time / 1000.0
         val timestamp = currentTime
 
@@ -166,7 +162,8 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
             when {
                 periodGPS <= 0 -> logger.info("Location GPS gathering disabled in settings")
                 locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> {
-                    onLocationChanged(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER))
+                    locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                        ?.let { onLocationChanged(it) }
                     locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, periodGPS * 1000, 0f, this@PhoneLocationManager)
                     logger.info("Location GPS listener activated and set to a period of {}", periodGPS)
                 }
@@ -176,7 +173,8 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
             when {
                 periodNetwork <= 0 -> logger.info("Location network gathering disabled in settings")
                 locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> {
-                    onLocationChanged(locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER))
+                    locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                        ?.let { onLocationChanged(it) }
                     locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, periodNetwork * 1000, 0f, this@PhoneLocationManager)
                     logger.info("Location Network listener activated and set to a period of {}", periodNetwork)
                 }

@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-apply plugin: 'kotlin-android-extensions'
-
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
     defaultConfig {
         buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
+    }
+    buildFeatures {
+        viewBinding true
     }
 }
 

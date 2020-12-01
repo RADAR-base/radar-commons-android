@@ -2,6 +2,7 @@ package org.radarbase.android.util
 
 import android.Manifest.permission.ACCESS_COARSE_LOCATION
 import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.Manifest.permission.SYSTEM_ALERT_WINDOW
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -22,7 +23,12 @@ import org.radarbase.android.R
 import org.radarbase.android.RadarService
 import org.slf4j.LoggerFactory
 
-open class PermissionHandler(private val activity: AppCompatActivity, private val mHandler: SafeHandler, private val requestPermissionTimeoutMs: Long) {
+
+open class PermissionHandler(
+    private val activity: AppCompatActivity,
+    private val mHandler: SafeHandler,
+    private val requestPermissionTimeoutMs: Long
+) {
     private val broadcaster = LocalBroadcastManager.getInstance(activity)
 
     private var needsPermissions: MutableSet<String> = HashSet()
@@ -60,6 +66,12 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
                     addRequestingPermissions(Context.LOCATION_SERVICE)
                     requestLocationProvider()
                 }
+                SYSTEM_ALERT_WINDOW in currentlyNeeded -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        addRequestingPermissions(SYSTEM_ALERT_WINDOW)
+                        requestSystemWindowPermissions()
+                    }
+                }
                 RadarService.PACKAGE_USAGE_STATS_COMPAT in currentlyNeeded -> {
                     addRequestingPermissions(RadarService.PACKAGE_USAGE_STATS_COMPAT)
                     requestPackageUsageStats()
@@ -82,8 +94,11 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
                     }
                     addRequestingPermissions(compatiblePermissions)
                     try {
-                        ActivityCompat.requestPermissions(activity,
-                                compatiblePermissions.toTypedArray(), REQUEST_ENABLE_PERMISSIONS)
+                        ActivityCompat.requestPermissions(
+                            activity,
+                            compatiblePermissions.toTypedArray(),
+                            REQUEST_ENABLE_PERMISSIONS,
+                        )
                     } catch (ex: IllegalStateException) {
                         logger.warn("Cannot request permission on closing activity")
                     }
@@ -131,25 +146,41 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
             setMessage(R.string.enable_location)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.cancel()
-                val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                if (intent.resolveActivity(activity.packageManager) != null) {
-                    activity.startActivityForResult(intent, LOCATION_REQUEST_CODE)
-                }
+                Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                    .startActivityForResult(LOCATION_REQUEST_CODE)
             }
             setIcon(android.R.drawable.ic_dialog_alert)
         }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
+    private fun requestSystemWindowPermissions() {
+        // Show alert dialog to the user saying a separate permission is needed
+        // Launch the settings activity if the user prefers
+        Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:" + activity.packageName)
+        ).startActivityForResult(ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
+    }
+
+    private fun Intent.startActivityForResult(code: Int) {
+        resolveActivity(activity.packageManager) ?: return
+        try {
+            activity.startActivityForResult(this, code)
+        } catch (ex: ActivityNotFoundException) {
+            logger.error("Failed to ask for usage code", ex)
+        } catch (ex: IllegalStateException) {
+            logger.warn("Cannot start activity on closed app")
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint("BatteryLife")
     private fun requestDisableBatteryOptimization() {
-        val intent = Intent().apply {
-            action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-            data = Uri.parse("package:" + activity.applicationContext.packageName)
-        }
-        if (intent.resolveActivity(activity.packageManager) != null) {
-            activity.startActivityForResult(intent, BATTERY_OPT_CODE)
-        }
+        Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:" + activity.packageName)
+        ).startActivityForResult(BATTERY_OPT_CODE)
     }
 
 
@@ -163,13 +194,7 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
                 if (intent.resolveActivity(activity.packageManager) == null) {
                     intent = Intent(Settings.ACTION_SETTINGS)
                 }
-                try {
-                    activity.startActivityForResult(intent, USAGE_REQUEST_CODE)
-                } catch (ex: ActivityNotFoundException) {
-                    logger.error("Failed to ask for usage code", ex)
-                } catch (ex: IllegalStateException) {
-                    logger.warn("Cannot start activity on closed app")
-                }
+                intent.startActivityForResult(USAGE_REQUEST_CODE)
             }
             setIcon(android.R.drawable.ic_dialog_alert)
         }
@@ -177,45 +202,51 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
 
     fun onActivityResult(requestCode: Int, resultCode: Int) {
         when (requestCode) {
-            LOCATION_REQUEST_CODE -> {
-                onPermissionRequestResult(Context.LOCATION_SERVICE, resultCode == Activity.RESULT_OK)
-            }
-            USAGE_REQUEST_CODE -> {
-                onPermissionRequestResult(
-                        RadarService.PACKAGE_USAGE_STATS_COMPAT,
-                        resultCode == Activity.RESULT_OK)
-            }
+            LOCATION_REQUEST_CODE -> onPermissionRequestResult(
+                Context.LOCATION_SERVICE,
+                resultCode == Activity.RESULT_OK
+            )
+            USAGE_REQUEST_CODE -> onPermissionRequestResult(
+                RadarService.PACKAGE_USAGE_STATS_COMPAT,
+                resultCode == Activity.RESULT_OK
+            )
             BATTERY_OPT_CODE -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val powerManager = activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
+                    val powerManager =
+                        activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
                     val granted = resultCode == Activity.RESULT_OK
                             || powerManager?.isIgnoringBatteryOptimizations(activity.applicationContext.packageName) != false
-                    onPermissionRequestResult(RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT, granted)
+                    onPermissionRequestResult(
+                        RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT,
+                        granted
+                    )
                 }
             }
+            ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE -> onPermissionRequestResult(
+                SYSTEM_ALERT_WINDOW,
+                resultCode == Activity.RESULT_OK
+            )
         }
     }
 
     fun invalidateCache() {
         mHandler.execute {
             if (isRequestingPermissions.isNotEmpty()) {
-                val now = System.currentTimeMillis()
-                val expires = isRequestingPermissionsTime + requestPermissionTimeoutMs
-                if (expires <= now) {
+                val timeToExpire = isRequestingPermissionsTime + requestPermissionTimeoutMs - System.currentTimeMillis()
+                if (timeToExpire <= 0L) {
                     resetRequestingPermission()
                 } else {
-                    mHandler.delay(expires - now, ::resetRequestingPermission)
+                    mHandler.delay(timeToExpire, ::resetRequestingPermission)
                 }
             }
         }
     }
 
     fun replaceNeededPermissions(newPermissions: Array<out String>?) {
-        newPermissions?.also { permissions ->
-            mHandler.execute {
-                needsPermissions = mutableSetOf(*permissions)
-                checkPermissions()
-            }
+        newPermissions ?: return
+        mHandler.execute {
+            needsPermissions = mutableSetOf(*newPermissions)
+            checkPermissions()
         }
     }
 
@@ -229,16 +260,22 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
     }
 
     fun saveInstanceState(savedInstanceState: Bundle) {
-        savedInstanceState.putStringArrayList("isRequestingPermissions", ArrayList(isRequestingPermissions))
+        savedInstanceState.putStringArrayList(
+            "isRequestingPermissions", ArrayList(
+                isRequestingPermissions
+            )
+        )
         savedInstanceState.putLong("isRequestingPermissionsTime", isRequestingPermissionsTime)
     }
 
     fun restoreInstanceState(savedInstanceState: Bundle) {
-        val isRequesting = savedInstanceState.getStringArrayList("isRequestingPermissions")
-        if (isRequesting != null) {
-            isRequestingPermissions += isRequesting
-        }
-        isRequestingPermissionsTime = savedInstanceState.getLong("isRequestingPermissionsTime", java.lang.Long.MAX_VALUE)
+        savedInstanceState.getStringArrayList("isRequestingPermissions")
+            ?.let { isRequestingPermissions += it }
+
+        isRequestingPermissionsTime = savedInstanceState.getLong(
+            "isRequestingPermissionsTime",
+            java.lang.Long.MAX_VALUE
+        )
     }
 
     companion object {
@@ -249,5 +286,6 @@ open class PermissionHandler(private val activity: AppCompatActivity, private va
         private const val LOCATION_REQUEST_CODE = 232619694 and 0xFFFF
         private const val USAGE_REQUEST_CODE = 232619695 and 0xFFFF
         private const val BATTERY_OPT_CODE = 232619696 and 0xFFFF
+        private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 232619697 and 0xFFFF
     }
 }

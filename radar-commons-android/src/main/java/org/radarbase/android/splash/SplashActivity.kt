@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.Intent.*
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
@@ -62,7 +63,7 @@ abstract class SplashActivity : AppCompatActivity() {
         authConnection = AuthServiceConnection(this@SplashActivity, loginListener)
         config = radarConfig
         configReceiver = false
-        handler = Handler()
+        handler = Handler(Looper.getMainLooper())
         startedAt = SystemClock.elapsedRealtime()
 
         createView()

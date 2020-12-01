@@ -29,6 +29,7 @@ import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.location.LocationManager
 import android.os.*
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
+import android.provider.Settings
 import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.core.content.ContextCompat
@@ -122,7 +123,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         mHandler = SafeHandler.getInstance("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
             start()
         }
-        mainHandler = Handler()
+        mainHandler = Handler(Looper.getMainLooper())
 
         configuration = radarConfig
         providerLoader = SourceProviderLoader(plugins)
@@ -453,25 +454,23 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
-    private fun isPermissionGranted(permission: String): Boolean {
-        return when (permission) {
-            LOCATION_SERVICE -> applySystemService<LocationManager, Boolean>(Context.LOCATION_SERVICE) { locationManager ->
-                locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                        || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-            } ?: true
-            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT -> applySystemService<PowerManager, Boolean>(Context.POWER_SERVICE) { powerManager ->
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                        || powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
-            } ?: true
-            PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager, Boolean>(Context.APP_OPS_SERVICE) { appOps ->
-                @Suppress("DEPRECATION")
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                        || MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName)
-            } ?: true
-            else -> PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, permission)
-        }
+    private fun isPermissionGranted(permission: String): Boolean = when (permission) {
+        LOCATION_SERVICE -> applySystemService<LocationManager, Boolean>(Context.LOCATION_SERVICE) { locationManager ->
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                    || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        } ?: true
+        REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT -> applySystemService<PowerManager, Boolean>(Context.POWER_SERVICE) { powerManager ->
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+                    || powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
+        } ?: true
+        PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager, Boolean>(Context.APP_OPS_SERVICE) { appOps ->
+            @Suppress("DEPRECATION")
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+                    || MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName)
+        } ?: true
+        SYSTEM_ALERT_WINDOW -> Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+        else -> PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, permission)
     }
-
 
     /** Configure whether a boot listener should start this application at boot.  */
     @Suppress("unused")

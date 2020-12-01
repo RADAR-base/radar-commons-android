@@ -140,6 +140,10 @@ class NotificationHandler(private val context: Context) {
         return NotificationRegistration(manager, id)
     }
 
+    fun cancel(notificationId: Int) {
+        manager?.cancel(notificationId)
+    }
+
     @Suppress("DEPRECATION")
     private fun deprecatedBuilder(channel: String): Notification.Builder {
         return Notification.Builder(context).apply {
