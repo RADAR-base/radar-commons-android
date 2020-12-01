@@ -16,6 +16,7 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import java.io.EOFException
 import java.io.File
 import java.io.IOException
@@ -35,7 +36,11 @@ import java.nio.channels.FileChannel
  * @throws IOException if the file could not be accessed or was smaller than
  *                     `QueueFileHeader.ELEMENT_HEADER_LENGTH`
  */
-class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Long) : QueueStorage {
+class DirectQueueFileStorage(
+        file: File,
+        initialLength: Long,
+        maximumLength: Long,
+) : QueueStorage {
     /**
      * The underlying file. Uses a ring buffer to store entries.
      * <pre>
@@ -78,8 +83,8 @@ class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         length = if (isPreExisting) {
             // Read header from file
             val currentLength = randomAccessFile.length()
-            if (currentLength < QueueFileHeader.QUEUE_HEADER_LENGTH) {
-                throw IOException("File length " + length + " is smaller than queue header length " + QueueFileHeader.QUEUE_HEADER_LENGTH)
+            if (currentLength < QUEUE_HEADER_LENGTH) {
+                throw IOException("File length $length is smaller than queue header length $QUEUE_HEADER_LENGTH")
             }
             currentLength
         } else {
@@ -90,26 +95,26 @@ class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     }
 
     @Throws(IOException::class)
-    override fun read(position: Long, buffer: ByteBuffer): Long {
+    override fun read(position: Long, data: ByteBuffer): Long {
         requireNotClosed()
-        val count = buffer.remaining()
-        require(count + QueueFileHeader.QUEUE_HEADER_LENGTH <= length) {
-            "buffer count ${buffer.remaining()} exceeds storage length $length"
+        val count = data.remaining()
+        require(count <= length - position.coerceAtMost(QUEUE_HEADER_LENGTH)) {
+            "buffer count ${data.remaining()} exceeds storage length $length"
         }
 
         val wrappedPosition = wrapPosition(position)
-        channel.position(wrappedPosition.toLong())
-        return if (position + count <= length) {
-            channel.read(buffer)
-            wrapPosition(wrappedPosition + count.toLong()).toLong()
+        channel.position(wrappedPosition)
+        return if (wrappedPosition + count <= length) {
+            channel.read(data)
+            wrapPosition(wrappedPosition + count.toLong())
         } else {
             // The read overlaps the EOF.
             // # of bytes to read before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
             val firstPart = (length - wrappedPosition).toInt()
-            readFully(buffer, firstPart)
-            channel.position(QueueFileHeader.QUEUE_HEADER_LENGTH.toLong())
-            readFully(buffer, count - firstPart)
-            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - firstPart).toLong()
+            readFully(data, firstPart)
+            channel.position(QUEUE_HEADER_LENGTH)
+            readFully(data, count - firstPart)
+            QUEUE_HEADER_LENGTH + count - firstPart
         }
     }
 
@@ -118,18 +123,18 @@ class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         var n = 0
         while (n < count) {
             val numRead = channel.read(buffer).toLong()
-            if (numRead == -1L) {
-                throw EOFException()
-            }
+            if (numRead == -1L) throw EOFException()
             n += numRead.toInt()
         }
     }
 
     /** Wraps the position if it exceeds the end of the file.  */
-    private fun wrapPosition(position: Long): Int {
-        val newPosition = if (position < length) position else QueueFileHeader.QUEUE_HEADER_LENGTH + position - length
-        require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
-        return newPosition.toInt()
+    override fun wrapPosition(position: Long): Long {
+        val newPosition = if (position < length) position else QUEUE_HEADER_LENGTH + position - length
+        require(newPosition < length && position >= 0) {
+            "Position $position invalid outside of storage length $length"
+        }
+        return newPosition
     }
 
     /** Sets the length of the file.  */
@@ -143,7 +148,7 @@ class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
             "New length $size exceeds maximum length $maximumLength"
         }
         require(size >= MINIMUM_LENGTH) {
-            "New length $size is less than minimum length ${QueueFileHeader.QUEUE_HEADER_LENGTH}"
+            "New length $size is less than minimum length $QUEUE_HEADER_LENGTH"
         }
         flush()
         randomAccessFile.setLength(size)
@@ -157,52 +162,46 @@ class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     }
 
     @Throws(IOException::class)
-    override fun write(position: Long, buffer: ByteBuffer): Long {
+    override fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean): Long {
         requireNotClosed()
-        val count = buffer.remaining()
-        require(count + QueueFileHeader.QUEUE_HEADER_LENGTH <= length) {
-            "buffer count ${buffer.remaining()} exceeds storage length $length"
+        val count = data.remaining()
+        require(count + QUEUE_HEADER_LENGTH <= length) {
+            "buffer count ${data.remaining()} exceeds storage length $length"
         }
         val wrappedPosition = wrapPosition(position)
-        channel.position(wrappedPosition.toLong())
+        channel.position(wrappedPosition)
         val linearPart = (length - wrappedPosition).toInt()
         return if (linearPart >= count) {
-            writeFully(buffer, count)
-            wrapPosition(wrappedPosition + count.toLong()).toLong()
+            writeFully(data, count)
+            wrapPosition(wrappedPosition + count.toLong())
         } else {
             // The write overlaps the EOF.
             // # of bytes to write before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
             if (linearPart > 0) {
-                writeFully(buffer, linearPart)
+                writeFully(data, linearPart)
             }
-            channel.position(QueueFileHeader.QUEUE_HEADER_LENGTH.toLong())
-            writeFully(buffer, count - linearPart)
-            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - linearPart).toLong()
+            channel.position(QUEUE_HEADER_LENGTH)
+            writeFully(data, count - linearPart)
+            QUEUE_HEADER_LENGTH + count - linearPart
         }
     }
 
     @Throws(IOException::class)
     private fun writeFully(buffer: ByteBuffer, count: Int) {
         var n = 0
-        val writeBuffer: ByteBuffer
-        if (buffer.remaining() == count) {
-            writeBuffer = buffer
-        } else if (buffer.remaining() > count) {
-            writeBuffer = buffer.slice()
-            writeBuffer.limit(count)
-        } else {
+        if (buffer.remaining() < count) {
             throw BufferUnderflowException()
         }
+        val oldLimit = buffer.limit()
+        if (buffer.remaining() > count) {
+            buffer.limit(buffer.position() + count)
+        }
         while (n < count) {
-            val numWritten = channel.write(writeBuffer)
-            if (numWritten == -1) {
-                throw EOFException()
-            }
+            val numWritten = channel.write(buffer)
+            if (numWritten == -1) throw EOFException()
             n += numWritten
         }
-        if (writeBuffer !== buffer) {
-            buffer.position(buffer.position() + count)
-        }
+        buffer.limit(oldLimit)
     }
 
     @Throws(IOException::class)
@@ -225,9 +224,7 @@ class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
 
     @Throws(IOException::class)
     private fun requireNotClosed() {
-        if (isClosed) {
-            throw IOException("closed")
-        }
+        if (isClosed) throw IOException("closed")
     }
 
     @Throws(IOException::class)
@@ -237,9 +234,7 @@ class DirectQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         randomAccessFile.close()
     }
 
-    override fun toString(): String {
-        return "DirectQueueFileStorage<$fileName>[length=$length]"
-    }
+    override fun toString() = "DirectQueueFileStorage<$fileName>[length=$length]"
 
     companion object {
         /** Initial file size in bytes.  */

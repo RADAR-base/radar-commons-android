@@ -16,8 +16,9 @@
 
 package org.radarbase.util
 
-import org.radarbase.util.Serialization.*
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Header for a [QueueFile].
@@ -39,12 +40,12 @@ constructor(
         private val storage: QueueStorage) {
 
     /** Buffer to read and store the header with.  */
-    private val headerBuffer = ByteArray(QUEUE_HEADER_LENGTH)
+    private val headerBuffer = ByteBuffer.allocate(QUEUE_HEADER_LENGTH.toInt())
+            .order(ByteOrder.LITTLE_ENDIAN)
 
-    /** Cached file length. Always a power of 2.  */
-    /** Get the stored length of the QueueStorage in bytes.  */
     /**
-     * Set the stored length of the QueueStorage in bytes. This does not modify the storage length
+     * Cached file length. Always a power of 2.
+     * Setting the stored length does not modify the storage length
      * itself.
      */
     var length: Long = 0
@@ -52,7 +53,9 @@ constructor(
     /** Number of elements.  */
     /** Get the number of elements in the QueueFile.  */
     var count: Int = 0
-        private set
+
+    val dataLength: Long
+        get() = length - QUEUE_HEADER_LENGTH
 
     /** Version number. Currently fixed to [.VERSIONED_HEADER].  */
     private val version: Int
@@ -73,7 +76,7 @@ constructor(
             read()
         } else {
             length = this.storage.length
-            if (length < QUEUE_HEADER_LENGTH) {
+            if (dataLength < 0) {
                 throw IOException("Storage does not contain header.")
             }
             count = 0
@@ -86,22 +89,24 @@ constructor(
     /** To initialize the header, read it from file.  */
     @Throws(IOException::class)
     private fun read() {
-        storage.read(0L, headerBuffer, 0, QUEUE_HEADER_LENGTH)
+        headerBuffer.rewind()
+        storage.read(0L, headerBuffer)
+        headerBuffer.flip()
 
-        val version = bytesToInt(headerBuffer, 0)
+        val version = headerBuffer.int
         if (version != VERSIONED_HEADER) {
             throw IOException("Storage $storage is not recognized as a queue file.")
         }
-        length = bytesToLong(headerBuffer, 4)
+        length = headerBuffer.long
         if (length > storage.length) {
             throw IOException("File is truncated. Expected length: " + length
                     + ", Actual length: " + storage.length)
         }
-        count = bytesToInt(headerBuffer, 12)
-        firstPosition = bytesToLong(headerBuffer, 16)
-        lastPosition = bytesToLong(headerBuffer, 24)
+        count = headerBuffer.int
+        firstPosition = headerBuffer.long
+        lastPosition = headerBuffer.long
 
-        if (length < QUEUE_HEADER_LENGTH) {
+        if (dataLength < 0) {
             throw IOException("File length in $storage header too small")
         }
         if (firstPosition < 0 || firstPosition > length
@@ -111,7 +116,7 @@ constructor(
         if (count < 0 || count > 0 && (firstPosition == 0L || lastPosition == 0L)) {
             throw IOException("Number of elements not correct in storage $storage")
         }
-        val crc = bytesToInt(headerBuffer, 32)
+        val crc = headerBuffer.int
         if (crc != hashCode()) {
             throw IOException("Queue storage $storage was corrupted.")
         }
@@ -123,22 +128,19 @@ constructor(
      */
     @Throws(IOException::class)
     fun write() {
-        // first write all variables to a single byte buffer
-        intToBytes(VERSIONED_HEADER, headerBuffer, 0)
-        longToBytes(length, headerBuffer, 4)
-        intToBytes(count, headerBuffer, 12)
-        longToBytes(firstPosition, headerBuffer, 16)
-        longToBytes(lastPosition, headerBuffer, 24)
-        intToBytes(hashCode(), headerBuffer, 32)
+        storage.write(0L, headerBuffer.apply {
+            rewind()
+            putInt(VERSIONED_HEADER)
+            putLong(length)
+            putInt(count)
+            putLong(firstPosition)
+            putLong(lastPosition)
+            putInt(this@QueueFileHeader.hashCode())
 
-        // then write the byte buffer out in one go
-        storage.write(0L, headerBuffer, 0, QUEUE_HEADER_LENGTH)
+            // then write the byte buffer out in one go
+            flip()
+        })
         storage.flush()
-    }
-
-    /** Add given number of elements to the current number of elements in the QueueFile.  */
-    fun addCount(count: Int) {
-        this.count += count
     }
 
     /**
@@ -168,17 +170,7 @@ constructor(
                 && lastPosition == otherHeader.lastPosition
     }
 
-    /** Wraps the position if it exceeds the end of the file.  */
-    fun wrapPosition(position: Long): Long {
-        val newPosition = if (position < length) position else QUEUE_HEADER_LENGTH + position - length
-        @Suppress("ConvertTwoComparisonsToRangeCheck")
-        require(newPosition < length && newPosition >= 0) { "Position $position invalid outside of storage length $length" }
-        return newPosition
-    }
-
-    override fun toString(): String {
-        return "QueueFileHeader[length=$length, size=$count, first=$firstPosition, last=$lastPosition]"
-    }
+    override fun toString() = "QueueFileHeader[length=$length, size=$count, first=$firstPosition, last=$lastPosition]"
 
     /** Clear the positions and count. This does not change the stored file length.  */
     fun clear() {
@@ -189,7 +181,7 @@ constructor(
 
     companion object {
         /** The header length in bytes.  */
-        const val QUEUE_HEADER_LENGTH = 36
+        const val QUEUE_HEADER_LENGTH = 36L
 
         /** Leading bit set to 1 indicating a versioned header and the version of 1.  */
         private const val VERSIONED_HEADER = 0x00000001

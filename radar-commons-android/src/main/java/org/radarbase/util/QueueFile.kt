@@ -16,12 +16,14 @@
 
 package org.radarbase.util
 
-import org.radarbase.util.Serialization.bytesToInt
+import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -79,7 +81,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     private val header: QueueFileHeader = QueueFileHeader(storage)
 
     /** Pointer to first (or eldest) element.  */
-    private val first = ArrayDeque<QueueFileElement>()
+    private val firstElements = ArrayDeque<QueueFileElement>()
 
     /** Pointer to last (or newest) element.  */
     private val last: QueueFileElement
@@ -91,7 +93,8 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
      */
     private val modCount = AtomicInteger(0)
 
-    private val elementHeaderBuffer = ByteArray(QueueFileElement.ELEMENT_HEADER_LENGTH)
+    private val elementHeaderBuffer = ByteBuffer.allocate(QueueFileElement.ELEMENT_HEADER_LENGTH)
+            .order(ByteOrder.LITTLE_ENDIAN)
 
     /** Returns true if this queue contains no entries.  */
     val isEmpty: Boolean
@@ -109,7 +112,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         }
 
         readElement(header.firstPosition).takeUnless { it.isEmpty }
-                ?.let { first.add(it) }
+                ?.let { firstElements += it }
 
         last = readElement(header.lastPosition)
     }
@@ -128,17 +131,28 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             return
         }
 
-        storage.read(position, elementHeaderBuffer, 0, QueueFileElement.ELEMENT_HEADER_LENGTH)
-        val length = bytesToInt(elementHeaderBuffer, 0)
+        elementHeaderBuffer.rewind()
+        while (elementHeaderBuffer.hasRemaining()) {
+            storage.read(
+                storage.wrapPosition(position + elementHeaderBuffer.position()),
+                elementHeaderBuffer,
+            )
+        }
+        elementHeaderBuffer.flip()
 
-        if (elementHeaderBuffer[4] != QueueFileElement.crc(length)) {
-            logger.error("Failed to verify {}: crc {} does not match stored checksum {}. " + "QueueFile is corrupt.",
-                    elementToUpdate, QueueFileElement.crc(length), elementHeaderBuffer[4])
+        elementToUpdate.position = position
+        elementToUpdate.length = elementHeaderBuffer.int
+
+        val crc = elementHeaderBuffer.get()
+
+        if (crc != elementToUpdate.crc) {
+            logger.error("Failed to verify {}: crc {} does not match stored checksum {}. "
+                    + "QueueFile is corrupt.",
+                elementToUpdate, elementToUpdate.crc, crc)
+
             close()
             throw IOException("Element is not correct; queue file is corrupted")
         }
-        elementToUpdate.length = length
-        elementToUpdate.position = position
     }
 
     /**
@@ -168,12 +182,12 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     val usedBytes: Long
         get() {
             if (isEmpty) {
-                return QueueFileHeader.QUEUE_HEADER_LENGTH.toLong()
+                return QUEUE_HEADER_LENGTH
             }
 
-            val firstPosition = first.first.position
+            val firstPosition = firstElements.first.position
             return last.nextPosition - firstPosition + if (last.position >= firstPosition) {
-                QueueFileHeader.QUEUE_HEADER_LENGTH.toLong()
+                QUEUE_HEADER_LENGTH
             } else {
                 // tail < head. The queue wraps.
                 header.length
@@ -184,7 +198,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     @Throws(IOException::class)
     fun peek(): InputStream? {
         requireNotClosed()
-        return if (!isEmpty) QueueFileInputStream(first.first) else null
+        return if (!isEmpty) QueueFileInputStream(firstElements.first) else null
     }
 
     /**
@@ -200,7 +214,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         private var nextElementIndex: Int = 0
 
         /** Position of element to be returned by subsequent call to next.  */
-        private var nextElementPosition: Long = if (first.isEmpty()) 0 else first.first.position
+        private var nextElementPosition: Long = if (firstElements.isEmpty()) 0 else firstElements.first.position
 
         /**
          * The [.modCount] value that the iterator believes that the backing QueueFile should
@@ -208,7 +222,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
          */
         private val expectedModCount = modCount.get()
 
-        private var cacheIterator: Iterator<QueueFileElement>? = first.iterator()
+        private var cacheIterator: Iterator<QueueFileElement>? = firstElements.iterator()
         private var previousCached: QueueFileElement? = QueueFileElement()
 
         private fun checkConditions() {
@@ -245,12 +259,12 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
                     throw IllegalStateException("Cannot read element", ex)
                 }
 
-                first.add(current)
+                firstElements += current
             }
             val input = QueueFileInputStream(current)
 
             // Update the pointer to the next element.
-            nextElementPosition = header.wrapPosition(current.nextPosition)
+            nextElementPosition = storage.wrapPosition(current.nextPosition)
             nextElementIndex++
 
             // Return the read element.
@@ -297,31 +311,31 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
 
         var i = 0
         // remove from cache first
-        while (i < n && !first.isEmpty()) {
-            newFirst.update(first.removeFirst())
+        while (i < n && !firstElements.isEmpty()) {
+            newFirst.update(firstElements.removeFirst())
             newFirst.updateIfMoved(previous, header)
             previous.update(newFirst)
             i++
         }
 
-        if (first.isEmpty()) {
+        if (firstElements.isEmpty()) {
             // if the cache contained less than n elements, skip from file
             // read one additional element to become the first element of the cache.
             while (i <= n) {
-                readElement(header.wrapPosition(newFirst.nextPosition), newFirst)
+                readElement(storage.wrapPosition(newFirst.nextPosition), newFirst)
                 i++
             }
             // the next element was read from file and will become the next first element
-            first.add(newFirst)
+            firstElements += newFirst
         } else {
-            newFirst = first.first
+            newFirst = firstElements.first
             newFirst.updateIfMoved(previous, header)
         }
 
         // Commit the header.
         modCount.incrementAndGet()
         header.firstPosition = newFirst.position
-        header.addCount(-n)
+        header.count -= n
         truncateIfNeeded()
         header.write()
     }
@@ -356,7 +370,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     fun clear() {
         requireNotClosed()
 
-        first.clear()
+        firstElements.clear()
         last.reset()
         header.clear()
 
@@ -383,31 +397,27 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     }
 
     override fun toString(): String {
-        return "QueueFile[storage=$storage, header=$header, first=$first, last=$last]"
+        return "QueueFile[storage=$storage, header=$header, first=$firstElements, last=$last]"
     }
 
-    private inner class QueueFileInputStream(element: QueueFileElement) : InputStream() {
-        private val totalLength: Int
-        private val expectedModCount: Int
+    private inner class QueueFileInputStream(
+            element: QueueFileElement
+    ) : InputStream() {
+        private val totalLength: Int = element.length
+        private val expectedModCount: Int = modCount.get()
         private val singleByteArray = ByteArray(1)
-        private var storagePosition: Long = 0
+        private var storagePosition: Long = storage.wrapPosition(element.dataPosition)
         private var bytesRead: Int = 0
 
-        init {
-            this.storagePosition = header.wrapPosition(element.dataPosition)
-            this.totalLength = element.length
-            this.expectedModCount = modCount.get()
-            this.bytesRead = 0
-        }
+        private val elementAvailable: Int
+            get() = totalLength - bytesRead
 
-        override fun available(): Int {
-            return totalLength - bytesRead
-        }
+        override fun available() = elementAvailable
 
         override fun skip(byteCount: Long): Long {
-            val countAvailable = byteCount.coerceAtMost((totalLength - bytesRead).toLong()).toInt()
+            val countAvailable = byteCount.coerceAtMost(elementAvailable.toLong()).toInt()
             bytesRead += countAvailable
-            storagePosition = header.wrapPosition(storagePosition + countAvailable)
+            storagePosition = storage.wrapPosition(storagePosition + countAvailable)
             return countAvailable.toLong()
         }
 
@@ -421,22 +431,18 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
 
         @Throws(IOException::class)
         override fun read(bytes: ByteArray, offset: Int, count: Int): Int {
-            if (bytesRead == totalLength) {
-                return -1
-            }
-            if (count < 0) {
-                throw IndexOutOfBoundsException("length < 0")
-            }
-            if (count == 0) {
-                return 0
-            }
+            if (elementAvailable == 0) return -1
+            if (count < 0) throw IndexOutOfBoundsException("length < 0")
+            if (count == 0) return 0
             checkForCoModification()
 
-            val countAvailable = count.coerceAtMost(totalLength - bytesRead)
-            storagePosition = storage.read(storagePosition, bytes, offset, countAvailable)
+            val countAvailable = count.coerceAtMost(elementAvailable)
+            val buffer = ByteBuffer.wrap(bytes, offset, countAvailable)
+            storagePosition = storage.read(storagePosition, buffer)
 
-            bytesRead += countAvailable
-            return countAvailable
+            val numRead = buffer.position() - offset
+            bytesRead += numRead
+            return numRead
         }
 
         @Throws(IOException::class)
@@ -446,9 +452,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             }
         }
 
-        override fun toString(): String {
-            return "QueueFileInputStream[length=$totalLength,bytesRead=$bytesRead]"
-        }
+        override fun toString(): String = "QueueFileInputStream[length=$totalLength,bytesRead=$bytesRead]"
     }
 
     @Throws(IOException::class)
@@ -457,12 +461,11 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             last.update(newLast)
             header.lastPosition = newLast.position
         }
-        if (!newFirst.isEmpty && first.isEmpty()) {
-            first.add(newFirst)
+        if (!newFirst.isEmpty && firstElements.isEmpty()) {
+            firstElements += newFirst
             header.firstPosition = newFirst.position
         }
-        storage.flush()
-        header.addCount(count)
+        header.count += count
         header.write()
         modCount.incrementAndGet()
     }
@@ -479,24 +482,28 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         storage.resize(size)
         header.length = size
 
-        // Calculate the position of the tail end of the data in the ring buffer
-        // If the buffer is split, we need to make it contiguous
+        compact(position, beginningOfFirstElement, oldLength)
+
+        header.write()
+    }
+
+    // Calculate the position of the tail end of the data in the ring buffer
+    // If the buffer is split, we need to make it contiguous
+    private fun compact(position: Long, beginningOfFirstElement: Long, newBufferPosition: Long) {
         if (position <= beginningOfFirstElement) {
-            if (position > QueueFileHeader.QUEUE_HEADER_LENGTH) {
-                val count = position - QueueFileHeader.QUEUE_HEADER_LENGTH
-                storage.move(QueueFileHeader.QUEUE_HEADER_LENGTH.toLong(), oldLength, count)
+            if (position > QUEUE_HEADER_LENGTH) {
+                val count = position - QUEUE_HEADER_LENGTH
+                storage.move(QUEUE_HEADER_LENGTH, newBufferPosition, count)
             }
             modCount.incrementAndGet()
 
             // Last position was moved forward in the copy
-            val positionUpdate = oldLength - QueueFileHeader.QUEUE_HEADER_LENGTH
+            val positionUpdate = newBufferPosition - QUEUE_HEADER_LENGTH
             if (header.lastPosition < beginningOfFirstElement) {
-                header.lastPosition = header.lastPosition + positionUpdate
+                header.lastPosition += positionUpdate
                 last.position = header.lastPosition
             }
         }
-
-        header.write()
     }
 
     companion object {
@@ -504,27 +511,28 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
 
         @Throws(IOException::class)
         fun newMapped(file: File, maxSize: Long): QueueFile {
-            return QueueFile(MappedQueueFileStorage(
-                    file, MappedQueueFileStorage.MINIMUM_LENGTH, maxSize))
+            return QueueFile(
+                BufferedQueueStorage(
+                    MappedQueueFileStorage(file, MappedQueueFileStorage.MINIMUM_LENGTH, maxSize)
+                )
+            )
         }
 
         @Throws(IOException::class)
         fun newDirect(file: File, maxSize: Long): QueueFile {
-            return QueueFile(DirectQueueFileStorage(
-                    file, DirectQueueFileStorage.MINIMUM_LENGTH, maxSize))
+            return QueueFile(
+                BufferedQueueStorage(
+                    DirectQueueFileStorage(file, DirectQueueFileStorage.MINIMUM_LENGTH, maxSize)
+                )
+            )
         }
 
-        fun checkOffsetAndCount(bytes: ByteArray, offset: Int, length: Int) {
-            if (offset < 0) {
-                throw IndexOutOfBoundsException("offset < 0")
-            }
-            if (length < 0) {
-                throw IndexOutOfBoundsException("length < 0")
-            }
-            if (offset + length > bytes.size) {
-                throw IndexOutOfBoundsException(
-                        "extent of offset and length larger than buffer length")
-            }
+        fun ByteArray.checkOffsetAndCount(offset: Int, length: Int) {
+            if (offset < 0) throw IndexOutOfBoundsException("offset < 0")
+            if (length < 0) throw IndexOutOfBoundsException("length < 0")
+            if (offset + length > size) throw IndexOutOfBoundsException(
+                "extent of offset and length larger than buffer length"
+            )
         }
     }
 }

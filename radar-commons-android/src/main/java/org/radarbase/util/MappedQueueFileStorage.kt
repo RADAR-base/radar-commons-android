@@ -16,6 +16,7 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
@@ -80,8 +81,8 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         length = if (isPreExisting) {
             // Read header from file
             val currentLength = randomAccessFile.length()
-            if (currentLength < QueueFileHeader.QUEUE_HEADER_LENGTH) {
-                throw IOException("File length " + length + " is smaller than queue header length " + QueueFileHeader.QUEUE_HEADER_LENGTH)
+            if (currentLength < QUEUE_HEADER_LENGTH) {
+                throw IOException("File length $length is smaller than queue header length $QUEUE_HEADER_LENGTH")
             }
             currentLength
         } else {
@@ -94,48 +95,48 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     }
 
     @Throws(IOException::class)
-    override fun read(position: Long, buffer: ByteBuffer): Long {
+    override fun read(position: Long, data: ByteBuffer): Long {
         requireNotClosed()
-        val count = buffer.remaining()
-        require(count + QueueFileHeader.QUEUE_HEADER_LENGTH <= length) {
-            "buffer count ${buffer.remaining()} exceeds storage length $length"
+        val count = data.remaining()
+        require(count <= length - position.coerceAtMost(QUEUE_HEADER_LENGTH)) {
+            "buffer count ${data.remaining()} exceeds storage length $length"
         }
 
-        val wrappedPosition = wrapPosition(position)
-        return if (position + count <= length) {
+        val wrappedPosition = wrapPosition(position).toInt()
+        return if (wrappedPosition + count <= length) {
             val newPosition = wrappedPosition + count
-            buffer.put(byteBuffer.slice().apply {
+            data.put(byteBuffer.duplicate().apply {
                 position(wrappedPosition)
                 limit(newPosition)
             })
             byteBuffer.position(newPosition)
-            wrapPosition(newPosition.toLong()).toLong()
+            wrapPosition(newPosition.toLong())
         } else {
             // The read overlaps the EOF.
             // # of bytes to read before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
             val firstPart = (length - wrappedPosition).toInt()
 
-            buffer.put(byteBuffer.slice().apply {
+            data.put(byteBuffer.duplicate().apply {
                 position(wrappedPosition)
                 limit(wrappedPosition + firstPart)
             })
 
-            val newPosition = QueueFileHeader.QUEUE_HEADER_LENGTH + count - firstPart
-            buffer.put(byteBuffer.slice().apply {
-                position(QueueFileHeader.QUEUE_HEADER_LENGTH)
+            val newPosition = (QUEUE_HEADER_LENGTH + count - firstPart).toInt()
+            data.put(byteBuffer.duplicate().apply {
+                position(QUEUE_HEADER_LENGTH.toInt())
                 limit(newPosition)
             })
 
-            buffer.position(newPosition)
-            newPosition.toLong()
-        }
+            byteBuffer.position(newPosition)
+            newPosition
+        }.toLong()
     }
 
     /** Wraps the position if it exceeds the end of the file.  */
-    private fun wrapPosition(position: Long): Int {
-        val newPosition = if (position < length) position else QueueFileHeader.QUEUE_HEADER_LENGTH + position - length
+    override fun wrapPosition(position: Long): Long {
+        val newPosition = if (position < length) position else QUEUE_HEADER_LENGTH + position - length
         require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
-        return newPosition.toInt()
+        return newPosition
     }
 
     /** Sets the length of the file.  */
@@ -149,7 +150,7 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
             "New length $size exceeds maximum length $maximumLength"
         }
         require(size >= MINIMUM_LENGTH) {
-            "New length $size is less than minimum length ${QueueFileHeader.QUEUE_HEADER_LENGTH}"
+            "New length $size is less than minimum length $QUEUE_HEADER_LENGTH"
         }
         flush()
         randomAccessFile.setLength(size)
@@ -163,31 +164,31 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     }
 
     @Throws(IOException::class)
-    override fun write(position: Long, buffer: ByteBuffer): Long {
+    override fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean): Long {
         requireNotClosed()
-        val count = buffer.remaining()
-        require(count + QueueFileHeader.QUEUE_HEADER_LENGTH <= length) {
-            "buffer count ${buffer.remaining()} exceeds storage length $length"
+        val count = data.remaining()
+        require(count + QUEUE_HEADER_LENGTH <= length) {
+            "buffer count ${data.remaining()} exceeds storage length $length"
         }
         val wrappedPosition = wrapPosition(position)
-        byteBuffer.position(wrappedPosition)
+        byteBuffer.position(wrappedPosition.toInt())
         val linearPart = (length - wrappedPosition).toInt()
         return if (linearPart >= count) {
-            byteBuffer.put(buffer)
-            wrapPosition((wrappedPosition + count).toLong()).toLong()
+            byteBuffer.put(data)
+            wrapPosition(wrappedPosition + count)
         } else {
             // The write overlaps the EOF.
             // # of bytes to write before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
             if (linearPart > 0) {
-                byteBuffer.put(buffer.slice().apply {
+                byteBuffer.put(data.duplicate().apply {
                     limit(position() + linearPart)
                 })
             }
-            byteBuffer.position(QueueFileHeader.QUEUE_HEADER_LENGTH)
-            byteBuffer.put(buffer.slice().apply {
+            byteBuffer.position(QUEUE_HEADER_LENGTH.toInt())
+            byteBuffer.put(data.duplicate().apply {
                 position(position() + linearPart)
             })
-            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - linearPart).toLong()
+            QUEUE_HEADER_LENGTH + count - linearPart
         }
     }
 

@@ -30,6 +30,8 @@ import org.radarcns.passive.phone.PhoneLight;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.function.Function;
 
@@ -113,6 +115,65 @@ public class BackedObjectQueueTest {
     }
 
     @Test
+    public void testMultipleMappedRegularObject() throws IOException {
+        testMultipleRegularObject(f -> {
+            try {
+                return QueueFile.Companion.newMapped(f, 10000);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        });
+    }
+    @Test
+    public void testMultipleDirectRegularObject() throws IOException {
+        testMultipleRegularObject(f -> {
+            try {
+                return QueueFile.Companion.newDirect(f, 10000);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        });
+    }
+
+    private void testMultipleRegularObject(Function<File, QueueFile> queueFileSupplier) throws IOException {
+        File file = folder.newFile();
+        assertTrue(file.delete());
+        AvroTopic<ObservationKey, ObservationKey> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
+                ObservationKey.class, ObservationKey.class);
+        AvroTopic<GenericRecord, GenericRecord> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
+                GenericRecord.class, GenericRecord.class);
+
+        BackedObjectQueue<Record<ObservationKey, ObservationKey>, Record<GenericRecord, GenericRecord>> queue;
+        queue = new BackedObjectQueue<>(
+                queueFileSupplier.apply(file),
+                serialization.createSerializer(topic),
+                serialization.createDeserializer(outputTopic));
+
+        List<Record<ObservationKey, ObservationKey>> records = new ArrayList<>(100);
+
+        for (int i = 0; i < 100; i++) {
+            records.add(new Record<>(
+                    new ObservationKey("test", "a", "b"),
+                    new ObservationKey("test", "c", "d" + i)));
+        }
+        queue.addAll(records);
+        assertEquals(100, queue.getSize());
+        List<Record<GenericRecord, GenericRecord>> resultRecords = queue.peek(2, 1000000L);
+        assertEquals(2, resultRecords.size());
+        resultRecords = queue.peek(100, 1000000L);
+        assertEquals(100, resultRecords.size());
+        for (int i = 0; i < resultRecords.size(); i++) {
+            Record<GenericRecord, GenericRecord> result = resultRecords.get(i);
+            assertNotNull(result);
+            assertEquals("a", result.key.get("userId"));
+            assertEquals("d" + i, result.value.get("sourceId"));
+        }
+    }
+
+
+    @Test
     public void testMappedRegularObject() throws IOException {
         testRegularObject(f -> {
             try {
@@ -157,6 +218,7 @@ public class BackedObjectQueueTest {
         queue.peek();
         assertEquals(1, queue.getSize());
     }
+
 
     @Test
     public void testMappedFloatObject() throws IOException {

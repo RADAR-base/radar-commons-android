@@ -57,6 +57,8 @@ class BackedObjectQueue<S, T>(
         queueFile.elementOutputStream().use { out -> serializer.serialize(entry, out) }
     }
 
+    operator fun plusAssign(entry: S) = add(entry)
+
     /**
      * Add a collection of new element to the queue.
      * @param entries elements to add
@@ -74,6 +76,8 @@ class BackedObjectQueue<S, T>(
             }
         }
     }
+
+    operator fun plusAssign(entries: Collection<S>) = addAll(entries)
 
     /**
      * Get the front-most object in the queue. This does not remove the element.
@@ -109,10 +113,10 @@ class BackedObjectQueue<S, T>(
                 curSize += input.available().toLong()
                 if (curSize <= sizeLimit || i == 0) {
                     try {
-                        results.add(deserializer.deserialize(input))
+                        results += deserializer.deserialize(input)
                     } catch (ex: IllegalStateException) {
                         logger.warn("Invalid record ignored", ex)
-                        results.add(null)
+                        results += null
                     }
                 }
             }
@@ -132,6 +136,8 @@ class BackedObjectQueue<S, T>(
     fun remove(n: Int = 1) {
         queueFile.remove(n)
     }
+
+    operator fun minusAssign(n: Int) = remove(n)
 
     /**
      * Close the queue. This also closes the backing file.
