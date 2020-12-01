@@ -4,7 +4,14 @@ import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import java.lang.ref.SoftReference
 import java.nio.ByteBuffer
 
-class BufferedQueueStorage(private val storage: QueueStorage) : QueueStorage {
+/**
+ * QueueStorage that provides a buffer around the underlying storage system. This implementation
+ * uses a [bufferSize] of 8192, which is the maximum size of a file system block.
+ */
+class BufferedQueueStorage(
+    private val storage: QueueStorage,
+    private val bufferSize: Int = 8192,
+) : QueueStorage {
     /**
      * Soft reference to the buffer. This may be garbage collected if there is high memory pressure.
      * This is only possible if there is no other hard reference such as a local
@@ -20,7 +27,7 @@ class BufferedQueueStorage(private val storage: QueueStorage) : QueueStorage {
 
     /** Get the current state in cache or create a new one. */
     private fun retrieveState(): BufferState = bufferSoftRef.get()
-            ?: BufferState(ByteBuffer.allocateDirect(8192), 0L, BufferStatus.INITIAL)
+            ?: BufferState(ByteBuffer.allocateDirect(bufferSize), 0L, BufferStatus.INITIAL)
                 .also { bufferSoftRef = SoftReference(it) }
 
     override val length: Long
@@ -119,7 +126,7 @@ class BufferedQueueStorage(private val storage: QueueStorage) : QueueStorage {
                 return storage.read(position, data)
             } else {
                 // Align buffer with filesystem block boundaries
-                val bufPosition = (position / 8192) * 8192
+                val bufPosition = (position / bufferSize) * bufferSize
                 state.initialize(bufPosition, BufferStatus.READ)
                 storage.read(bufPosition, state.buffer)
                 state.buffer.flip()
