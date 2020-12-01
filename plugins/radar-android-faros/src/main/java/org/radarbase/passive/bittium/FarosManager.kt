@@ -30,7 +30,11 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.regex.Pattern
 
-class FarosManager internal constructor(service: FarosService, private val farosFactory: FarosSdkFactory, private val handler: SafeHandler) : AbstractSourceManager<FarosService, FarosState>(service), FarosDeviceListener, FarosSdkListener {
+class FarosManager internal constructor(
+        service: FarosService,
+        private val farosFactory: FarosSdkFactory,
+        private val handler: SafeHandler
+) : AbstractSourceManager<FarosService, FarosState>(service), FarosDeviceListener, FarosSdkListener {
     private var doNotify: Boolean = false
     private val accelerationTopic: DataCache<ObservationKey, BittiumFarosAcceleration> = createCache("android_bittium_faros_acceleration", BittiumFarosAcceleration())
     private val ecgTopic: DataCache<ObservationKey, BittiumFarosEcg> = createCache("android_bittium_faros_ecg", BittiumFarosEcg())
