@@ -39,9 +39,9 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  *
  * In a traditional queue, the remove operation returns an element. In this queue,
- * [.peek] and [.remove] are used in conjunction. Use
- * `peek` to retrieve the first element, and then `remove` to remove it after
- * successful processing. If the system crashes after `peek` and during processing, the
+ * [peek] and [remove] are used in conjunction. Use
+ * [peek] to retrieve the first element, and then [remove] to remove it after
+ * successful processing. If the system crashes after [peek] and during processing, the
  * element will remain in the queue, to be processed when the system restarts.
  *
  * This class is an adaptation of com.squareup.tape2, allowing multi-element writes. It also
@@ -80,6 +80,14 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
      */
     private val header: QueueFileHeader = QueueFileHeader(storage)
 
+    /** Returns the number of elements in this queue.  */
+    val size: Int
+        get() = header.count
+
+    /** File size in bytes  */
+    val fileSize: Long
+        get() = header.length
+
     /** Pointer to first (or eldest) element.  */
     private val firstElements = ArrayDeque<QueueFileElement>()
 
@@ -111,8 +119,9 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             this.storage.resize(header.length)
         }
 
-        readElement(header.firstPosition).takeUnless { it.isEmpty }
-                ?.let { firstElements += it }
+        readElement(header.firstPosition)
+            .takeUnless { it.isEmpty }
+            ?.let { firstElements += it }
 
         last = readElement(header.lastPosition)
     }
@@ -270,14 +279,6 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             return "QueueFile[position=$nextElementPosition, index=$nextElementIndex]"
         }
     }
-
-    /** Returns the number of elements in this queue.  */
-    val size: Int
-        get() = header.count
-
-    /** File size in bytes  */
-    val fileSize: Long
-        get() = header.length
 
     /**
      * Removes the eldest `n` elements.

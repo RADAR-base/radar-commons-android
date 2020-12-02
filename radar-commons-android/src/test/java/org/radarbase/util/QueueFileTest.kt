@@ -20,6 +20,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.radarbase.util.DirectQueueFileStorage.Companion.MINIMUM_LENGTH
 import org.radarbase.util.QueueFileElement.Companion.ELEMENT_HEADER_LENGTH
 import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import org.slf4j.LoggerFactory
@@ -219,31 +220,31 @@ class QueueFileTest {
     @Throws(Exception::class)
     fun fileSize() {
         val queue = createQueue()
-        assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH, queue.fileSize)
+        assertEquals(MINIMUM_LENGTH, queue.fileSize)
         val bufSize = MAX_SIZE / 16 - QUEUE_HEADER_LENGTH
         val buffer = ByteArray(bufSize.toInt())
         // write buffer, assert that the file size increases with the stored size
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH, bufSize + ELEMENT_HEADER_LENGTH + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH, (bufSize + ELEMENT_HEADER_LENGTH) * 2 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 2, (bufSize + ELEMENT_HEADER_LENGTH) * 3 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 2, (bufSize + ELEMENT_HEADER_LENGTH) * 4 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 5 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 6 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 7 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 8 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 9 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 10 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 11 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 12 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 13 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 14 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 15 + QUEUE_HEADER_LENGTH, buffer, queue)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH, bufSize + ELEMENT_HEADER_LENGTH + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH, (bufSize + ELEMENT_HEADER_LENGTH) * 2 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 2, (bufSize + ELEMENT_HEADER_LENGTH) * 3 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 2, (bufSize + ELEMENT_HEADER_LENGTH) * 4 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 5 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 6 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 7 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 4, (bufSize + ELEMENT_HEADER_LENGTH) * 8 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 9 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 10 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 11 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 12 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 13 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 14 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 15 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
 
         // queue is full now
         var actualException: Exception? = null
         try {
-            writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 17 + QUEUE_HEADER_LENGTH, buffer, queue)
+            writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 17 + QUEUE_HEADER_LENGTH, buffer, queue)
         } catch (ex: IllegalStateException) {
             actualException = ex
         }
@@ -252,31 +253,31 @@ class QueueFileTest {
         // queue is full, remove elements to add new ones
         queue.remove(1)
         // this buffer is written in a circular way
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
         queue.remove(1)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
         queue.remove(1)
-        writeAssertFileSize(MappedQueueFileStorage.MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
+        writeAssertFileSize(MINIMUM_LENGTH * 8, (bufSize + ELEMENT_HEADER_LENGTH) * 16 + QUEUE_HEADER_LENGTH, buffer, queue)
         queue.remove(14)
         assertEquals(2, queue.size)
         assertEquals((bufSize + ELEMENT_HEADER_LENGTH) * 2 + QUEUE_HEADER_LENGTH, queue.usedBytes)
-        assertEquals(MappedQueueFileStorage.MINIMUM_LENGTH * 2, queue.fileSize)
+        assertEquals(MINIMUM_LENGTH * 2, queue.fileSize)
     }
 
     private enum class Operation {
         REOPEN, WRITE, READ, CLEAR, REMOVE
     }
 
-    @Test //(timeout = 10000L)
+    @Test(timeout = 30_000L)
     @Throws(Throwable::class)
     fun enduranceTest() {
-        val numberOfOperations = 1000
-        val size = MappedQueueFileStorage.MINIMUM_LENGTH * 4
+        val numberOfOperations = 1_000
+        val size = MINIMUM_LENGTH * 4
         val random = Random()
         val buffer = ByteArray((size * 2 / 3).toInt()) { it.toByte() }
         val file = folder.newFile()
         assertTrue(file.delete())
-        var queue = QueueFile.newMapped(file, size)
+        var queue = QueueFile.newDirect(file, size)
         val list = LinkedList<Element>()
         var bytesUsed = 36L
 
@@ -290,17 +291,14 @@ class QueueFileTest {
                     else -> Operation.WRITE
                 }
 
-                logger.info("Running {} operation", operation)
                 when (operation) {
                     Operation.REOPEN -> {
+                        logger.info("Running {} operation", operation)
                         queue.close()
-                        queue = if (random.nextBoolean()) {
-                            QueueFile.newMapped(file, size)
-                        } else {
-                            QueueFile.newDirect(file, size)
-                        }
+                        queue = QueueFile.newDirect(file, size)
                     }
                     Operation.CLEAR -> {
+                        logger.info("Running {} operation", operation)
                         queue.clear()
                         list.clear()
                         bytesUsed = 36
@@ -372,14 +370,13 @@ class QueueFileTest {
     @Throws(IOException::class)
     private fun write(list: LinkedList<Element>, queue: QueueFile, buffer: ByteArray, random: Random, size: Long): Long {
         val numAdd = random.nextInt(16) + 1
-        logger.info("Adding {} elements", numAdd)
+        logger.info("Writing {} elements", numAdd)
         var bytesUsed = 0L
         val lambda = lambda(buffer.size.toDouble())
         queue.elementOutputStream().use { out ->
             repeat(numAdd) {
                 val numBytes = (random.nextExponential(lambda).toInt() + 1).coerceAtMost(buffer.size)
                 if (numBytes + out.usedSize + ELEMENT_HEADER_LENGTH > size) {
-                    logger.info("Not adding to full queue")
                     return@repeat
                 }
                 val next = Element(0, numBytes)
@@ -420,7 +417,7 @@ class QueueFileTest {
     }
 
     companion object {
-        private const val MAX_SIZE = 8 * MappedQueueFileStorage.MINIMUM_LENGTH
+        private const val MAX_SIZE = 8 * MINIMUM_LENGTH
         private val logger = LoggerFactory.getLogger(QueueFileTest::class.java)
         private fun lambda(target: Double) = - ln(0.001) / target
     }

@@ -1,6 +1,7 @@
 package org.radarbase.util
 
 import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
+import org.radarbase.util.QueueStorage.Companion.withAvailable
 import java.lang.ref.SoftReference
 import java.nio.ByteBuffer
 
@@ -52,7 +53,9 @@ class BufferedQueueStorage(
         get() = length - QUEUE_HEADER_LENGTH
 
     override fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean): Long {
-        require(data.remaining() <= dataLength)
+        checkPosition(position, data)
+        if (data.remaining() == 0) return position
+
         val state = retrieveState()
 
         when {
@@ -65,22 +68,24 @@ class BufferedQueueStorage(
             position < QUEUE_HEADER_LENGTH -> return storage.write(position, data)
             // create a new buffer if not in writing mode
             state.status != BufferStatus.WRITE -> {
-                state.initialize(position, BufferStatus.WRITE)
+                val bufPosition = (position / bufferSize) * bufferSize
+                state.initialize(bufPosition, BufferStatus.WRITE, position)
                 bufferHardRef = state
             }
             // ensure the buffer can be written to
-            !state.isWritable(position) || !state.buffer.hasRemaining() -> {
+            !state.isWritable(position, data.remaining()) -> {
                 // If data cannot be written to the buffer and [mayIgnoreBuffer] is indicated, avoid
                 // resetting the buffer so writing can continue at the previous mark after this header
                 // has been written.
                 if (mayIgnoreBuffer) {
-                    if (state.isWritable(wrapPosition(position + data.remaining() - 1))) {
+                    if (state.isWritable(wrapPosition(position + data.remaining() - 1), 1)) {
                         state.flush()
                     }
                     return storage.write(position, data)
                 } else {
                     state.flush()
-                    state.initialize(position, BufferStatus.WRITE)
+                    val bufPosition = (position / bufferSize) * bufferSize
+                    state.initialize(bufPosition, BufferStatus.WRITE, position)
                 }
             }
         }
@@ -89,28 +94,28 @@ class BufferedQueueStorage(
         val previousPosition = state.buffer.position()
         state.position = position
 
-        // Number of bytes that cannot be written using the current buffer
-        val numBytesExcluded = data.remaining() - state.buffer.remaining()
-        return if (numBytesExcluded > 0) {
-            val previousLimit = data.limit()
-            data.limit(previousLimit - numBytesExcluded)
-            state.buffer.put(data)
-            data.limit(previousLimit)
+        val newPosition = data.withAvailable(state.buffer.remaining().toLong()) {
+            state.buffer.put(it)
             state.position
-        } else {
-            state.buffer.put(data)
-            val newPosition = state.position
-            // when writing inside the buffer, ensure that the final position of the buffer
-            // is put back to where it was originally writing to.
-            if (state.buffer.position() < previousPosition) {
-                state.buffer.position(previousPosition)
-            }
-            newPosition
         }
+
+        // when writing inside the buffer, ensure that the final position of the buffer
+        // is put back to where it was originally writing to.
+        if (state.buffer.position() < previousPosition) {
+            state.buffer.position(previousPosition)
+        }
+
+        return wrapPosition(newPosition)
+    }
+
+    private fun checkPosition(position: Long, data: ByteBuffer) {
+        require(position >= 0 && position < length) { "position $position out of range [0, $length)." }
+        require(data.remaining() <= dataLength)
     }
 
     override fun read(position: Long, data: ByteBuffer): Long {
-        require(position >= 0 && position < length) { "position $position out of range [0, $length)." }
+        checkPosition(position, data)
+        if (data.remaining() == 0) return position
 
         val state = retrieveState()
         // Ensure that any write data is written to file and synchronized before attempting to read
@@ -136,18 +141,10 @@ class BufferedQueueStorage(
         }
 
         state.position = position
-        val dataCount = data.remaining()
-        val bufferCount = state.buffer.remaining()
-        val bytesRead = if (dataCount < bufferCount) {
-            val previousLimit = state.buffer.limit()
-            state.buffer.limit(previousLimit - bufferCount + dataCount)
-            data.put(state.buffer)
-            state.buffer.limit(previousLimit)
-            dataCount
-        } else {
-            // The buffer may contain too few bytes, resulting in a partial read
-            data.put(state.buffer)
-            bufferCount
+        val bytesRead = state.buffer.withAvailable(data.remaining().toLong()) {
+            val result = it.remaining()
+            data.put(it)
+            result
         }
         return wrapPosition(position + bytesRead)
     }
@@ -181,22 +178,39 @@ class BufferedQueueStorage(
         var status: BufferStatus,
     ) {
         var position: Long
-            get() = wrapPosition(buffer.position() + startPosition)
+            get() = buffer.position() + startPosition
             set(value) {
-                buffer.position(translateToBufferPosition(value))
+                val newPosition = translateToBufferPosition(value)
+                buffer.position(newPosition)
+                if (status == BufferStatus.WRITE && newPosition < mark) {
+                    mark = newPosition
+                }
             }
 
         var limit: Long
-            get() = wrapPosition(startPosition + buffer.limit())
+            get() = startPosition + buffer.limit()
             set(value) {
                 buffer.limit(translateToBufferPosition(value))
             }
 
-        fun initialize(startPosition: Long, status: BufferStatus) {
-            buffer.position(0)
-            buffer.limit(buffer.capacity().coerceAtMost((length - startPosition).toInt()))
-            this.startPosition = startPosition
+        private var mark: Int = 0
+
+        var markPosition: Long
+            get() = startPosition + mark
+            set(value) {
+                require(value >= startPosition)
+                mark = (value - startPosition).toInt()
+            }
+
+
+        fun initialize(bufferPosition: Long, status: BufferStatus, writePosition: Long = bufferPosition) {
+            this.startPosition = bufferPosition
             this.status = status
+            this.markPosition = writePosition
+            val newLimit = buffer.capacity().coerceAtMost((length - bufferPosition).toInt())
+            require(newLimit > mark)
+            buffer.limit(newLimit)
+            buffer.position(mark)
         }
 
         fun translateToBufferPosition(position: Long): Int {
@@ -204,19 +218,24 @@ class BufferedQueueStorage(
             return (position - startPosition).toInt()
         }
 
-        operator fun contains(position: Long): Boolean = position >= startPosition && position < startPosition + buffer.limit()
+        operator fun contains(position: Long): Boolean = position >= markPosition && position < limit
 
-        fun isWritable(position: Long): Boolean = position >= startPosition && position <= startPosition + buffer.position()
+        fun isWritable(position: Long, count: Int): Boolean = (
+                position >= startPosition
+                        && position + count >= markPosition
+                        && position <= this.position
+                        && position < limit)
 
         fun flush() {
             if (status == BufferStatus.WRITE) {
-                status = if (buffer.position() > 0) {
-                    buffer.flip()
-                    storage.writeFully(startPosition, buffer)
+                status = if (buffer.position() > mark) {
+                    buffer.limit(buffer.position())
+                    buffer.position(mark)
+                    storage.writeFully(markPosition, buffer)
 
-                    // the written buffer can directly be read from 0 to the new flipped limit
+                    // the written buffer can directly be read from mark to the new limit
                     // (the old position).
-                    buffer.position(0)
+                    buffer.position(mark)
                     BufferStatus.READ
                 } else {
                     BufferStatus.INITIAL

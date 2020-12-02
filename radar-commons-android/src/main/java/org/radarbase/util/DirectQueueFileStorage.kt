@@ -17,6 +17,8 @@
 package org.radarbase.util
 
 import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
+import org.radarbase.util.QueueStorage.Companion.withAvailable
+import org.slf4j.LoggerFactory
 import java.io.EOFException
 import java.io.File
 import java.io.IOException
@@ -97,18 +99,12 @@ class DirectQueueFileStorage(
     override fun read(position: Long, data: ByteBuffer): Long {
         requireNotClosed()
         require(position >= 0 && position < length) { "position out of range [0, $length)." }
-        channel.position(position)
 
-        val count = data.remaining()
-        val available = length - position
-        val numRead = if (count > available) {
-            val previousLimit = data.limit()
-            data.limit(previousLimit - count + available.toInt())
-            channel.read(data)
-                .also { data.limit(previousLimit) }
-        } else {
-            channel.read(data)
+        channel.position(position)
+        val numRead = data.withAvailable(length - position) {
+            channel.read(it)
         }
+
         if (numRead == -1) throw EOFException()
         return wrapPosition(position + numRead)
     }
@@ -123,7 +119,7 @@ class DirectQueueFileStorage(
         require(size <= length || size <= maximumLength) {
             "New length $size exceeds maximum length $maximumLength"
         }
-        require(size >= MINIMUM_LENGTH) {
+        require(size >= minimumLength) {
             "New length $size is less than minimum length $QUEUE_HEADER_LENGTH"
         }
         flush()
@@ -142,17 +138,9 @@ class DirectQueueFileStorage(
         requireNotClosed()
         require(position >= 0 && position < length) { "position out of range [0, $length)." }
 
-        val count = data.remaining()
-        val available = length - position
         channel.position(position)
-
-        val numWritten = if (available >= count) {
-            channel.write(data)
-        } else {
-            val previousLimit = data.limit()
-            data.limit(previousLimit - count + available.toInt())
-            channel.write(data)
-                .also { data.limit(previousLimit) }
+        val numWritten = data.withAvailable(length - position) {
+            channel.write(it)
         }
         if (numWritten == -1) throw EOFException()
         return wrapPosition(position + numWritten)
@@ -170,7 +158,6 @@ class DirectQueueFileStorage(
         }
         flush()
         channel.position(dstPosition)
-
         if (channel.transferTo(srcPosition, count, channel) != count) {
             throw IOException("Cannot move all data")
         }
@@ -193,5 +180,6 @@ class DirectQueueFileStorage(
     companion object {
         /** Initial file size in bytes.  */
         const val MINIMUM_LENGTH = 4096L // one file system block
+        private val logger = LoggerFactory.getLogger(DirectQueueFileStorage::class.java)
     }
 }

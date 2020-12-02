@@ -57,16 +57,6 @@ public class BackedObjectQueueTest {
     }
 
     @Test
-    public void testMappedBinaryObject() throws IOException {
-        testBinaryObject(f -> {
-            try {
-                return QueueFile.Companion.newMapped(f, 450000000);
-            } catch (IOException e) {
-                throw new AssertionError(e);
-            }
-        });
-    }
-    @Test
     public void testDirectBinaryObject() throws IOException {
         testBinaryObject(f -> {
             try {
@@ -172,17 +162,6 @@ public class BackedObjectQueueTest {
         }
     }
 
-
-    @Test
-    public void testMappedRegularObject() throws IOException {
-        testRegularObject(f -> {
-            try {
-                return QueueFile.Companion.newMapped(f, 10000);
-            } catch (IOException e) {
-                throw new AssertionError(e);
-            }
-        });
-    }
     @Test
     public void testDirectRegularObject() throws IOException {
         testRegularObject(f -> {
@@ -219,17 +198,6 @@ public class BackedObjectQueueTest {
         assertEquals(1, queue.getSize());
     }
 
-
-    @Test
-    public void testMappedFloatObject() throws IOException {
-        testFloatObject(f -> {
-            try {
-                return QueueFile.Companion.newMapped(f, 10000);
-            } catch (IOException e) {
-                throw new AssertionError(e);
-            }
-        });
-    }
     @Test
     public void testDirectFloatObject() throws IOException {
         testFloatObject(f -> {

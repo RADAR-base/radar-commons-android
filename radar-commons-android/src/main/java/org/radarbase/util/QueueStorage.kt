@@ -121,4 +121,21 @@ interface QueueStorage : Closeable, Flushable {
         require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
         return newPosition
     }
+
+    companion object {
+        internal inline fun <T> ByteBuffer.withAvailable(
+            available: Long,
+            applyBuffer: (ByteBuffer) -> T,
+        ): T {
+            val remaining = remaining()
+            return if (remaining <= available) {
+                applyBuffer(this)
+            } else {
+                val previousLimit = limit()
+                limit(previousLimit - remaining + available.toInt())
+                applyBuffer(this)
+                    .also { limit(previousLimit) }
+            }
+        }
+    }
 }

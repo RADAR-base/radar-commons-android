@@ -20,7 +20,7 @@ data class CacheConfiguration(
     }
 
     enum class QueueFileFactory(val generator: (File, Long) -> QueueFile) {
-        MAPPED(QueueFile::newMapped), DIRECT(QueueFile::newDirect);
+        DIRECT(QueueFile::newDirect);
 
         fun generate(file: File, size: Long) = generator(file, size)
     }
