@@ -39,14 +39,14 @@ class QueueFileOutputStreamTest  {
             this[1] = 23.toByte()
             this[4] = (-54).toByte()
         }
-        assertEquals(QUEUE_HEADER_LENGTH + 5L, directQueue.read(QUEUE_HEADER_LENGTH, ByteBuffer.wrap(actualHeader)))
+        assertEquals(QUEUE_HEADER_LENGTH + 5L, directQueue.readFully(QUEUE_HEADER_LENGTH, ByteBuffer.wrap(actualHeader)))
         assertArrayEquals(expectedHeader, actualHeader)
-        assertEquals(QUEUE_HEADER_LENGTH + 5L + size, directQueue.read(QUEUE_HEADER_LENGTH + 5L, ByteBuffer.wrap(actual)))
+        assertEquals(QUEUE_HEADER_LENGTH + 5L + size, directQueue.readFully(QUEUE_HEADER_LENGTH + 5L, ByteBuffer.wrap(actual)))
         assertArrayEquals(expected, actual)
 
-        assertEquals(QUEUE_HEADER_LENGTH + 10L + size, directQueue.read(QUEUE_HEADER_LENGTH + 5L + size, ByteBuffer.wrap(actualHeader)))
+        assertEquals(QUEUE_HEADER_LENGTH + 10L + size, directQueue.readFully(QUEUE_HEADER_LENGTH + 5L + size, ByteBuffer.wrap(actualHeader)))
         assertArrayEquals(expectedHeader, actualHeader)
-        assertEquals(QUEUE_HEADER_LENGTH + 10L + 2*size, directQueue.read(QUEUE_HEADER_LENGTH + 10L + size, ByteBuffer.wrap(actual)))
+        assertEquals(QUEUE_HEADER_LENGTH + 10L + 2*size, directQueue.readFully(QUEUE_HEADER_LENGTH + 10L + size, ByteBuffer.wrap(actual)))
         assertArrayEquals(expected, actual)
     }
 }

@@ -78,7 +78,7 @@ class QueueFileOutputStream internal constructor(
 
         writeInitialHeader(count)
 
-        storagePosition = storage.write(storagePosition, ByteBuffer.wrap(bytes, offset, count))
+        storagePosition = storage.writeFully(storagePosition, ByteBuffer.wrap(bytes, offset, count))
         current.length += count
     }
 
@@ -99,7 +99,7 @@ class QueueFileOutputStream internal constructor(
         elementHeaderBuffer.putInt(count)
         elementHeaderBuffer.put(crc)
         elementHeaderBuffer.flip()
-        return storage.write(position, elementHeaderBuffer, mayIgnoreBuffer)
+        return storage.writeFully(position, elementHeaderBuffer, mayIgnoreBuffer)
     }
 
     @Throws(IOException::class)

@@ -132,13 +132,6 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         }.toLong()
     }
 
-    /** Wraps the position if it exceeds the end of the file.  */
-    override fun wrapPosition(position: Long): Long {
-        val newPosition = if (position < length) position else QUEUE_HEADER_LENGTH + position - length
-        require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
-        return newPosition
-    }
-
     /** Sets the length of the file.  */
     @Throws(IOException::class)
     override fun resize(size: Long) {

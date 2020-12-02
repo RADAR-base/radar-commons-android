@@ -16,6 +16,7 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
@@ -56,10 +57,19 @@ interface QueueStorage : Closeable, Flushable {
      * @param mayIgnoreBuffer whether the data can be written without buffering if it would require
      *                        setting up a new buffer.
      * @throws IOException if the storage is full or cannot be written to
-     * @return wrapped position after the write)
+     * @return wrapped position after the write
      */
     @Throws(IOException::class)
     fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean = false): Long
+
+    fun writeFully(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean = false): Long {
+        require(data.remaining() <= length - position.coerceAtMost(QUEUE_HEADER_LENGTH))
+        var newPosition = position
+        do {
+            newPosition = write(newPosition, data, mayIgnoreBuffer)
+        } while (data.hasRemaining())
+        return newPosition
+    }
 
     /**
      * Read data from storage medium. The position will wrap around.
@@ -70,6 +80,15 @@ interface QueueStorage : Closeable, Flushable {
      */
     @Throws(IOException::class)
     fun read(position: Long, data: ByteBuffer): Long
+
+    fun readFully(position: Long, data: ByteBuffer): Long {
+        require(data.remaining() <= length - position.coerceAtMost(QUEUE_HEADER_LENGTH))
+        var newPosition = position
+        do {
+            newPosition = read(newPosition, data)
+        } while (data.hasRemaining())
+        return newPosition
+    }
 
     /**
      * Move part of the storage to another location, overwriting any data on the previous location.
@@ -97,5 +116,9 @@ interface QueueStorage : Closeable, Flushable {
      * For a given virtual [position], get a valid location in this storage. This will wrap the
      * position if it exceeds [length].
      */
-    fun wrapPosition(position: Long): Long
+    fun wrapPosition(position: Long): Long {
+        val newPosition = if (position < length) position else QueueFileHeader.QUEUE_HEADER_LENGTH + position - length
+        require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
+        return newPosition
+    }
 }

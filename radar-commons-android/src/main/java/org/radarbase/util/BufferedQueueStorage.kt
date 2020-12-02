@@ -96,7 +96,7 @@ class BufferedQueueStorage(
             data.limit(previousLimit - numBytesExcluded)
             state.buffer.put(data)
             data.limit(previousLimit)
-            write(state.position, data)
+            state.position
         } else {
             state.buffer.put(data)
             val newPosition = state.position
@@ -110,7 +110,7 @@ class BufferedQueueStorage(
     }
 
     override fun read(position: Long, data: ByteBuffer): Long {
-        require(data.remaining() <= dataLength)
+        require(position >= 0 && position < length) { "position $position out of range [0, $length)." }
 
         val state = retrieveState()
         // Ensure that any write data is written to file and synchronized before attempting to read
@@ -126,9 +126,11 @@ class BufferedQueueStorage(
                 return storage.read(position, data)
             } else {
                 // Align buffer with filesystem block boundaries
-                val bufPosition = (position / bufferSize) * bufferSize
+                var bufPosition = (position / bufferSize) * bufferSize
                 state.initialize(bufPosition, BufferStatus.READ)
-                storage.read(bufPosition, state.buffer)
+                do {
+                    bufPosition = storage.read(bufPosition, state.buffer)
+                } while (state.buffer.position() == 0)
                 state.buffer.flip()
             }
         }
@@ -199,38 +201,18 @@ class BufferedQueueStorage(
 
         fun translateToBufferPosition(position: Long): Int {
             require(position in this) { "value $position does not fall in range [$startPosition, $limit)"}
-            return if (position >= startPosition) {
-                // direct value
-                position - startPosition
-            } else {
-                // wrap around
-                position + buffer.limit() - wrapPosition(startPosition + buffer.limit())
-            }.toInt()
+            return (position - startPosition).toInt()
         }
 
-        operator fun contains(position: Long): Boolean = contains(position, buffer.limit() - 1)
+        operator fun contains(position: Long): Boolean = position >= startPosition && position < startPosition + buffer.limit()
 
-        fun isWritable(position: Long): Boolean = contains(position, buffer.position())
-        /**
-         * Whether given position falls in the range of [startPosition] (inclusive) plus given
-         * [bufferEndPosition] (inclusive). This takes into account the wrap around in the
-         * underlying storage.
-         */
-        private fun contains(position: Long, bufferEndPosition: Int): Boolean {
-            val endPosition = startPosition + bufferEndPosition
-            val wrappedEndPosition = wrapPosition(endPosition)
-            return when {
-                position >= startPosition -> position <= endPosition
-                endPosition != wrappedEndPosition -> position >= QUEUE_HEADER_LENGTH && position <= wrappedEndPosition
-                else -> false
-            }
-        }
+        fun isWritable(position: Long): Boolean = position >= startPosition && position <= startPosition + buffer.position()
 
         fun flush() {
             if (status == BufferStatus.WRITE) {
                 status = if (buffer.position() > 0) {
                     buffer.flip()
-                    storage.write(startPosition, buffer)
+                    storage.writeFully(startPosition, buffer)
 
                     // the written buffer can directly be read from 0 to the new flipped limit
                     // (the old position).

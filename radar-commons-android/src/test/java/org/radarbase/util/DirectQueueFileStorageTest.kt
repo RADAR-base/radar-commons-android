@@ -22,8 +22,8 @@ class DirectQueueFileStorageTest {
             ThreadLocalRandom.current().nextBytes(this)
         }
         val actual = ByteArray(10)
-        assertEquals(QUEUE_HEADER_LENGTH + 10L, directQueue.write(QUEUE_HEADER_LENGTH, ByteBuffer.wrap(expected)))
-        assertEquals(QUEUE_HEADER_LENGTH + 10L, directQueue.read(QUEUE_HEADER_LENGTH, ByteBuffer.wrap(actual)))
+        assertEquals(QUEUE_HEADER_LENGTH + 10L, directQueue.writeFully(QUEUE_HEADER_LENGTH, ByteBuffer.wrap(expected)))
+        assertEquals(QUEUE_HEADER_LENGTH + 10L, directQueue.readFully(QUEUE_HEADER_LENGTH, ByteBuffer.wrap(actual)))
         assertArrayEquals(expected, actual)
     }
 
@@ -36,8 +36,8 @@ class DirectQueueFileStorageTest {
             ThreadLocalRandom.current().nextBytes(this)
         }
         val actual = ByteArray(10)
-        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.write(4090, ByteBuffer.wrap(expected)))
-        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.read(4090, ByteBuffer.wrap(actual)))
+        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.writeFully(4090, ByteBuffer.wrap(expected)))
+        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.readFully(4090, ByteBuffer.wrap(actual)))
         assertArrayEquals(expected, actual)
     }
 
@@ -50,13 +50,13 @@ class DirectQueueFileStorageTest {
             ThreadLocalRandom.current().nextBytes(this)
         }
         val actual = ByteArray(10)
-        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.write(4090, ByteBuffer.wrap(expected)))
-        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.read(4090, ByteBuffer.wrap(actual)))
+        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.writeFully(4090, ByteBuffer.wrap(expected)))
+        assertEquals(4L + QUEUE_HEADER_LENGTH, directQueue.readFully(4090, ByteBuffer.wrap(actual)))
         assertArrayEquals(expected, actual)
 
         directQueue.resize(2 * 4096)
         directQueue.move(QUEUE_HEADER_LENGTH, 4096L, 4L)
-        assertEquals(4100L, directQueue.read(4090L, ByteBuffer.wrap(actual)))
+        assertEquals(4100L, directQueue.readFully(4090L, ByteBuffer.wrap(actual)))
         assertArrayEquals(expected, actual)
     }
 }

@@ -90,7 +90,7 @@ constructor(
     @Throws(IOException::class)
     private fun read() {
         headerBuffer.rewind()
-        storage.read(0L, headerBuffer)
+        storage.readFully(0L, headerBuffer)
         headerBuffer.flip()
 
         val version = headerBuffer.int
@@ -128,7 +128,7 @@ constructor(
      */
     @Throws(IOException::class)
     fun write() {
-        storage.write(0L, headerBuffer.apply {
+        headerBuffer.apply {
             rewind()
             putInt(VERSIONED_HEADER)
             putLong(length)
@@ -139,7 +139,8 @@ constructor(
 
             // then write the byte buffer out in one go
             flip()
-        })
+        }
+        storage.writeFully(0L, headerBuffer)
         storage.flush()
     }
 

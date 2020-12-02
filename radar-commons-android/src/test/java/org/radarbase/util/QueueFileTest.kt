@@ -328,7 +328,7 @@ class QueueFileTest {
         val numRemove = random.nextInt(queue.size) + 1
         logger.info("Removing {} elements", numRemove)
         queue.remove(numRemove)
-        return generateSequence { list.removeFirst().length + ELEMENT_HEADER_LENGTH }
+        return generateSequence { (list.removeFirst().length + ELEMENT_HEADER_LENGTH).toLong() }
             .take(numRemove)
             .sum()
     }
@@ -342,18 +342,23 @@ class QueueFileTest {
         val numRead = random.nextInt(queue.size) + 1
         assertTrue(queue.size >= numRead)
         logger.info("Reading {} elements", numRead)
+        val readBuffer = ByteArray(buffer.size)
         val iterator = queue.iterator()
         repeat (numRead) { j ->
             val expectedElement = list[j]
             val `in` = iterator.next()
             try {
                 var readLength = 0
-                var newlyRead = `in`.read(buffer, 0, buffer.size)
+                var newlyRead = `in`.read(readBuffer, 0, readBuffer.size)
                 while (newlyRead != -1) {
                     readLength += newlyRead
-                    newlyRead = `in`.read(buffer, readLength, buffer.size - readLength)
+                    newlyRead = `in`.read(readBuffer, readLength, readBuffer.size - readLength)
                 }
-                assertEquals(expectedElement.length, readLength.toLong())
+                assertEquals(expectedElement.length, readLength)
+                assertArrayEquals(
+                    buffer.copyOf(expectedElement.length),
+                    readBuffer.copyOf(expectedElement.length)
+                )
             } catch (ex: Throwable) {
                 logger.error("Inputstream {} of queuefile {} does not match element {}",
                         `in`, queue, expectedElement)
@@ -372,7 +377,7 @@ class QueueFileTest {
         val lambda = lambda(buffer.size.toDouble())
         queue.elementOutputStream().use { out ->
             repeat(numAdd) {
-                val numBytes = (random.nextExponential(lambda).toInt() + 1).coerceAtMost(buffer.size).toLong()
+                val numBytes = (random.nextExponential(lambda).toInt() + 1).coerceAtMost(buffer.size)
                 if (numBytes + out.usedSize + ELEMENT_HEADER_LENGTH > size) {
                     logger.info("Not adding to full queue")
                     return@repeat
@@ -401,7 +406,7 @@ class QueueFileTest {
                 }
                 bytesUsed += next.length + ELEMENT_HEADER_LENGTH
                 list.add(next)
-                out.write(buffer, 0, numBytes.toInt())
+                out.write(buffer, 0, numBytes)
                 out.next()
             }
         }
@@ -410,7 +415,7 @@ class QueueFileTest {
 
     private fun Random.nextExponential(lambda: Double): Double = - ln(1 - nextDouble()) / lambda
 
-    data class Element constructor(var position: Long, val length: Long) {
+    data class Element constructor(var position: Long, val length: Int) {
         override fun toString(): String = "[$position, $length]"
     }
 

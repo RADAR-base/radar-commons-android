@@ -132,12 +132,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         }
 
         elementHeaderBuffer.rewind()
-        while (elementHeaderBuffer.hasRemaining()) {
-            storage.read(
-                storage.wrapPosition(position + elementHeaderBuffer.position()),
-                elementHeaderBuffer,
-            )
-        }
+        storage.readFully(position, elementHeaderBuffer)
         elementHeaderBuffer.flip()
 
         elementToUpdate.position = position

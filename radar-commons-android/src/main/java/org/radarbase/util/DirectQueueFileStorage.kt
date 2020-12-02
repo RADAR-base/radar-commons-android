@@ -21,7 +21,6 @@ import java.io.EOFException
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
-import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 
@@ -97,44 +96,21 @@ class DirectQueueFileStorage(
     @Throws(IOException::class)
     override fun read(position: Long, data: ByteBuffer): Long {
         requireNotClosed()
+        require(position >= 0 && position < length) { "position out of range [0, $length)." }
+        channel.position(position)
+
         val count = data.remaining()
-        require(count <= length - position.coerceAtMost(QUEUE_HEADER_LENGTH)) {
-            "buffer count ${data.remaining()} exceeds storage length $length"
-        }
-
-        val wrappedPosition = wrapPosition(position)
-        channel.position(wrappedPosition)
-        return if (wrappedPosition + count <= length) {
+        val available = length - position
+        val numRead = if (count > available) {
+            val previousLimit = data.limit()
+            data.limit(previousLimit - count + available.toInt())
             channel.read(data)
-            wrapPosition(wrappedPosition + count.toLong())
+                .also { data.limit(previousLimit) }
         } else {
-            // The read overlaps the EOF.
-            // # of bytes to read before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
-            val firstPart = (length - wrappedPosition).toInt()
-            readFully(data, firstPart)
-            channel.position(QUEUE_HEADER_LENGTH)
-            readFully(data, count - firstPart)
-            QUEUE_HEADER_LENGTH + count - firstPart
+            channel.read(data)
         }
-    }
-
-    @Throws(IOException::class)
-    private fun readFully(buffer: ByteBuffer, count: Int) {
-        var n = 0
-        while (n < count) {
-            val numRead = channel.read(buffer).toLong()
-            if (numRead == -1L) throw EOFException()
-            n += numRead.toInt()
-        }
-    }
-
-    /** Wraps the position if it exceeds the end of the file.  */
-    override fun wrapPosition(position: Long): Long {
-        val newPosition = if (position < length) position else QUEUE_HEADER_LENGTH + position - length
-        require(newPosition < length && position >= 0) {
-            "Position $position invalid outside of storage length $length"
-        }
-        return newPosition
+        if (numRead == -1) throw EOFException()
+        return wrapPosition(position + numRead)
     }
 
     /** Sets the length of the file.  */
@@ -164,44 +140,22 @@ class DirectQueueFileStorage(
     @Throws(IOException::class)
     override fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean): Long {
         requireNotClosed()
-        val count = data.remaining()
-        require(count + QUEUE_HEADER_LENGTH <= length) {
-            "buffer count ${data.remaining()} exceeds storage length $length"
-        }
-        val wrappedPosition = wrapPosition(position)
-        channel.position(wrappedPosition)
-        val linearPart = (length - wrappedPosition).toInt()
-        return if (linearPart >= count) {
-            writeFully(data, count)
-            wrapPosition(wrappedPosition + count.toLong())
-        } else {
-            // The write overlaps the EOF.
-            // # of bytes to write before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
-            if (linearPart > 0) {
-                writeFully(data, linearPart)
-            }
-            channel.position(QUEUE_HEADER_LENGTH)
-            writeFully(data, count - linearPart)
-            QUEUE_HEADER_LENGTH + count - linearPart
-        }
-    }
+        require(position >= 0 && position < length) { "position out of range [0, $length)." }
 
-    @Throws(IOException::class)
-    private fun writeFully(buffer: ByteBuffer, count: Int) {
-        var n = 0
-        if (buffer.remaining() < count) {
-            throw BufferUnderflowException()
+        val count = data.remaining()
+        val available = length - position
+        channel.position(position)
+
+        val numWritten = if (available >= count) {
+            channel.write(data)
+        } else {
+            val previousLimit = data.limit()
+            data.limit(previousLimit - count + available.toInt())
+            channel.write(data)
+                .also { data.limit(previousLimit) }
         }
-        val oldLimit = buffer.limit()
-        if (buffer.remaining() > count) {
-            buffer.limit(buffer.position() + count)
-        }
-        while (n < count) {
-            val numWritten = channel.write(buffer)
-            if (numWritten == -1) throw EOFException()
-            n += numWritten
-        }
-        buffer.limit(oldLimit)
+        if (numWritten == -1) throw EOFException()
+        return wrapPosition(position + numWritten)
     }
 
     @Throws(IOException::class)
