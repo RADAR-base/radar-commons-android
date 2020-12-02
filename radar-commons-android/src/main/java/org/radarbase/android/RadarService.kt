@@ -655,6 +655,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
         val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
             PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
+        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 
         @Suppress("UNCHECKED_CAST")
         private inline fun <reified T, U> Context.applySystemService(type: String, callback: (T) -> U): U? {
