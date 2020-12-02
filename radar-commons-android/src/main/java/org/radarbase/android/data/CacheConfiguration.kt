@@ -2,7 +2,6 @@ package org.radarbase.android.data
 
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.config.SingleRadarConfiguration
-import org.radarbase.util.MappedQueueFileStorage
 import org.radarbase.util.QueueFile
 import java.io.File
 

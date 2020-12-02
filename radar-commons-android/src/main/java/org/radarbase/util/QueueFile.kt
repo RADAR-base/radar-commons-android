@@ -506,15 +506,6 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
         private val logger = LoggerFactory.getLogger(QueueFile::class.java)
 
         @Throws(IOException::class)
-        fun newMapped(file: File, maxSize: Long): QueueFile {
-            return QueueFile(
-                BufferedQueueStorage(
-                    MappedQueueFileStorage(file, MappedQueueFileStorage.MINIMUM_LENGTH, maxSize)
-                )
-            )
-        }
-
-        @Throws(IOException::class)
         fun newDirect(file: File, maxSize: Long): QueueFile {
             return QueueFile(
                 BufferedQueueStorage(

@@ -103,17 +103,6 @@ public class BackedObjectQueueTest {
             assertArrayEquals(data, ((ByteBuffer) result.value.get("data")).array());
         }
     }
-
-    @Test
-    public void testMultipleMappedRegularObject() throws IOException {
-        testMultipleRegularObject(f -> {
-            try {
-                return QueueFile.Companion.newMapped(f, 10000);
-            } catch (IOException e) {
-                throw new AssertionError(e);
-            }
-        });
-    }
     @Test
     public void testMultipleDirectRegularObject() throws IOException {
         testMultipleRegularObject(f -> {
