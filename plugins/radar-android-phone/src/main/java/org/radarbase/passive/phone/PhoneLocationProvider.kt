@@ -41,18 +41,10 @@ open class PhoneLocationProvider(radarService: RadarService) : SourceProvider<Ba
     override val displayName: String
         get() = radarService.getString(R.string.phoneLocationServiceDisplayName)
 
-    override val permissionsNeeded: List<String> = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-        listOf(
-                ACCESS_COARSE_LOCATION,
-                ACCESS_FINE_LOCATION,
-                ACCESS_BACKGROUND_LOCATION,
-        )
-    } else {
-        listOf(
-                ACCESS_COARSE_LOCATION,
-                ACCESS_FINE_LOCATION,
-        )
-    }
+    override val permissionsNeeded: List<String> = listOf(
+        ACCESS_COARSE_LOCATION,
+        ACCESS_FINE_LOCATION,
+    )
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_LOCATION)
 

@@ -37,20 +37,11 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
 
     override val hasDetailView: Boolean = true
 
-    override val permissionsNeeded: List<String> = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-        listOf(
-                ACCESS_COARSE_LOCATION,
-                BLUETOOTH,
-                BLUETOOTH_ADMIN,
-                ACCESS_BACKGROUND_LOCATION,
-        )
-    } else {
-        listOf(
-                ACCESS_COARSE_LOCATION,
-                BLUETOOTH,
-                BLUETOOTH_ADMIN,
-        )
-    }
+    override val permissionsNeeded: List<String> = listOf(
+        ACCESS_COARSE_LOCATION,
+        BLUETOOTH,
+        BLUETOOTH_ADMIN,
+    )
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)
 

@@ -31,20 +31,11 @@ open class E4Provider(radarService: RadarService) : SourceProvider<E4State>(rada
             "org.radarbase.passive.empatica.E4Provider",
             "org.radarcns.empatica.E4ServiceProvider")
 
-    override val permissionsNeeded = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-        listOf(
-                ACCESS_COARSE_LOCATION,
-                BLUETOOTH,
-                BLUETOOTH_ADMIN,
-                ACCESS_BACKGROUND_LOCATION,
-        )
-    } else {
-        listOf(
-                ACCESS_COARSE_LOCATION,
-                BLUETOOTH,
-                BLUETOOTH_ADMIN,
-        )
-    }
+    override val permissionsNeeded = listOf(
+        ACCESS_COARSE_LOCATION,
+        BLUETOOTH,
+        BLUETOOTH_ADMIN,
+    )
 
     override val featuresNeeded = listOf(PackageManager.FEATURE_BLUETOOTH, PackageManager.FEATURE_BLUETOOTH_LE)
 
