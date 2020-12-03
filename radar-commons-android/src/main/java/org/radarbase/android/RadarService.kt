@@ -304,6 +304,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 needsPermissions -= grantedPermissions
                 startScanning()
             }
+            checkPermissions()
         }
     }
 
