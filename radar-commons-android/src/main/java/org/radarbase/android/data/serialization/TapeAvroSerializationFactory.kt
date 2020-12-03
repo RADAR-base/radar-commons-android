@@ -31,4 +31,6 @@ class TapeAvroSerializationFactory: SerializationFactory {
     override fun <K : Any, V : Any> createSerializer(
             topic: AvroTopic<K, V>
     ) = TapeAvroSerializer(topic, specificData)
+
+    override fun toString() = "TapeAvroSerialization"
 }
