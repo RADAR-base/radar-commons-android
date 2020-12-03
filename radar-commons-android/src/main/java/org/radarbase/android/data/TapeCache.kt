@@ -60,6 +60,7 @@ constructor(override val file: File,
 
     private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
+    private val queueFileFactory = config.queueFileType
 
     private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
 
@@ -78,11 +79,11 @@ constructor(override val file: File,
 
     init {
         queueFile = try {
-            QueueFile.newMapped(Objects.requireNonNull(file), maximumSize)
+            queueFileFactory.generate(Objects.requireNonNull(file), maximumSize)
         } catch (ex: IOException) {
             logger.error("TapeCache {} was corrupted. Removing old cache.", file, ex)
             if (file.delete()) {
-                QueueFile.newMapped(file, maximumSize)
+                queueFileFactory.generate(file, maximumSize)
             } else {
                 throw ex
             }
@@ -137,7 +138,7 @@ constructor(override val file: File,
                     ?: records.size
 
             if (nullSize > 0) {
-                queue.remove(nullSize)
+                queue -= nullSize
                 records = records.subList(nullSize, records.size)
             }
             currentKey = records.firstOrNull()?.key
@@ -167,7 +168,7 @@ constructor(override val file: File,
             val actualNumber = number.coerceAtMost(queue.size)
             if (actualNumber > 0) {
                 logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
-                queue.remove(actualNumber)
+                queue -= actualNumber
             }
         }
     }
@@ -215,7 +216,7 @@ constructor(override val file: File,
         }
         try {
             logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
-            queue.addAll(measurementsToAdd)
+            queue += measurementsToAdd
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
             throw RuntimeException(ex)
@@ -227,7 +228,7 @@ constructor(override val file: File,
                 logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
                 for (record in measurementsToAdd) {
                     try {
-                        queue.add(record)
+                        queue += record
                     } catch (ex2: IllegalArgumentException) {
                         logger.error("Failed to write individual record {}", record, ex)
                     }
@@ -253,7 +254,7 @@ constructor(override val file: File,
         }
 
         if (file.delete()) {
-            queueFile = QueueFile.newMapped(file, maximumSize)
+            queueFile = queueFileFactory.generate(file, maximumSize)
             queue = BackedObjectQueue(queueFile, serializer, deserializer)
         } else {
             throw IOException("Cannot create new cache.")

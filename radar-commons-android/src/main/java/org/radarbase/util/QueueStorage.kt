@@ -16,9 +16,11 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
+import java.nio.ByteBuffer
 
 /**
  * Storage for a queue. Data in the queue must be written contiguously starting at position 0. The
@@ -27,6 +29,11 @@ import java.io.IOException
  */
 
 interface QueueStorage : Closeable, Flushable {
+    /**
+     * Current size of the storage.
+     * @return size in bytes
+     */
+    val length: Long
 
     /** Minimum size of the storage in bytes.  */
     val minimumLength: Long
@@ -40,44 +47,54 @@ interface QueueStorage : Closeable, Flushable {
     /** Whether the close function was called.  */
     val isClosed: Boolean
 
+    /** Whether underlying file existed when the current queue storage was created.  */
+    val isPreExisting: Boolean
+
     /**
      * Write data to storage medium. The position will wrap around.
      * @param position position to write to
-     * @param buffer buffer to write
-     * @param offset offset in buffer to write
-     * @param count number of bytes to write
-     * @throws IndexOutOfBoundsException if `position < 0`,
-     * `offset < 0`, `count < 0`,
-     * `offset + count > buffer.length`, or
-     * `count > file size - QueueFileHeader.ELEMENT_HEADER_LENGTH`
+     * @param data buffer to write
+     * @param mayIgnoreBuffer whether the data can be written without buffering if it would require
+     *                        setting up a new buffer.
      * @throws IOException if the storage is full or cannot be written to
-     * @return wrapped position after the write)
+     * @return wrapped position after the write
      */
     @Throws(IOException::class)
-    fun write(position: Long, buffer: ByteArray, offset: Int, count: Int): Long
+    fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean = false): Long
+
+    fun writeFully(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean = false): Long {
+        require(data.remaining() <= length - position.coerceAtMost(QUEUE_HEADER_LENGTH))
+        var newPosition = position
+        do {
+            newPosition = write(newPosition, data, mayIgnoreBuffer)
+        } while (data.hasRemaining())
+        return newPosition
+    }
 
     /**
      * Read data from storage medium. The position will wrap around.
      * @param position position read from
-     * @param buffer buffer to read data into
-     * @param offset offset in buffer read data to
-     * @param count number of bytes to read
-     * @throws IndexOutOfBoundsException if `position < QueueFileHeader.ELEMENT_HEADER_LENGTH`,
-     * `offset < 0`, `count < 0`, or
-     * `offset + count > buffer.length`
+     * @param data buffer to read data into
      * @throws IOException if the storage cannot be read.
      * @return wrapped position after the read
      */
     @Throws(IOException::class)
-    fun read(position: Long, buffer: ByteArray, offset: Int, count: Int): Long
+    fun read(position: Long, data: ByteBuffer): Long
+
+    fun readFully(position: Long, data: ByteBuffer): Long {
+        require(data.remaining() <= length - position.coerceAtMost(QUEUE_HEADER_LENGTH))
+        var newPosition = position
+        do {
+            newPosition = read(newPosition, data)
+        } while (data.hasRemaining())
+        return newPosition
+    }
 
     /**
      * Move part of the storage to another location, overwriting any data on the previous location.
      *
-     * @throws IllegalArgumentException if `srcPosition < QueueFileHeader.ELEMENT_HEADER_LENGTH`,
-     * `dstPosition < QueueFileHeader.ELEMENT_HEADER_LENGTH`,
-     * `count <= 0`, `srcPosition + count > size`
-     * or `dstPosition + count > size`
+     * @throws IllegalArgumentException if `srcPosition < QueueFileHeader.QUEUE_HEADER_LENGTH` or
+     * `dstPosition < QueueFileHeader.QUEUE_HEADER_LENGTH`
      */
     @Throws(IOException::class)
     fun move(srcPosition: Long, dstPosition: Long, count: Long)
@@ -88,7 +105,7 @@ interface QueueStorage : Closeable, Flushable {
      * it contiguously from previously written data.
      *
      * @param size new size in bytes.
-     * @throws IllegalArgumentException if `size < QueueFileHeader.ELEMENT_HEADER_LENGTH` or
+     * @throws IllegalArgumentException if `size < QueueFileHeader.QUEUE_HEADER_LENGTH` or
      * if the size is increased and `size > #getMaximumSize()`.
      * @throws IOException if the storage could not be resized
      */
@@ -96,11 +113,29 @@ interface QueueStorage : Closeable, Flushable {
     fun resize(size: Long)
 
     /**
-     * Current size of the storage.
-     * @return size in bytes
+     * For a given virtual [position], get a valid location in this storage. This will wrap the
+     * position if it exceeds [length].
      */
-    val length: Long
+    fun wrapPosition(position: Long): Long {
+        val newPosition = if (position < length) position else QueueFileHeader.QUEUE_HEADER_LENGTH + position - length
+        require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
+        return newPosition
+    }
 
-    /** Whether underlying file existed when the current object was created.  */
-    val isPreExisting: Boolean
+    companion object {
+        internal inline fun <T> ByteBuffer.withAvailable(
+            available: Long,
+            applyBuffer: (ByteBuffer) -> T,
+        ): T {
+            val remaining = remaining()
+            return if (remaining <= available) {
+                applyBuffer(this)
+            } else {
+                val previousLimit = limit()
+                limit(previousLimit - remaining + available.toInt())
+                applyBuffer(this)
+                    .also { limit(previousLimit) }
+            }
+        }
+    }
 }

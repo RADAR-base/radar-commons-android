@@ -16,6 +16,8 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
+
 /**
  * A pointer to an element. It contains a starting position and length of the data that the element
  * contains.
@@ -30,13 +32,16 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
             field = value
         }
 
+    private val elementLength: Int
+        get() = length + ELEMENT_HEADER_LENGTH
+
     /**
      * Get the length in bytes, excluding the header. If this is 0, the element is not valid
      * for reading or writing.
      */
     var length: Int = length
         set(value) {
-            require(value >= 0) { "length < 0" }
+            require(value >= 0) { "length < 0 at position $position" }
             field = value
         }
 
@@ -57,11 +62,7 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
 
     /** Position of the next element.  */
     val nextPosition: Long
-        get() = if (isEmpty) {
-            QueueFileHeader.QUEUE_HEADER_LENGTH.toLong()
-        } else {
-            position + ELEMENT_HEADER_LENGTH + length
-        }
+        get() = if (isEmpty) QUEUE_HEADER_LENGTH else position + elementLength
 
     /** Update element values to the given element.  */
     fun update(element: QueueFileElement) {
@@ -74,7 +75,10 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
      * position and length and from the file length.
      */
     fun updateIfMoved(previousElement: QueueFileElement, header: QueueFileHeader) {
-        if (position < previousElement.position && previousElement.nextPosition < header.length) {
+        if (
+            position < previousElement.position
+            && previousElement.nextPosition < header.length
+        ) {
             position = previousElement.nextPosition
         }
     }
@@ -93,13 +97,9 @@ class QueueFileElement(position: Long = 0L, length: Int = 0) {
         return position == otherElement.position && length == otherElement.length
     }
 
-    override fun hashCode(): Int {
-        return 31 * (position shr 32 xor position).toInt() + length
-    }
+    override fun hashCode(): Int = 31 * (position shr 32 xor position).toInt() + length
 
-    override fun toString(): String {
-        return "QueueFileElement[position=$position, length=$length]"
-    }
+    override fun toString() = "QueueFileElement[position=$position, length=$length]"
 
     companion object {
         /** Length of element header in bytes.  */

@@ -16,16 +16,18 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
+import org.radarbase.util.QueueStorage.Companion.withAvailable
+import org.slf4j.LoggerFactory
+import java.io.EOFException
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
-import java.nio.MappedByteBuffer
+import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 
 /**
  * A storage backend for a QueueFile
- * @author Joris Borgdorff (joris@thehyve.nl)
- *
  * @param file file to use
  * @param initialLength initial length if the file does not exist.
  * @param maximumLength maximum length that the file may have.
@@ -35,7 +37,11 @@ import java.nio.channels.FileChannel
  * @throws IOException if the file could not be accessed or was smaller than
  *                     `QueueFileHeader.ELEMENT_HEADER_LENGTH`
  */
-class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Long) : QueueStorage {
+class DirectQueueFileStorage(
+        file: File,
+        initialLength: Long,
+        maximumLength: Long,
+) : QueueStorage {
     /**
      * The underlying file. Uses a ring buffer to store entries.
      * <pre>
@@ -50,7 +56,6 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
     /** Filename, for toString purposes  */
     private val fileName: String = file.name
 
-    private var byteBuffer: MappedByteBuffer
     override var isClosed: Boolean = false
         private set
 
@@ -79,8 +84,8 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         length = if (isPreExisting) {
             // Read header from file
             val currentLength = randomAccessFile.length()
-            if (currentLength < QueueFileHeader.QUEUE_HEADER_LENGTH) {
-                throw IOException("File length " + length + " is smaller than queue header length " + QueueFileHeader.QUEUE_HEADER_LENGTH)
+            if (currentLength < QUEUE_HEADER_LENGTH) {
+                throw IOException("File length $length is smaller than queue header length $QUEUE_HEADER_LENGTH")
             }
             currentLength
         } else {
@@ -88,35 +93,20 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
             initialLength
         }
         channel = randomAccessFile.channel
-        byteBuffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, length)
-        byteBuffer.clear()
     }
 
     @Throws(IOException::class)
-    override fun read(position: Long, buffer: ByteArray, offset: Int, count: Int): Long {
+    override fun read(position: Long, data: ByteBuffer): Long {
         requireNotClosed()
-        checkOffsetAndCount(buffer, offset, count)
-        val wrappedPosition = wrapPosition(position)
-        byteBuffer.position(wrappedPosition)
-        return if (position + count <= length) {
-            byteBuffer.get(buffer, offset, count)
-            wrapPosition((wrappedPosition + count).toLong()).toLong()
-        } else {
-            // The read overlaps the EOF.
-            // # of bytes to read before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
-            val firstPart = (length - wrappedPosition).toInt()
-            byteBuffer.get(buffer, offset, firstPart)
-            byteBuffer.position(QueueFileHeader.QUEUE_HEADER_LENGTH)
-            byteBuffer.get(buffer, offset + firstPart, count - firstPart)
-            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - firstPart).toLong()
-        }
-    }
+        require(position >= 0 && position < length) { "position out of range [0, $length)." }
 
-    /** Wraps the position if it exceeds the end of the file.  */
-    private fun wrapPosition(position: Long): Int {
-        val newPosition = if (position < length) position else QueueFileHeader.QUEUE_HEADER_LENGTH + position - length
-        require(newPosition < length && position >= 0) { "Position $position invalid outside of storage length $length" }
-        return newPosition.toInt()
+        channel.position(position)
+        val numRead = data.withAvailable(length - position) {
+            channel.read(it)
+        }
+
+        if (numRead == -1) throw EOFException()
+        return wrapPosition(position + numRead)
     }
 
     /** Sets the length of the file.  */
@@ -126,44 +116,34 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         if (size == length) {
             return
         }
-        require(!(size > length && size > maximumLength)) {
+        require(size <= length || size <= maximumLength) {
             "New length $size exceeds maximum length $maximumLength"
         }
-        require(size >= MINIMUM_LENGTH) {
-            "New length $size is less than minimum length ${QueueFileHeader.QUEUE_HEADER_LENGTH}"
+        require(size >= minimumLength) {
+            "New length $size is less than minimum length $QUEUE_HEADER_LENGTH"
         }
         flush()
         randomAccessFile.setLength(size)
         channel.force(true)
-        byteBuffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, size)
         length = size
     }
 
+    @Throws(IOException::class)
     override fun flush() {
-        byteBuffer.force()
+        channel.force(false)
     }
 
     @Throws(IOException::class)
-    override fun write(position: Long, buffer: ByteArray, offset: Int, count: Int): Long {
+    override fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean): Long {
         requireNotClosed()
-        checkOffsetAndCount(buffer, offset, count)
-        val wrappedPosition = wrapPosition(position)
+        require(position >= 0 && position < length) { "position out of range [0, $length)." }
 
-        byteBuffer.position(wrappedPosition)
-        val linearPart = (length - wrappedPosition).toInt()
-        return if (linearPart >= count) {
-            byteBuffer.put(buffer, offset, count)
-            wrapPosition((wrappedPosition + count).toLong()).toLong()
-        } else {
-            // The write overlaps the EOF.
-            // # of bytes to write before the EOF. Guaranteed to be less than Integer.MAX_VALUE.
-            if (linearPart > 0) {
-                byteBuffer.put(buffer, offset, linearPart)
-            }
-            byteBuffer.position(QueueFileHeader.QUEUE_HEADER_LENGTH)
-            byteBuffer.put(buffer, offset + linearPart, count - linearPart)
-            (QueueFileHeader.QUEUE_HEADER_LENGTH + count - linearPart).toLong()
+        channel.position(position)
+        val numWritten = data.withAvailable(length - position) {
+            channel.write(it)
         }
+        if (numWritten == -1) throw EOFException()
+        return wrapPosition(position + numWritten)
     }
 
     @Throws(IOException::class)
@@ -178,7 +158,6 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         }
         flush()
         channel.position(dstPosition)
-
         if (channel.transferTo(srcPosition, count, channel) != count) {
             throw IOException("Cannot move all data")
         }
@@ -186,9 +165,7 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
 
     @Throws(IOException::class)
     private fun requireNotClosed() {
-        if (isClosed) {
-            throw IOException("closed")
-        }
+        if (isClosed) throw IOException("closed")
     }
 
     @Throws(IOException::class)
@@ -198,28 +175,11 @@ class MappedQueueFileStorage(file: File, initialLength: Long, maximumLength: Lon
         randomAccessFile.close()
     }
 
-    override fun toString(): String {
-        return "MappedQueueFileStorage<$fileName>[length=$length]"
-    }
-
-    private fun checkOffsetAndCount(bytes: ByteArray, offset: Int, count: Int) {
-        if (offset < 0) {
-            throw IndexOutOfBoundsException("offset < 0")
-        }
-        if (count < 0) {
-            throw IndexOutOfBoundsException("count < 0")
-        }
-        require(count + QueueFileHeader.QUEUE_HEADER_LENGTH <= length) {
-            "buffer count $count exceeds storage length $length"
-        }
-        if (offset + count > bytes.size) {
-            throw IndexOutOfBoundsException(
-                    "extent of offset and length larger than buffer length")
-        }
-    }
+    override fun toString() = "DirectQueueFileStorage<$fileName>[length=$length]"
 
     companion object {
         /** Initial file size in bytes.  */
         const val MINIMUM_LENGTH = 4096L // one file system block
+        private val logger = LoggerFactory.getLogger(DirectQueueFileStorage::class.java)
     }
 }

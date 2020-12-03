@@ -30,7 +30,10 @@ import org.radarcns.passive.phone.PhoneLight;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
+import java.util.function.Function;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -54,7 +57,17 @@ public class BackedObjectQueueTest {
     }
 
     @Test
-    public void testBinaryObject() throws IOException {
+    public void testDirectBinaryObject() throws IOException {
+        testBinaryObject(f -> {
+            try {
+                return QueueFile.Companion.newDirect(f, 450000000);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        });
+    }
+
+    private void testBinaryObject(Function<File, QueueFile> queueFileSupplier) throws IOException {
         File file = folder.newFile();
         Random random = new Random();
         byte[] data = new byte[176482];
@@ -70,7 +83,7 @@ public class BackedObjectQueueTest {
                 GenericRecord.class, GenericRecord.class);
 
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
-                QueueFile.Companion.newMapped(file, 450000000),
+                queueFileSupplier.apply(file),
                 serialization.createSerializer(topic),
                 serialization.createDeserializer(outputTopic))) {
 
@@ -82,7 +95,7 @@ public class BackedObjectQueueTest {
             assertEquals(1, queue.getSize());
         }
         try (BackedObjectQueue<Record<ObservationKey, ActiveAudioRecording>, Record<GenericRecord, GenericRecord>> queue = new BackedObjectQueue<>(
-                QueueFile.Companion.newMapped(file, 450000000),
+                queueFileSupplier.apply(file),
                 serialization.createSerializer(topic),
                 serialization.createDeserializer(outputTopic))) {
             Record<GenericRecord, GenericRecord> result = queue.peek();
@@ -90,9 +103,18 @@ public class BackedObjectQueueTest {
             assertArrayEquals(data, ((ByteBuffer) result.value.get("data")).array());
         }
     }
-
     @Test
-    public void testRegularObject() throws IOException {
+    public void testMultipleDirectRegularObject() throws IOException {
+        testMultipleRegularObject(f -> {
+            try {
+                return QueueFile.Companion.newDirect(f, 10000);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        });
+    }
+
+    private void testMultipleRegularObject(Function<File, QueueFile> queueFileSupplier) throws IOException {
         File file = folder.newFile();
         assertTrue(file.delete());
         AvroTopic<ObservationKey, ObservationKey> topic = new AvroTopic<>("test",
@@ -104,7 +126,55 @@ public class BackedObjectQueueTest {
 
         BackedObjectQueue<Record<ObservationKey, ObservationKey>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.Companion.newMapped(file, 10000),
+                queueFileSupplier.apply(file),
+                serialization.createSerializer(topic),
+                serialization.createDeserializer(outputTopic));
+
+        List<Record<ObservationKey, ObservationKey>> records = new ArrayList<>(100);
+
+        for (int i = 0; i < 100; i++) {
+            records.add(new Record<>(
+                    new ObservationKey("test", "a", "b"),
+                    new ObservationKey("test", "c", "d" + i)));
+        }
+        queue.addAll(records);
+        assertEquals(100, queue.getSize());
+        List<Record<GenericRecord, GenericRecord>> resultRecords = queue.peek(2, 1000000L);
+        assertEquals(2, resultRecords.size());
+        resultRecords = queue.peek(100, 1000000L);
+        assertEquals(100, resultRecords.size());
+        for (int i = 0; i < resultRecords.size(); i++) {
+            Record<GenericRecord, GenericRecord> result = resultRecords.get(i);
+            assertNotNull(result);
+            assertEquals("a", result.key.get("userId"));
+            assertEquals("d" + i, result.value.get("sourceId"));
+        }
+    }
+
+    @Test
+    public void testDirectRegularObject() throws IOException {
+        testRegularObject(f -> {
+            try {
+                return QueueFile.Companion.newDirect(f, 10000);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        });
+    }
+
+    private void testRegularObject(Function<File, QueueFile> queueFileSupplier) throws IOException {
+        File file = folder.newFile();
+        assertTrue(file.delete());
+        AvroTopic<ObservationKey, ObservationKey> topic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
+                ObservationKey.class, ObservationKey.class);
+        AvroTopic<GenericRecord, GenericRecord> outputTopic = new AvroTopic<>("test",
+                ObservationKey.getClassSchema(), ObservationKey.getClassSchema(),
+                GenericRecord.class, GenericRecord.class);
+
+        BackedObjectQueue<Record<ObservationKey, ObservationKey>, Record<GenericRecord, GenericRecord>> queue;
+        queue = new BackedObjectQueue<>(
+                queueFileSupplier.apply(file),
                 serialization.createSerializer(topic),
                 serialization.createDeserializer(outputTopic));
 
@@ -118,7 +188,28 @@ public class BackedObjectQueueTest {
     }
 
     @Test
-    public void testFloatObject() throws IOException {
+    public void testByteBuffer() {
+        byte[] expected = new byte[4];
+        Serialization.intToBytes(0x01020304, expected, 0);
+
+        byte[] actual = new byte[4];
+        ByteBuffer buffer = ByteBuffer.wrap(actual);
+        buffer.putInt(0x01020304);
+        assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void testDirectFloatObject() throws IOException {
+        testFloatObject(f -> {
+            try {
+                return QueueFile.Companion.newDirect(f, 10000);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        });
+    }
+
+    private void testFloatObject(Function<File, QueueFile> queueFileSupplier) throws IOException {
         File file = folder.newFile();
         assertTrue(file.delete());
         AvroTopic<ObservationKey, PhoneLight> topic = new AvroTopic<>("test",
@@ -132,7 +223,7 @@ public class BackedObjectQueueTest {
 
         BackedObjectQueue<Record<ObservationKey, PhoneLight>, Record<GenericRecord, GenericRecord>> queue;
         queue = new BackedObjectQueue<>(
-                QueueFile.Companion.newMapped(file, 10000),
+                queueFileSupplier.apply(file),
                 serialization.createSerializer(topic),
                 serialization.createDeserializer(outputTopic));
 
