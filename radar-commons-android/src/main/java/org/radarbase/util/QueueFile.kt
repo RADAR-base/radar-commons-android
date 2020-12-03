@@ -23,7 +23,6 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -102,7 +101,6 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
     private val modCount = AtomicInteger(0)
 
     private val elementHeaderBuffer = ByteBuffer.allocate(QueueFileElement.ELEMENT_HEADER_LENGTH)
-            .order(ByteOrder.LITTLE_ENDIAN)
 
     /** Returns true if this queue contains no entries.  */
     val isEmpty: Boolean

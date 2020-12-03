@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.OutputStream
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * An OutputStream that can write multiple elements. After finished writing one element, call
@@ -62,7 +61,6 @@ class QueueFileOutputStream internal constructor(
 
     /** Buffer to write an element header to. */
     private val elementHeaderBuffer = ByteBuffer.allocate(ELEMENT_HEADER_LENGTH)
-            .order(ByteOrder.LITTLE_ENDIAN)
 
     @Throws(IOException::class)
     override fun write(byteValue: Int) {

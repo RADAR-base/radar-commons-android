@@ -172,6 +172,8 @@ class BufferedQueueStorage(
         storage.flush()
     }
 
+    override fun toString() = "BufferedQueueStorage[storage=$storage,bufferSize=${retrieveState().buffer.remaining()}]"
+
     private inner class BufferState(
         val buffer: ByteBuffer,
         var startPosition: Long,

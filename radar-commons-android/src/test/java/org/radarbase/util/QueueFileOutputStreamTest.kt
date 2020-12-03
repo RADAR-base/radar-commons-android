@@ -35,8 +35,8 @@ class QueueFileOutputStreamTest  {
         }
         val actualHeader = ByteArray(5)
         val expectedHeader = ByteArray(5).apply {
-            this[0] = 112.toByte()
-            this[1] = 23.toByte()
+            this[2] = 23.toByte()
+            this[3] = 112.toByte()
             this[4] = (-54).toByte()
         }
         assertEquals(QUEUE_HEADER_LENGTH + 5L, directQueue.readFully(QUEUE_HEADER_LENGTH, ByteBuffer.wrap(actualHeader)))

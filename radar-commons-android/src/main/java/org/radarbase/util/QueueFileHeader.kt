@@ -18,7 +18,6 @@ package org.radarbase.util
 
 import java.io.IOException
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * Header for a [QueueFile].
@@ -41,7 +40,6 @@ constructor(
 
     /** Buffer to read and store the header with.  */
     private val headerBuffer = ByteBuffer.allocate(QUEUE_HEADER_LENGTH.toInt())
-            .order(ByteOrder.LITTLE_ENDIAN)
 
     /**
      * Cached file length. Always a power of 2.

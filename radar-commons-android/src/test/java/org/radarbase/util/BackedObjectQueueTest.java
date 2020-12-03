@@ -188,6 +188,17 @@ public class BackedObjectQueueTest {
     }
 
     @Test
+    public void testByteBuffer() {
+        byte[] expected = new byte[4];
+        Serialization.intToBytes(0x01020304, expected, 0);
+
+        byte[] actual = new byte[4];
+        ByteBuffer buffer = ByteBuffer.wrap(actual);
+        buffer.putInt(0x01020304);
+        assertArrayEquals(expected, actual);
+    }
+
+    @Test
     public void testDirectFloatObject() throws IOException {
         testFloatObject(f -> {
             try {
