@@ -52,17 +52,17 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     init {
         name = service.getString(R.string.phoneUsageServiceDisplayName)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-            this.usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager?
+        this.usageStatsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
         } else {
-            this.usageStatsManager = null
+            null
         }
 
-        if (usageStatsManager != null) {
-            usageEventTopic = createCache("android_phone_usage_event", PhoneUsageEvent())
+        usageEventTopic = if (usageStatsManager != null) {
+            createCache("android_phone_usage_event", PhoneUsageEvent())
         } else {
             logger.warn("Usage statistics are not available.")
-            usageEventTopic = null
+            null
         }
         this.preferences = context.getSharedPreferences(PhoneUsageService::class.java.name, Context.MODE_PRIVATE)
         this.loadLastEvent()
@@ -74,12 +74,10 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
                 if (preferences.getString(LAST_USER_INTERACTION, "") == Intent.ACTION_SHUTDOWN) {
                     sendInteractionState(ACTION_BOOT)
                 }
+                intent ?: return
+                val action = intent.action ?: return
 
-                if (intent == null || intent.action == null) {
-                    return
-                }
-
-                sendInteractionState(intent.action!!)
+                sendInteractionState(action)
             }
         }
 
@@ -137,9 +135,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     }
 
     private fun processUsageEvents() {
-        if (usageStatsManager == null) {
-            return
-        }
+        usageStatsManager ?: return
 
         // Get events from previous event to now or from a fixed history
         val usageEvents = usageStatsManager.queryEvents(lastTimestamp, System.currentTimeMillis())
