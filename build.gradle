@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 buildscript {
-    ext.kotlin_version = '1.4.20'
+    ext.kotlin_version = '1.4.21'
     repositories {
         google()
         jcenter()
@@ -38,10 +38,10 @@ allprojects {
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = '1.0.5'
+    version = '1.0.6'
     group = 'org.radarbase'
 
-    ext.versionCode = 39
+    ext.versionCode = 40
 }
 
 subprojects {

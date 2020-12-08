@@ -53,8 +53,10 @@ import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGE
 import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
+import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
+import java.security.Permission
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -277,12 +279,14 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     private fun requestPermissions(permissions: Collection<String>) {
-        startActivity(Intent(this, radarApp.mainActivity).apply {
-            action = ACTION_CHECK_PERMISSIONS
-            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra(EXTRA_PERMISSIONS, permissions.toTypedArray())
-        })
+        mainHandler.post {
+            startActivity(Intent(this, radarApp.mainActivity).apply {
+                action = ACTION_CHECK_PERMISSIONS
+                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(EXTRA_PERMISSIONS, permissions.toTypedArray())
+            })
+        }
     }
 
     private fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
@@ -438,8 +442,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     protected fun checkPermissions() {
-        needsPermissions.clear()
-        needsPermissions += HashSet<String>()
+        mHandler.executeReentrant {
+            needsPermissions.clear()
+            needsPermissions += HashSet<String>()
                 .apply {
                     this += servicePermissions
                     this += mConnections.flatMap { it.permissionsNeeded }
@@ -447,30 +452,13 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                         this += LOCATION_SERVICE
                     }
                 }
-                .filterNot(::isPermissionGranted)
+                .filterNot { isPermissionGranted(it) }
 
-        if (needsPermissions.isNotEmpty()) {
-            logger.debug("Requesting permission for {}", needsPermissions)
-            requestPermissions(needsPermissions)
+            if (needsPermissions.isNotEmpty()) {
+                logger.debug("Requesting permission for {}", needsPermissions)
+                requestPermissions(needsPermissions)
+            }
         }
-    }
-
-    private fun isPermissionGranted(permission: String): Boolean = when (permission) {
-        LOCATION_SERVICE -> applySystemService<LocationManager, Boolean>(Context.LOCATION_SERVICE) { locationManager ->
-            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                    || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        } ?: true
-        REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT -> applySystemService<PowerManager, Boolean>(Context.POWER_SERVICE) { powerManager ->
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                    || powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
-        } ?: true
-        PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager, Boolean>(Context.APP_OPS_SERVICE) { appOps ->
-            @Suppress("DEPRECATION")
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                    || MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName)
-        } ?: true
-        SYSTEM_ALERT_WINDOW -> Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
-        else -> PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, permission)
     }
 
     /** Configure whether a boot listener should start this application at boot.  */
@@ -560,9 +548,11 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         val packageManager = packageManager
 
-        configuredProviders.applyIfChanged(providerLoader.loadProvidersFromNames(config)
-                .filter { hasFeatures(it, packageManager) }) { providers ->
-            val oldConnections = mConnections
+        val supportedPlugins = providerLoader.loadProvidersFromNames(config)
+            .filter { hasFeatures(it, packageManager) }
+
+        configuredProviders.applyIfChanged(supportedPlugins) { providers ->
+            val previousConnections = mConnections
             removeProviders(mConnections.filter { it !in providers })
 
             sourceRegistrar?.let {
@@ -571,7 +561,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
             authConnection.applyBinder { createRegistrar(this, providers) }
 
-            if (mConnections != oldConnections) {
+            if (mConnections != previousConnections) {
                 broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
         }
@@ -659,7 +649,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 
         @Suppress("UNCHECKED_CAST")
-        private inline fun <reified T, U> Context.applySystemService(type: String, callback: (T) -> U): U? {
+        internal inline fun <reified T> Context.applySystemService(type: String, callback: (T) -> Boolean): Boolean? {
             return (getSystemService(type) as T?)?.let(callback)
         }
 
