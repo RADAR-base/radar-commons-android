@@ -84,7 +84,8 @@ public class SmileJNI implements Runnable {
      * @param configFile configuration file name
      * @param updateProfile whether to update the audio profile
      * @param outputfile outputfile that openSMILE should write to
-     * @return
+     * @param cwd  current working directory
+     * @return status string
      */
     public static native String SMILExtractJNI(String cwd, String configFile, int updateProfile, String outputfile);
 
