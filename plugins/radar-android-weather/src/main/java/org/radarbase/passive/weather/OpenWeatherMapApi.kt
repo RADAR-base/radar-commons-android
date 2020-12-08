@@ -48,7 +48,7 @@ internal class OpenWeatherMapApi(apiKey: String, client: OkHttpClient) : Weather
         }
     }
 
-    private class OpenWeatherMapApiResult internal constructor(private val cw: CurrentWeather) : WeatherApiResult {
+    private class OpenWeatherMapApiResult(private val cw: CurrentWeather) : WeatherApiResult {
         override val timestamp: Double = System.currentTimeMillis() / 1000.0
         override val temperature: Float?
         override val sunSet: Int?
@@ -60,9 +60,15 @@ internal class OpenWeatherMapApi(apiKey: String, client: OkHttpClient) : Weather
 
         init {
             val main = cw.mainInstance
-            temperature = if (main?.hasTemperature() == true) main.temperature else null
-            pressure = if (main?.hasPressure() == true) main.pressure else null
-            humidity = if (main?.hasHumidity() == true) main.humidity else null
+            if (main != null) {
+                temperature = if (main.hasTemperature) main.temperature else null
+                pressure = if (main.hasPressure) main.pressure else null
+                humidity = if (main.hasHumidity) main.humidity else null
+            } else {
+                temperature = null
+                pressure = null
+                humidity = null
+            }
 
             val sys = cw.sysInstance
             if (sys != null) {
@@ -85,7 +91,7 @@ internal class OpenWeatherMapApi(apiKey: String, client: OkHttpClient) : Weather
 
         override val weatherCondition: WeatherCondition
             get() {
-                if (!cw.hasWeatherInstance()) {
+                if (!cw.hasWeatherInstance) {
                     return WeatherCondition.UNKNOWN
                 }
                 // Get weather code of primary weather condition instance
