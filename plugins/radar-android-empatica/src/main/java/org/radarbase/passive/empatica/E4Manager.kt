@@ -58,6 +58,7 @@ class E4Manager(
     private val isScanning = AtomicBoolean(false)
     private var hasBeenConnecting = false
     private var apiKey: String? = null
+    private var connectingFuture: SafeHandler.HandlerFuture? = null
 
     init {
         status = SourceStatusListener.Status.UNAVAILABLE
@@ -162,16 +163,25 @@ class E4Manager(
                     service.sourceFailedToConnect(deviceName)
                 } else {
                     handler.execute {
+                        if (connectingFuture != null) {
+                            return@execute
+                        }
                         name = service.getString(R.string.e4DeviceName, deviceName)
                         stopScanning()
-                        logger.info("Will connect device {}", deviceName)
-                        try {
-                            // Connect to the device
-                            status = SourceStatusListener.Status.CONNECTING
-                            empaManager.connectDevice(empaDevice)
-                        } catch (e: ConnectionNotAllowedException) {
-                            // This should happen only if you try to connect when allowed == false.
-                            service.sourceFailedToConnect(deviceName)
+                        connectingFuture = handler.delay(500L) {
+                            connectingFuture = null
+                            logger.info("Will connect device {}", deviceName)
+                            try {
+                                // Connect to the device
+                                status = SourceStatusListener.Status.CONNECTING
+                                empaManager.connectDevice(empaDevice)
+                            } catch (e: ConnectionNotAllowedException) {
+                                // This should happen only if you try to connect when allowed == false.
+                                service.sourceFailedToConnect(deviceName)
+                            } catch (e: Exception) {
+                                logger.error("E4 device failed to connect", e)
+                                disconnect()
+                            }
                         }
                     }
                 }
@@ -195,6 +205,10 @@ class E4Manager(
     override fun onClose() {
         handler.execute(true) {
             stopScanning()
+            connectingFuture?.let {
+                it.cancel()
+                connectingFuture = null
+            }
             logger.info("Initiated device {} stop-sequence", name)
             if (hasBeenConnecting) {
                 try {
@@ -320,7 +334,7 @@ class E4Manager(
     companion object {
         private val logger = LoggerFactory.getLogger(E4Manager::class.java)
 
-        fun Int.toEmpaStatusString(): String = when(this) {
+        private fun Int.toEmpaStatusString(): String = when(this) {
             EmpaSensorStatus.ON_WRIST -> "ON_WRIST"
             EmpaSensorStatus.NOT_ON_WRIST -> "NOT_ON_WRIST"
             EmpaSensorStatus.DEAD -> "DEAD"

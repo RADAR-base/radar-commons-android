@@ -1,6 +1,6 @@
 <resources>
     <string name="empaticaE4DisplayName">E4</string>
-    <string name="e4DeviceName">E4 $1%s</string>
+    <string name="e4DeviceName">E4 %1$s</string>
     <string name="empatica_e4_explanation">Empatica E4 collects heart rate, blood volume pulse and
         acceleration, and electrodermal activity. Connect an Empatica E4 by pressing the
         power-button. It needs Bluetooth and location permissions to communicate efficiently. The
