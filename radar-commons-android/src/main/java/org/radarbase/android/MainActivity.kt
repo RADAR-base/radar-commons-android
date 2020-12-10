@@ -110,7 +110,7 @@ abstract class MainActivity : AppCompatActivity() {
                 .register(RADAR_CONFIGURATION_CHANGED) { _, _ -> onConfigChanged() }
 
         // Start the UI thread
-        uiRefreshRate = configuration.latestConfig.getLong(UI_REFRESH_RATE_KEY)
+        uiRefreshRate = configuration.latestConfig.getLong(UI_REFRESH_RATE_KEY, 250L)
     }
 
     @CallSuper
