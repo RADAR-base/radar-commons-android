@@ -21,7 +21,6 @@ import android.os.Handler
 import android.os.Looper
 import androidx.annotation.XmlRes
 import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailabilityLight
 import com.google.android.gms.tasks.OnFailureListener
 import com.google.android.gms.tasks.OnSuccessListener
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -85,12 +84,7 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
                     .addOnFailureListener(onFailureListener)
         }
 
-        val googleApi = GoogleApiAvailabilityLight.getInstance()
-        status = if (googleApi.isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS) {
-            RadarConfiguration.RemoteConfigStatus.READY
-        } else {
-            RadarConfiguration.RemoteConfigStatus.UNAVAILABLE
-        }
+        status = RadarConfiguration.RemoteConfigStatus.READY
     }
 
     /**
