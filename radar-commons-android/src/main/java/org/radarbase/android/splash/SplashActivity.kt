@@ -170,7 +170,7 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun startConfigReceiver() {
         updateState(STATE_FETCHING_CONFIG)
-        config.fetch()
+        config.forceFetch()
         radarConfig.config.observe(this, configObserver)
         configReceiver = true
     }

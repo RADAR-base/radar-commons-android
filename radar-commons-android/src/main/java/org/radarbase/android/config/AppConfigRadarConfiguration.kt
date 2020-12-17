@@ -100,6 +100,9 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
 
                         retryDelay.reset()
                         RadarConfiguration.RemoteConfigStatus.FETCHED
+                    } else if (response.code == 404) {
+                        logger.warn("Cannot query appconfig at {}. Disabling app-config.", request.url)
+                        RadarConfiguration.RemoteConfigStatus.UNAVAILABLE
                     } else {
                         logger.error("Failed to fetch remote config using {} (HTTP status {}): {}",
                                 call.request(), response.code, response.body?.string())
