@@ -79,7 +79,7 @@ class TapeCacheTest {
         }
         tapeCache = TapeCache(folder.newFile(), topic,
                 outputTopic, handler, serializationFactory,
-                CacheConfiguration(100, 4096, CacheConfiguration.QueueFileFactory.MAPPED))
+                CacheConfiguration(100, 4096, CacheConfiguration.QueueFileFactory.DIRECT))
 
         key = ObservationKey("test", "a", "b")
         val time = System.currentTimeMillis() / 1000.0
