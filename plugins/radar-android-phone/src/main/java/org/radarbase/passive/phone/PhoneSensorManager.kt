@@ -39,17 +39,30 @@ import org.radarbase.passive.phone.PhoneSensorService.Companion.PHONE_SENSOR_INT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.*
 import org.slf4j.LoggerFactory
+import java.util.*
 import java.util.concurrent.TimeUnit
 
 class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
-
     private val accelerationTopic: DataCache<ObservationKey, PhoneAcceleration> = createCache("android_phone_acceleration", PhoneAcceleration())
     private val lightTopic: DataCache<ObservationKey, PhoneLight> = createCache("android_phone_light", PhoneLight())
     private val stepCountTopic: DataCache<ObservationKey, PhoneStepCount> = createCache("android_phone_step_count", PhoneStepCount())
     private val gyroscopeTopic: DataCache<ObservationKey, PhoneGyroscope> = createCache("android_phone_gyroscope", PhoneGyroscope())
     private val magneticFieldTopic: DataCache<ObservationKey, PhoneMagneticField> = createCache("android_phone_magnetic_field", PhoneMagneticField())
     private val batteryTopic: DataCache<ObservationKey, PhoneBatteryLevel> = createCache("android_phone_battery_level", PhoneBatteryLevel())
-    private val sensorDelays: SparseIntArray = SparseIntArray()
+
+    var sensorDelays: SparseIntArray = SparseIntArray()
+        set(value) {
+            mHandler.execute(defaultToCurrentThread = true) {
+                if (field.contentsEquals(value)) {
+                    return@execute
+                }
+
+                field = value
+                if (state.status == SourceStatusListener.Status.CONNECTED) {
+                    registerSensors()
+                }
+            }
+        }
 
     private val mHandler = SafeHandler.getInstance("Phone sensors", THREAD_PRIORITY_BACKGROUND)
 
@@ -92,23 +105,6 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         }
     }
 
-    fun setSensorDelays(sensorDelays: SparseIntArray) {
-        mHandler.execute {
-            if (this.sensorDelays == sensorDelays) {
-                return@execute
-            }
-
-            this.sensorDelays.clear()
-            for (i in 0 until sensorDelays.size()) {
-                this.sensorDelays.put(sensorDelays.keyAt(i), sensorDelays.valueAt(i))
-            }
-            if (state.status == SourceStatusListener.Status.CONNECTED) {
-                sensorManager!!.unregisterListener(this)
-                registerSensors()
-            }
-        }
-    }
-
     fun setBatteryUpdateInterval(period: Long, batteryIntervalUnit: TimeUnit) {
         batteryProcessor.interval(period, batteryIntervalUnit)
     }
@@ -117,10 +113,15 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
      * Register all sensors supplied in SENSOR_TYPES_TO_REGISTER constant.
      */
     private fun registerSensors() {
+        sensorManager ?: return
         mHandler.executeReentrant {
+            if (state.status == SourceStatusListener.Status.CONNECTED) {
+                sensorManager.unregisterListener(this)
+            }
+
             // At time of writing this is: Accelerometer, Light, Gyroscope, Magnetic Field and Step Counter
             for (sensorType in SENSOR_TYPES_TO_REGISTER) {
-                val sensor = sensorManager!!.getDefaultSensor(sensorType)
+                val sensor = sensorManager.getDefaultSensor(sensorType)
                 if (sensor != null) {
                     // delay from milliseconds to microseconds
                     val delay = TimeUnit.MILLISECONDS.toMicros(sensorDelays.get(sensorType, PHONE_SENSOR_INTERVAL_DEFAULT).toLong())
@@ -128,7 +129,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
                         sensorManager.registerListener(this, sensor, delay.toInt())
                     }
                 } else {
-                    logger.warn("The sensor '{}' could not be found", SENSOR_NAMES.get(sensorType, "unknown"))
+                    logger.warn("The sensor '{}' could not be found", sensorType.toSensorName())
                 }
             }
         }
@@ -196,16 +197,14 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     private fun processStep(event: SensorEvent) {
         // Number of step since listening or since reboot
         val stepCount = event.values[0].toInt()
-
         val time = currentTime
 
         // Send how many steps have been taken since the last time this function was triggered
         // Note: normally processStep() is called for every new step and the stepsSinceLastUpdate is 1
-        val stepsSinceLastUpdate: Int
-        if (lastStepCount == -1 || lastStepCount > stepCount) {
-            stepsSinceLastUpdate = 1
+        val stepsSinceLastUpdate = if (lastStepCount == -1 || lastStepCount > stepCount) {
+            1
         } else {
-            stepsSinceLastUpdate = stepCount - lastStepCount
+            stepCount - lastStepCount
         }
         lastStepCount = stepCount
         send(stepCountTopic, PhoneStepCount(time, time, stepsSinceLastUpdate))
@@ -225,7 +224,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
 
         val isPlugged = intent.getIntExtra(EXTRA_PLUGGED, 0) > 0
         val status = intent.getIntExtra(EXTRA_STATUS, BATTERY_STATUS_UNKNOWN)
-        val batteryStatus = BATTERY_TYPES.get(status, BatteryStatus.UNKNOWN)
+        val batteryStatus = status.toBatteryStatus()
 
         state.batteryLevel = batteryPct
 
@@ -246,30 +245,38 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         private val logger = LoggerFactory.getLogger(PhoneSensorManager::class.java)
 
         // Sensors to register, together with the name of the sensor
-        private val SENSOR_TYPES_TO_REGISTER = intArrayOf(Sensor.TYPE_ACCELEROMETER, Sensor.TYPE_LIGHT, Sensor.TYPE_MAGNETIC_FIELD, Sensor.TYPE_GYROSCOPE, Sensor.TYPE_STEP_COUNTER)
+        private val SENSOR_TYPES_TO_REGISTER = intArrayOf(
+            Sensor.TYPE_ACCELEROMETER,
+            Sensor.TYPE_LIGHT,
+            Sensor.TYPE_MAGNETIC_FIELD,
+            Sensor.TYPE_GYROSCOPE,
+            Sensor.TYPE_STEP_COUNTER,
+        )
 
-        // Names of the sensor (for warning message if unable to register)
-        private val SENSOR_NAMES = SparseArray<String>(5)
-
-        init {
-            SENSOR_NAMES.append(Sensor.TYPE_ACCELEROMETER, Sensor.STRING_TYPE_ACCELEROMETER)
-            SENSOR_NAMES.append(Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT)
-            SENSOR_NAMES.append(Sensor.TYPE_MAGNETIC_FIELD, Sensor.STRING_TYPE_MAGNETIC_FIELD)
-            SENSOR_NAMES.append(Sensor.TYPE_GYROSCOPE, Sensor.STRING_TYPE_GYROSCOPE)
-            SENSOR_NAMES.append(Sensor.TYPE_STEP_COUNTER, Sensor.STRING_TYPE_STEP_COUNTER)
+        private fun Int.toSensorName(): String = when (this) {
+            Sensor.TYPE_ACCELEROMETER  -> Sensor.STRING_TYPE_ACCELEROMETER
+            Sensor.TYPE_LIGHT          -> Sensor.STRING_TYPE_LIGHT
+            Sensor.TYPE_MAGNETIC_FIELD -> Sensor.STRING_TYPE_MAGNETIC_FIELD
+            Sensor.TYPE_GYROSCOPE      -> Sensor.STRING_TYPE_GYROSCOPE
+            Sensor.TYPE_STEP_COUNTER   -> Sensor.STRING_TYPE_STEP_COUNTER
+            else -> "unknown"
         }
 
-        private val BATTERY_TYPES = SparseArray<BatteryStatus>(5)
-
-        init {
-            BATTERY_TYPES.append(BATTERY_STATUS_UNKNOWN, BatteryStatus.UNKNOWN)
-            BATTERY_TYPES.append(BATTERY_STATUS_CHARGING, BatteryStatus.CHARGING)
-            BATTERY_TYPES.append(BATTERY_STATUS_DISCHARGING, BatteryStatus.DISCHARGING)
-            BATTERY_TYPES.append(BATTERY_STATUS_NOT_CHARGING, BatteryStatus.NOT_CHARGING)
-            BATTERY_TYPES.append(BATTERY_STATUS_FULL, BatteryStatus.FULL)
+        private fun Int.toBatteryStatus(): BatteryStatus = when (this) {
+            BATTERY_STATUS_UNKNOWN      -> BatteryStatus.UNKNOWN
+            BATTERY_STATUS_CHARGING     -> BatteryStatus.CHARGING
+            BATTERY_STATUS_DISCHARGING  -> BatteryStatus.DISCHARGING
+            BATTERY_STATUS_NOT_CHARGING -> BatteryStatus.NOT_CHARGING
+            BATTERY_STATUS_FULL         -> BatteryStatus.FULL
+            else -> BatteryStatus.UNKNOWN
         }
 
         private const val ACTIVITY_LAUNCH_WAKE = "org.radarbase.passive.phone.PhoneSensorManager.ACTIVITY_LAUNCH_WAKE"
         private const val REQUEST_CODE_PENDING_INTENT = 482480668
+
+        private fun SparseIntArray.contentsEquals(other: SparseIntArray): Boolean {
+            return size() == other.size()
+                    && (0 until size()).all { keyAt(it) == other.keyAt(it) && valueAt(it) == other.valueAt(it) }
+        }
     }
 }
