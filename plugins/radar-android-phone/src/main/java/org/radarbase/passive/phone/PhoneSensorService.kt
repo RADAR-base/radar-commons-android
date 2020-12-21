@@ -29,8 +29,6 @@ import java.util.concurrent.TimeUnit
  * the phone sensors and send it to a Kafka REST proxy.
  */
 class PhoneSensorService : SourceService<PhoneState>() {
-    private val sensorDelays: SparseIntArray = SparseIntArray(5)
-
     override val defaultState: PhoneState
         get() = PhoneState()
 
@@ -41,7 +39,7 @@ class PhoneSensorService : SourceService<PhoneState>() {
 
         val defaultInterval = config.getInt(PHONE_SENSOR_INTERVAL, PHONE_SENSOR_INTERVAL_DEFAULT)
 
-        sensorDelays.apply {
+        manager.sensorDelays = SparseIntArray(5).apply {
             put(Sensor.TYPE_ACCELEROMETER, config.getInt(PHONE_SENSOR_ACCELERATION_INTERVAL, defaultInterval))
             put(Sensor.TYPE_MAGNETIC_FIELD, config.getInt(PHONE_SENSOR_MAGNETIC_FIELD_INTERVAL, defaultInterval))
             put(Sensor.TYPE_GYROSCOPE, config.getInt(PHONE_SENSOR_GYROSCOPE_INTERVAL, defaultInterval))
@@ -49,11 +47,9 @@ class PhoneSensorService : SourceService<PhoneState>() {
             put(Sensor.TYPE_STEP_COUNTER, config.getInt(PHONE_SENSOR_STEP_COUNT_INTERVAL, defaultInterval))
         }
 
-        manager.setSensorDelays(sensorDelays)
         manager.setBatteryUpdateInterval(
                 config.getLong(PHONE_SENSOR_BATTERY_INTERVAL_SECONDS, PHONE_SENSOR_BATTERY_INTERVAL_DEFAULT_SECONDS),
                 TimeUnit.SECONDS)
-
     }
 
     companion object {
