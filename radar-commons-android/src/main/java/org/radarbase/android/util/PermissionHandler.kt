@@ -84,10 +84,18 @@ open class PermissionHandler(
             needsPermissions -= externallyGrantedPermissions
         }
 
-        val currentlyNeeded = HashSet(needsPermissions)
-        currentlyNeeded -= isRequestingPermissions
+        val currentlyNeeded: Set<String> = HashSet(needsPermissions).apply {
+            this -= isRequestingPermissions
+            if (
+                ACCESS_COARSE_LOCATION in this
+                || ACCESS_FINE_LOCATION in this
+            ) {
+                this -= RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT
+            }
+        }
 
         when {
+            currentlyNeeded.isEmpty() -> logger.info("Already requested all permissions.")
             Context.LOCATION_SERVICE in currentlyNeeded -> {
                 addRequestingPermissions(Context.LOCATION_SERVICE)
                 requestLocationProvider()
@@ -111,12 +119,6 @@ open class PermissionHandler(
                 }
             }
             else -> {
-                if (
-                    ACCESS_COARSE_LOCATION in currentlyNeeded
-                    || ACCESS_FINE_LOCATION in currentlyNeeded
-                ) {
-                    currentlyNeeded -= RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT
-                }
                 addRequestingPermissions(currentlyNeeded)
                 try {
                     ActivityCompat.requestPermissions(
