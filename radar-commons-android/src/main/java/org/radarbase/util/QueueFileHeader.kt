@@ -16,6 +16,7 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.IO.requireIO
 import java.io.IOException
 import java.nio.ByteBuffer
 
@@ -74,9 +75,7 @@ constructor(
             read()
         } else {
             length = this.storage.length
-            if (dataLength < 0) {
-                throw IOException("Storage does not contain header.")
-            }
+            requireIO(dataLength >= 0) { "Storage $storage does not contain header." }
             count = 0
             firstPosition = 0L
             lastPosition = 0L
@@ -92,37 +91,20 @@ constructor(
         headerBuffer.flip()
 
         val version = headerBuffer.int
-        if (version != VERSIONED_HEADER) {
-            throw IOException("Storage $storage is not recognized as a queue file.")
-        }
+        requireIO(version == VERSIONED_HEADER) { "Storage $storage is not recognized as a queue file." }
         length = headerBuffer.long
-        if (length > storage.length) {
-            throw IOException("File is truncated. Expected length: " + length
-                    + ", Actual length: " + storage.length)
-        }
+        requireIO(length <= storage.length) { "File is truncated. Expected length: $length, Actual length: ${storage.length}" }
         count = headerBuffer.int
         firstPosition = headerBuffer.long
         lastPosition = headerBuffer.long
 
-        if (dataLength < 0) {
-            throw IOException("File length in $storage header too small")
-        }
-        if (
-            firstPosition < 0 || firstPosition > length
-            || lastPosition < 0 || lastPosition > length
-        ) {
-            throw IOException("Element offsets point outside of storage $storage")
-        }
-        if (
-            count < 0
-            || (count > 0 && (firstPosition == 0L || lastPosition == 0L))
-        ) {
-            throw IOException("Number of elements not correct in storage $storage")
-        }
-        val crc = headerBuffer.int
-        if (crc != hashCode()) {
-            throw IOException("Queue storage $storage was corrupted.")
-        }
+        requireIO(dataLength >= 0) { "File length in $storage header too small" }
+        val lengthRange = 0 .. length
+        requireIO(firstPosition in lengthRange) { "First element offset $firstPosition points outside of storage $storage" }
+        requireIO(lastPosition in lengthRange) { "Last element offset $lastPosition points outside of storage $storage" }
+        requireIO(count >= 0) { "Number of elements $count must be positive in $storage" }
+        requireIO(count == 0 || (firstPosition != 0L && lastPosition != 0L)) { "A non-empty queue (size $count) must have a non-zero first $firstPosition and last $lastPosition position." }
+        requireIO(crc == headerBuffer.int) { "Queue storage $storage was corrupted: checksum does not match." }
     }
 
     /**

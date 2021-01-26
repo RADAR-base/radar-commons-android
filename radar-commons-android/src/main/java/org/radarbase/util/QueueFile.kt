@@ -16,6 +16,7 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.IO.requireIO
 import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -388,9 +389,7 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
 
     @Throws(IOException::class)
     private fun requireNotClosed() {
-        if (storage.isClosed) {
-            throw IOException("closed")
-        }
+        requireIO(!storage.isClosed) { "storage $header is closed" }
     }
 
     @Throws(IOException::class)
@@ -468,14 +467,6 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             } catch (ex: IllegalArgumentException) {
                 throw IOException("Cannot create queue", ex)
             }
-        }
-
-        fun ByteArray.checkOffsetAndCount(offset: Int, length: Int) {
-            if (offset < 0) throw IndexOutOfBoundsException("offset < 0")
-            if (length < 0) throw IndexOutOfBoundsException("length < 0")
-            if (offset + length > size) throw IndexOutOfBoundsException(
-                "extent of offset and length larger than buffer length"
-            )
         }
     }
 }

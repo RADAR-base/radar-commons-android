@@ -16,9 +16,9 @@
 
 package org.radarbase.util
 
+import org.radarbase.util.IO.requireIO
 import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import org.radarbase.util.QueueStorage.Companion.withAvailable
-import org.slf4j.LoggerFactory
 import java.io.EOFException
 import java.io.File
 import java.io.IOException
@@ -83,11 +83,8 @@ class DirectQueueFileStorage(
         randomAccessFile = RandomAccessFile(file, "rw")
         length = if (isPreExisting) {
             // Read header from file
-            val currentLength = randomAccessFile.length()
-            if (currentLength < QUEUE_HEADER_LENGTH) {
-                throw IOException("File length $length is smaller than queue header length $QUEUE_HEADER_LENGTH")
-            }
-            currentLength
+            randomAccessFile.length()
+                .also { requireIO(it >= QUEUE_HEADER_LENGTH) { "File length $it of $file is smaller than queue header length $QUEUE_HEADER_LENGTH" } }
         } else {
             randomAccessFile.setLength(initialLength)
             initialLength
@@ -98,7 +95,8 @@ class DirectQueueFileStorage(
     @Throws(IOException::class)
     override fun read(position: Long, data: ByteBuffer): Long {
         requireNotClosed()
-        require(position >= 0 && position < length) { "position out of range [0, $length)." }
+        require(position >= 0) { "Read position $position in storage $this must be positive." }
+        require(position < length)  { "Read position $position in storage $this must be less than length $length." }
 
         channel.position(position)
         val numRead = data.withAvailable(length - position) {
@@ -117,10 +115,10 @@ class DirectQueueFileStorage(
             return
         }
         require(size <= length || size <= maximumLength) {
-            "New length $size exceeds maximum length $maximumLength"
+            "New length $size of $this exceeds maximum length $maximumLength"
         }
         require(size >= minimumLength) {
-            "New length $size is less than minimum length $QUEUE_HEADER_LENGTH"
+            "New length $size of $this is less than minimum length $QUEUE_HEADER_LENGTH"
         }
         flush()
         randomAccessFile.setLength(size)
@@ -136,7 +134,8 @@ class DirectQueueFileStorage(
     @Throws(IOException::class)
     override fun write(position: Long, data: ByteBuffer, mayIgnoreBuffer: Boolean): Long {
         requireNotClosed()
-        require(position >= 0 && position < length) { "position out of range [0, $length)." }
+        require(position >= 0) { "Write position $position in storage $this must be positive." }
+        require(position < length)  { "Write position $position in storage $this must be less than length $length." }
 
         channel.position(position)
         val numWritten = data.withAvailable(length - position) {
@@ -154,18 +153,17 @@ class DirectQueueFileStorage(
                 && count > 0
                 && srcPosition + count <= length
                 && dstPosition + count <= length) {
-            "Movement specification src=$srcPosition, count=$count, dst=$dstPosition is invalid for storage of length $length"
+            "Movement specification src=$srcPosition, count=$count, dst=$dstPosition is invalid for storage $this"
         }
         flush()
         channel.position(dstPosition)
-        if (channel.transferTo(srcPosition, count, channel) != count) {
-            throw IOException("Cannot move all data")
-        }
+        val bytesTransferred = channel.transferTo(srcPosition, count, channel)
+        requireIO(bytesTransferred == count) { "Cannot move all data in $this from $srcPosition to $dstPosition with size $count. Only moved $bytesTransferred." }
     }
 
     @Throws(IOException::class)
     private fun requireNotClosed() {
-        if (isClosed) throw IOException("closed")
+        requireIO(!isClosed) { "Queue storage $this is already closed." }
     }
 
     @Throws(IOException::class)
@@ -180,6 +178,5 @@ class DirectQueueFileStorage(
     companion object {
         /** Initial file size in bytes.  */
         const val MINIMUM_LENGTH = 4096L // one file system block
-        private val logger = LoggerFactory.getLogger(DirectQueueFileStorage::class.java)
     }
 }

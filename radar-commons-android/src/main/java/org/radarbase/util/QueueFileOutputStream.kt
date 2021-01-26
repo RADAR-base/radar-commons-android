@@ -16,7 +16,8 @@
 
 package org.radarbase.util
 
-import org.radarbase.util.QueueFile.Companion.checkOffsetAndCount
+import org.radarbase.util.IO.requireIO
+import org.radarbase.util.IO.checkOffsetAndCount
 import org.radarbase.util.QueueFileElement.Companion.ELEMENT_HEADER_LENGTH
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -102,7 +103,8 @@ class QueueFileOutputStream internal constructor(
 
     @Throws(IOException::class)
     private fun checkNotClosed() {
-        if (isClosed || storage.isClosed) throw IOException("isClosed")
+        requireIO(!isClosed) { "Cannot write to storage $storage, output stream is closed." }
+        requireIO(!storage.isClosed) { "Cannot write to storage $storage, it is closed." }
     }
 
     /**

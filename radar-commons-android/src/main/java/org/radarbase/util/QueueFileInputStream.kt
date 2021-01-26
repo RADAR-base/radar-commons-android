@@ -1,5 +1,6 @@
 package org.radarbase.util
 
+import org.radarbase.util.IO.requireIO
 import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -30,9 +31,7 @@ class QueueFileInputStream(
 
     @Throws(IOException::class)
     override fun read(): Int {
-        if (read(singleByteArray, 0, 1) != 1) {
-            throw IOException("Cannot read byte")
-        }
+        requireIO(read(singleByteArray, 0, 1) == 1) { "Cannot read byte from $storage" }
         return singleByteArray[0].toInt() and 0xFF
     }
 
@@ -54,9 +53,7 @@ class QueueFileInputStream(
 
     @Throws(IOException::class)
     private fun checkForCoModification() {
-        if (modificationCount.get() != expectedModCount) {
-            throw IOException("Buffer modified while reading InputStream")
-        }
+        requireIO(modificationCount.get() == expectedModCount) { "Buffer modified while reading InputStream of $storage" }
     }
 
     override fun toString(): String = "QueueFileInputStream[length=$totalLength,bytesRead=$bytesRead]"
