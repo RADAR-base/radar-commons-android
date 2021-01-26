@@ -4,6 +4,8 @@ import android.app.Activity.RESULT_OK
 import android.bluetooth.BluetoothAdapter
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.IRadarBinder
@@ -14,9 +16,11 @@ import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEn
 import java.util.concurrent.TimeUnit
 
 class BluetoothEnforcer(
-        private val context: ComponentActivity,
-        private val radarConnection: ManagedServiceConnection<IRadarBinder>
+    private val context: ComponentActivity,
+    private val radarConnection: ManagedServiceConnection<IRadarBinder>,
 ) {
+    private val handler = Handler(Looper.getMainLooper())
+    private var isRequestingBluetooth = false
     private val config = context.radarConfig
     private val enableBluetoothRequests: ChangeRunner<Boolean>
     private val bluetoothIsNeeded = ChangeRunner(false)
@@ -44,7 +48,8 @@ class BluetoothEnforcer(
         val latestConfig = config.latestConfig
         val lastRequest = prefs.getLong(LAST_REQUEST, 0L)
         val cooldown = TimeUnit.SECONDS.toMillis(
-                latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3)))
+            latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3))
+        )
         if (lastRequest + cooldown < System.currentTimeMillis()) {
             config.reset(ENABLE_BLUETOOTH_REQUESTS)
         }
@@ -53,7 +58,8 @@ class BluetoothEnforcer(
             updateNeedsBluetooth(it.needsBluetooth())
         }
         enableBluetoothRequests = ChangeRunner(
-                latestConfig.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true))
+            latestConfig.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true)
+        )
 
         bluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
             if (!enabled) requestEnableBt()
@@ -98,15 +104,23 @@ class BluetoothEnforcer(
      * Sends an intent to request bluetooth to be turned on.
      */
     private fun requestEnableBt() {
-        if (isEnabled && !bluetoothIsEnabled) {
-            prefs.edit()
-                    .putLong(LAST_REQUEST, System.currentTimeMillis())
-                    .apply()
+        handler.post {
+            if (isRequestingBluetooth) {
+                return@post
+            }
+            isRequestingBluetooth = handler.postDelayed({
+                if (isEnabled && !bluetoothIsEnabled) {
+                    prefs.edit()
+                        .putLong(LAST_REQUEST, System.currentTimeMillis())
+                        .apply()
 
-            context.startActivityForResult(Intent().apply {
-                action = BluetoothAdapter.ACTION_REQUEST_ENABLE
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }, REQUEST_ENABLE_BT)
+                    context.startActivityForResult(Intent().apply {
+                        action = BluetoothAdapter.ACTION_REQUEST_ENABLE
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }, REQUEST_ENABLE_BT)
+                }
+                isRequestingBluetooth = false
+            }, 1000L)
         }
     }
 
