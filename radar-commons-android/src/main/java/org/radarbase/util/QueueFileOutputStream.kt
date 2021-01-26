@@ -169,13 +169,13 @@ class QueueFileOutputStream internal constructor(
             header.firstPosition
         }
 
-        queue.setFileLength(newLength, storagePosition, beginningOfFirstElement)
+        queue.growStorage(newLength, storagePosition, beginningOfFirstElement)
 
         if (storagePosition <= beginningOfFirstElement) {
             val positionUpdate = oldLength - QueueFileHeader.QUEUE_HEADER_LENGTH
 
             if (current.position <= beginningOfFirstElement) {
-                current.position = current.position + positionUpdate
+                current.position += positionUpdate
             }
             storagePosition += positionUpdate
         }

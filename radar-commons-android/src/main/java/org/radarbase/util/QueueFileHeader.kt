@@ -35,8 +35,9 @@ class QueueFileHeader
  */
 @Throws(IOException::class)
 constructor(
-        /** Storage to read and write the header.  */
-        private val storage: QueueStorage) {
+    /** Storage to read and write the header. */
+    private val storage: QueueStorage,
+) {
 
     /** Buffer to read and store the header with.  */
     private val headerBuffer = ByteBuffer.allocate(QUEUE_HEADER_LENGTH.toInt())
@@ -55,18 +56,17 @@ constructor(
     val dataLength: Long
         get() = length - QUEUE_HEADER_LENGTH
 
-    /** Version number. Currently fixed to [.VERSIONED_HEADER].  */
+    /** Version number. Currently fixed to [VERSIONED_HEADER].  */
     private val version: Int
 
     /** Position of the first (front-most) element in the queue.  */
-    /** Get the position of the first element in the QueueFile.  */
-    /** Set the position of the first element in the QueueFile.  */
     var firstPosition: Long = 0
 
     /** Position of the last (back-most) element in the queue.  */
-    /** Get the position of the last element in the QueueFile.  */
-    /** Set the position of the last element in the QueueFile.  */
     var lastPosition: Long = 0
+
+    private val crc: Int
+        get() = hashCode()
 
     init {
         version = VERSIONED_HEADER
@@ -107,11 +107,16 @@ constructor(
         if (dataLength < 0) {
             throw IOException("File length in $storage header too small")
         }
-        if (firstPosition < 0 || firstPosition > length
-                || lastPosition < 0 || lastPosition > length) {
+        if (
+            firstPosition < 0 || firstPosition > length
+            || lastPosition < 0 || lastPosition > length
+        ) {
             throw IOException("Element offsets point outside of storage $storage")
         }
-        if (count < 0 || count > 0 && (firstPosition == 0L || lastPosition == 0L)) {
+        if (
+            count < 0
+            || (count > 0 && (firstPosition == 0L || lastPosition == 0L))
+        ) {
             throw IOException("Number of elements not correct in storage $storage")
         }
         val crc = headerBuffer.int
@@ -133,7 +138,7 @@ constructor(
             putInt(count)
             putLong(firstPosition)
             putLong(lastPosition)
-            putInt(this@QueueFileHeader.hashCode())
+            putInt(crc)
 
             // then write the byte buffer out in one go
             flip()
@@ -161,12 +166,12 @@ constructor(
         if (other == null || javaClass != other.javaClass) {
             return false
         }
-        val otherHeader = other as QueueFileHeader
-        return version == otherHeader.version
-                && length == otherHeader.length
-                && count == otherHeader.count
-                && firstPosition == otherHeader.firstPosition
-                && lastPosition == otherHeader.lastPosition
+        other as QueueFileHeader
+        return version == other.version
+                && length == other.length
+                && count == other.count
+                && firstPosition == other.firstPosition
+                && lastPosition == other.lastPosition
     }
 
     override fun toString() = "QueueFileHeader[length=$length, size=$count, first=$firstPosition, last=$lastPosition]"

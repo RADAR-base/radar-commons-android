@@ -109,8 +109,9 @@ class BufferedQueueStorage(
     }
 
     private fun checkPosition(position: Long, data: ByteBuffer) {
-        require(position >= 0 && position < length) { "position $position out of range [0, $length)." }
-        require(data.remaining() <= dataLength)
+        require(position >= 0) { "position $position must be positive." }
+        require (position < length) { "position $position must be less than length $length." }
+        require(data.remaining() <= dataLength) { "read size may not exceed length of data." }
     }
 
     override fun read(position: Long, data: ByteBuffer): Long {
