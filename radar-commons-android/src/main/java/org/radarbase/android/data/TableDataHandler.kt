@@ -326,9 +326,12 @@ class TableDataHandler(
     }
 
     @Throws(IOException::class)
-    override fun <V: SpecificRecord> registerCache(topic: AvroTopic<ObservationKey, V>): DataCache<ObservationKey, V> {
+    override fun <V: SpecificRecord> registerCache(
+        topic: AvroTopic<ObservationKey, V>,
+        handler: SafeHandler?,
+    ): DataCache<ObservationKey, V> {
         return cacheStore
-                .getOrCreateCaches(context.applicationContext, topic, config.cacheConfig)
+                .getOrCreateCaches(context.applicationContext, topic, config.cacheConfig, handler)
                 .also { tables[topic.name] = it }
                 .activeDataCache
     }

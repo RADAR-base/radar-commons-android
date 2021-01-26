@@ -207,7 +207,12 @@ constructor(
         } catch (ex: ExecutionException) {
             logger.warn("Failed to execute flush task", ex)
         }
+    }
 
+    override fun triggerFlush() {
+        handler.execute {
+            addMeasurementFuture?.runNow()
+        }
     }
 
     private fun doFlush() {

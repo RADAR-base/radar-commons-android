@@ -58,11 +58,21 @@ class CacheStore(
     fun <K: ObservationKey, V: SpecificRecord> getOrCreateCaches(
             context: Context,
             topic: AvroTopic<K, V>,
-            config: CacheConfiguration
+            config: CacheConfiguration,
+            handler: SafeHandler? = null,
     ): DataCacheGroup<K, V> {
+        val useHandler = if (handler != null) {
+            require(handler.isStarted) { "Cannot load a cache from a stopped handler" }
+            handler
+        } else this.handler
         val ref = tables[topic.name] as SynchronizedReference<DataCacheGroup<K, V>>?
                 ?: SynchronizedReference {
-                    loadCache(context.cacheDir.absolutePath + "/" + topic.name, topic, config)
+                    loadCache(
+                        context.cacheDir.absolutePath + "/" + topic.name,
+                        topic,
+                        config,
+                        useHandler,
+                    )
                 }.also { tables[topic.name] = it as SynchronizedReference<DataCacheGroup<*, *>> }
 
         return ref.get()
@@ -72,7 +82,8 @@ class CacheStore(
     private fun <K: Any, V: Any> loadCache(
             base: String,
             topic: AvroTopic<K, V>,
-            config: CacheConfiguration
+            config: CacheConfiguration,
+            handler: SafeHandler,
     ): DataCacheGroup<K, V> {
         val fileBases = getFileBases(base)
         logger.debug("Files for topic {}: {}", topic.name, fileBases)
