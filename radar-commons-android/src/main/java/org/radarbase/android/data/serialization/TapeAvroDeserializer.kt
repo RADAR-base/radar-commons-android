@@ -25,6 +25,7 @@ import org.apache.avro.io.DecoderFactory
 import org.radarbase.data.Record
 import org.radarbase.topic.AvroTopic
 import org.radarbase.util.BackedObjectQueue
+import org.radarbase.util.IO.skipFully
 
 import java.io.IOException
 import java.io.InputStream
@@ -32,7 +33,10 @@ import java.io.InputStream
 /**
  * Converts records from an AvroTopic for Tape
  */
-class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val avroData: GenericData) : BackedObjectQueue.Deserializer<Record<K, V>> {
+class TapeAvroDeserializer<K, V>(
+    topic: AvroTopic<*, *>,
+    private val avroData: GenericData,
+) : BackedObjectQueue.Deserializer<Record<K, V>> {
     private val decoderFactory: DecoderFactory = DecoderFactory.get()
     private val keyReader: DatumReader<K>
     private val valueReader: DatumReader<V>
@@ -69,14 +73,5 @@ class TapeAvroDeserializer<K, V>(topic: AvroTopic<*, *>, private val avroData: G
             "Failed to validate given record in topic $topicName\n\tkey: $key\n\tvalue: $value"
         }
         return Record(key, value)
-    }
-
-    companion object {
-        fun InputStream.skipFully(n: Long) {
-            var numRead = 0L
-            do {
-                numRead += skip(n - numRead)
-            } while (numRead < n)
-        }
     }
 }

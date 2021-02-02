@@ -24,6 +24,7 @@ import org.radarbase.android.RadarConfiguration.Companion.SOURCE_ID_KEY
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.util.ChangeRunner
+import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
@@ -119,12 +120,14 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
      * @return created topic
      */
     protected fun <V : SpecificRecord> createCache(
-            name: String, valueClass: V): DataCache<ObservationKey, V> {
+            name: String, valueClass: V,
+            handler: SafeHandler? = null,
+    ): DataCache<ObservationKey, V> {
         try {
             val topic = AvroTopic(name,
                     ObservationKey.getClassSchema(), valueClass.schema,
                     ObservationKey::class.java, valueClass::class.java)
-            return dataHandler.registerCache(topic)
+            return dataHandler.registerCache(topic, handler)
         } catch (e: ReflectiveOperationException) {
             logger.error("Error creating topic {}", name, e)
             throw RuntimeException(e)

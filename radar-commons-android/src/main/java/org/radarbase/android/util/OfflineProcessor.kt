@@ -89,9 +89,9 @@ class OfflineProcessor(private val context: Context,
     fun start(initializer: (() -> Unit)? = null) {
         handler.compute {
             check(config.intervalMillis > 0) { "Cannot start processing without an interval" }
-            didStart = true
         }
         handler.execute {
+            didStart = true
             context.registerReceiver(this.receiver, IntentFilter(config.requestName))
             schedule()
             initializer?.let { it() }
@@ -183,7 +183,15 @@ class OfflineProcessor(private val context: Context,
         handler.execute {
             if (didStart) {
                 alarmManager.cancel(pendingIntent)
-                context.unregisterReceiver(receiver)
+                try {
+                    context.unregisterReceiver(receiver)
+                } catch (ex: IllegalStateException) {
+                    logger.warn(
+                        "Cannot unregister OfflineProcessor {}, it was most likely not completely started: {}",
+                        config.requestName,
+                        ex.message,
+                    )
+                }
             }
         }
 

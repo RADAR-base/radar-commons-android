@@ -30,4 +30,6 @@ interface DataCache<K, V> : Flushable, ReadableDataCache {
     /** Configuration. */
     var config: CacheConfiguration
 
+    /** Trigger a flush to happen as soon as possible. */
+    fun triggerFlush()
 }

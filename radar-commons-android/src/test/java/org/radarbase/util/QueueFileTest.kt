@@ -16,6 +16,7 @@
 
 package org.radarbase.util
 
+import org.hamcrest.core.Is.`is`
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -26,6 +27,7 @@ import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.*
+import java.util.concurrent.ThreadLocalRandom
 import kotlin.math.ln
 
 class QueueFileTest {
@@ -47,6 +49,39 @@ class QueueFileTest {
             out.write(buffer)
             out.next()
             assertThrows(IllegalStateException::class.java) { out.write(buffer) }
+        }
+    }
+
+    @Test
+    fun testExactSize() {
+        val file = folder.newFile()
+        assertTrue(file.delete())
+        val buffer = ByteArray(244)
+        ThreadLocalRandom.current().nextBytes(buffer)
+
+        QueueFile.newDirect(file, 40000000).use { queue ->
+            queue.elementOutputStream().use { out ->
+                repeat(30) {
+                    out.write(buffer)
+                    out.next()
+                }
+            }
+            queue.elementOutputStream().use { out ->
+                repeat(37) {
+                    out.write(buffer)
+                    out.next()
+                }
+            }
+            queue.remove(1)
+            queue.elementOutputStream().use { out ->
+                out.write(buffer)
+                out.next()
+            }
+            queue.remove(66)
+        }
+
+        QueueFile.newDirect(file, 40000000).use {
+            assertThat(it.fileSize, `is`(32768L))
         }
     }
 
@@ -98,10 +133,10 @@ class QueueFileTest {
     }
 
     @Throws(IOException::class)
-    private fun createQueue(): QueueFile {
+    private fun createQueue(size: Long = MAX_SIZE): QueueFile {
         val file = folder.newFile()
         assertTrue(file.delete())
-        return QueueFile.newDirect(file, MAX_SIZE)
+        return QueueFile.newDirect(file, size)
     }
 
     @Test

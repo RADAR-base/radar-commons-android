@@ -17,6 +17,7 @@
 package org.radarbase.android.data
 
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
 
 interface DataHandler<K, V> : ServerStatusListener {
@@ -29,7 +30,7 @@ interface DataHandler<K, V> : ServerStatusListener {
     val recordsSent: Map<String, Long>
     val status: ServerStatusListener.Status
 
-    fun <W: V> registerCache(topic: AvroTopic<K, W>): DataCache<K, W>
+    fun <W: V> registerCache(topic: AvroTopic<K, W>, handler: SafeHandler? = null): DataCache<K, W>
 
     fun handler(build: DataHandlerConfiguration.() -> Unit)
     fun getCache(topic: String): DataCache<*, *>

@@ -37,9 +37,9 @@ import java.util.concurrent.ExecutionException
  * ExecutorService. Data is retrieved and removed from the queue in a blocking way using that same
  * ExecutorService. Sent messages are not kept, they are immediately removed.
  *
- * @param <K> measurement key type
- * @param <V> measurement value type
-</V></K> */
+ * @param K measurement key type
+ * @param V measurement value type
+ */
 class TapeCache<K: Any, V: Any>
 /**
  * TapeCache to cache measurements with
@@ -47,12 +47,14 @@ class TapeCache<K: Any, V: Any>
  * @throws IOException if a BackedObjectQueue cannot be created.
  */
 @Throws(IOException::class)
-constructor(override val file: File,
-            override val topic: AvroTopic<K, V>,
-            override val readTopic: AvroTopic<Any, Any>,
-            private val handler: SafeHandler,
-            override val serialization: SerializationFactory,
-            config: CacheConfiguration) : DataCache<K, V> {
+constructor(
+    override val file: File,
+    override val topic: AvroTopic<K, V>,
+    override val readTopic: AvroTopic<Any, Any>,
+    private val handler: SafeHandler,
+    override val serialization: SerializationFactory,
+    config: CacheConfiguration,
+) : DataCache<K, V> {
 
     private val measurementsToAdd = mutableListOf<Record<K, V>>()
     private val serializer = serialization.createSerializer(topic)
@@ -205,7 +207,12 @@ constructor(override val file: File,
         } catch (ex: ExecutionException) {
             logger.warn("Failed to execute flush task", ex)
         }
+    }
 
+    override fun triggerFlush() {
+        handler.execute {
+            addMeasurementFuture?.runNow()
+        }
     }
 
     private fun doFlush() {

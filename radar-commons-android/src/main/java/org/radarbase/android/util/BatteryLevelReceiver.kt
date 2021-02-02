@@ -22,11 +22,13 @@ import android.content.Intent
 import android.content.Intent.ACTION_BATTERY_CHANGED
 import android.content.IntentFilter
 import android.os.BatteryManager.*
+import org.slf4j.LoggerFactory
 
 /** Keep track of battery level events.  */
 class BatteryLevelReceiver(
         private val context: Context,
-        var listener: ((level: Float, isPlugged: Boolean) -> Unit)? = null) : SpecificReceiver {
+        var listener: ((level: Float, isPlugged: Boolean) -> Unit)? = null
+) : SpecificReceiver {
     /** Latest battery level in range [0, 1].  */
     var level: Float = 1.0f
         private set
@@ -58,6 +60,17 @@ class BatteryLevelReceiver(
     }
 
     override fun unregister() {
-        context.unregisterReceiver(receiver)
+        try {
+            context.unregisterReceiver(receiver)
+        } catch (ex: IllegalStateException) {
+            logger.warn(
+                "Cannot unregister BatteryLevelReceiver. It probably was incompletely registered: {}",
+                ex.message,
+            )
+        }
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(BatteryLevelReceiver::class.java)
     }
 }

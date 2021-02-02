@@ -44,7 +44,7 @@ class FarosManager internal constructor(
 
     private lateinit var acceptableIds: Array<Pattern>
     private lateinit var apiManager: FarosSdkManager
-    private lateinit var settings: FarosSettings
+    private var settings: FarosSettings = farosFactory.defaultSettingsBuilder().build()
 
     private var faros: FarosDevice? = null
 
