@@ -120,19 +120,33 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             }
 
             // At time of writing this is: Accelerometer, Light, Gyroscope, Magnetic Field and Step Counter
-            for (sensorType in SENSOR_TYPES_TO_REGISTER) {
-                val sensor = sensorManager.getDefaultSensor(sensorType)
-                if (sensor != null) {
-                    // delay from milliseconds to microseconds
-                    val delay = TimeUnit.MILLISECONDS.toMicros(sensorDelays.get(sensorType, PHONE_SENSOR_INTERVAL_DEFAULT).toLong())
-                    if (delay > 0) {
-                        sensorManager.registerListener(this, sensor, delay.toInt())
-                    }
-                } else {
-                    logger.warn("The sensor '{}' could not be found", sensorType.toSensorName())
-                }
-            }
+            SENSOR_TYPES_TO_REGISTER.forEach { sensorManager.registerSensor(it) }
         }
+    }
+
+    private fun SensorManager.registerSensor(sensorType: Int) {
+        // delay from milliseconds to microseconds
+        val delay = TimeUnit.MILLISECONDS.toMicros(
+            sensorDelays.get(sensorType, PHONE_SENSOR_INTERVAL_DEFAULT).toLong()
+        ).toInt()
+        if (delay <= 0) {
+            logger.info("Sensor {} is disabled in configuration", sensorType.toSensorName())
+            return
+        }
+
+        val sensor = getDefaultSensor(sensorType)
+        if (sensor == null) {
+            logger.warn("The sensor '{}' could not be found", sensorType.toSensorName())
+            return
+        }
+
+        val result = registerListener(this@PhoneSensorManager, sensor, delay)
+        logger.info(
+            "Registered listener for {} sensor at sampling interval {} microseconds: {}",
+            sensor.name,
+            delay,
+            if (result) "succeeded" else "failed",
+        )
     }
 
     override fun onSensorChanged(event: SensorEvent) {
