@@ -69,70 +69,50 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
 
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
-    fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
-        val bodyString = sourceRegistrationBody(source).toString()
-        val body = bodyString.toRequestBody(APPLICATION_JSON_TYPE)
-
-        val request = client.requestBuilder("api/subjects/${auth.userId}/sources")
-                .post(body)
-                .headers(auth.okHttpHeaders)
-                .header("Content-Type", APPLICATION_JSON_UTF8)
-                .header("Accept", APPLICATION_JSON)
-                .build()
-
-        client.request(request).use { response ->
-            when (response.code) {
-                401 -> throw AuthenticationException("Authentication failure with the ManagementPortal.")
-                403 -> throw UnsupportedOperationException("Not allowed to update source data.")
-                404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal.")
-                409 -> throw ConflictException()
-                else -> {
-                    val responseBody = RestClient.responseBody(response) ?: ""
-
-                    if (!response.isSuccessful) {
-                        throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $bodyString")
-                    } else if (responseBody.isEmpty()) {
-                        throw IOException("Source registration with the ManagementPortal did not yield result.")
-                    } else {
-                        parseSourceRegistration(responseBody, source)
-                        return source
-                    }
-                }
-            }
-        }
-    }
+    fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata = handleSourceUpdateRequest(
+        auth,
+        "api/subjects/${auth.userId}/sources",
+        sourceRegistrationBody(source),
+        source,
+    )
 
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
-    fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
-        val bodyString = sourceUpdateBody(source).toString()
-        val body = bodyString.toRequestBody(APPLICATION_JSON_TYPE)
+    fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata = handleSourceUpdateRequest(
+        auth,
+        "api/subjects/${auth.userId}/sources/${source.sourceName}",
+        sourceUpdateBody(source),
+        source,
+    )
 
-        val request = client.requestBuilder("api/subjects/${auth.userId}/sources/${source.sourceName}")
-                .post(body)
-                .headers(auth.okHttpHeaders)
-                .header("Content-Type", APPLICATION_JSON_UTF8)
-                .header("Accept", APPLICATION_JSON)
-                .build()
+    private fun handleSourceUpdateRequest(
+        auth: AppAuthState,
+        relativePath: String,
+        requestBody: JSONObject,
+        source: SourceMetadata,
+    ): SourceMetadata {
+        val request = client.requestBuilder(relativePath)
+            .post(requestBody.toString().toRequestBody(APPLICATION_JSON_TYPE))
+            .headers(auth.okHttpHeaders)
+            .header("Content-Type", APPLICATION_JSON_UTF8)
+            .header("Accept", APPLICATION_JSON)
+            .build()
 
-        client.request(request).use { response ->
+        return client.request(request).use { response ->
+            val responseBody = RestClient.responseBody(response)
+                ?.takeIf { it.isNotEmpty() }
+                ?: throw IOException("Source registration with the ManagementPortal did not yield a response body.")
+
             when (response.code) {
-                401 -> throw AuthenticationException("Authentication failure with the ManagementPortal.")
-                403 -> throw UnsupportedOperationException("Not allowed to update source data.")
-                404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal or the source no longer exists.")
-                else -> {
-                    val responseBody = RestClient.responseBody(response) ?: ""
-
-                    if (!response.isSuccessful) {
-                        throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $bodyString")
-                    } else if (responseBody.isEmpty()) {
-                        throw IOException("Source registration with the ManagementPortal did not yield result.")
-                    } else {
-                        parseSourceRegistration(responseBody, source)
-                        return source
-                    }
-                }
+                401 -> throw AuthenticationException("Authentication failure with the ManagementPortal: $responseBody")
+                403 -> throw UnsupportedOperationException("Not allowed to update source data: $responseBody")
+                404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal: $responseBody")
+                409 -> throw ConflictException("Source registration conflicts with existing source registration: $responseBody")
+                in 400..599 -> throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $requestBody")
             }
+
+            parseSourceRegistration(responseBody, source)
+            source
         }
     }
 
@@ -163,14 +143,16 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
     @Throws(IOException::class)
     private fun <T> handleRequest(request: Request, parser: Parser<String, T>): T {
         return client.request(request).use { response ->
-            val body = RestClient.responseBody(response) ?: ""
+            val body = RestClient.responseBody(response)
+                ?.takeIf { it.isNotEmpty() }
+                ?: throw IOException("ManagementPortal did not yield a response body.")
 
-            when {
-                response.code == 401 -> throw AuthenticationException("QR code is invalid: $body")
-                !response.isSuccessful -> throw IOException("Failed to make request; response $body")
-                body.isEmpty() -> throw IOException("Response body expected but not found")
-                else -> parser.parse(body)
+            when (response.code) {
+                401 -> throw AuthenticationException("QR code is invalid: $body")
+                in 400 .. 599 -> throw IOException("Failed to make request; response $body")
             }
+
+            parser.parse(body)
         }
     }
 

@@ -120,7 +120,12 @@ abstract class AuthService : Service(), LoginListener {
                     }
                 }
                 else -> {
-                    logger.info("Failed to retrieve authentication state without refreshing")
+                    logger.error("Failed to retrieve authentication state without refreshing",
+                        IllegalStateException(
+                            "Cannot refresh authentication state $appAuth: not online and no" +
+                            "applicable authentication manager."
+                        )
+                    )
                     startLogin()
                 }
             }
