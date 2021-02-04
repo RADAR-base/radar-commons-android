@@ -22,6 +22,7 @@ import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.net.ConnectException
 
 /**
@@ -118,7 +119,7 @@ abstract class SplashActivity : AppCompatActivity() {
     protected open fun createLoginListener(): LoginListener {
         return object : LoginListener {
             override fun loginFailed(manager: LoginManager?, ex: Exception?) {
-                if (ex is ConnectException) {
+                if (ex is IOException) {
                     updateState(STATE_DISCONNECTED)
                 } else {
                     startActivity(radarApp.loginActivity)
