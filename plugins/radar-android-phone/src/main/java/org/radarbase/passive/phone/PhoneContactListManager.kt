@@ -75,21 +75,23 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
 
         do {
             numUpdates = 0
-            lateinit var lastLookup: String
+            var lastLookup: String? = null
             db.query(ContactsContract.Contacts.CONTENT_URI, LOOKUP_COLUMNS,
                     where, whereArgs, sortOrder)?.use { cursor ->
                 while (cursor.moveToNext()) {
                     numUpdates++
                     lastLookup = cursor.getString(0)
-                    contactIds.add(lastLookup)
+                        .also { contactIds.add(it) }
                 }
             } ?: return null
 
-            if (where == null) {
-                where = ContactsContract.Contacts.LOOKUP_KEY + " > ?"
-                whereArgs = arrayOf(lastLookup)
-            } else {
-                whereArgs!![0] = lastLookup
+            lastLookup?.let { ll ->
+                if (where == null) {
+                    where = ContactsContract.Contacts.LOOKUP_KEY + " > ?"
+                    whereArgs = arrayOf(ll)
+                } else {
+                    whereArgs!![0] = ll
+                }
             }
         } while (numUpdates == limit && !processor.isDone)
 
@@ -106,7 +108,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
         var added: Int? = null
         var removed: Int? = null
 
-        if (!savedContactLookups.isEmpty()) {
+        if (savedContactLookups.isNotEmpty()) {
             added = differenceSize(newContactLookups, savedContactLookups)
             removed = differenceSize(savedContactLookups, newContactLookups)
         }
