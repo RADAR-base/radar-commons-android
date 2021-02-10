@@ -42,22 +42,23 @@ import java.util.concurrent.atomic.AtomicBoolean
  * It uses a set of timers to addMeasurement data and clean the databases.
  */
 class KafkaDataSubmitter(
-        private val dataHandler: DataHandler<*, *>,
-        private val sender: KafkaSender,
-        config: SubmitterConfiguration) : Closeable {
+    private val dataHandler: DataHandler<*, *>,
+    private val sender: KafkaSender,
+    config: SubmitterConfiguration,
+) : Closeable {
 
     private val submitHandler = SafeHandler.getInstance("KafkaDataSubmitter", Process.THREAD_PRIORITY_BACKGROUND)
-    private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>>
+    private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>> = HashMap()
     private val connection: KafkaConnectionChecker
 
     var config: SubmitterConfiguration = config
         set(newValue) {
             this.submitHandler.execute {
-                if (newValue != field) {
-                    validate(newValue)
-                    field = newValue.copy()
-                    schedule()
-                }
+                if (newValue == field) return@execute
+
+                validate(newValue)
+                field = newValue.copy()
+                schedule()
             }
         }
 
@@ -135,7 +136,6 @@ class KafkaDataSubmitter(
                 } catch (e: IOException) {
                     logger.warn("failed to stop topicSender for topic {}", topic, e)
                 }
-
             }
             topicSenders.clear()
 
@@ -149,10 +149,15 @@ class KafkaDataSubmitter(
 
     /** Get a sender for a topic. Per topic, only ONE thread may use this.  */
     @Throws(IOException::class, SchemaValidationException::class)
-    private fun sender(topic: AvroTopic<Any, Any>): KafkaTopicSender<Any, Any> {
-         return topicSenders[topic.name]
-                ?: sender.sender(topic).also { topicSenders[topic.name] = it }
-    }
+    private fun sender(
+        topic: AvroTopic<Any, Any>,
+    ): KafkaTopicSender<Any, Any> = topicSenders.computeIfAbsentKt(topic.name) { sender.sender(topic) }
+
+    private fun <K: Any, V: Any> MutableMap<K, V>.computeIfAbsentKt(
+        key: K,
+        mappingFunction: (K) -> V,
+    ): V = get(key)
+        ?: mappingFunction(key).also { put(key, it) }
 
     /**
      * Check the connection status eventually.
@@ -228,16 +233,16 @@ class KafkaDataSubmitter(
     @Throws(IOException::class, SchemaValidationException::class)
     private fun uploadCache(cache: ReadableDataCache, uploadingNotified: AtomicBoolean): Int {
         val data = cache.getUnsentRecords(config.amountLimit, config.sizeLimit)
-                ?: return 0
+            ?: return 0
 
         val size = data.size()
         if (size == 0) {
             return 0
         }
 
-        val dataNonNull = data.filterNotNull()
+        val recordsNotNull = data.filterNotNull()
 
-        if (dataNonNull.isNotEmpty()) {
+        if (recordsNotNull.isNotEmpty()) {
             val topic = cache.readTopic
 
             val keyUserId = if (topic.keySchema.type == Schema.Type.RECORD) {
@@ -253,7 +258,7 @@ class KafkaDataSubmitter(
 
                 try {
                     sender(topic).run {
-                        send(AvroRecordData<Any, Any>(data.topic, data.key, dataNonNull))
+                        send(AvroRecordData<Any, Any>(data.topic, data.key, recordsNotNull))
                         flush()
                     }
                     dataHandler.updateRecordsSent(topic.name, size.toLong())

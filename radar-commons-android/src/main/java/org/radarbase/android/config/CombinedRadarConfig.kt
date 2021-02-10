@@ -13,12 +13,14 @@ import org.radarbase.android.RadarConfiguration.RemoteConfigStatus.*
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.portal.GetSubjectParser.Companion.externalUserId
 import org.radarbase.android.auth.portal.GetSubjectParser.Companion.humanReadableUserId
+import org.radarbase.android.util.SafeHandler
 import org.slf4j.LoggerFactory
 
 class CombinedRadarConfig(
-        private val localConfig: LocalConfig,
-        private val remoteConfigs: List<RemoteConfig>,
-        defaultsFactory: () -> Map<String, String>): RadarConfiguration {
+    private val localConfig: LocalConfig,
+    private val remoteConfigs: List<RemoteConfig>,
+    defaultsFactory: () -> Map<String, String>,
+): RadarConfiguration {
     private val defaults = defaultsFactory()
             .filterValues { it.isNotEmpty() }
     @Volatile

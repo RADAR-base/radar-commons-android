@@ -24,8 +24,10 @@ import java.io.IOException
 class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
     private var auth: AppAuthState? = null
     private var config: SingleRadarConfiguration? = null
-    private val handler = SafeHandler("appconfig", THREAD_PRIORITY_BACKGROUND).apply {
-        start()
+    private val handler = SafeHandler.getInstance("appconfig", THREAD_PRIORITY_BACKGROUND).apply {
+        if (!isStarted) {
+            start()
+        }
     }
     private val retryDelay = DelayedRetry(minDelay = 10_000L, maxDelay = 3_600_000L)
 
@@ -49,13 +51,10 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
 
     private val preferences = context.getSharedPreferences("org.radarbase.android.config.AppConfigRadarConfiguration", MODE_PRIVATE)
 
+    @Suppress("UNCHECKED_CAST")
     @get:Synchronized
     @set:Synchronized
-    override var cache: Map<String, String> = preferences.all
-            .mapNotNull { (k, v) ->
-                if (v is String) Pair(k, v) else null
-            }
-            .toMap()
+    override var cache: Map<String, String> = preferences.all.filterValues { it is String } as Map<String, String>
         private set
 
     @Volatile
