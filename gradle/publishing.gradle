@@ -1,5 +1,6 @@
 apply plugin: 'maven-publish'
-apply plugin: 'digital.wup.android-maven-publish'
+apply plugin: "org.jetbrains.dokka"
+
 //apply plugin: 'org.jetbrains.dokka-android'
 
 ext.sharedManifest = manifest {
@@ -13,28 +14,17 @@ task sourcesJar(type: Jar) {
     manifest.from sharedManifest
 }
 
-task javadoc(type: Javadoc) {
-    source = android.sourceSets.main.java.srcDirs
-    android.libraryVariants.all { variant ->
-        if (variant.name == 'release') {
-            owner.classpath += variant.javaCompileProvider.get().classpath
+dokkaJavadoc.configure {
+    dokkaSourceSets {
+        named("main") {
+            noAndroidSdkLink.set(false)
         }
     }
-    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
-    exclude '**/BuildConfig.java'
-    exclude '**/R.java'
-    exclude '**/*.kt'
 }
 
-//dokka {
-//    outputFormat = 'html'
-//    outputDirectory = javadoc.destinationDir
-//}
-
-//task javadocJar(type: Jar, dependsOn: [dokka, javadoc]) {
-task javadocJar(type: Jar, dependsOn: javadoc) {
+task javadocJar(type: Jar, dependsOn: dokkaJavadoc) {
     archiveClassifier.set('javadoc')
-    from javadoc.destinationDir
+    from dokkaJavadoc.outputDirectory
     manifest.from sharedManifest
 }
 
@@ -43,7 +33,9 @@ ext.nexusRepoBase = 'https://repo.thehyve.nl/content/repositories'
 publishing {
     publications {
         mavenAar(MavenPublication) {
-            from components.android
+            afterEvaluate {
+                from components.release
+            }
             artifact sourcesJar
             artifact javadocJar
 
