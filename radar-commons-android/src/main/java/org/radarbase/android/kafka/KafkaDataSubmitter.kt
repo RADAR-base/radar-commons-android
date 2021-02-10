@@ -67,32 +67,30 @@ class KafkaDataSubmitter(
     /** Upload rate in milliseconds.  */
 
     init {
-        topicSenders = HashMap()
+        validate(config)
 
-        this.submitHandler.start()
+        submitHandler.start()
 
         logger.debug("Started data submission executor")
 
-        connection = KafkaConnectionChecker(sender, this.submitHandler, dataHandler, config.uploadRate * 5)
+        connection = KafkaConnectionChecker(sender, submitHandler, dataHandler, config.uploadRate * 5)
 
-        this.submitHandler.execute {
+        submitHandler.execute {
+            uploadFuture = null
+            uploadIfNeededFuture = null
+
             try {
-                if (this@KafkaDataSubmitter.sender.isConnected) {
-                    this@KafkaDataSubmitter.dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
+                if (sender.isConnected) {
+                    dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
                     connection.didConnect()
                 } else {
-                    this@KafkaDataSubmitter.dataHandler.updateServerStatus(ServerStatusListener.Status.DISCONNECTED)
+                    dataHandler.updateServerStatus(ServerStatusListener.Status.DISCONNECTED)
                     connection.didDisconnect(null)
                 }
             } catch (ex: AuthenticationException) {
                 connection.didDisconnect(ex)
             }
-        }
 
-        this.submitHandler.execute {
-            uploadFuture = null
-            uploadIfNeededFuture = null
-            validate(config)
             schedule()
         }
     }
