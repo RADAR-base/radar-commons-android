@@ -1,8 +1,6 @@
 apply plugin: 'maven-publish'
 apply plugin: "org.jetbrains.dokka"
 
-//apply plugin: 'org.jetbrains.dokka-android'
-
 ext.sharedManifest = manifest {
     attributes("Implementation-Title": name,
             "Implementation-Version": version)
