@@ -16,9 +16,10 @@ import org.radarbase.android.auth.portal.GetSubjectParser.Companion.humanReadabl
 import org.slf4j.LoggerFactory
 
 class CombinedRadarConfig(
-        private val localConfig: LocalConfig,
-        private val remoteConfigs: List<RemoteConfig>,
-        defaultsFactory: () -> Map<String, String>): RadarConfiguration {
+    private val localConfig: LocalConfig,
+    private val remoteConfigs: List<RemoteConfig>,
+    defaultsFactory: () -> Map<String, String>,
+): RadarConfiguration {
     private val defaults = defaultsFactory()
             .filterValues { it.isNotEmpty() }
     @Volatile
@@ -48,7 +49,8 @@ class CombinedRadarConfig(
         val allStatus = remoteConfigs.map { it.status }
         status = when {
             FETCHING in allStatus -> FETCHING
-            FETCHED in allStatus -> FETCHED
+            FETCHED in allStatus && allStatus.all { it == FETCHED || it == UNAVAILABLE } -> FETCHED
+            FETCHED in allStatus || PARTIALLY_FETCHED in allStatus -> PARTIALLY_FETCHED
             ERROR in allStatus -> ERROR
             READY in allStatus -> READY
             INITIAL in allStatus -> INITIAL

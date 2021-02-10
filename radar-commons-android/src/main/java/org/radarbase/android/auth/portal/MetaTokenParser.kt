@@ -7,8 +7,6 @@ import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.AuthService.Companion.PRIVACY_POLICY_URL_PROPERTY
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCES_PROPERTY
-import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE
 import java.io.IOException
 

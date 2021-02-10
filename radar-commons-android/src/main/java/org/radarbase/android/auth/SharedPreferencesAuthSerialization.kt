@@ -9,8 +9,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.Serializable
-import java.util.ArrayList
-import java.util.HashSet
+import java.util.*
 
 class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
     private val prefs = context.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE)
@@ -20,37 +19,37 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
 
         try {
             readSerializable(LOGIN_PROPERTIES)
-                    ?.let {
-                        @Suppress("UNCHECKED_CAST")
-                        it as HashMap<String, out Serializable>?
-                    }?.also {
-                        @Suppress("DEPRECATION")
-                        builder.properties(it)
-                    }
+                ?.let {
+                    @Suppress("UNCHECKED_CAST")
+                    it as HashMap<String, out Serializable>?
+                }?.also {
+                    @Suppress("DEPRECATION")
+                    builder.properties(it)
+                }
         } catch (ex: Exception) {
             logger.warn("Cannot read AppAuthState properties", ex)
         }
 
         try {
             readSerializable(LOGIN_HEADERS)
-                    ?.let {
-                        @Suppress("UNCHECKED_CAST")
-                        it as ArrayList<Map.Entry<String, String>>?
-                    }
-                    ?.also { builder.headers += it }
+                ?.let {
+                    @Suppress("UNCHECKED_CAST")
+                    it as ArrayList<Map.Entry<String, String>>?
+                }
+                ?.also { builder.headers += it }
         } catch (ex: Exception) {
             logger.warn("Cannot read AppAuthState parseHeaders", ex)
         }
 
         try {
             prefs.getStringSet(LOGIN_APP_SOURCES_LIST, null)
-                    ?.also { builder.parseSourceMetadata(it) }
+                ?.also { builder.parseSourceMetadata(it) }
         } catch (ex: JSONException) {
             logger.warn("Cannot parse source metadata parseHeaders", ex)
         }
         try {
             prefs.getStringSet(LOGIN_SOURCE_TYPES, null)
-                    ?.also { builder.parseSourceTypes(it) }
+                ?.also { builder.parseSourceTypes(it) }
         } catch (ex: JSONException) {
             logger.warn("Cannot parse source types parseHeaders", ex)
         }
@@ -125,7 +124,6 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
             } catch (ex: ClassNotFoundException) {
                 logger.warn("Failed to deserialize object {} from preferences", key, ex)
             }
-
         }
         return null
     }

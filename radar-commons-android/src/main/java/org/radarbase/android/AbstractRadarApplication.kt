@@ -17,7 +17,6 @@
 package org.radarbase.android
 
 import android.app.Application
-import android.content.Context
 import android.os.Bundle
 import androidx.annotation.CallSuper
 import org.radarbase.android.config.CombinedRadarConfig
@@ -63,9 +62,10 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
      */
     protected open fun createConfiguration(): RadarConfiguration {
         return CombinedRadarConfig(
-                LocalConfiguration(this),
-                createRemoteConfiguration(),
-                ::createDefaultConfiguration)
+            LocalConfiguration(this),
+            createRemoteConfiguration(),
+            ::createDefaultConfiguration
+        )
     }
 
     /**
@@ -80,12 +80,4 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
      * Create default configuration for the app.
      */
     protected open fun createDefaultConfiguration(): Map<String, String> = mapOf()
-
-    companion object {
-        val Context.radarApp: AbstractRadarApplication
-            get() = applicationContext as AbstractRadarApplication
-
-        val Context.radarConfig: RadarConfiguration
-            get() = radarApp.configuration
-    }
 }

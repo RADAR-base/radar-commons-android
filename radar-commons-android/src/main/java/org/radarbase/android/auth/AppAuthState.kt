@@ -35,21 +35,25 @@ import kotlin.collections.HashMap
 @Keep
 @Suppress("unused")
 class AppAuthState private constructor(builder: Builder) {
-    val projectId: String?
-    val userId: String?
-    val token: String?
-    val tokenType: Int
-    val authenticationSource: String?
-    val needsRegisteredSources: Boolean
-    val expiration: Long
-    val lastUpdate: Long
-    val attributes: Map<String, String>
-    val headers: List<Map.Entry<String, String>>
-    val sourceMetadata: List<SourceMetadata>
-    val sourceTypes: List<SourceType>
-    val isPrivacyPolicyAccepted: Boolean
-    val okHttpHeaders: Headers
-    val baseUrl: String?
+    val projectId: String? = builder.projectId
+    val userId: String? = builder.userId
+    val token: String? = builder.token
+    val tokenType: Int = builder.tokenType
+    val authenticationSource: String? = builder.authenticationSource
+    val needsRegisteredSources: Boolean = builder.needsRegisteredSources
+    val expiration: Long = builder.expiration
+    val lastUpdate: Long = builder.lastUpdate
+    val attributes: Map<String, String> = HashMap(builder.attributes)
+    val headers: List<Map.Entry<String, String>> = ArrayList(builder.headers)
+    val sourceMetadata: List<SourceMetadata> = ArrayList(builder.sourceMetadata)
+    val sourceTypes: List<SourceType> = ArrayList(builder.sourceTypes)
+    val isPrivacyPolicyAccepted: Boolean = builder.isPrivacyPolicyAccepted
+    val okHttpHeaders: Headers = Headers.Builder().apply {
+        for (header in headers) {
+            add(header.key, header.value)
+        }
+    }.build()
+    val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.stripEndSlashes()
 
     val isValid: Boolean
         get() = isPrivacyPolicyAccepted && expiration > System.currentTimeMillis()
@@ -60,28 +64,6 @@ class AppAuthState private constructor(builder: Builder) {
     constructor() : this(Builder())
 
     constructor(initializer: Builder.() -> Unit) : this(Builder().also(initializer))
-
-    init {
-        this.projectId = builder.projectId
-        this.userId = builder.userId
-        this.token = builder.token
-        this.tokenType = builder.tokenType
-        this.expiration = builder.expiration
-        this.attributes = HashMap(builder.attributes)
-        this.sourceTypes = ArrayList(builder.sourceTypes)
-        this.sourceMetadata = ArrayList(builder.sourceMetadata)
-        this.headers = ArrayList(builder.headers)
-        this.lastUpdate = builder.lastUpdate
-        this.isPrivacyPolicyAccepted = builder.isPrivacyPolicyAccepted
-        this.authenticationSource = builder.authenticationSource
-        this.needsRegisteredSources = builder.needsRegisteredSources
-        this.okHttpHeaders = Headers.Builder().apply {
-            for (header in headers) {
-                add(header.key, header.value)
-            }
-        }.build()
-        this.baseUrl = attributes[AuthService.BASE_URL_PROPERTY]?.stripEndSlashes()
-    }
 
     fun getAttribute(key: String) = attributes[key]
 
@@ -212,20 +194,22 @@ class AppAuthState private constructor(builder: Builder) {
     }
 
     override fun toString(): String {
-        return ("AppAuthState{"
-                + "authenticationSource='" + authenticationSource + '\''.toString()
-                + ", \nprojectId='" + projectId + '\''.toString() +
-                ", \nuserId='" + userId + '\''.toString() +
-                ", \ntoken='" + token + '\''.toString() +
-                ", \ntokenType=" + tokenType +
-                ", \nexpiration=" + expiration +
-                ", \nlastUpdate=" + lastUpdate +
-                ", \nattributes=" + attributes +
-                ", \nsourceTypes=" + sourceTypes +
-                ", \nsourceMetadata=" + sourceMetadata +
-                ", \nparseHeaders=" + headers +
-                ", \nisPrivacyPolicyAccepted=" + isPrivacyPolicyAccepted +
-                "\n")
+        return """
+            AppAuthState{
+                authenticationSource='$authenticationSource',
+                projectId='$projectId',
+                userId='$userId',
+                token='$token',
+                tokenType=$tokenType,
+                expiration=$expiration,
+                lastUpdate=$lastUpdate,
+                attributes=$attributes,
+                sourceTypes=$sourceTypes,
+                sourceMetadata=$sourceMetadata,
+                parseHeaders=$headers,
+                isPrivacyPolicyAccepted=$isPrivacyPolicyAccepted,
+            }
+        """.trimIndent()
     }
 
     override fun equals(other: Any?): Boolean {
@@ -234,28 +218,22 @@ class AppAuthState private constructor(builder: Builder) {
 
         other as AppAuthState
 
-        if (projectId != other.projectId) return false
-        if (userId != other.userId) return false
-        if (token != other.token) return false
-        if (tokenType != other.tokenType) return false
-        if (authenticationSource != other.authenticationSource) return false
-        if (needsRegisteredSources != other.needsRegisteredSources) return false
-        if (expiration != other.expiration) return false
-        if (attributes != other.attributes) return false
-        if (headers != other.headers) return false
-        if (sourceMetadata != other.sourceMetadata) return false
-        if (sourceTypes != other.sourceTypes) return false
-        if (isPrivacyPolicyAccepted != other.isPrivacyPolicyAccepted) return false
+        return projectId == other.projectId
+            && userId == other.userId
+            && token == other.token
+            && tokenType == other.tokenType
+            && authenticationSource == other.authenticationSource
+            && needsRegisteredSources == other.needsRegisteredSources
+            && expiration == other.expiration
+            && attributes == other.attributes
+            && headers == other.headers
+            && sourceMetadata == other.sourceMetadata
+            && sourceTypes == other.sourceTypes
+            && isPrivacyPolicyAccepted == other.isPrivacyPolicyAccepted
 
-        return true
     }
 
-    override fun hashCode(): Int {
-        var result = projectId?.hashCode() ?: 0
-        result = 31 * result + (userId?.hashCode() ?: 0)
-        result = 31 * result + (token?.hashCode() ?: 0)
-        return result
-    }
+    override fun hashCode(): Int = Objects.hash(projectId, userId, token)
 
     companion object {
         private val logger = LoggerFactory.getLogger(AppAuthState::class.java)
