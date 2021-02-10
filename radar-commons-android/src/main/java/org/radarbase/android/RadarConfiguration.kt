@@ -36,7 +36,7 @@ interface RadarConfiguration {
     val config: LiveData<SingleRadarConfiguration>
 
     enum class RemoteConfigStatus {
-        UNAVAILABLE, INITIAL, ERROR, READY, FETCHING, FETCHED
+        UNAVAILABLE, INITIAL, ERROR, READY, FETCHING, FETCHED, PARTIALLY_FETCHED
     }
 
     /**

@@ -40,17 +40,34 @@ abstract class SplashActivity : AppCompatActivity() {
     protected var state: Int = STATE_INITIAL
     protected abstract val delayMs: Long
     protected var startedAt: Long = 0
+    protected var enable = true
+    protected var waitForFullFetchMs = 0L
 
     protected lateinit var handler: Handler
     protected var startActivityFuture: Runnable? = null
-    private val configObserver: Observer<SingleRadarConfiguration> = Observer {
-        if ((lifecycle.currentState == Lifecycle.State.RESUMED
-                        || lifecycle.currentState == Lifecycle.State.STARTED)
-                && it.status == RadarConfiguration.RemoteConfigStatus.FETCHED
-                && state != STATE_AUTHORIZING) {
-            logger.info("Config has been fetched, checking authentication")
-            stopConfigListener()
-            startAuthConnection()
+    private val configObserver: Observer<SingleRadarConfiguration> = Observer { config ->
+        updateConfig(config.status, allowPartialConfiguration = false)
+    }
+
+    private fun updateConfig(status: RadarConfiguration.RemoteConfigStatus, allowPartialConfiguration: Boolean) {
+        if (enable
+            && (lifecycle.currentState == Lifecycle.State.RESUMED
+                    || lifecycle.currentState == Lifecycle.State.STARTED)
+            && state != STATE_AUTHORIZING
+        ) {
+            if (
+                status == RadarConfiguration.RemoteConfigStatus.FETCHED
+                || (status == RadarConfiguration.RemoteConfigStatus.PARTIALLY_FETCHED
+                        && (waitForFullFetchMs <= 0L || allowPartialConfiguration))
+            ) {
+                logger.info("Config has been fetched, checking authentication")
+                stopConfigListener()
+                startAuthConnection()
+            } else if (status == RadarConfiguration.RemoteConfigStatus.PARTIALLY_FETCHED) {
+                handler.postDelayed({
+                    updateConfig(radarConfig.status, allowPartialConfiguration = true)
+                }, waitForFullFetchMs)
+            }
         }
     }
 
@@ -58,6 +75,9 @@ abstract class SplashActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        if (!enable) {
+            return
+        }
         networkReceiver = NetworkConnectedReceiver(this, null)
 
         loginListener = createLoginListener()
@@ -75,6 +95,10 @@ abstract class SplashActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!enable) {
+            return
+        }
+
         logger.info("Starting SplashActivity")
         networkReceiver.register()
 
@@ -99,6 +123,9 @@ abstract class SplashActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        if (!enable) {
+            return
+        }
         logger.info("Stopping splash")
         stopConfigListener()
         stopAuthConnection()

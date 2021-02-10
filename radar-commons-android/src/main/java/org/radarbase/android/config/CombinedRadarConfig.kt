@@ -13,7 +13,6 @@ import org.radarbase.android.RadarConfiguration.RemoteConfigStatus.*
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.portal.GetSubjectParser.Companion.externalUserId
 import org.radarbase.android.auth.portal.GetSubjectParser.Companion.humanReadableUserId
-import org.radarbase.android.util.SafeHandler
 import org.slf4j.LoggerFactory
 
 class CombinedRadarConfig(
@@ -50,7 +49,8 @@ class CombinedRadarConfig(
         val allStatus = remoteConfigs.map { it.status }
         status = when {
             FETCHING in allStatus -> FETCHING
-            FETCHED in allStatus -> FETCHED
+            FETCHED in allStatus && allStatus.all { it == FETCHED || it == UNAVAILABLE } -> FETCHED
+            FETCHED in allStatus || PARTIALLY_FETCHED in allStatus -> PARTIALLY_FETCHED
             ERROR in allStatus -> ERROR
             READY in allStatus -> READY
             INITIAL in allStatus -> INITIAL
