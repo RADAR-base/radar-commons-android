@@ -17,8 +17,6 @@
 package org.radarbase.android
 
 import android.Manifest.permission.*
-import android.app.AppOpsManager
-import android.app.AppOpsManager.MODE_ALLOWED
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.ComponentName
@@ -26,13 +24,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
-import android.location.LocationManager
 import android.os.*
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
-import android.provider.Settings
 import android.widget.Toast
 import androidx.annotation.CallSuper
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
@@ -56,7 +51,6 @@ import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHA
 import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
-import java.security.Permission
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 

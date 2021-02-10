@@ -23,7 +23,6 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.net.ConnectException
 
 /**
  * Ensure that settings and authentication is loaded

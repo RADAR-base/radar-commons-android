@@ -1,8 +1,6 @@
 package org.radarbase.android.util
 
-import android.Manifest.permission.ACCESS_COARSE_LOCATION
-import android.Manifest.permission.ACCESS_FINE_LOCATION
-import android.Manifest.permission.SYSTEM_ALERT_WINDOW
+import android.Manifest.permission.*
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -10,7 +8,6 @@ import android.app.AppOpsManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_DENIED
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.location.LocationManager
@@ -29,7 +26,6 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
 import org.radarbase.android.RadarService
 import org.radarbase.android.RadarService.Companion.applySystemService
-import org.radarbase.android.source.SourceProvider
 import org.slf4j.LoggerFactory
 
 

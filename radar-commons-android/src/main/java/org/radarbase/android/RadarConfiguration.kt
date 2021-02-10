@@ -19,16 +19,9 @@ package org.radarbase.android
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.lifecycle.LiveData
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import org.radarbase.android.auth.AppAuthState
-import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
-import org.radarbase.android.auth.portal.GetSubjectParser
 import org.radarbase.android.config.SingleRadarConfiguration
-import org.slf4j.LoggerFactory
 import java.util.*
-import java.util.regex.Pattern
-import java.util.regex.Pattern.CASE_INSENSITIVE
 
 interface RadarConfiguration {
     val status: RemoteConfigStatus

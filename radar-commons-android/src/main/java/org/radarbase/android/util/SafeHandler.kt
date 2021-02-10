@@ -3,6 +3,7 @@ package org.radarbase.android.util
 import android.os.Handler
 import android.os.HandlerThread
 import androidx.annotation.Keep
+import org.radarbase.android.util.SafeHandler.Companion.getInstance
 import org.slf4j.LoggerFactory
 import java.lang.ref.WeakReference
 import java.util.concurrent.ExecutionException

@@ -5,7 +5,7 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.kafka.SubmitterConfiguration
 import org.radarbase.android.util.StageLevels
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
-import java.util.HashSet
+import java.util.*
 
 data class DataHandlerConfiguration(
         /** Minimum battery level to send data. */

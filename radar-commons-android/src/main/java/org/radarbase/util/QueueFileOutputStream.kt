@@ -16,8 +16,8 @@
 
 package org.radarbase.util
 
-import org.radarbase.util.IO.requireIO
 import org.radarbase.util.IO.checkOffsetAndCount
+import org.radarbase.util.IO.requireIO
 import org.radarbase.util.QueueFileElement.Companion.ELEMENT_HEADER_LENGTH
 import org.slf4j.LoggerFactory
 import java.io.IOException

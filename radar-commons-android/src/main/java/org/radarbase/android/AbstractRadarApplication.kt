@@ -17,7 +17,6 @@
 package org.radarbase.android
 
 import android.app.Application
-import android.content.Context
 import android.os.Bundle
 import androidx.annotation.CallSuper
 import org.radarbase.android.config.CombinedRadarConfig

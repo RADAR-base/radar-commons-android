@@ -29,11 +29,9 @@ import android.os.Debug
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.os.SystemClock
-import okhttp3.internal.threadName
 import org.radarbase.util.CountedReference
 import org.slf4j.LoggerFactory
 import java.io.Closeable
-import java.lang.IllegalArgumentException
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 

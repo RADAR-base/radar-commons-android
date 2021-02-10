@@ -9,8 +9,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.Serializable
-import java.util.ArrayList
-import java.util.HashSet
+import java.util.*
 
 class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
     private val prefs = context.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE)
