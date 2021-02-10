@@ -72,8 +72,8 @@ abstract class AuthService : Service(), LoginListener {
 
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 refreshDelay.reset()
-                config.updateWithAuthState(this@AuthService, appAuth)
                 authSerialization.store(appAuth)
+                config.updateWithAuthState(this@AuthService, appAuth)
             }
         })
     }
@@ -94,6 +94,12 @@ abstract class AuthService : Service(), LoginListener {
             } else {
                 doRefresh()
             }
+        }
+    }
+
+    fun triggerFlush() {
+        handler.executeReentrant {
+            authSerialization.store(appAuth)
         }
     }
 
@@ -319,6 +325,8 @@ abstract class AuthService : Service(), LoginListener {
             get() = loginManagers
 
         fun update(manager: LoginManager) = this@AuthService.update(manager)
+
+        fun triggerFlush() = this@AuthService.triggerFlush()
 
         fun refresh() = this@AuthService.refresh()
 
