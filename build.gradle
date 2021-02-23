@@ -15,7 +15,7 @@
  */
 buildscript {
     ext.kotlin_version = '1.4.30'
-    ext.dokka_version = '1.4.20'
+    ext.dokka_version = '1.4.20-dev-65'
     repositories {
         google()
         jcenter()
