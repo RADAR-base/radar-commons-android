@@ -16,9 +16,9 @@ ext {
 }
 
 dependencies {
-    testImplementation 'junit:junit:4.13'
+    testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.slf4j:slf4j-simple:1.7.30'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.9.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.9.1'
 
     // Core library
     androidTestImplementation "androidx.test:core:$androidXCoreVersion"
@@ -30,7 +30,7 @@ dependencies {
     // Assertions
     androidTestImplementation "androidx.test.ext:junit:$androidXExtVersion"
     androidTestImplementation "androidx.test.ext:truth:$androidXExtVersion"
-    androidTestImplementation "com.google.truth:truth:1.0"
+    androidTestImplementation "com.google.truth:truth:1.0.1"
 
     // Espresso dependencies
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidXEspressoVersion"

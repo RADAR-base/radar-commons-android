@@ -24,4 +24,3 @@ dependencies {
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"
-apply from: "$rootDir/gradle/bintray.gradle"

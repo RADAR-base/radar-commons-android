@@ -2,11 +2,15 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <application android:hardwareAccelerated="true">
+    <uses-sdk tools:overrideLibrary="com.google.zxing.client.android" />
+
+    <application
+        android:hardwareAccelerated="true">
+
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
             android:screenOrientation="user"
-            tools:replace="android:screenOrientation"/>
+            tools:replace="screenOrientation"/>
     </application>
 
 </manifest>
