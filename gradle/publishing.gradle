@@ -39,6 +39,8 @@ publishing {
             artifact javadocJar
 
             pom {
+                name = project.name
+                url = githubUrl
                 description = project.description
                 licenses {
                     license {
