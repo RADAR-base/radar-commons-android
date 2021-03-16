@@ -1,9 +1,12 @@
 apply plugin: 'maven-publish'
 apply plugin: "org.jetbrains.dokka"
+apply plugin: 'signing'
 
 ext.sharedManifest = manifest {
-    attributes("Implementation-Title": name,
-            "Implementation-Version": version)
+    attributes(
+            "Implementation-Title": name,
+            "Implementation-Version": version
+    )
 }
 
 task sourcesJar(type: Jar) {
@@ -25,8 +28,6 @@ task javadocJar(type: Jar, dependsOn: dokkaJavadoc) {
     from dokkaJavadoc.outputDirectory
     manifest.from sharedManifest
 }
-
-ext.nexusRepoBase = 'https://repo.thehyve.nl/content/repositories'
 
 publishing {
     publications {
@@ -71,13 +72,26 @@ publishing {
     }
     repositories {
         maven {
-            def releasesRepoUrl = "$nexusRepoBase/releases"
-            def snapshotsRepoUrl = "$nexusRepoBase/snapshots"
-            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+            name = "OSSRH"
             credentials {
-                username = project.hasProperty('nexusUser') ? project.property('nexusUser') : System.getenv('NEXUS_USER')
-                password = project.hasProperty('nexusPassword') ? project.property('nexusPassword') : System.getenv('NEXUS_PASSWORD')
+                username = project.hasProperty("ossrh.user") ? project.property("ossrh.user") : System.getenv("OSSRH_USER")
+                password = project.hasProperty("ossrh.password") ? project.property("ossrh.password") : System.getenv("OSSRH_PASSWORD")
             }
+
+            def releasesRepoUrl = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2/")
+            def snapshotsRepoUrl = uri("https://oss.sonatype.org/content/repositories/snapshots/")
+            url = version.toString().endsWith("SNAPSHOT") ? snapshotsRepoUrl : releasesRepoUrl
         }
     }
+}
+
+signing {
+    useGpgCmd()
+    required { true }
+    sign(tasks["sourcesJar"], tasks["javadocJar"])
+    sign(publishing.publications["mavenAar"])
+}
+
+tasks.withType(Sign).configureEach {
+    onlyIf { gradle.taskGraph.hasTask("${project.path}:publish") }
 }

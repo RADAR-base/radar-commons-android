@@ -15,11 +15,11 @@ Include this plugin in a RADAR app by adding the following configuration to `bui
 
 ```gradle
 repositories {
-    maven { url 'http://dl.bintray.com/radar-cns/org.radarcns' }
+    mavenCentral()
 }
 
 dependencies {
-    compile 'org.radarcns:radar-android-weatherapi:0.2.1'
+    compile 'org.radarcns:radar-android-weatherapi:<version>'
 }
 ```
 Add `org.radarbase.passive.weather.WeatherApiManager` to the `plugins` variable of the `RadarService` instance in your app.

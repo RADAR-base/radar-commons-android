@@ -37,8 +37,7 @@ Include this repository by adding the following snippet to your Android `build.g
 
 ```gradle
 repositories {
-    jcenter()
-    maven { url 'http://dl.bintray.com/radar-base/org.radarbase' }
+    mavenCentral()
 }
 dependencies {
     api 'org.radarbase:radar-commons-android:1.1.0'
