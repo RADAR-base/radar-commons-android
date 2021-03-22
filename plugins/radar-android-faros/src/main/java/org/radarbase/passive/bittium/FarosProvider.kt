@@ -39,6 +39,7 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
 
     override val permissionsNeeded: List<String> = listOf(
         ACCESS_COARSE_LOCATION,
+        ACCESS_FINE_LOCATION,
         BLUETOOTH,
         BLUETOOTH_ADMIN,
     )
