@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 buildscript {
-    ext.kotlin_version = '1.4.31'
+    ext.kotlin_version = '1.4.32'
     ext.dokka_version = '1.4.30'
     repositories {
         google()
