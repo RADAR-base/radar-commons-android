@@ -67,8 +67,16 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         register()
         // Calls and sms, in and outgoing and number of unread sms
         logProcessor.start {
-            lastCallTimestamp = preferences.getLong(LAST_CALL_KEY, System.currentTimeMillis())
-            lastSmsTimestamp = preferences.getLong(LAST_SMS_KEY, System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            lastCallTimestamp = preferences.getLong(LAST_CALL_KEY, now)
+            lastSmsTimestamp = preferences.getLong(LAST_SMS_KEY, now)
+
+            if (lastCallTimestamp == now || lastSmsTimestamp == now) {
+                preferences.edit()
+                    .putLong(LAST_CALL_KEY, lastCallTimestamp)
+                    .putLong(LAST_SMS_KEY, lastSmsTimestamp)
+                    .apply()
+            }
         }
 
         status = SourceStatusListener.Status.CONNECTED
@@ -130,7 +138,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         var lastTimestamp = previousTimestamp
 
         do {
-            val whereArgs = arrayOf(java.lang.Long.toString(lastTimestamp))
+            val whereArgs = arrayOf(lastTimestamp.toString())
             numUpdates = 0
             // Query all sms with a date later than the last date seen and orderBy by date
             try {
@@ -143,7 +151,6 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
             } catch (ex: Exception) {
                 logger.error("Error in processing the sms log", ex)
             }
-
         } while (numUpdates == SQLITE_LIMIT && !logProcessor.isDone)
 
         return lastTimestamp
@@ -247,15 +254,15 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
      */
     private fun createTargetHashKey(target: String, phoneNumber: Long?): ByteBuffer? {
         // If non-numerical, then hash the target directly
-        if (phoneNumber == null) {
-            return hashGenerator.createHashByteBuffer(target)
-        } else if (phoneNumber < 0) {
-            return null
-        } else {
-            // remove international prefixes if present, since that would
-            // give inconsistent results -> 0612345678 vs +31612345678
-            val phoneNumberSuffix = (phoneNumber % 1_000_000_000L).toInt()
-            return hashGenerator.createHashByteBuffer(phoneNumberSuffix)
+        return when {
+            phoneNumber == null -> hashGenerator.createHashByteBuffer(target)
+            phoneNumber < 0 -> null
+            else -> {
+                // remove international prefixes if present, since that would
+                // give inconsistent results -> 0612345678 vs +31612345678
+                val phoneNumberSuffix = (phoneNumber % 1_000_000_000L).toInt()
+                hashGenerator.createHashByteBuffer(phoneNumberSuffix)
+            }
         }
     }
 

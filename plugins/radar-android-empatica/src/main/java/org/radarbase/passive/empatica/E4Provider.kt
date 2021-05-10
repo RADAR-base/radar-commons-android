@@ -33,6 +33,7 @@ open class E4Provider(radarService: RadarService) : SourceProvider<E4State>(rada
 
     override val permissionsNeeded = listOf(
         ACCESS_COARSE_LOCATION,
+        ACCESS_FINE_LOCATION,
         BLUETOOTH,
         BLUETOOTH_ADMIN,
     )

@@ -46,6 +46,7 @@ open class PhoneBluetoothProvider(radarService: RadarService) : SourceProvider<B
     override val permissionsNeeded: List<String> = listOf(
         Manifest.permission.BLUETOOTH_ADMIN,
         Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION,
     )
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)
