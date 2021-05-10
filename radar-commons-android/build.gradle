@@ -28,11 +28,11 @@ android {
 description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarbase:radar-commons:0.13.1') {
+    api ('org.radarbase:radar-commons:0.13.2') {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarcns:radar-schemas-commons:0.5.15') {
+    api ('org.radarbase:radar-schemas-commons:0.6.0') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     //noinspection GradleDependency
@@ -48,12 +48,12 @@ dependencies {
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
-    api "androidx.lifecycle:lifecycle-service:2.3.0"
+    api "androidx.lifecycle:lifecycle-service:2.3.1"
 
     implementation 'com.google.firebase:firebase-config:20.0.4'
-    implementation 'com.google.firebase:firebase-core:18.0.2'
-    implementation 'com.google.firebase:firebase-crashlytics:17.4.0'
-    implementation 'sk.baka.slf4j:slf4j-handroid:1.7.32'
+    implementation 'com.google.firebase:firebase-core:18.0.3'
+    implementation 'com.google.firebase:firebase-crashlytics:17.4.1'
+    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:1.7.30'
 }
 
 apply from: "$rootDir/gradle/test.gradle"

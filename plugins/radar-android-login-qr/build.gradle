@@ -15,7 +15,7 @@ dependencies {
     implementation('com.journeyapps:zxing-android-embedded:4.2.0') { transitive = false }
     implementation 'androidx.appcompat:appcompat:1.2.0'
     // Support Android 14+
-    implementation 'com.google.zxing:core:3.3.0'
+    implementation 'com.google.zxing:core:3.3.2'
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"
