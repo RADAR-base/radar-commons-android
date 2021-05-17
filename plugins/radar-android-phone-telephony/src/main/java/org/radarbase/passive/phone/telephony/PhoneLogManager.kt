@@ -34,11 +34,11 @@ import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.*
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
+import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
 class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLogService, BaseSourceState>(context) {
-
     private val callTopic: DataCache<ObservationKey, PhoneCall> = createCache("android_phone_call", PhoneCall())
     private val smsTopic: DataCache<ObservationKey, PhoneSms> = createCache("android_phone_sms", PhoneSms())
     private val smsUnreadTopic: DataCache<ObservationKey, PhoneSmsUnread> = createCache("android_phone_sms_unread", PhoneSmsUnread())
@@ -72,6 +72,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
             lastSmsTimestamp = preferences.getLong(LAST_SMS_KEY, now)
 
             if (lastCallTimestamp == now || lastSmsTimestamp == now) {
+                logger.info("Setting last SMS / call timestamp to {}", Date(now))
                 preferences.edit()
                     .putLong(LAST_CALL_KEY, lastCallTimestamp)
                     .putLong(LAST_SMS_KEY, lastSmsTimestamp)
@@ -89,7 +90,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     }
 
     private fun processSmsLog() {
-        lastSmsTimestamp = processDb(Telephony.Sms.CONTENT_URI, SMS_COLUMNS, Telephony.Sms.DATE, lastSmsTimestamp) {
+        val newSmsTimestamp = processDb(Telephony.Sms.CONTENT_URI, SMS_COLUMNS, Telephony.Sms.DATE, lastSmsTimestamp) {
             val date = getLong(getColumnIndex(Telephony.Sms.DATE))
 
             // If from contact, then the ID of the sender is a non-zero integer
@@ -103,13 +104,18 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
             date
         }
 
-        preferences.edit()
+        if (newSmsTimestamp != lastSmsTimestamp) {
+            lastSmsTimestamp = newSmsTimestamp
+            logger.info("Setting last SMS timestamp to {}", Date(lastSmsTimestamp))
+
+            preferences.edit()
                 .putLong(LAST_SMS_KEY, lastSmsTimestamp)
                 .apply()
+        }
     }
 
     private fun processCallLog() {
-        lastCallTimestamp = processDb(CallLog.Calls.CONTENT_URI, CALL_COLUMNS, CallLog.Calls.DATE, lastCallTimestamp) {
+        val newLastCallTimestamp = processDb(CallLog.Calls.CONTENT_URI, CALL_COLUMNS, CallLog.Calls.DATE, lastCallTimestamp) {
             val date = getLong(getColumnIndex(CallLog.Calls.DATE))
 
             // If contact, then the contact lookup uri is given
@@ -125,9 +131,13 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
             date
         }
 
-        preferences.edit()
+        if (newLastCallTimestamp != lastCallTimestamp) {
+            lastCallTimestamp = newLastCallTimestamp
+            logger.info("Setting last call timestamp to {}", Date(lastCallTimestamp))
+            preferences.edit()
                 .putLong(LAST_CALL_KEY, lastCallTimestamp)
                 .apply()
+        }
     }
 
     private fun processDb(contentUri: Uri, columns: Array<String>, dateColumn: String, previousTimestamp: Long, processor: Cursor.() -> Long): Long {
@@ -188,8 +198,6 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
                 targetIsContact,
                 phoneNumber == null,
                 target.length))
-
-        logger.info("Call log: {}, {}, {}, {}, {}, contact? {}", target, targetKey, duration, type, eventTimestamp, targetIsContact)
     }
 
     private fun sendPhoneSms(eventTimestamp: Double, target: String, typeCode: Int, message: String, targetIsContact: Boolean) {
@@ -220,16 +228,11 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
                 sendFromContact,
                 phoneNumber == null,
                 target.length))
-
-        logger.info("SMS log: {}, {}, {}, {}, {} chars, contact? {}, length? {}",
-                target, targetKey, type, eventTimestamp, length, sendFromContact, target.length)
     }
 
     private fun sendNumberUnreadSms(numberUnread: Int) {
         val time = currentTime
         send(smsUnreadTopic, PhoneSmsUnread(time, time, numberUnread))
-
-        logger.info("SMS unread: {} {}", time, numberUnread)
     }
 
     /**
@@ -276,7 +279,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         private const val SQLITE_LIMIT = 1000
 
         private val ID_COLUMNS = arrayOf(_ID)
-        private val SMS_COLUMNS = arrayOf(Telephony.Sms.PERSON, Telephony.Sms.ADDRESS, Telephony.Sms.TYPE, Telephony.Sms.BODY)
+        private val SMS_COLUMNS = arrayOf(Telephony.Sms.DATE, Telephony.Sms.PERSON, Telephony.Sms.ADDRESS, Telephony.Sms.TYPE, Telephony.Sms.BODY)
         private val CALL_COLUMNS = arrayOf(CallLog.Calls.DATE, CallLog.Calls.CACHED_LOOKUP_URI, CallLog.Calls.NUMBER, CallLog.Calls.DURATION, CallLog.Calls.TYPE)
 
         // If from contact, then the ID of the sender is a non-zero integer
