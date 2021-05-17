@@ -16,6 +16,7 @@
 
 package org.radarbase.util
 
+import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.core.Is.`is`
 import org.junit.Assert.*
 import org.junit.Rule
@@ -245,7 +246,12 @@ class QueueFileTest {
     }
 
     @Throws(IOException::class)
-    private fun writeAssertFileSize(expectedSize: Long, expectedUsed: Long, buffer: ByteArray, queue: QueueFile) {
+    private fun writeAssertFileSize(
+        expectedSize: Long,
+        expectedUsed: Long,
+        buffer: ByteArray,
+        queue: QueueFile,
+    ) {
         queue.elementOutputStream().use { out -> out.write(buffer) }
         assertEquals(expectedUsed, queue.usedBytes)
         assertEquals(expectedSize, queue.fileSize)
@@ -357,7 +363,11 @@ class QueueFileTest {
      * @return bytes removed
      */
     @Throws(IOException::class)
-    private fun remove(list: LinkedList<Element>, queue: QueueFile, random: Random): Long {
+    private fun remove(
+        list: LinkedList<Element>,
+        queue: QueueFile,
+        random: Random,
+    ): Long {
         val numRemove = random.nextInt(queue.size) + 1
         logger.info("Removing {} elements", numRemove)
         queue.remove(numRemove)
@@ -371,7 +381,12 @@ class QueueFileTest {
      * The sizes read must match the verification list.
      */
     @Throws(Throwable::class)
-    private fun read(list: LinkedList<Element>, queue: QueueFile, buffer: ByteArray, random: Random) {
+    private fun read(
+        list: LinkedList<Element>,
+        queue: QueueFile,
+        buffer: ByteArray,
+        random: Random,
+    ) {
         val numRead = random.nextInt(queue.size) + 1
         assertTrue(queue.size >= numRead)
         logger.info("Reading {} elements", numRead)
@@ -403,7 +418,13 @@ class QueueFileTest {
     }
 
     @Throws(IOException::class)
-    private fun write(list: LinkedList<Element>, queue: QueueFile, buffer: ByteArray, random: Random, size: Long): Long {
+    private fun write(
+        list: LinkedList<Element>,
+        queue: QueueFile,
+        buffer: ByteArray,
+        random: Random,
+        size: Long,
+    ): Long {
         val numAdd = random.nextInt(16) + 1
         logger.info("Writing {} elements", numAdd)
         var bytesUsed = 0L
