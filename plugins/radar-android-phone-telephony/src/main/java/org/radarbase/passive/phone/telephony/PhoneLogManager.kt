@@ -53,9 +53,10 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         name = service.getString(R.string.phoneLogServiceDisplayName)
         logProcessor = OfflineProcessor(context) {
             process = listOf(
-                    this@PhoneLogManager::processCallLog,
-                    this@PhoneLogManager::processSmsLog,
-                    this@PhoneLogManager::processNumberUnreadSms)
+                this@PhoneLogManager::processCallLog,
+                this@PhoneLogManager::processSmsLog,
+                this@PhoneLogManager::processNumberUnreadSms,
+            )
             requestCode = REQUEST_CODE_PENDING_INTENT
             requestName = ACTIVITY_LAUNCH_WAKE
             wake = false
