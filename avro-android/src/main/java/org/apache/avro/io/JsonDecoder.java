@@ -41,9 +41,6 @@ import java.util.Objects;
 
 import static org.apache.avro.io.parsing.Symbol.ARRAY_END;
 import static org.apache.avro.io.parsing.Symbol.MAP_END;
-import static org.apache.avro.io.parsing.Symbol.MAP_START;
-import static org.apache.avro.io.parsing.Symbol.RECORD_END;
-import static org.apache.avro.io.parsing.Symbol.RECORD_START;
 
 /**
  * A {@link Decoder} for Avro's JSON data encoding.
@@ -299,20 +296,11 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public long readMapStart() throws IOException {
-    if (parser.topSymbol() == RECORD_START) {
-      advance(Symbol.RECORD_START);
-      Object next = currentState.next("record-start");
-      if (next instanceof JSONObject) {
-        stateDeque.push(currentState);
-        currentState = new JSONRecordStackElement((JSONObject) next);
-      }
-    } else if (parser.topSymbol() == MAP_START) {
-      advance(Symbol.MAP_START);
-      Object next = currentState.next("map-start");
-      if (next instanceof JSONObject) {
-        stateDeque.push(currentState);
-        currentState = new JSONMapStackElement((JSONObject) next);
-      }
+    advance(Symbol.MAP_START);
+    Object next = currentState.next("map-start");
+    if (next instanceof JSONObject) {
+      stateDeque.push(currentState);
+      currentState = new JSONMapStackElement((JSONObject) next);
     }
     return doMapNext();
   }
@@ -323,20 +311,15 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
   }
 
   private long doMapNext() throws IOException {
-    if (currentState instanceof JSONRecordStackElement
-            || currentState instanceof JSONMapStackElement) {
+    if (currentState instanceof JSONMapStackElement) {
       int result = currentState.available();
       if (result == 0) {
-        if (currentState instanceof JSONRecordStackElement) {
-          advance(RECORD_END);
-        } else {
-          advance(MAP_END);
-        }
+        advance(MAP_END);
         currentState = stateDeque.pop();
       }
       return result;
     } else {
-      throw error("array", currentState.getClass().getSimpleName());
+      throw error("map", currentState.getClass().getSimpleName());
     }
   }
 
@@ -386,6 +369,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public Symbol doAction(Symbol input, Symbol top) throws IOException {
+    if (input)
     return null;
   }
 
@@ -446,36 +430,40 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   private class JSONRecordStackElement implements JSONStackElement {
     final JSONObject element;
-    private final Iterator<String> keyIterator;
-    int queried;
-    final int totalSize;
+    String key;
+    boolean isRead;
 
     JSONRecordStackElement(JSONObject object) {
       element = object;
-      keyIterator = element.keys();
-      queried = 0;
-      totalSize = element.length();
+      key = null;
+      isRead = true;
     }
 
     @Override
     public int available() {
-      return totalSize - queried;
+      return isRead ? 0 : 1;
+    }
+
+    public void setKey(String key) {
+      this.key = key;
+      this.isRead = false;
     }
 
     @Override
     public Object next(String type) throws IOException {
-      if (!keyIterator.hasNext()) {
+      if (isRead) {
         throw new AvroTypeException("Expected " + type + ". Got object end.");
       }
-      advance(Symbol.ITEM_END);
+      advance(Symbol.FIELD_END);
+      isRead = true;
       try {
-        queried++;
-        return element.get(keyIterator.next());
+        return element.get(key);
       } catch (JSONException ex) {
         throw new IOException(ex);
       }
     }
   }
+
   private class JSONArrayStackElement implements JSONStackElement {
     final JSONArray element;
     private int arrayIndex;
