@@ -151,8 +151,7 @@ class OfflineProcessor(private val context: Context,
 
     private fun schedule() {
         val runImmediately = Debug.isDebuggerConnected()
-        val firstAlarm: Long
-        firstAlarm = if (runImmediately) {
+        val firstAlarm: Long = if (runImmediately) {
             trigger()
             SystemClock.elapsedRealtime() + config.intervalMillis
         } else {
