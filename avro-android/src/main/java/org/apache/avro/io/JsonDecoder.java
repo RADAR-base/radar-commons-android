@@ -40,7 +40,10 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import static org.apache.avro.io.parsing.Symbol.ARRAY_END;
+import static org.apache.avro.io.parsing.Symbol.ITEM_END;
 import static org.apache.avro.io.parsing.Symbol.MAP_END;
+import static org.apache.avro.io.parsing.Symbol.RECORD_END;
+import static org.apache.avro.io.parsing.Symbol.UNION_END;
 
 /**
  * A {@link Decoder} for Avro's JSON data encoding.
@@ -74,6 +77,9 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   private void advance(Symbol symbol) throws IOException {
     this.parser.processTrailingImplicitActions();
+    if (this.parser.topSymbol() == ITEM_END) {
+      this.parser.popSymbol();
+    }
     parser.advance(symbol);
   }
 
@@ -342,24 +348,25 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
     String label;
     Object next = currentState.next("start-union");
+    stateDeque.push(currentState);
     if (next == JSONObject.NULL) {
       label = "null";
+      currentState = new JSONPrimitiveStackElement(JSONObject.NULL);
     } else if (next instanceof JSONObject) {
       try {
         label = ((JSONObject) next).keys().next();
       } catch (NoSuchElementException ex) {
         throw error("start-union", "empty-object");
       }
-      stateDeque.push(currentState);
       try {
         currentState = new JSONPrimitiveStackElement(((JSONObject) next).get(label));
       } catch (JSONException ex) {
         throw new IOException(ex);
       }
-      parser.pushSymbol(Symbol.UNION_END);
     } else {
       throw error("start-union", next);
     }
+    parser.pushSymbol(Symbol.UNION_END);
     int n = a.findLabel(label);
     if (n < 0)
       throw new AvroTypeException("Unknown union branch " + label);
@@ -369,7 +376,27 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public Symbol doAction(Symbol input, Symbol top) throws IOException {
-    if (input)
+    if (top instanceof Symbol.FieldAdjustAction) {
+      Symbol.FieldAdjustAction fa = (Symbol.FieldAdjustAction) top;
+      String name = fa.fname;
+      if (currentState instanceof JSONRecordStackElement) {
+        JSONRecordStackElement recordElement = (JSONRecordStackElement) currentState;
+        recordElement.setKey(name);
+      }
+    } else if (top == Symbol.FIELD_END) {
+      if (currentState instanceof JSONRecordStackElement) {
+        ((JSONRecordStackElement) currentState).setKey(null);
+      }
+    } else if (top == Symbol.RECORD_START) {
+      Object next = currentState.next("record-start");
+      if (!(next instanceof JSONObject)) {
+        throw error("record-start", next.getClass().getSimpleName());
+      }
+      stateDeque.push(currentState);
+      currentState = new JSONRecordStackElement((JSONObject) next);
+    } else if (top == RECORD_END || top == UNION_END) {
+      currentState = stateDeque.pop();
+    }
     return null;
   }
 
@@ -382,7 +409,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
     Object next(String type) throws IOException;
   }
 
-  private class JSONMapStackElement implements JSONStackElement {
+  private static class JSONMapStackElement implements JSONStackElement {
     final JSONObject element;
     private final Iterator<String> keyIterator;
     String key;
@@ -393,7 +420,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
       element = object;
       keyIterator = element.keys();
       queried = 0;
-      totalSize = element.length() * 2;
+      totalSize = element.length();
     }
 
     @Override
@@ -404,18 +431,15 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
     @Override
     public Object next(String type) throws IOException {
       if (key == null) {
-        advance(Symbol.MAP_KEY_MARKER);
         if (!keyIterator.hasNext()) {
           throw new AvroTypeException("Expected " + type + ". Got map end.");
         }
         if (!type.equals("map-key")) {
           throw new AvroTypeException("Expected " + type + ". Got map-key string.");
         }
-        queried++;
         key = keyIterator.next();
         return key;
       } else {
-        advance(Symbol.ITEM_END);
         try {
           Object result = element.get(key);
           queried++;
@@ -428,7 +452,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
     }
   }
 
-  private class JSONRecordStackElement implements JSONStackElement {
+  private static class JSONRecordStackElement implements JSONStackElement {
     final JSONObject element;
     String key;
     boolean isRead;
@@ -446,15 +470,14 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
     public void setKey(String key) {
       this.key = key;
-      this.isRead = false;
+      this.isRead = key == null;
     }
 
     @Override
     public Object next(String type) throws IOException {
       if (isRead) {
-        throw new AvroTypeException("Expected " + type + ". Got object end.");
+        throw new AvroTypeException("Expected " + type + ". Got object-end.");
       }
-      advance(Symbol.FIELD_END);
       isRead = true;
       try {
         return element.get(key);
@@ -464,7 +487,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
     }
   }
 
-  private class JSONArrayStackElement implements JSONStackElement {
+  private static class JSONArrayStackElement implements JSONStackElement {
     final JSONArray element;
     private int arrayIndex;
     final int totalSize;
@@ -482,7 +505,6 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
     @Override
     public Object next(String type) throws IOException {
-      advance(Symbol.ITEM_END);
       if (arrayIndex >= element.length()) {
         throw new AvroTypeException("Expected " + type + ". Got array end.");
       }

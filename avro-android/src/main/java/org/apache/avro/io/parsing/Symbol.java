@@ -17,7 +17,10 @@
  */
 package org.apache.avro.io.parsing;
 
+import org.apache.avro.Schema;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -25,8 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-
-import org.apache.avro.Schema;
 
 /**
  * Symbol is the base of all symbols (terminals and non-terminals) of the
@@ -55,6 +56,7 @@ public abstract class Symbol {
 
   /// The kind of this symbol.
   public final Kind kind;
+  protected final String name;
 
   /**
    * The production for this symbol. If this symbol is a terminal this is
@@ -76,11 +78,12 @@ public abstract class Symbol {
   /**
    * Constructs a new symbol of the given kind <tt>kind</tt>.
    */
-  protected Symbol(Kind kind) {
-    this(kind, null);
+  protected Symbol(String name, Kind kind) {
+    this(name, kind, null);
   }
 
-  protected Symbol(Kind kind, Symbol[] production) {
+  protected Symbol(String name, Kind kind, Symbol[] production) {
+    this.name = name;
     this.production = production;
     this.kind = kind;
   }
@@ -257,19 +260,18 @@ public abstract class Symbol {
     return result;
   }
 
+
+  @Override
+  public String toString() {
+    return name;
+  }
+
   private static class Terminal extends Symbol {
-    private final String printName;
-
     public Terminal(String printName) {
-      super(Kind.TERMINAL);
-      this.printName = printName;
-    }
-
-    @Override
-    public String toString() {
-      return printName;
+      super(printName, Kind.TERMINAL);
     }
   }
+
 
   public static class ImplicitAction extends Symbol {
     /**
@@ -279,19 +281,19 @@ public abstract class Symbol {
      */
     public final boolean isTrailing;
 
-    private ImplicitAction() {
-      this(false);
+    private ImplicitAction(String name) {
+      this(name, false);
     }
 
-    private ImplicitAction(boolean isTrailing) {
-      super(Kind.IMPLICIT_ACTION);
+    private ImplicitAction(String name, boolean isTrailing) {
+      super(name, Kind.IMPLICIT_ACTION);
       this.isTrailing = isTrailing;
     }
   }
 
   protected static class Root extends Symbol {
     private Root(Symbol... symbols) {
-      super(Kind.ROOT, makeProduction(symbols));
+      super("root", Kind.ROOT, makeProduction(symbols));
       production[0] = this;
     }
 
@@ -304,7 +306,7 @@ public abstract class Symbol {
 
   protected static class Sequence extends Symbol implements Iterable<Symbol> {
     private Sequence(Symbol[] productions) {
-      super(Kind.SEQUENCE, productions);
+      super("sequence", Kind.SEQUENCE, productions);
     }
 
     public Symbol get(int index) {
@@ -363,13 +365,19 @@ public abstract class Symbol {
     public final int flattenedSize() {
       return flattenedSize(production, 0);
     }
+
+
+    @Override
+    public String toString() {
+      return name + Arrays.toString(production);
+    }
   }
 
   public static class Repeater extends Symbol {
     public final Symbol end;
 
     private Repeater(Symbol end, Symbol... sequenceToRepeat) {
-      super(Kind.REPEATER, makeProduction(sequenceToRepeat));
+      super("repeater", Kind.REPEATER, makeProduction(sequenceToRepeat));
       this.end = end;
       production[0] = this;
     }
@@ -451,7 +459,7 @@ public abstract class Symbol {
     public final String[] labels;
 
     private Alternative(Symbol[] symbols, String[] labels) {
-      super(Kind.ALTERNATIVE);
+      super("alternative", Kind.ALTERNATIVE);
       this.symbols = symbols;
       this.labels = labels;
     }
@@ -487,27 +495,43 @@ public abstract class Symbol {
       }
       return new Alternative(ss, labels);
     }
+
+    @Override
+    public String toString() {
+      return name + Arrays.toString(labels);
+    }
   }
 
   public static class ErrorAction extends ImplicitAction {
     public final String msg;
 
     private ErrorAction(String msg) {
+      super("error");
       this.msg = msg;
+    }
+
+    @Override
+    public String toString() {
+      return name + "<msg='" + msg + ">";
     }
   }
 
   public static IntCheckAction intCheckAction(int size) {
-    return new IntCheckAction(size);
+    return new IntCheckAction("int-check", size);
   }
 
   public static class IntCheckAction extends Symbol {
     public final int size;
 
     @Deprecated
-    public IntCheckAction(int size) {
-      super(Kind.EXPLICIT_ACTION);
+    public IntCheckAction(String name, int size) {
+      super(name, Kind.EXPLICIT_ACTION);
       this.size = size;
+    }
+
+    @Override
+    public String toString() {
+      return name + "<size=" + size + '>';
     }
   }
 
@@ -521,7 +545,7 @@ public abstract class Symbol {
 
     @Deprecated
     public EnumAdjustAction(int rsymCount, Object[] adjustments) {
-      super(rsymCount);
+      super("enum-check", rsymCount);
       this.adjustments = adjustments;
       boolean noAdj = true;
       if (adjustments != null) {
@@ -535,11 +559,12 @@ public abstract class Symbol {
   }
 
   public static WriterUnionAction writerUnionAction() {
-    return new WriterUnionAction();
+    return new WriterUnionAction("writer-union");
   }
 
   public static class WriterUnionAction extends ImplicitAction {
-    private WriterUnionAction() {
+    private WriterUnionAction(String name) {
+      super(name);
     }
   }
 
@@ -548,6 +573,7 @@ public abstract class Symbol {
     public final Symbol reader;
 
     private ResolvingAction(Symbol writer, Symbol reader) {
+      super("resolve");
       this.writer = writer;
       this.reader = reader;
     }
@@ -568,7 +594,7 @@ public abstract class Symbol {
 
     @Deprecated
     public SkipAction(Symbol symToSkip) {
-      super(true);
+      super("skip", true);
       this.symToSkip = symToSkip;
     }
 
@@ -590,9 +616,15 @@ public abstract class Symbol {
 
     @Deprecated
     public FieldAdjustAction(int rindex, String fname, Set<String> aliases) {
+      super("field");
       this.rindex = rindex;
       this.fname = fname;
       this.aliases = aliases;
+    }
+
+    @Override
+    public String toString() {
+      return name + '<' + fname + '>';
     }
   }
 
@@ -606,6 +638,7 @@ public abstract class Symbol {
 
     @Deprecated
     public FieldOrderAction(Schema.Field[] fields) {
+      super("field-order");
       this.fields = fields;
       boolean noReorder = true;
       for (int i = 0; noReorder && i < fields.length; i++)
@@ -623,6 +656,7 @@ public abstract class Symbol {
 
     @Deprecated
     public DefaultStartAction(byte[] contents) {
+      super("default-start");
       this.contents = contents;
     }
   }
@@ -637,6 +671,7 @@ public abstract class Symbol {
 
     @Deprecated
     public UnionAdjustAction(int rindex, Symbol symToParse) {
+      super("union-adjust");
       this.rindex = rindex;
       this.symToParse = symToParse;
     }
@@ -646,6 +681,10 @@ public abstract class Symbol {
       return new UnionAdjustAction(rindex, symToParse.flatten(map, map2));
     }
 
+    @Override
+    public String toString() {
+      return name + '<' + symToParse + '>';
+    }
   }
 
   /** For JSON. */
@@ -658,7 +697,7 @@ public abstract class Symbol {
 
     @Deprecated
     public EnumLabelsAction(List<String> symbols) {
-      super(symbols.size());
+      super("enum-label-check", symbols.size());
       this.symbols = symbols;
     }
 
@@ -704,11 +743,11 @@ public abstract class Symbol {
   /* a pseudo terminal used by parsers */
   public static final Symbol FIELD_ACTION = new Symbol.Terminal("field-action");
 
-  public static final Symbol RECORD_START = new ImplicitAction(false);
-  public static final Symbol RECORD_END = new ImplicitAction(true);
-  public static final Symbol UNION_END = new ImplicitAction(true);
-  public static final Symbol FIELD_END = new ImplicitAction(true);
+  public static final Symbol RECORD_START = new ImplicitAction("record-start", false);
+  public static final Symbol RECORD_END = new ImplicitAction("record-end", true);
+  public static final Symbol UNION_END = new ImplicitAction("union-end", true);
+  public static final Symbol FIELD_END = new ImplicitAction("field-end", true);
 
-  public static final Symbol DEFAULT_END_ACTION = new ImplicitAction(true);
+  public static final Symbol DEFAULT_END_ACTION = new ImplicitAction("default-end", true);
   public static final Symbol MAP_KEY_MARKER = new Symbol.Terminal("map-key-marker");
 }

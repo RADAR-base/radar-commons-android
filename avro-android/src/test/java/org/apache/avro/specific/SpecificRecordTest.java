@@ -2,7 +2,9 @@ package org.apache.avro.specific;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaValidationException;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Before;
 import org.junit.Test;
 import org.radarbase.android.data.serialization.TapeAvroDeserializer;
@@ -22,8 +24,11 @@ import org.radarcns.passive.phone.PhoneAcceleration;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -82,7 +87,7 @@ public class SpecificRecordTest {
         AvroEncoder.AvroWriter<GenericRecord> accelerationWriter = encoder.writer(Questionnaire.getClassSchema(), GenericRecord.class);
         ParsedSchemaMetadata schemaMetadata = new ParsedSchemaMetadata(1, 1, Questionnaire.getClassSchema());
         accelerationWriter.setReaderSchema(schemaMetadata);
-        List<Answer> list = new ArrayList<Answer>(2);
+        List<Answer> list = new ArrayList<>(2);
         list.add(new Answer("qid1", 1, 0.4, 0.5));
         list.add(new Answer("qid2", "a", 0.6, 0.7));
         byte[] result = accelerationWriter.encode(new Questionnaire(0.1, 0.2, 0.3, "test", "2", list));
@@ -92,6 +97,33 @@ public class SpecificRecordTest {
         AvroDecoder decoder = new AvroDatumDecoder(SpecificData.get(), false);
         AvroDecoder.AvroReader<Questionnaire> accelerationReader = decoder.reader(Questionnaire.getClassSchema(), Questionnaire.class);
         GenericRecord acceleration = accelerationReader.decode(result);
-        assertEquals(record.value, acceleration);
+        assertEquals(new Questionnaire(0.1, 0.2, 0.3, "test", "2", list), acceleration);
+    }
+
+
+    @Test
+    public void avroMiscEncodingTest() throws IOException, SchemaValidationException {
+        AvroEncoder encoder = new RemoteSchemaEncoder(false);
+
+        Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[{\"name\":\"bytes\",\"type\":\"bytes\"},{\"name\":\"bool\",\"type\":\"boolean\"},{\"name\":\"unionFixed\",\"type\":[\"null\",{\"type\":\"fixed\",\"size\":4,\"name\":\"four\"}],\"default\":null},{\"name\":\"map\",\"type\":{\"type\":\"map\", \"values\":{\"type\":\"int\"}}}]}");
+        AvroEncoder.AvroWriter<GenericRecord> accelerationWriter = encoder.writer(schema, GenericRecord.class);
+        ParsedSchemaMetadata schemaMetadata = new ParsedSchemaMetadata(1, 1, schema);
+        accelerationWriter.setReaderSchema(schemaMetadata);
+        GenericRecordBuilder record = new GenericRecordBuilder(schema);
+        record.set("bytes", ByteBuffer.wrap(new byte[] {1, 2, 3, 4}));
+        Map<String, Integer> map = new HashMap<>();
+        map.put("m1", 5);
+        map.put("m2", 6);
+        record.set("bool", false);
+        record.set("map", map);
+        record.set("unionFixed", new GenericData.Fixed(schema.getField("unionFixed").schema().getTypes().get(1), new byte[] {8, 9, 10, 11}));
+        byte[] encoded = accelerationWriter.encode(record.build());
+
+        System.out.println("Result: " + new String(encoded) + " (len " + encoded.length + ")");
+
+        AvroDecoder decoder = new AvroDatumDecoder(SpecificData.get(), false);
+        AvroDecoder.AvroReader<GenericRecord> reader = decoder.reader(schema, GenericRecord.class);
+        GenericRecord result = reader.decode(encoded);
+        assertEquals(record.build(), result);
     }
 }
