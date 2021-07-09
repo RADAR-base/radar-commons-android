@@ -49,30 +49,30 @@ public class ValidatingGrammarGenerator {
   public Symbol generate(Schema sc, Map<LitS, Symbol> seen) {
     switch (sc.getType()) {
     case NULL:
-      return Symbol.NULL;
+      return Symbols.NULL;
     case BOOLEAN:
-      return Symbol.BOOLEAN;
+      return Symbols.BOOLEAN;
     case INT:
-      return Symbol.INT;
+      return Symbols.INT;
     case LONG:
-      return Symbol.LONG;
+      return Symbols.LONG;
     case FLOAT:
-      return Symbol.FLOAT;
+      return Symbols.FLOAT;
     case DOUBLE:
-      return Symbol.DOUBLE;
+      return Symbols.DOUBLE;
     case STRING:
-      return Symbol.STRING;
+      return Symbols.STRING;
     case BYTES:
-      return Symbol.BYTES;
+      return Symbols.BYTES;
     case FIXED:
-      return Symbol.seq(Symbol.intCheckAction(sc.getFixedSize()), Symbol.FIXED);
+      return Symbol.seq(Symbol.intCheckAction(sc.getFixedSize()), Symbols.FIXED);
     case ENUM:
-      return Symbol.seq(Symbol.intCheckAction(sc.getEnumSymbols().size()), Symbol.ENUM);
+      return Symbol.seq(Symbol.intCheckAction(sc.getEnumSymbols().size()), Symbols.ENUM);
     case ARRAY:
-      return Symbol.seq(Symbol.repeat(Symbol.ARRAY_END, generate(sc.getElementType(), seen)), Symbol.ARRAY_START);
+      return Symbol.seq(Symbol.repeat(Symbols.ARRAY_END, generate(sc.getElementType(), seen)), Symbols.ARRAY_START);
     case MAP:
-      return Symbol.seq(Symbol.repeat(Symbol.MAP_END, generate(sc.getValueType(), seen), Symbol.STRING),
-          Symbol.MAP_START);
+      return Symbol.seq(Symbol.repeat(Symbols.MAP_END, generate(sc.getValueType(), seen), Symbols.STRING),
+          Symbols.MAP_START);
     case RECORD: {
       LitS wsc = new LitS(sc);
       Symbol rresult = seen.get(wsc);
@@ -104,7 +104,7 @@ public class ValidatingGrammarGenerator {
         labels[i] = b.getFullName();
         i++;
       }
-      return Symbol.seq(Symbol.alt(symbols, labels), Symbol.UNION);
+      return Symbol.seq(Symbol.alt(symbols, labels), Symbols.UNION);
 
     default:
       throw new RuntimeException("Unexpected schema type");

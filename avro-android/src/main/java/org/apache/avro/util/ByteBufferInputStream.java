@@ -18,27 +18,24 @@
 
 package org.apache.avro.util;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.List;
 
 /** Utility to present {@link ByteBuffer} data as an {@link InputStream}. */
 public class ByteBufferInputStream extends InputStream {
-  private final List<ByteBuffer> buffers;
-  private int current;
+  private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
+  private final ByteBuffer buffer;
 
-  public ByteBufferInputStream(List<ByteBuffer> buffers) {
-    this.buffers = buffers;
+  public ByteBufferInputStream(ByteBuffer buffer) {
+    this.buffer = buffer;
   }
 
   /**
    * @see InputStream#read()
    */
   @Override
-  public int read() throws IOException {
-    ByteBuffer buffer = getBuffer();
-    if (buffer == null) {
+  public int read() {
+    if (!buffer.hasRemaining()) {
       return -1;
     }
     return buffer.get() & 0xff;
@@ -48,35 +45,33 @@ public class ByteBufferInputStream extends InputStream {
    * @see InputStream#read(byte[], int, int)
    */
   @Override
-  public int read(byte[] b, int off, int len) throws IOException {
-    if (len == 0)
+  public int read(byte[] b, int off, int len) {
+    if (b == null) {
+      throw new NullPointerException();
+    } else if (off < 0 || len < 0 || len > b.length - off) {
+      throw new IndexOutOfBoundsException();
+    } else if (len == 0) {
       return 0;
-    ByteBuffer buffer = getBuffer();
-    if (buffer == null) {
+    }
+
+    int remaining = Math.min(buffer.remaining(), len);
+    if (remaining == 0) {
       return -1;
     }
-    int remaining = buffer.remaining();
-    if (len > remaining) {
-      buffer.get(b, off, remaining);
-      return remaining;
-    } else {
-      buffer.get(b, off, len);
-      return len;
-    }
+    buffer.get(b, off, remaining);
+    return remaining;
   }
 
   /**
    * Read a buffer from the input without copying, if possible.
    */
-  public ByteBuffer readBuffer(int length) throws IOException {
+  public ByteBuffer readBuffer(int length) {
     if (length == 0)
-      return ByteBuffer.allocate(0);
-    ByteBuffer buffer = getBuffer();
-    if (buffer == null) {
-      return ByteBuffer.allocate(0);
+      return EMPTY_BUFFER;
+    if (!buffer.hasRemaining()) {
+      return EMPTY_BUFFER;
     }
     if (buffer.remaining() == length) { // can return current as-is?
-      current++;
       return buffer; // return w/o copying
     }
     // punt: allocate a new buffer & copy into it
@@ -87,16 +82,15 @@ public class ByteBufferInputStream extends InputStream {
     return result;
   }
 
-  /**
-   * Returns the next non-empty buffer.
-   */
-  private ByteBuffer getBuffer() throws IOException {
-    while (current < buffers.size()) {
-      ByteBuffer buffer = buffers.get(current);
-      if (buffer.hasRemaining())
-        return buffer;
-      current++;
+  @Override
+  public long skip(long n) {
+    if (n <= 0) {
+      // n may be negative and results in skipping 0 bytes, according to javadoc
+      return 0;
     }
-    return null;
+    // this catches n > Integer.MAX_VALUE
+    int bytesToSkip = n > buffer.remaining() ? buffer.remaining() : (int) n;
+    buffer.position(buffer.position() + bytesToSkip);
+    return bytesToSkip;
   }
 }

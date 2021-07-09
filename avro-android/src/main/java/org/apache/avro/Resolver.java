@@ -85,7 +85,7 @@ public class Resolver {
       case DOUBLE:
       case STRING:
       case BYTES:
-        return new DoNothing(w, r, d);
+        return new DoNothing(w, r);
 
       case FIXED:
         if (w.getFullName() != null && !w.getFullName().equals(r.getFullName())) {
@@ -93,7 +93,7 @@ public class Resolver {
         } else if (w.getFixedSize() != r.getFixedSize()) {
           return new ErrorAction(w, r, d, ErrorType.SIZES_DONT_MATCH);
         } else {
-          return new DoNothing(w, r, d);
+          return new DoNothing(w, r);
         }
 
       case ARRAY:
@@ -130,17 +130,11 @@ public class Resolver {
    */
   public static abstract class Action {
     /** Helps us traverse faster. */
-    public enum Type {
-      DO_NOTHING, ERROR, PROMOTE, CONTAINER, ENUM, SKIP, RECORD, WRITER_UNION, READER_UNION
-    }
-
     public final Schema writer, reader;
-    public final Type type;
 
-    protected Action(Schema w, Schema r, GenericData data, Type t) {
+    protected Action(Schema w, Schema r) {
       this.writer = w;
       this.reader = r;
-      this.type = t;
     }
   }
 
@@ -150,8 +144,8 @@ public class Resolver {
    * primitive types and fixed types, and not for any other kind of schema.
    */
   public static class DoNothing extends Action {
-    public DoNothing(Schema w, Schema r, GenericData d) {
-      super(w, r, d, Action.Type.DO_NOTHING);
+    public DoNothing(Schema w, Schema r) {
+      super(w, r);
     }
   }
 
@@ -196,7 +190,7 @@ public class Resolver {
     public final ErrorType error;
 
     public ErrorAction(Schema w, Schema r, GenericData d, ErrorType e) {
-      super(w, r, d, Action.Type.ERROR);
+      super(w, r);
       this.error = e;
     }
 
@@ -234,7 +228,7 @@ public class Resolver {
    */
   public static class Promote extends Action {
     private Promote(Schema w, Schema r, GenericData d) {
-      super(w, r, d, Action.Type.PROMOTE);
+      super(w, r);
     }
 
     /**
@@ -266,11 +260,7 @@ public class Resolver {
       Schema.Type wt = w.getType();
       switch (r.getType()) {
       case INT:
-        switch (wt) {
-        case INT:
-          return true;
-        }
-        break;
+        return wt == Schema.Type.INT;
       case LONG:
         switch (wt) {
         case INT:
@@ -317,7 +307,7 @@ public class Resolver {
     public final Action elementAction;
 
     public Container(Schema w, Schema r, GenericData d, Action e) {
-      super(w, r, d, Action.Type.CONTAINER);
+      super(w, r);
       this.elementAction = e;
     }
   }
@@ -347,15 +337,18 @@ public class Resolver {
     public final Object[] values;
     public final boolean noAdjustmentsNeeded;
 
-    private EnumAdjust(Schema w, Schema r, GenericData d, int[] adj, Object[] values) {
-      super(w, r, d, Action.Type.ENUM);
+    private EnumAdjust(Schema w, Schema r, int[] adj, Object[] values) {
+      super(w, r);
       this.adjustments = adj;
       boolean noAdj;
       int rsymCount = r.getEnumSymbols().size();
       int count = Math.min(rsymCount, adj.length);
       noAdj = (adj.length <= rsymCount);
-      for (int i = 0; noAdj && i < count; i++) {
-        noAdj &= (i == adj[i]);
+      for (int i = 0; i < count; i++) {
+        if (i != adj[i]) {
+          noAdj = false;
+          break;
+        }
       }
       this.noAdjustmentsNeeded = noAdj;
       this.values = values;
@@ -384,7 +377,7 @@ public class Resolver {
         adjustments[i] = j;
         values[i] = (j == defaultIndex) ? defaultValue : d.createEnum(rsymbols.get(j), r);
       }
-      return new EnumAdjust(w, r, d, adjustments, values);
+      return new EnumAdjust(w, r, adjustments, values);
     }
   }
 
@@ -398,7 +391,7 @@ public class Resolver {
    */
   public static class Skip extends Action {
     public Skip(Schema w, GenericData d) {
-      super(w, null, d, Action.Type.SKIP);
+      super(w, null);
     }
   }
 
@@ -446,21 +439,8 @@ public class Resolver {
      */
     public final GenericData.InstanceSupplier instanceSupplier;
 
-    /**
-     * Returns true iff <code>i&nbsp;==&nbsp;readerOrder[i].pos()</code> for all
-     * indices <code>i</code>. Which is to say: the order of the reader's fields is
-     * the same in both the reader's and writer's schema.
-     */
-    public boolean noReorder() {
-      boolean result = true;
-      for (int i = 0; result && i < readerOrder.length; i++) {
-        result &= (i == readerOrder[i].pos());
-      }
-      return result;
-    }
-
     private RecordAdjust(Schema w, Schema r, GenericData d, Action[] fa, Field[] ro, int firstD, Object[] defaults) {
-      super(w, r, d, Action.Type.RECORD);
+      super(w, r);
       this.fieldActions = fa;
       this.readerOrder = ro;
       this.firstDefault = firstD;
@@ -552,7 +532,7 @@ public class Resolver {
     public final boolean unionEquiv;
 
     private WriterUnion(Schema w, Schema r, GenericData d, boolean ue, Action[] a) {
-      super(w, r, d, Action.Type.WRITER_UNION);
+      super(w, r);
       unionEquiv = ue;
       actions = a;
     }
@@ -587,7 +567,7 @@ public class Resolver {
     public final Action actualAction;
 
     public ReaderUnion(Schema w, Schema r, GenericData d, int firstMatch, Action actual) {
-      super(w, r, d, Action.Type.READER_UNION);
+      super(w, r);
       this.firstMatch = firstMatch;
       this.actualAction = actual;
     }
@@ -670,20 +650,17 @@ public class Resolver {
           }
           break;
         case FLOAT:
-          switch (b.getType()) {
-          case DOUBLE:
+          if (b.getType() == Schema.Type.DOUBLE) {
             return j;
           }
           break;
         case STRING:
-          switch (b.getType()) {
-          case BYTES:
+          if (b.getType() == Schema.Type.BYTES) {
             return j;
           }
           break;
         case BYTES:
-          switch (b.getType()) {
-          case STRING:
+          if (b.getType() == Schema.Type.STRING) {
             return j;
           }
           break;

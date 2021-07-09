@@ -24,7 +24,6 @@ import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.ResolvingDecoder;
-import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -40,10 +39,6 @@ public class GenericDatumReader<D> implements DatumReader<D> {
 
   private ResolvingDecoder creatorResolver = null;
   private final Thread creator;
-
-  public GenericDatumReader() {
-    this(null, null, GenericData.get());
-  }
 
   /** Construct where the writer's and reader's schemas are the same. */
   public GenericDatumReader(Schema schema) {
@@ -74,15 +69,6 @@ public class GenericDatumReader<D> implements DatumReader<D> {
   /** Return the writer's schema. */
   public Schema getSchema() {
     return actual;
-  }
-
-  @Override
-  public void setSchema(Schema writer) {
-    this.actual = writer;
-    if (expected == null) {
-      expected = actual;
-    }
-    creatorResolver = null;
   }
 
   /** Get the reader's schema. */
@@ -150,7 +136,7 @@ public class GenericDatumReader<D> implements DatumReader<D> {
     case STRING:
       return readString(in);
     case BYTES:
-      return readBytes(old, expected, in);
+      return readBytes(old, in);
     case INT:
       return readInt(in);
     case LONG:
@@ -175,17 +161,16 @@ public class GenericDatumReader<D> implements DatumReader<D> {
    */
   protected Object readRecord(Object old, Schema expected, ResolvingDecoder in) throws IOException {
     final Object record = data.newRecord(old, expected);
-    final Object state = data.getRecordState(record, expected);
 
     for (Field field : in.readFieldOrder()) {
       int pos = field.pos();
       String name = field.name();
       Object oldDatum = null;
       if (old != null) {
-        oldDatum = data.getField(record, name, pos, state);
+        oldDatum = data.getField(record, name, pos);
       }
 
-      readField(record, field, oldDatum, in, state);
+      readField(record, field, oldDatum, in);
     }
 
     return record;
@@ -195,9 +180,9 @@ public class GenericDatumReader<D> implements DatumReader<D> {
    * Called to read a single field of a record. May be overridden for more
    * efficient or alternate implementations.
    */
-  protected void readField(Object record, Field field, Object oldDatum, ResolvingDecoder in, Object state)
+  protected void readField(Object record, Field field, Object oldDatum, ResolvingDecoder in)
       throws IOException {
-    data.setField(record, field.name(), field.pos(), read(oldDatum, field.schema(), in), state);
+    data.setField(record, field.name(), field.pos(), read(oldDatum, field.schema(), in));
   }
 
   /**
@@ -371,27 +356,10 @@ public class GenericDatumReader<D> implements DatumReader<D> {
 
   /**
    * Called to read strings. Subclasses may override to use a different string
-   * representation. By default, this calls {@link #readString(Object,Decoder)}.
+   * representation. By default, this calls {@link Decoder#readString()}.
    */
   protected Object readString(Decoder in) throws IOException {
     return in.readString();
-  }
-
-  /**
-   * Called to read strings. Subclasses may override to use a different string
-   * representation. By default, this calls {@link Decoder#readString(Utf8)}.
-   */
-  protected Object readString(Object old, Decoder in) throws IOException {
-    return in.readString(old instanceof Utf8 ? (Utf8) old : null);
-  }
-
-  /**
-   * Called to read byte arrays. Subclasses may override to use a different byte
-   * array representation. By default, this calls
-   * {@link Decoder#readBytes(ByteBuffer)}.
-   */
-  protected Object readBytes(Object old, Schema s, Decoder in) throws IOException {
-    return readBytes(old, in);
   }
 
   /**
@@ -419,67 +387,4 @@ public class GenericDatumReader<D> implements DatumReader<D> {
   protected Object createBytes(byte[] value) {
     return ByteBuffer.wrap(value);
   }
-
-  /** Skip an instance of a schema. */
-  public static void skip(Schema schema, Decoder in) throws IOException {
-    switch (schema.getType()) {
-    case RECORD:
-      for (Field field : schema.getFields())
-        skip(field.schema(), in);
-      break;
-    case ENUM:
-      in.readEnum();
-      break;
-    case ARRAY:
-      Schema elementType = schema.getElementType();
-      for (long l = in.skipArray(); l > 0; l = in.skipArray()) {
-        for (long i = 0; i < l; i++) {
-          skip(elementType, in);
-        }
-      }
-      break;
-    case MAP:
-      Schema value = schema.getValueType();
-      for (long l = in.skipMap(); l > 0; l = in.skipMap()) {
-        for (long i = 0; i < l; i++) {
-          in.skipString();
-          skip(value, in);
-        }
-      }
-      break;
-    case UNION:
-      skip(schema.getTypes().get(in.readIndex()), in);
-      break;
-    case FIXED:
-      in.skipFixed(schema.getFixedSize());
-      break;
-    case STRING:
-      in.skipString();
-      break;
-    case BYTES:
-      in.skipBytes();
-      break;
-    case INT:
-      in.readInt();
-      break;
-    case LONG:
-      in.readLong();
-      break;
-    case FLOAT:
-      in.readFloat();
-      break;
-    case DOUBLE:
-      in.readDouble();
-      break;
-    case BOOLEAN:
-      in.readBoolean();
-      break;
-    case NULL:
-      in.readNull();
-      break;
-    default:
-      throw new RuntimeException("Unknown type: " + schema);
-    }
-  }
-
 }

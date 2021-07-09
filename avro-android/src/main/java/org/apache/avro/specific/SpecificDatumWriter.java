@@ -51,21 +51,13 @@ public class SpecificDatumWriter<T> extends GenericDatumWriter<T> {
   }
 
   @Override
-  protected void writeString(Schema schema, Object datum, Encoder out) throws IOException {
-    if (!(datum instanceof CharSequence) && getSpecificData().isStringable(datum.getClass())) {
-      datum = datum.toString(); // convert to string
-    }
-    writeString(datum, out);
-  }
-
-  @Override
-  protected void writeField(Object datum, Schema.Field f, Encoder out, Object state) throws IOException {
+  protected void writeField(Object datum, Schema.Field f, Encoder out) throws IOException {
     if (datum instanceof SpecificRecordBase) {
       Schema fieldSchema = f.schema();
       Object value = getData().getField(datum, f.name(), f.pos());
       writeWithoutConversion(fieldSchema, value, out);
     } else {
-      super.writeField(datum, f, out, state);
+      super.writeField(datum, f, out);
     }
   }
 }

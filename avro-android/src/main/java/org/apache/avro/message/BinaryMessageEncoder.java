@@ -83,8 +83,7 @@ public class BinaryMessageEncoder<D> implements MessageEncoder<D> {
     return writeCodec.encode(datum);
   }
 
-  @Override
-  public void encode(D datum, OutputStream stream) throws IOException {
+  private void encode(D datum, OutputStream stream) throws IOException {
     writeCodec.encode(datum, stream);
   }
 

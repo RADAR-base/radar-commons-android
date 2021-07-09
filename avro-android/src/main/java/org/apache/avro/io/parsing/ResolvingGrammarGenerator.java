@@ -23,8 +23,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.util.internal.Accessor;
-import org.apache.avro.util.internal.Accessor.ResolvingGrammarGeneratorAccessor;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -42,20 +40,6 @@ import java.util.Map;
  * The class that generates a resolving grammar to resolve between two schemas.
  */
 public class ResolvingGrammarGenerator extends ValidatingGrammarGenerator {
-
-  static {
-    Accessor.setAccessor(new ResolvingGrammarGeneratorAccessor() {
-      @Override
-      protected void encode(Encoder e, Schema s, Object n) throws IOException {
-        try {
-          ResolvingGrammarGenerator.encode(e, s, n);
-        } catch (JSONException ex) {
-          throw new RuntimeException(ex);
-        }
-      }
-    });
-  }
-
   /**
    * Resolves the writer schema <tt>writer</tt> and the reader schema
    * <tt>reader</tt> and returns the start symbol for the grammar generated.
@@ -103,15 +87,15 @@ public class ResolvingGrammarGenerator extends ValidatingGrammarGenerator {
     } else if (action instanceof Resolver.ReaderUnion) {
       Resolver.ReaderUnion ru = (Resolver.ReaderUnion) action;
       Symbol s = generate(ru.actualAction, seen);
-      return Symbol.seq(Symbol.unionAdjustAction(ru.firstMatch, s), Symbol.UNION);
+      return Symbol.seq(Symbol.unionAdjustAction(ru.firstMatch, s), Symbols.UNION);
 
     } else if (action.writer.getType() == Schema.Type.ARRAY) {
       Symbol es = generate(((Resolver.Container) action).elementAction, seen);
-      return Symbol.seq(Symbol.repeat(Symbol.ARRAY_END, es), Symbol.ARRAY_START);
+      return Symbol.seq(Symbol.repeat(Symbols.ARRAY_END, es), Symbols.ARRAY_START);
 
     } else if (action.writer.getType() == Schema.Type.MAP) {
       Symbol es = generate(((Resolver.Container) action).elementAction, seen);
-      return Symbol.seq(Symbol.repeat(Symbol.MAP_END, es, Symbol.STRING), Symbol.MAP_START);
+      return Symbol.seq(Symbol.repeat(Symbols.MAP_END, es, Symbols.STRING), Symbols.MAP_START);
 
     } else if (action.writer.getType() == Schema.Type.UNION) {
       if (((Resolver.WriterUnion) action).unionEquiv) {
@@ -126,7 +110,7 @@ public class ResolvingGrammarGenerator extends ValidatingGrammarGenerator {
         labels[i] = action.writer.getTypes().get(i).getFullName();
         i++;
       }
-      return Symbol.seq(Symbol.alt(symbols, labels), Symbol.WRITER_UNION_ACTION);
+      return Symbol.seq(Symbol.alt(symbols, labels), Symbols.WRITER_UNION_ACTION);
     } else if (action instanceof Resolver.EnumAdjust) {
       Resolver.EnumAdjust e = (Resolver.EnumAdjust) action;
       Object[] adjs = new Object[e.adjustments.length];
@@ -134,7 +118,7 @@ public class ResolvingGrammarGenerator extends ValidatingGrammarGenerator {
         adjs[i] = (0 <= e.adjustments[i] ? Integer.valueOf(e.adjustments[i])
             : "No match for " + e.writer.getEnumSymbols().get(i));
       }
-      return Symbol.seq(Symbol.enumAdjustAction(e.reader.getEnumSymbols().size(), adjs), Symbol.ENUM);
+      return Symbol.seq(Symbol.enumAdjustAction(e.reader.getEnumSymbols().size(), adjs), Symbols.ENUM);
 
     } else if (action instanceof Resolver.RecordAdjust) {
       Symbol result = seen.get(action);
@@ -156,7 +140,7 @@ public class ResolvingGrammarGenerator extends ValidatingGrammarGenerator {
           byte[] bb = getBinary(rf.schema(), rf.defaultVal());
           production[--count] = Symbol.defaultStartAction(bb);
           production[--count] = simpleGen(rf.schema(), seen);
-          production[--count] = Symbol.DEFAULT_END_ACTION;
+          production[--count] = Symbols.DEFAULT_END_ACTION;
         }
       }
       return result;
@@ -168,34 +152,34 @@ public class ResolvingGrammarGenerator extends ValidatingGrammarGenerator {
   private Symbol simpleGen(Schema s, Map<Object, Symbol> seen) {
     switch (s.getType()) {
     case NULL:
-      return Symbol.NULL;
+      return Symbols.NULL;
     case BOOLEAN:
-      return Symbol.BOOLEAN;
+      return Symbols.BOOLEAN;
     case INT:
-      return Symbol.INT;
+      return Symbols.INT;
     case LONG:
-      return Symbol.LONG;
+      return Symbols.LONG;
     case FLOAT:
-      return Symbol.FLOAT;
+      return Symbols.FLOAT;
     case DOUBLE:
-      return Symbol.DOUBLE;
+      return Symbols.DOUBLE;
     case BYTES:
-      return Symbol.BYTES;
+      return Symbols.BYTES;
     case STRING:
-      return Symbol.STRING;
+      return Symbols.STRING;
 
     case FIXED:
-      return Symbol.seq(Symbol.intCheckAction(s.getFixedSize()), Symbol.FIXED);
+      return Symbol.seq(Symbol.intCheckAction(s.getFixedSize()), Symbols.FIXED);
 
     case ENUM:
-      return Symbol.seq(Symbol.enumAdjustAction(s.getEnumSymbols().size(), null), Symbol.ENUM);
+      return Symbol.seq(Symbol.enumAdjustAction(s.getEnumSymbols().size(), null), Symbols.ENUM);
 
     case ARRAY:
-      return Symbol.seq(Symbol.repeat(Symbol.ARRAY_END, simpleGen(s.getElementType(), seen)), Symbol.ARRAY_START);
+      return Symbol.seq(Symbol.repeat(Symbols.ARRAY_END, simpleGen(s.getElementType(), seen)), Symbols.ARRAY_START);
 
     case MAP:
-      return Symbol.seq(Symbol.repeat(Symbol.MAP_END, simpleGen(s.getValueType(), seen), Symbol.STRING),
-          Symbol.MAP_START);
+      return Symbol.seq(Symbol.repeat(Symbols.MAP_END, simpleGen(s.getValueType(), seen), Symbols.STRING),
+          Symbols.MAP_START);
 
     case UNION: {
       final List<Schema> subs = s.getTypes();
@@ -206,7 +190,7 @@ public class ResolvingGrammarGenerator extends ValidatingGrammarGenerator {
         symbols[i] = simpleGen(b, seen);
         labels[i++] = b.getFullName();
       }
-      return Symbol.seq(Symbol.alt(symbols, labels), Symbol.UNION);
+      return Symbol.seq(Symbol.alt(symbols, labels), Symbols.UNION);
     }
 
     case RECORD: {

@@ -60,7 +60,7 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
     return data;
   }
 
-  public void setSchema(Schema root) {
+  private void setSchema(Schema root) {
     this.root = root;
   }
 
@@ -99,7 +99,7 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
         writeFixed(schema, datum, out);
         break;
       case STRING:
-        writeString(schema, datum, out);
+        writeString(datum, out);
         break;
       case BYTES:
         writeBytes(datum, out);
@@ -146,9 +146,7 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
 
   /** Helper method for adding a message to an Avro Type Exception . */
   protected AvroTypeException addAvroTypeMsg(AvroTypeException e, String s) {
-    AvroTypeException result = new AvroTypeException(e.getMessage() + s);
-    result.initCause(e.getCause() == null ? e : e.getCause());
-    return result;
+    return new AvroTypeException(e.getMessage() + s, e.getCause() == null ? e : e.getCause());
   }
 
   /**
@@ -156,9 +154,8 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
    * representations.
    */
   protected void writeRecord(Schema schema, Object datum, Encoder out) throws IOException {
-    Object state = data.getRecordState(datum, schema);
     for (Field f : schema.getFields()) {
-      writeField(datum, f, out, state);
+      writeField(datum, f, out);
     }
   }
 
@@ -166,8 +163,8 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
    * Called to write a single field of a record. May be overridden for more
    * efficient or alternate implementations.
    */
-  protected void writeField(Object datum, Field f, Encoder out, Object state) throws IOException {
-    Object value = data.getField(datum, f.name(), f.pos(), state);
+  protected void writeField(Object datum, Field f, Encoder out) throws IOException {
+    Object value = data.getField(datum, f.name(), f.pos());
     try {
       write(f.schema(), value, out);
     } catch (final UnresolvedUnionException uue) { // recreate it with the right field info
@@ -203,7 +200,7 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
     long actualSize = 0;
     out.writeArrayStart();
     out.setItemCount(size);
-    for (Iterator<? extends Object> it = getArrayElements(datum); it.hasNext();) {
+    for (Iterator<?> it = getArrayElements(datum); it.hasNext();) {
       out.startItem();
       write(element, it.next(), out);
       actualSize++;
@@ -237,7 +234,7 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
    * array elements. The default implementation is for {@link Collection}.
    */
   @SuppressWarnings("unchecked")
-  protected Iterator<? extends Object> getArrayElements(Object array) {
+  protected Iterator<?> getArrayElements(Object array) {
     return ((Collection) array).iterator();
   }
 
@@ -279,14 +276,6 @@ public class GenericDatumWriter<D> implements DatumWriter<D> {
   @SuppressWarnings("unchecked")
   protected Iterable<Map.Entry<Object, Object>> getMapEntries(Object map) {
     return ((Map) map).entrySet();
-  }
-
-  /**
-   * Called to write a string. May be overridden for alternate string
-   * representations.
-   */
-  protected void writeString(Schema schema, Object datum, Encoder out) throws IOException {
-    writeString(datum, out);
   }
 
   /**

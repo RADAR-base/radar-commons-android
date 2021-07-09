@@ -82,7 +82,7 @@ public class SpecificData extends GenericData {
    * e.g., those without a no-arg constructor or those whose fields are all
    * transient.
    */
-  protected Set<Class> stringableClasses = new HashSet<>(Arrays.asList(java.math.BigDecimal.class,
+  protected final Set<Class> stringableClasses = new HashSet<>(Arrays.asList(java.math.BigDecimal.class,
       java.math.BigInteger.class, java.net.URI.class, java.net.URL.class, java.io.File.class));
 
   /** For subclasses. Applications normally use {@link SpecificData#get()}. */
@@ -134,7 +134,7 @@ public class SpecificData extends GenericData {
     return (datum instanceof Enum) ? getSchema(datum.getClass()) : super.getEnumSchema(datum);
   }
 
-  private ConcurrentMap<String, Class> classCache = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Class> classCache = new ConcurrentHashMap<>();
 
   private static final Class NO_CLASS = new Object() {}.getClass();
   private static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
@@ -171,9 +171,7 @@ public class SpecificData extends GenericData {
         return getWrapper(types.get(types.get(0).equals(NULL_SCHEMA) ? 1 : 0));
       return Object.class;
     case STRING:
-      if (STRING_TYPE_STRING.equals(schema.getProp(STRING_PROP)))
-        return String.class;
-      return CharSequence.class;
+      return String.class;
     case BYTES:
       return ByteBuffer.class;
     case INT:
@@ -324,7 +322,6 @@ public class SpecificData extends GenericData {
     return super.compare(o1, o2, s, eq);
   }
 
-  private static final Class<?>[] EMPTY_ARRAY = new Class[]{};
   private static final Map<Class<?>, Constructor<?>> constructorCache = new WeakHashMap<>();
 
   /**

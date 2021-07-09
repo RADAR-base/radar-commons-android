@@ -51,18 +51,16 @@ public class SkipParser extends Parser {
    * <code>this</code>, until the parser stack reaches the target level.
    */
   public final void skipTo(int target) throws IOException {
-    outer: while (target < pos) {
+    while (target < pos) {
       Symbol top = stack[pos - 1];
-      while (top.kind != Symbol.Kind.TERMINAL) {
-        if (top.kind == Symbol.Kind.IMPLICIT_ACTION || top.kind == Symbol.Kind.EXPLICIT_ACTION) {
-          skipHandler.skipAction();
-        } else {
-          --pos;
-          pushProduction(top);
-        }
-        continue outer;
+      if (top.kind == Symbol.Kind.TERMINAL) {
+        skipHandler.skipTopSymbol();
+      } else if (top.kind == Symbol.Kind.IMPLICIT_ACTION || top.kind == Symbol.Kind.EXPLICIT_ACTION) {
+        skipHandler.skipAction();
+      } else {
+        --pos;
+        pushProduction(top);
       }
-      skipHandler.skipTopSymbol();
     }
   }
 

@@ -20,7 +20,6 @@ package org.apache.avro.specific;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.ResolvingDecoder;
 
 import java.io.Externalizable;
 import java.io.IOException;

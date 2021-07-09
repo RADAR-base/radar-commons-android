@@ -24,9 +24,6 @@ import org.apache.avro.AvroRuntimeException;
 /**
  * Exception thrown by a {@link MessageDecoder} when the message is encoded
  * using an unknown {@link org.apache.avro.Schema}.
- * <p>
- * Using a {@link SchemaStore} to provide schemas to the decoder can avoid this
- * problem.
  */
 public class MissingSchemaException extends AvroRuntimeException {
   public MissingSchemaException(String message) {

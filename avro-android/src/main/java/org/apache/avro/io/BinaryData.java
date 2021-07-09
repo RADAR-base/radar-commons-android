@@ -158,8 +158,8 @@ public class BinaryData {
    */
   public static int encodeDouble(double d, byte[] buf, int pos) {
     final long bits = Double.doubleToRawLongBits(d);
-    int first = (int) (bits & 0xFFFFFFFF);
-    int second = (int) ((bits >>> 32) & 0xFFFFFFFF);
+    int first = (int) bits;
+    int second = (int) (bits >>> 32);
     // the compiler seems to execute this order the best, likely due to
     // register allocation -- the lifetime of constants is minimized.
     buf[pos] = (byte) (first);

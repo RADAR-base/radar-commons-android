@@ -23,6 +23,7 @@ import org.apache.avro.io.parsing.SkipParser;
 import org.apache.avro.io.parsing.Symbol;
 import org.apache.avro.io.parsing.Parser.ActionHandler;
 import org.apache.avro.io.parsing.SkipParser.SkipHandler;
+import org.apache.avro.io.parsing.Symbols;
 
 /**
  * Base class for <a href="parsing/package-summary.html">parser</a>-based
@@ -45,31 +46,31 @@ public abstract class ParsingDecoder extends Decoder implements ActionHandler, S
   @Override
   public void skipTopSymbol() throws IOException {
     Symbol top = parser.topSymbol();
-    if (top == Symbol.NULL) {
+    if (top == Symbols.NULL) {
       readNull();
-    } else if (top == Symbol.BOOLEAN) {
+    } else if (top == Symbols.BOOLEAN) {
       readBoolean();
-    } else if (top == Symbol.INT) {
+    } else if (top == Symbols.INT) {
       readInt();
-    } else if (top == Symbol.LONG) {
+    } else if (top == Symbols.LONG) {
       readLong();
-    } else if (top == Symbol.FLOAT) {
+    } else if (top == Symbols.FLOAT) {
       readFloat();
-    } else if (top == Symbol.DOUBLE) {
+    } else if (top == Symbols.DOUBLE) {
       readDouble();
-    } else if (top == Symbol.STRING) {
+    } else if (top == Symbols.STRING) {
       skipString();
-    } else if (top == Symbol.BYTES) {
+    } else if (top == Symbols.BYTES) {
       skipBytes();
-    } else if (top == Symbol.ENUM) {
+    } else if (top == Symbols.ENUM) {
       readEnum();
-    } else if (top == Symbol.FIXED) {
+    } else if (top == Symbols.FIXED) {
       skipFixed();
-    } else if (top == Symbol.UNION) {
+    } else if (top == Symbols.UNION) {
       readIndex();
-    } else if (top == Symbol.ARRAY_START) {
+    } else if (top == Symbols.ARRAY_START) {
       skipArray();
-    } else if (top == Symbol.MAP_START) {
+    } else if (top == Symbols.MAP_START) {
       skipMap();
     }
   }

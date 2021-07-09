@@ -184,11 +184,6 @@ public class BufferedBinaryEncoder extends BinaryEncoder {
     buf[pos++] = (byte) (b & 0xFF);
   }
 
-  @Override
-  public int bytesBuffered() {
-    return pos;
-  }
-
   /**
    * ByteSink abstracts the destination of written data from the core workings of
    * BinaryEncoder.

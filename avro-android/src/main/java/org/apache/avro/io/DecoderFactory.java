@@ -36,7 +36,7 @@ public class DecoderFactory {
   private static final DecoderFactory DEFAULT_FACTORY = new DefaultDecoderFactory();
   static final int DEFAULT_BUFFER_SIZE = 8192;
 
-  int binaryDecoderBufferSize = DEFAULT_BUFFER_SIZE;
+  final int binaryDecoderBufferSize = DEFAULT_BUFFER_SIZE;
 
   /** Constructor for factory instances */
   public DecoderFactory() {

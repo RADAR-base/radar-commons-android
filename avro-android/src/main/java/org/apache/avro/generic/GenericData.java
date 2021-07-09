@@ -31,8 +31,9 @@ import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.io.parsing.ResolvingGrammarGenerator;
 import org.apache.avro.util.Utf8;
-import org.apache.avro.util.internal.Accessor;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -60,27 +61,7 @@ import java.util.WeakHashMap;
 public class GenericData {
 
   private static final GenericData INSTANCE = new GenericData();
-
-  /** Used to specify the Java type for a string schema. */
-  public enum StringType {
-    CharSequence, String, Utf8
-  }
-
-  public static final String STRING_PROP = "avro.java.string";
-  protected static final String STRING_TYPE_STRING = "String";
-
   private final ClassLoader classLoader;
-
-  /**
-   * Set the Java type to be used when reading this schema. Meaningful only only
-   * string schemas and map schemas (for the keys).
-   */
-  public static void setStringType(Schema s, StringType stringType) {
-    // Utf8 is the default and implements CharSequence, so we only need to add
-    // a property when the type is String
-    if (stringType == StringType.String)
-      s.addProp(GenericData.STRING_PROP, GenericData.STRING_TYPE_STRING);
-  }
 
   /** Return the singleton instance. */
   public static GenericData get() {
@@ -210,16 +191,6 @@ public class GenericData {
         elements = new Object[capacity];
     }
 
-    public Array(Schema schema, Collection<T> c) {
-      if (schema == null || !Type.ARRAY.equals(schema.getType()))
-        throw new AvroRuntimeException("Not an array schema: " + schema);
-      this.schema = schema;
-      if (c != null) {
-        elements = new Object[c.size()];
-        addAll(c);
-      }
-    }
-
     @Override
     public Schema getSchema() {
       return schema;
@@ -323,20 +294,6 @@ public class GenericData {
       return GenericData.get().compare(this, that, this.getSchema());
     }
 
-    @Override
-    public void reverse() {
-      int left = 0;
-      int right = elements.length - 1;
-
-      while (left < right) {
-        Object tmp = elements[left];
-        elements[left] = elements[right];
-        elements[right] = tmp;
-
-        left++;
-        right--;
-      }
-    }
   }
 
   /** Default implementation of {@link GenericFixed}. */
@@ -351,9 +308,6 @@ public class GenericData {
     public Fixed(Schema schema, byte[] bytes) {
       this.schema = schema;
       this.bytes = bytes;
-    }
-
-    protected Fixed() {
     }
 
     protected void setSchema(Schema schema) {
@@ -400,20 +354,12 @@ public class GenericData {
 
   /** Default implementation of {@link GenericEnumSymbol}. */
   public static class EnumSymbol implements GenericEnumSymbol<EnumSymbol> {
-    private Schema schema;
-    private String symbol;
+    private final Schema schema;
+    private final String symbol;
 
     public EnumSymbol(Schema schema, String symbol) {
       this.schema = schema;
       this.symbol = symbol;
-    }
-
-    /**
-     * Maps existing Objects into an Avro enum by calling toString(), eg for Java
-     * Enums
-     */
-    public EnumSymbol(Schema schema, Object symbol) {
-      this(schema, symbol.toString());
     }
 
     @Override
@@ -595,7 +541,7 @@ public class GenericData {
       ByteBuffer bytes = ((ByteBuffer) datum).duplicate();
       writeEscapedString(StandardCharsets.ISO_8859_1.decode(bytes), buffer);
       buffer.append("\"");
-    } else if (isNanOrInfinity(datum) || isTemporal(datum)) {
+    } else if (isNanOrInfinity(datum)) {
       buffer.append("\"");
       buffer.append(datum);
       buffer.append("\"");
@@ -610,10 +556,6 @@ public class GenericData {
     } else {
       buffer.append(datum);
     }
-  }
-
-  private boolean isTemporal(Object datum) {
-    return false;
   }
 
   private boolean isNanOrInfinity(Object datum) {
@@ -679,25 +621,6 @@ public class GenericData {
    */
   public Object getField(Object record, String name, int position) {
     return ((IndexedRecord) record).get(position);
-  }
-
-  /**
-   * Produce state for repeated calls to
-   * {@link #getField(Object,String,int,Object)} and
-   * {@link #setField(Object,String,int,Object,Object)} on the same record.
-   */
-  protected Object getRecordState(Object record, Schema schema) {
-    return null;
-  }
-
-  /** Version of {@link #setField} that has state. */
-  protected void setField(Object record, String name, int position, Object value, Object state) {
-    setField(record, name, position, value);
-  }
-
-  /** Version of {@link #getField} that has state. */
-  protected Object getField(Object record, String name, int pos, Object state) {
-    return getField(record, name, pos);
   }
 
   /**
@@ -1024,7 +947,7 @@ public class GenericData {
       try {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(baos, null);
-        Accessor.encode(encoder, field.schema(), json);
+        ResolvingGrammarGenerator.encode(encoder, field.schema(), json);
         encoder.flush();
         BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(baos.toByteArray(), null);
         defaultValue = createDatumReader(field.schema()).read(null, decoder);
@@ -1033,7 +956,7 @@ public class GenericData {
         // and calling put. The last thread will win. However,
         // that's not an issue.
         defaultValueCache.put(field, defaultValue);
-      } catch (IOException e) {
+      } catch (IOException | JSONException e) {
         throw new AvroRuntimeException(e);
       }
 
@@ -1099,14 +1022,14 @@ public class GenericData {
     case NULL:
       return null;
     case RECORD:
-      Object oldState = getRecordState(value, schema);
+      Object oldState = null;
       Object newRecord = newRecord(null, schema);
-      Object newState = getRecordState(newRecord, schema);
+      Object newState = null;
       for (Field f : schema.getFields()) {
         int pos = f.pos();
         String name = f.name();
-        Object newValue = deepCopy(f.schema(), getField(value, name, pos, oldState));
-        setField(newRecord, name, pos, newValue, newState);
+        Object newValue = deepCopy(f.schema(), getField(value, name, pos));
+        setField(newRecord, name, pos, newValue);
       }
       return newRecord;
     case STRING:
@@ -1197,7 +1120,7 @@ public class GenericData {
       ((Collection<?>) old).clear();
       return old;
     } else
-      return new GenericData.Array<Object>(size, schema);
+      return new GenericData.Array<>(size, schema);
   }
 
   /**
@@ -1221,6 +1144,6 @@ public class GenericData {
   }
 
   public interface InstanceSupplier {
-    public Object newInstance(Object oldInstance, Schema schema);
+    Object newInstance(Object oldInstance, Schema schema);
   }
 }

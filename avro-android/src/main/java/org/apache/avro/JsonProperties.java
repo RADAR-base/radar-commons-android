@@ -132,23 +132,6 @@ public abstract class JsonProperties {
     return !prop.equals("") ? prop : null;
   }
 
-  /**
-   * Adds a property with the given name <tt>name</tt> and value <tt>value</tt>.
-   * Neither <tt>name</tt> nor <tt>value</tt> can be <tt>null</tt>. It is illegal
-   * to add a property if another with the same name but different value already
-   * exists in this schema.
-   *
-   * @param name  The name of the property to add
-   * @param value The value for the property to add
-   */
-  public void addProp(String name, String value) {
-    try {
-      props.put(name, value);
-    } catch (JSONException ex) {
-      throw new IllegalArgumentException(ex);
-    }
-  }
-
   public void addProp(String name, Object value) {
     try {
       props.put(name, value);

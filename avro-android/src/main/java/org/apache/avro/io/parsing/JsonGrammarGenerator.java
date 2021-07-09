@@ -63,13 +63,13 @@ public class JsonGrammarGenerator extends ValidatingGrammarGenerator {
     case UNION:
       return super.generate(sc, seen);
     case ENUM:
-      return Symbol.seq(Symbol.enumLabelsAction(sc.getEnumSymbols()), Symbol.ENUM);
+      return Symbol.seq(Symbol.enumLabelsAction(sc.getEnumSymbols()), Symbols.ENUM);
     case ARRAY:
-      return Symbol.seq(Symbol.repeat(Symbol.ARRAY_END, Symbol.ITEM_END, generate(sc.getElementType(), seen)),
-          Symbol.ARRAY_START);
+      return Symbol.seq(Symbol.repeat(Symbols.ARRAY_END, Symbols.ITEM_END, generate(sc.getElementType(), seen)),
+          Symbols.ARRAY_START);
     case MAP:
-      return Symbol.seq(Symbol.repeat(Symbol.MAP_END, Symbol.ITEM_END, generate(sc.getValueType(), seen),
-          Symbol.MAP_KEY_MARKER, Symbol.STRING), Symbol.MAP_START);
+      return Symbol.seq(Symbol.repeat(Symbols.MAP_END, Symbols.ITEM_END, generate(sc.getValueType(), seen),
+          Symbols.MAP_KEY_MARKER, Symbols.STRING), Symbols.MAP_START);
     case RECORD: {
       LitS wsc = new LitS(sc);
       Symbol rresult = seen.get(wsc);
@@ -80,14 +80,14 @@ public class JsonGrammarGenerator extends ValidatingGrammarGenerator {
 
         int i = production.length;
         int n = 0;
-        production[--i] = Symbol.RECORD_START;
+        production[--i] = Symbols.RECORD_START;
         for (Field f : sc.getFields()) {
           production[--i] = Symbol.fieldAdjustAction(n, f.name(), f.aliases());
           production[--i] = generate(f.schema(), seen);
-          production[--i] = Symbol.FIELD_END;
+          production[--i] = Symbols.FIELD_END;
           n++;
         }
-        production[--i] = Symbol.RECORD_END;
+        production[--i] = Symbols.RECORD_END;
       }
       return rresult;
     }

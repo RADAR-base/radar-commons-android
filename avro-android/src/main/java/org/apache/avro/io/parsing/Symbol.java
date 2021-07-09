@@ -52,7 +52,7 @@ public abstract class Symbol {
     IMPLICIT_ACTION,
     /** non-terminal action symbol which is explicitly consumed */
     EXPLICIT_ACTION
-  };
+  }
 
   /// The kind of this symbol.
   public final Kind kind;
@@ -151,10 +151,6 @@ public abstract class Symbol {
 
   public Symbol flatten(Map<Sequence, Sequence> map, Map<Sequence, List<Fixup>> map2) {
     return this;
-  }
-
-  public int flattenedSize() {
-    return 1;
   }
 
   /**
@@ -266,7 +262,7 @@ public abstract class Symbol {
     return name;
   }
 
-  private static class Terminal extends Symbol {
+  static class Terminal extends Symbol {
     public Terminal(String printName) {
       super(printName, Kind.TERMINAL);
     }
@@ -277,7 +273,7 @@ public abstract class Symbol {
     /**
      * Set to <tt>true</tt> if and only if this implicit action is a trailing
      * action. That is, it is an action that follows real symbol. E.g
-     * {@link Symbol#DEFAULT_END_ACTION}.
+     * {@link Symbols#DEFAULT_END_ACTION}.
      */
     public final boolean isTrailing;
 
@@ -285,7 +281,7 @@ public abstract class Symbol {
       this(name, false);
     }
 
-    private ImplicitAction(String name, boolean isTrailing) {
+    ImplicitAction(String name, boolean isTrailing) {
       super(name, Kind.IMPLICIT_ACTION);
       this.isTrailing = isTrailing;
     }
@@ -361,8 +357,7 @@ public abstract class Symbol {
       return result;
     }
 
-    @Override
-    public final int flattenedSize() {
+    private int flattenedSize() {
       return flattenedSize(production, 0);
     }
 
@@ -416,7 +411,8 @@ public abstract class Symbol {
     case ALTERNATIVE:
       return hasErrors(symbol, ((Alternative) symbol).symbols, visited);
     case EXPLICIT_ACTION:
-      return false;
+    case TERMINAL:
+        return false;
     case IMPLICIT_ACTION:
       if (symbol instanceof ErrorAction) {
         return true;
@@ -433,8 +429,6 @@ public abstract class Symbol {
     case ROOT:
     case SEQUENCE:
       return hasErrors(symbol, symbol.production, visited);
-    case TERMINAL:
-      return false;
     default:
       throw new RuntimeException("unknown symbol kind: " + symbol.kind);
     }
@@ -551,20 +545,24 @@ public abstract class Symbol {
       if (adjustments != null) {
         int count = Math.min(rsymCount, adjustments.length);
         noAdj = (adjustments.length <= rsymCount);
-        for (int i = 0; noAdj && i < count; i++)
-          noAdj &= ((adjustments[i] instanceof Integer) && i == (Integer) adjustments[i]);
+        for (int i = 0; i < count; i++) {
+          if (!(adjustments[i] instanceof Integer) || i != (Integer) adjustments[i]) {
+            noAdj = false;
+            break;
+          }
+        }
       }
       this.noAdjustments = noAdj;
     }
   }
 
   public static WriterUnionAction writerUnionAction() {
-    return new WriterUnionAction("writer-union");
+    return new WriterUnionAction();
   }
 
   public static class WriterUnionAction extends ImplicitAction {
-    private WriterUnionAction(String name) {
-      super(name);
+    WriterUnionAction() {
+      super("writer-union");
     }
   }
 
@@ -641,8 +639,12 @@ public abstract class Symbol {
       super("field-order");
       this.fields = fields;
       boolean noReorder = true;
-      for (int i = 0; noReorder && i < fields.length; i++)
-        noReorder &= (i == fields[i].pos());
+      for (int i = 0; i < fields.length; i++) {
+        if (i != fields[i].pos()) {
+          noReorder = false;
+          break;
+        }
+      }
       this.noReorder = noReorder;
     }
   }
@@ -716,38 +718,4 @@ public abstract class Symbol {
       return -1;
     }
   }
-
-  /**
-   * The terminal symbols for the grammar.
-   */
-  public static final Symbol NULL = new Symbol.Terminal("null");
-  public static final Symbol BOOLEAN = new Symbol.Terminal("boolean");
-  public static final Symbol INT = new Symbol.Terminal("int");
-  public static final Symbol LONG = new Symbol.Terminal("long");
-  public static final Symbol FLOAT = new Symbol.Terminal("float");
-  public static final Symbol DOUBLE = new Symbol.Terminal("double");
-  public static final Symbol STRING = new Symbol.Terminal("string");
-  public static final Symbol BYTES = new Symbol.Terminal("bytes");
-  public static final Symbol FIXED = new Symbol.Terminal("fixed");
-  public static final Symbol ENUM = new Symbol.Terminal("enum");
-  public static final Symbol UNION = new Symbol.Terminal("union");
-
-  public static final Symbol ARRAY_START = new Symbol.Terminal("array-start");
-  public static final Symbol ARRAY_END = new Symbol.Terminal("array-end");
-  public static final Symbol MAP_START = new Symbol.Terminal("map-start");
-  public static final Symbol MAP_END = new Symbol.Terminal("map-end");
-  public static final Symbol ITEM_END = new Symbol.Terminal("item-end");
-
-  public static final Symbol WRITER_UNION_ACTION = writerUnionAction();
-
-  /* a pseudo terminal used by parsers */
-  public static final Symbol FIELD_ACTION = new Symbol.Terminal("field-action");
-
-  public static final Symbol RECORD_START = new ImplicitAction("record-start", false);
-  public static final Symbol RECORD_END = new ImplicitAction("record-end", true);
-  public static final Symbol UNION_END = new ImplicitAction("union-end", true);
-  public static final Symbol FIELD_END = new ImplicitAction("field-end", true);
-
-  public static final Symbol DEFAULT_END_ACTION = new ImplicitAction("default-end", true);
-  public static final Symbol MAP_KEY_MARKER = new Symbol.Terminal("map-key-marker");
 }

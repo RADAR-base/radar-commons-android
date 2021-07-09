@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.io.parsing.JsonGrammarGenerator;
 import org.apache.avro.io.parsing.Parser;
 import org.apache.avro.io.parsing.Symbol;
+import org.apache.avro.io.parsing.Symbols;
 import org.apache.avro.util.Utf8;
 import org.json.JSONException;
 
@@ -51,7 +52,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
   /**
    * Has anything been written into the collections?
    */
-  protected BitSet isEmpty = new BitSet();
+  protected final BitSet isEmpty = new BitSet();
 
   JsonEncoder(Schema sc, OutputStream out) {
     rawWriter = new OutputStreamWriter(out);
@@ -67,7 +68,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeNull() throws IOException {
-    parser.advance(Symbol.NULL);
+    parser.advance(Symbols.NULL);
     try {
       out.value(null);
     } catch (JSONException ex) {
@@ -77,7 +78,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeBoolean(boolean b) throws IOException {
-    parser.advance(Symbol.BOOLEAN);
+    parser.advance(Symbols.BOOLEAN);
     try {
       out.value(b);
     } catch (JSONException ex) {
@@ -87,7 +88,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeInt(int n) throws IOException {
-    parser.advance(Symbol.INT);
+    parser.advance(Symbols.INT);
     try {
       out.value(n);
     } catch (JSONException ex) {
@@ -97,7 +98,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeLong(long n) throws IOException {
-    parser.advance(Symbol.LONG);
+    parser.advance(Symbols.LONG);
     try {
       out.value(n);
     } catch (JSONException ex) {
@@ -107,7 +108,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeFloat(float f) throws IOException {
-    parser.advance(Symbol.FLOAT);
+    parser.advance(Symbols.FLOAT);
     try {
       out.value(f);
     } catch (JSONException ex) {
@@ -117,7 +118,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeDouble(double d) throws IOException {
-    parser.advance(Symbol.DOUBLE);
+    parser.advance(Symbols.DOUBLE);
     try {
       out.value(d);
     } catch (JSONException ex) {
@@ -132,10 +133,10 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeString(String str) throws IOException {
-    parser.advance(Symbol.STRING);
+    parser.advance(Symbols.STRING);
     try {
-      if (parser.topSymbol() == Symbol.MAP_KEY_MARKER) {
-        parser.advance(Symbol.MAP_KEY_MARKER);
+      if (parser.topSymbol() == Symbols.MAP_KEY_MARKER) {
+        parser.advance(Symbols.MAP_KEY_MARKER);
         out.key(str);
       } else {
         out.value(str);
@@ -158,7 +159,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeBytes(byte[] bytes, int start, int len) throws IOException {
-    parser.advance(Symbol.BYTES);
+    parser.advance(Symbols.BYTES);
     writeByteArray(bytes, start, len);
   }
 
@@ -172,7 +173,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeFixed(byte[] bytes, int start, int len) throws IOException {
-    parser.advance(Symbol.FIXED);
+    parser.advance(Symbols.FIXED);
     Symbol.IntCheckAction top = (Symbol.IntCheckAction) parser.popSymbol();
     if (len != top.size) {
       throw new AvroTypeException(
@@ -183,7 +184,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeEnum(int e) throws IOException {
-    parser.advance(Symbol.ENUM);
+    parser.advance(Symbols.ENUM);
     Symbol.EnumLabelsAction top = (Symbol.EnumLabelsAction) parser.popSymbol();
     if (e < 0 || e >= top.size) {
       throw new AvroTypeException("Enumeration out of range: max is " + top.size + " but received " + e);
@@ -197,7 +198,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeArrayStart() throws IOException {
-    parser.advance(Symbol.ARRAY_START);
+    parser.advance(Symbols.ARRAY_START);
     try {
       out.array();
     } catch (JSONException e) {
@@ -210,10 +211,10 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
   @Override
   public void writeArrayEnd() throws IOException {
     if (!isEmpty.get(pos)) {
-      parser.advance(Symbol.ITEM_END);
+      parser.advance(Symbols.ITEM_END);
     }
     pop();
-    parser.advance(Symbol.ARRAY_END);
+    parser.advance(Symbols.ARRAY_END);
     try {
       out.endArray();
     } catch (JSONException e) {
@@ -226,7 +227,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
     push();
     isEmpty.set(depth());
 
-    parser.advance(Symbol.MAP_START);
+    parser.advance(Symbols.MAP_START);
     try {
       out.object();
     } catch (JSONException e) {
@@ -237,11 +238,11 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
   @Override
   public void writeMapEnd() throws IOException {
     if (!isEmpty.get(pos)) {
-      parser.advance(Symbol.ITEM_END);
+      parser.advance(Symbols.ITEM_END);
     }
     pop();
 
-    parser.advance(Symbol.MAP_END);
+    parser.advance(Symbols.MAP_END);
     try {
       out.endObject();
     } catch (JSONException e) {
@@ -252,7 +253,7 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
   @Override
   public void startItem() throws IOException {
     if (!isEmpty.get(pos)) {
-      parser.advance(Symbol.ITEM_END);
+      parser.advance(Symbols.ITEM_END);
     }
     super.startItem();
     isEmpty.clear(depth());
@@ -260,17 +261,17 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
 
   @Override
   public void writeIndex(int unionIndex) throws IOException {
-    parser.advance(Symbol.UNION);
+    parser.advance(Symbols.UNION);
     Symbol.Alternative top = (Symbol.Alternative) parser.popSymbol();
     Symbol symbol = top.getSymbol(unionIndex);
-    if (symbol != Symbol.NULL) {
+    if (symbol != Symbols.NULL) {
       try {
         out.object();
         out.key(top.getLabel(unionIndex));
       } catch (JSONException e) {
         throw new IOException(e);
       }
-      parser.pushSymbol(Symbol.UNION_END);
+      parser.pushSymbol(Symbols.UNION_END);
     }
     parser.pushSymbol(symbol);
   }
@@ -281,11 +282,11 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
       if (top instanceof Symbol.FieldAdjustAction) {
         Symbol.FieldAdjustAction fa = (Symbol.FieldAdjustAction) top;
         out.key(fa.fname);
-      } else if (top == Symbol.RECORD_START) {
+      } else if (top == Symbols.RECORD_START) {
         out.object();
-      } else if (top == Symbol.RECORD_END || top == Symbol.UNION_END) {
+      } else if (top == Symbols.RECORD_END || top == Symbols.UNION_END) {
         out.endObject();
-      } else if (top != Symbol.FIELD_END) {
+      } else if (top != Symbols.FIELD_END) {
         throw new AvroTypeException("Unknown action symbol " + top);
       }
     } catch (JSONException | IOException e) {

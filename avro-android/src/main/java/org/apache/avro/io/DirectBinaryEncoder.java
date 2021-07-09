@@ -129,9 +129,4 @@ public class DirectBinaryEncoder extends BinaryEncoder {
     out.write(0);
   }
 
-  @Override
-  public int bytesBuffered() {
-    return 0;
-  }
-
 }

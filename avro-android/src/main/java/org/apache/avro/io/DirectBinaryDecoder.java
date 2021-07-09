@@ -17,14 +17,13 @@
  */
 package org.apache.avro.io;
 
+import org.apache.avro.InvalidNumberEncodingException;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
-
-import org.apache.avro.InvalidNumberEncodingException;
-import org.apache.avro.util.ByteBufferInputStream;
 
 /**
  * A non-buffering version of {@link BinaryDecoder}.
@@ -53,24 +52,6 @@ class DirectBinaryDecoder extends BinaryDecoder {
     }
   }
 
-  private class ReuseByteReader extends ByteReader {
-    private final ByteBufferInputStream bbi;
-
-    public ReuseByteReader(ByteBufferInputStream bbi) {
-      this.bbi = bbi;
-    }
-
-    @Override
-    public ByteBuffer read(ByteBuffer old, int length) throws IOException {
-      if (old != null) {
-        return super.read(old, length);
-      } else {
-        return bbi.readBuffer(length);
-      }
-    }
-
-  }
-
   private ByteReader byteReader;
 
   DirectBinaryDecoder(InputStream in) {
@@ -80,8 +61,7 @@ class DirectBinaryDecoder extends BinaryDecoder {
 
   DirectBinaryDecoder configure(InputStream in) {
     this.in = in;
-    byteReader = (in instanceof ByteBufferInputStream) ? new ReuseByteReader((ByteBufferInputStream) in)
-        : new ByteReader();
+    byteReader = new ByteReader();
     return this;
   }
 
@@ -185,13 +165,4 @@ class DirectBinaryDecoder extends BinaryDecoder {
     }
   }
 
-  @Override
-  public InputStream inputStream() {
-    return in;
-  }
-
-  @Override
-  public boolean isEnd() throws IOException {
-    throw new UnsupportedOperationException();
-  }
 }

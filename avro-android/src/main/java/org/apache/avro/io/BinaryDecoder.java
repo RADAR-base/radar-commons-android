@@ -74,28 +74,6 @@ public class BinaryDecoder extends Decoder {
   private int pos = 0;
   private int limit = 0;
 
-  byte[] getBuf() {
-    return buf;
-  }
-
-  int getPos() {
-    return pos;
-  }
-
-  int getLimit() {
-    return limit;
-  }
-
-  void setBuf(byte[] buf, int pos, int len) {
-    this.buf = buf;
-    this.pos = pos;
-    this.limit = pos + len;
-  }
-
-  void clearBuf() {
-    this.buf = null;
-  }
-
   /** protected constructor for child classes */
   protected BinaryDecoder() {
     super();
@@ -281,7 +259,7 @@ public class BinaryDecoder extends Decoder {
     ensureBounds(4);
     int len = 1;
     int n = (buf[pos] & 0xff) | ((buf[pos + len++] & 0xff) << 8) | ((buf[pos + len++] & 0xff) << 16)
-        | ((buf[pos + len++] & 0xff) << 24);
+        | ((buf[pos + len] & 0xff) << 24);
     if ((pos + 4) > limit) {
       throw new EOFException();
     }
@@ -296,7 +274,7 @@ public class BinaryDecoder extends Decoder {
     int n1 = (buf[pos] & 0xff) | ((buf[pos + len++] & 0xff) << 8) | ((buf[pos + len++] & 0xff) << 16)
         | ((buf[pos + len++] & 0xff) << 24);
     int n2 = (buf[pos + len++] & 0xff) | ((buf[pos + len++] & 0xff) << 8) | ((buf[pos + len++] & 0xff) << 16)
-        | ((buf[pos + len++] & 0xff) << 24);
+        | ((buf[pos + len] & 0xff) << 24);
     if ((pos + 8) > limit) {
       throw new EOFException();
     }
@@ -500,34 +478,6 @@ public class BinaryDecoder extends Decoder {
   }
 
   /**
-   * Returns true if the current BinaryDecoder is at the end of its source data
-   * and cannot read any further without throwing an EOFException or other
-   * IOException.
-   * <p/>
-   * Not all implementations of BinaryDecoder support isEnd(). Implementations
-   * that do not support isEnd() will throw a
-   * {@link java.lang.UnsupportedOperationException}.
-   *
-   * @throws IOException If the first byte cannot be read for any reason other
-   *                     than the end of the file, if the input stream has been
-   *                     closed, or if some other I/O error occurs.
-   */
-  public boolean isEnd() throws IOException {
-    if (pos < limit) {
-      return false;
-    }
-    if (source.isEof()) {
-      return true;
-    }
-
-    // read from source.
-    final int read = source.tryReadRaw(buf, 0, buf.length);
-    pos = 0;
-    limit = read;
-    return (0 == read);
-  }
-
-  /**
    * Ensures that buf[pos + num - 1] is not out of the buffer array bounds.
    * However, buf[pos + num -1] may be >= limit if there is not enough data left
    * in the source to fill the array with num bytes.
@@ -547,17 +497,6 @@ public class BinaryDecoder extends Decoder {
       if (pos >= limit)
         throw new EOFException();
     }
-  }
-
-  /**
-   * Returns an {@link java.io.InputStream} that is aware of any buffering that
-   * may occur in this BinaryDecoder. Readers that need to interleave decoding
-   * Avro data with other reads must access this InputStream to do so unless the
-   * implementation is 'direct' and does not read beyond the minimum bytes
-   * necessary from the source.
-   */
-  public InputStream inputStream() {
-    return source;
   }
 
   /**
@@ -811,7 +750,7 @@ public class BinaryDecoder extends Decoder {
   }
 
   private static class InputStreamByteSource extends ByteSource {
-    private InputStream in;
+    private final InputStream in;
     protected boolean isEof = false;
 
     private InputStreamByteSource(InputStream in) {
@@ -942,7 +881,7 @@ public class BinaryDecoder extends Decoder {
    */
   private static class ByteArrayByteSource extends ByteSource {
     private static final int MIN_SIZE = 16;
-    private byte[] data;
+    private final byte[] data;
     private int position;
     private int max;
     private boolean compacted = false;

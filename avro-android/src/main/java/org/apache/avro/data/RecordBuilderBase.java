@@ -140,10 +140,9 @@ public abstract class RecordBuilderBase<T extends IndexedRecord> implements Reco
 
   @Override
   public int hashCode() {
-    final int prime = 31;
     int result = 1;
-    result = prime * result + Arrays.hashCode(fieldSetFlags);
-    result = prime * result + ((schema == null) ? 0 : schema.hashCode());
+    result = 31 * result + Arrays.hashCode(fieldSetFlags);
+    result = 31 * result + ((schema == null) ? 0 : schema.hashCode());
     return result;
   }
 

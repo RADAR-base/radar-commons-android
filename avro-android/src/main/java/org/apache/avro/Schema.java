@@ -66,8 +66,7 @@ import java.util.Set;
  *
  * <li>{@link #setFields(List)}, can be called at most once. This method exists
  * in order to enable clients to build recursive schemas.
- * <li>{@link #addProp(String, String)} can be called with property names that
- * are not present already. It is not possible to change or delete an existing
+ * <li>It is not possible to change or delete an existing
  * property.
  * </ul>
  */
@@ -149,12 +148,6 @@ public abstract class Schema extends JsonProperties implements Serializable {
   }
 
   int hashCode = NO_HASHCODE;
-
-  @Override
-  public void addProp(String name, String value) {
-    super.addProp(name, value);
-    hashCode = NO_HASHCODE;
-  }
 
   @Override
   public void addProp(String name, Object value) {
@@ -424,7 +417,7 @@ public abstract class Schema extends JsonProperties implements Serializable {
       Order() {
         this.name = this.name().toLowerCase(Locale.ENGLISH);
       }
-    };
+    }
 
     /**
      * For Schema unions with a "null" type as the first entry, this can be used to
@@ -440,16 +433,6 @@ public abstract class Schema extends JsonProperties implements Serializable {
     private final Order order;
     private Set<String> aliases;
 
-    Field(String name, Schema schema, String doc, Object defaultValue, boolean validateDefault, Order order) throws JSONException {
-      super();
-      validateName(name);
-      this.name = name;
-      this.schema = schema;
-      this.doc = doc;
-      this.defaultValue = validateDefault ? validateDefault(name, schema, defaultValue) : defaultValue;
-      this.order = Objects.requireNonNull(order, "Order cannot be null");
-    }
-
     /**
      * Constructs a new Field instance with the same {@code name}, {@code doc},
      * {@code defaultValue}, and {@code order} as {@code field} has with changing
@@ -457,7 +440,7 @@ public abstract class Schema extends JsonProperties implements Serializable {
      * {@code aliases}.
      */
     public Field(Field field, Schema schema) throws JSONException {
-      this(field.name, schema, field.doc, field.defaultValue, true, field.order);
+      this(field.name, schema, field.doc, field.defaultValue, field.order);
       putAll(field);
       if (field.aliases != null)
         aliases = new LinkedHashSet<>(field.aliases);
@@ -467,14 +450,14 @@ public abstract class Schema extends JsonProperties implements Serializable {
      *
      */
     public Field(String name, Schema schema) throws JSONException {
-      this(name, schema, null, null, true, Order.ASCENDING);
+      this(name, schema, null, null, Order.ASCENDING);
     }
 
     /**
      *
      */
     public Field(String name, Schema schema, String doc) throws JSONException {
-      this(name, schema, doc, null, true, Order.ASCENDING);
+      this(name, schema, doc, null, Order.ASCENDING);
     }
 
     /**
@@ -483,8 +466,7 @@ public abstract class Schema extends JsonProperties implements Serializable {
      */
     public Field(String name, Schema schema, String doc, Object defaultValue) throws JSONException {
       this(name, schema, doc,
-          defaultValue == NULL_DEFAULT_VALUE ? JSONObject.NULL : defaultValue, true,
-          Order.ASCENDING);
+          defaultValue == NULL_DEFAULT_VALUE ? JSONObject.NULL : defaultValue, Order.ASCENDING);
     }
 
     /**
@@ -492,14 +474,18 @@ public abstract class Schema extends JsonProperties implements Serializable {
      *                     mapping in {@link JsonProperties}
      */
     public Field(String name, Schema schema, String doc, Object defaultValue, Order order) throws JSONException {
-      this(name, schema, doc,
-          defaultValue == NULL_DEFAULT_VALUE ? JSONObject.NULL : defaultValue, true,
-          Objects.requireNonNull(order));
+      super();
+      validateName(name);
+      this.name = name;
+      this.schema = schema;
+      this.doc = doc;
+      this.defaultValue = validateDefault(name, schema, defaultValue);
+      this.order = Objects.requireNonNull(order, "Order cannot be null");
     }
 
     public String name() {
       return name;
-    };
+    }
 
     /** The position of this field within the record. */
     public int pos() {
@@ -783,12 +769,6 @@ public abstract class Schema extends JsonProperties implements Serializable {
     public RecordSchema(Name name, String doc, boolean isError) {
       super(Type.RECORD, name, doc);
       this.isError = isError;
-    }
-
-    public RecordSchema(Name name, String doc, boolean isError, List<Field> fields) {
-      super(Type.RECORD, name, doc);
-      this.isError = isError;
-      setFields(fields);
     }
 
     @Override
@@ -1125,11 +1105,6 @@ public abstract class Schema extends JsonProperties implements Serializable {
     }
 
     @Override
-    public void addProp(String name, String value) {
-      throw new AvroRuntimeException("Can't set properties on a union: " + this);
-    }
-
-    @Override
     Object toJson(Names names) throws JSONException {
       JSONArray array = new JSONArray();
       for (Schema type : types)
@@ -1240,49 +1215,7 @@ public abstract class Schema extends JsonProperties implements Serializable {
    * may refer to it by name.
    */
   public static class Parser {
-    private Names names = new Names();
-    private boolean validate = true;
-    private boolean validateDefaults = true;
-
-    /**
-     * Adds the provided types to the set of defined, named types known to this
-     * parser.
-     */
-    public Parser addTypes(Map<String, Schema> types) {
-      for (Schema s : types.values())
-        names.add(s);
-      return this;
-    }
-
-    /** Returns the set of defined, named types known to this parser. */
-    public Map<String, Schema> getTypes() {
-      Map<String, Schema> result = new LinkedHashMap<>();
-      for (Schema s : names.values())
-        result.put(s.getFullName(), s);
-      return result;
-    }
-
-    /** Enable or disable name validation. */
-    public Parser setValidate(boolean validate) {
-      this.validate = validate;
-      return this;
-    }
-
-    /** True iff names are validated. True by default. */
-    public boolean getValidate() {
-      return this.validate;
-    }
-
-    /** Enable or disable default value validation. */
-    public Parser setValidateDefaults(boolean validateDefaults) {
-      this.validateDefaults = validateDefaults;
-      return this;
-    }
-
-    /** True iff default values are validated. False by default. */
-    public boolean getValidateDefaults() {
-      return this.validateDefaults;
-    }
+    private final Names names = new Names();
 
     /**
      * Parse a schema from the provided file. If named, the schema is added to the
@@ -1308,14 +1241,6 @@ public abstract class Schema extends JsonProperties implements Serializable {
         numRead = reader.read(buffer);
       }
       return parse(builder.toString());
-    }
-
-    /** Read a schema from one or more json strings */
-    public Schema parse(String s, String... more) {
-      StringBuilder b = new StringBuilder(s);
-      for (String part : more)
-        b.append(part);
-      return parse(b.toString());
     }
 
     /**
@@ -1358,10 +1283,6 @@ public abstract class Schema extends JsonProperties implements Serializable {
     public Names() {
     }
 
-    public Names(String space) {
-      this.space = space;
-    }
-
     public String space() {
       return space;
     }
@@ -1381,10 +1302,6 @@ public abstract class Schema extends JsonProperties implements Serializable {
         name = new Name(o, "");
       }
       return super.get(name);
-    }
-
-    public boolean contains(Schema schema) {
-      return get(((NamedSchema) schema).name) != null;
     }
 
     public void add(Schema schema) {
@@ -1526,7 +1443,7 @@ public abstract class Schema extends JsonProperties implements Serializable {
               && (Type.FLOAT.equals(fieldSchema.getType()) || Type.DOUBLE.equals(fieldSchema.getType()))
               && defaultValue instanceof String)
             defaultValue = Double.valueOf((String) defaultValue);
-          Field f = new Field(fieldName, fieldSchema, fieldDoc, defaultValue, true, order);
+          Field f = new Field(fieldName, fieldSchema, fieldDoc, defaultValue, order);
           Iterator<String> keys = fieldObject.keys();
           while (keys.hasNext()) { // add field props
             String prop = keys.next();
@@ -1685,7 +1602,7 @@ public abstract class Schema extends JsonProperties implements Serializable {
       for (Field f : s.getFields()) {
         Schema fSchema = applyAliases(f.schema, seen, aliases, fieldAliases);
         String fName = getFieldAlias(name, f.name, fieldAliases);
-        Field newF = new Field(fName, fSchema, f.doc, f.defaultValue, true, f.order);
+        Field newF = new Field(fName, fSchema, f.doc, f.defaultValue, f.order);
         newF.putAll(f); // copy props
         newFields.add(newF);
       }

@@ -19,8 +19,8 @@
 
 package org.apache.avro.message;
 
-import org.apache.avro.util.ReusableByteArrayInputStream;
-import org.apache.avro.util.ReusableByteBufferInputStream;
+import org.apache.avro.util.ByteBufferInputStream;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -31,17 +31,6 @@ import java.nio.ByteBuffer;
  * @param <D> a datum class
  */
 public interface MessageDecoder<D> {
-
-  /**
-   * Deserialize a single datum from an InputStream.
-   *
-   * @param stream stream to read from
-   * @return a datum read from the stream
-   * @throws BadHeaderException     If the payload's header is not recognized.
-   * @throws MissingSchemaException If the payload's schema cannot be found.
-   * @throws IOException
-   */
-  D decode(InputStream stream) throws IOException;
 
   /**
    * Deserialize a single datum from an InputStream.
@@ -67,41 +56,6 @@ public interface MessageDecoder<D> {
   D decode(ByteBuffer encoded) throws IOException;
 
   /**
-   * Deserialize a single datum from a ByteBuffer.
-   *
-   * @param encoded a ByteBuffer containing an encoded datum
-   * @param reuse   a datum instance to reuse, avoiding instantiation if possible
-   * @return a datum read from the stream
-   * @throws BadHeaderException     If the payload's header is not recognized.
-   * @throws MissingSchemaException If the payload's schema cannot be found.
-   * @throws IOException
-   */
-  D decode(ByteBuffer encoded, D reuse) throws IOException;
-
-  /**
-   * Deserialize a single datum from a byte array.
-   *
-   * @param encoded a byte array containing an encoded datum
-   * @return a datum read from the stream
-   * @throws BadHeaderException     If the payload's header is not recognized.
-   * @throws MissingSchemaException If the payload's schema cannot be found.
-   * @throws IOException
-   */
-  D decode(byte[] encoded) throws IOException;
-
-  /**
-   * Deserialize a single datum from a byte array.
-   *
-   * @param encoded a byte array containing an encoded datum
-   * @param reuse   a datum instance to reuse, avoiding instantiation if possible
-   * @return a datum read from the stream
-   * @throws BadHeaderException     If the payload's header is not recognized.
-   * @throws MissingSchemaException If the payload's schema cannot be found.
-   * @throws IOException
-   */
-  D decode(byte[] encoded, D reuse) throws IOException;
-
-  /**
    * Base class for {@link MessageEncoder} implementations that provides default
    * implementations for most of the {@code DatumEncoder} API.
    * <p>
@@ -110,41 +64,9 @@ public interface MessageDecoder<D> {
    * @param <D> a datum class
    */
   abstract class BaseDecoder<D> implements MessageDecoder<D> {
-
-    private static final ThreadLocal<ReusableByteArrayInputStream> BYTE_ARRAY_IN = ThreadLocal
-        .withInitial(ReusableByteArrayInputStream::new);
-
-    private static final ThreadLocal<ReusableByteBufferInputStream> BYTE_BUFFER_IN = ThreadLocal
-        .withInitial(ReusableByteBufferInputStream::new);
-
-    @Override
-    public D decode(InputStream stream) throws IOException {
-      return decode(stream, null);
-    }
-
     @Override
     public D decode(ByteBuffer encoded) throws IOException {
-      return decode(encoded, null);
+      return decode(new ByteBufferInputStream(encoded), null);
     }
-
-    @Override
-    public D decode(byte[] encoded) throws IOException {
-      return decode(encoded, null);
-    }
-
-    @Override
-    public D decode(ByteBuffer encoded, D reuse) throws IOException {
-      ReusableByteBufferInputStream in = BYTE_BUFFER_IN.get();
-      in.setByteBuffer(encoded);
-      return decode(in, reuse);
-    }
-
-    @Override
-    public D decode(byte[] encoded, D reuse) throws IOException {
-      ReusableByteArrayInputStream in = BYTE_ARRAY_IN.get();
-      in.setByteArray(encoded, 0, encoded.length);
-      return decode(in, reuse);
-    }
-
   }
 }

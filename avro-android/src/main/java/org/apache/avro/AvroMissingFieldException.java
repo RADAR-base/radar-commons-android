@@ -20,8 +20,6 @@ package org.apache.avro;
 
 import org.apache.avro.Schema.Field;
 
-import java.util.List;
-
 /** Avro exception in case of missing fields. */
 public class AvroMissingFieldException extends AvroRuntimeException {
   private final Field field;

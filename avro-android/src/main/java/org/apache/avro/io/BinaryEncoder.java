@@ -17,11 +17,11 @@
  */
 package org.apache.avro.io;
 
+import org.apache.avro.util.Utf8;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-
-import org.apache.avro.util.Utf8;
 
 /**
  * An abstract {@link Encoder} for Avro's binary encoding.
@@ -119,13 +119,4 @@ public abstract class BinaryEncoder extends Encoder {
 
   /** Write a zero byte to the underlying output. **/
   protected abstract void writeZero() throws IOException;
-
-  /**
-   * Returns the number of bytes currently buffered by this encoder. If this
-   * Encoder does not buffer, this will always return zero.
-   * <p/>
-   * Call {@link #flush()} to empty the buffer to the underlying output.
-   */
-  public abstract int bytesBuffered();
-
 }

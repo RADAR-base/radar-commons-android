@@ -20,6 +20,7 @@ package org.apache.avro.io;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.io.parsing.Parser;
 import org.apache.avro.io.parsing.Symbol;
+import org.apache.avro.io.parsing.Symbols;
 import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
@@ -51,72 +52,72 @@ public class ValidatingDecoder extends ParsingDecoder implements Parser.ActionHa
 
   @Override
   public void readNull() throws IOException {
-    parser.advance(Symbol.NULL);
+    parser.advance(Symbols.NULL);
     in.readNull();
   }
 
   @Override
   public boolean readBoolean() throws IOException {
-    parser.advance(Symbol.BOOLEAN);
+    parser.advance(Symbols.BOOLEAN);
     return in.readBoolean();
   }
 
   @Override
   public int readInt() throws IOException {
-    parser.advance(Symbol.INT);
+    parser.advance(Symbols.INT);
     return in.readInt();
   }
 
   @Override
   public long readLong() throws IOException {
-    parser.advance(Symbol.LONG);
+    parser.advance(Symbols.LONG);
     return in.readLong();
   }
 
   @Override
   public float readFloat() throws IOException {
-    parser.advance(Symbol.FLOAT);
+    parser.advance(Symbols.FLOAT);
     return in.readFloat();
   }
 
   @Override
   public double readDouble() throws IOException {
-    parser.advance(Symbol.DOUBLE);
+    parser.advance(Symbols.DOUBLE);
     return in.readDouble();
   }
 
   @Override
   public Utf8 readString(Utf8 old) throws IOException {
-    parser.advance(Symbol.STRING);
+    parser.advance(Symbols.STRING);
     return in.readString(old);
   }
 
   @Override
   public String readString() throws IOException {
-    parser.advance(Symbol.STRING);
+    parser.advance(Symbols.STRING);
     return in.readString();
   }
 
   @Override
   public void skipString() throws IOException {
-    parser.advance(Symbol.STRING);
+    parser.advance(Symbols.STRING);
     in.skipString();
   }
 
   @Override
   public ByteBuffer readBytes(ByteBuffer old) throws IOException {
-    parser.advance(Symbol.BYTES);
+    parser.advance(Symbols.BYTES);
     return in.readBytes(old);
   }
 
   @Override
   public void skipBytes() throws IOException {
-    parser.advance(Symbol.BYTES);
+    parser.advance(Symbols.BYTES);
     in.skipBytes();
   }
 
   private void checkFixed(int size) throws IOException {
-    parser.advance(Symbol.FIXED);
+    parser.advance(Symbols.FIXED);
     Symbol.IntCheckAction top = (Symbol.IntCheckAction) parser.popSymbol();
     if (size != top.size) {
       throw new AvroTypeException(
@@ -138,14 +139,14 @@ public class ValidatingDecoder extends ParsingDecoder implements Parser.ActionHa
 
   @Override
   protected void skipFixed() throws IOException {
-    parser.advance(Symbol.FIXED);
+    parser.advance(Symbols.FIXED);
     Symbol.IntCheckAction top = (Symbol.IntCheckAction) parser.popSymbol();
     in.skipFixed(top.size);
   }
 
   @Override
   public int readEnum() throws IOException {
-    parser.advance(Symbol.ENUM);
+    parser.advance(Symbols.ENUM);
     Symbol.IntCheckAction top = (Symbol.IntCheckAction) parser.popSymbol();
     int result = in.readEnum();
     if (result < 0 || result >= top.size) {
@@ -156,10 +157,10 @@ public class ValidatingDecoder extends ParsingDecoder implements Parser.ActionHa
 
   @Override
   public long readArrayStart() throws IOException {
-    parser.advance(Symbol.ARRAY_START);
+    parser.advance(Symbols.ARRAY_START);
     long result = in.readArrayStart();
     if (result == 0) {
-      parser.advance(Symbol.ARRAY_END);
+      parser.advance(Symbols.ARRAY_END);
     }
     return result;
   }
@@ -169,29 +170,29 @@ public class ValidatingDecoder extends ParsingDecoder implements Parser.ActionHa
     parser.processTrailingImplicitActions();
     long result = in.arrayNext();
     if (result == 0) {
-      parser.advance(Symbol.ARRAY_END);
+      parser.advance(Symbols.ARRAY_END);
     }
     return result;
   }
 
   @Override
   public long skipArray() throws IOException {
-    parser.advance(Symbol.ARRAY_START);
+    parser.advance(Symbols.ARRAY_START);
     for (long c = in.skipArray(); c != 0; c = in.skipArray()) {
       while (c-- > 0) {
         parser.skipRepeater();
       }
     }
-    parser.advance(Symbol.ARRAY_END);
+    parser.advance(Symbols.ARRAY_END);
     return 0;
   }
 
   @Override
   public long readMapStart() throws IOException {
-    parser.advance(Symbol.MAP_START);
+    parser.advance(Symbols.MAP_START);
     long result = in.readMapStart();
     if (result == 0) {
-      parser.advance(Symbol.MAP_END);
+      parser.advance(Symbols.MAP_END);
     }
     return result;
   }
@@ -201,26 +202,26 @@ public class ValidatingDecoder extends ParsingDecoder implements Parser.ActionHa
     parser.processTrailingImplicitActions();
     long result = in.mapNext();
     if (result == 0) {
-      parser.advance(Symbol.MAP_END);
+      parser.advance(Symbols.MAP_END);
     }
     return result;
   }
 
   @Override
   public long skipMap() throws IOException {
-    parser.advance(Symbol.MAP_START);
+    parser.advance(Symbols.MAP_START);
     for (long c = in.skipMap(); c != 0; c = in.skipMap()) {
       while (c-- > 0) {
         parser.skipRepeater();
       }
     }
-    parser.advance(Symbol.MAP_END);
+    parser.advance(Symbols.MAP_END);
     return 0;
   }
 
   @Override
   public int readIndex() throws IOException {
-    parser.advance(Symbol.UNION);
+    parser.advance(Symbols.UNION);
     Symbol.Alternative top = (Symbol.Alternative) parser.popSymbol();
     int result = in.readIndex();
     parser.pushSymbol(top.getSymbol(result));

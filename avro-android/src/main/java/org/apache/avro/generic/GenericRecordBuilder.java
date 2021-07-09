@@ -17,13 +17,13 @@
  */
 package org.apache.avro.generic;
 
-import java.io.IOException;
-
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.data.RecordBuilderBase;
 import org.apache.avro.generic.GenericData.Record;
+
+import java.io.IOException;
 
 /**
  * A RecordBuilder for generic records. GenericRecordBuilder fills in default
@@ -40,36 +40,6 @@ public class GenericRecordBuilder extends RecordBuilderBase<Record> {
   public GenericRecordBuilder(Schema schema) {
     super(schema, GenericData.get());
     record = new GenericData.Record(schema);
-  }
-
-  /**
-   * Creates a GenericRecordBuilder by copying an existing GenericRecordBuilder.
-   * 
-   * @param other the GenericRecordBuilder to copy.
-   */
-  public GenericRecordBuilder(GenericRecordBuilder other) {
-    super(other, GenericData.get());
-    record = new GenericData.Record(other.record, /* deepCopy = */ true);
-  }
-
-  /**
-   * Creates a GenericRecordBuilder by copying an existing record instance.
-   * 
-   * @param other the record instance to copy.
-   */
-  public GenericRecordBuilder(Record other) {
-    super(other.getSchema(), GenericData.get());
-    record = new GenericData.Record(other, /* deepCopy = */ true);
-
-    // Set all fields in the RecordBuilder that are set in the record
-    for (Field f : schema().getFields()) {
-      Object value = other.get(f.pos());
-      // Only set the value if it is not null, if the schema type is null,
-      // or if the schema type is a union that accepts nulls.
-      if (isValidValue(f, value)) {
-        set(f, data().deepCopy(f.schema(), value));
-      }
-    }
   }
 
   /**
@@ -178,26 +148,6 @@ public class GenericRecordBuilder extends RecordBuilderBase<Record> {
    */
   protected boolean has(int pos) {
     return fieldSetFlags()[pos];
-  }
-
-  /**
-   * Clears the value of the given field.
-   * 
-   * @param fieldName the name of the field to clear.
-   * @return a reference to the RecordBuilder.
-   */
-  public GenericRecordBuilder clear(String fieldName) {
-    return clear(schema().getField(fieldName));
-  }
-
-  /**
-   * Clears the value of the given field.
-   * 
-   * @param field the field to clear.
-   * @return a reference to the RecordBuilder.
-   */
-  public GenericRecordBuilder clear(Field field) {
-    return clear(field.pos());
   }
 
   /**

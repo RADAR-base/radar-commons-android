@@ -17,16 +17,17 @@
  */
 package org.apache.avro.io;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.Objects;
-
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.parsing.ResolvingGrammarGenerator;
 import org.apache.avro.io.parsing.Symbol;
+import org.apache.avro.io.parsing.Symbols;
 import org.apache.avro.util.Utf8;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 /**
  * {@link Decoder} that performs type-resolution between the reader's and
@@ -124,18 +125,7 @@ public class ResolvingDecoder extends ValidatingDecoder {
    *
    */
   public final Schema.Field[] readFieldOrder() throws IOException {
-    return ((Symbol.FieldOrderAction) parser.advance(Symbol.FIELD_ACTION)).fields;
-  }
-
-  /**
-   * Same as {@link #readFieldOrder} except that it returns <tt>null</tt> if there
-   * was no reordering of fields, i.e., if the correct thing for the reader to do
-   * is to read (all) of its fields in the order specified by its own schema
-   * (useful for optimizations).
-   */
-  public final Schema.Field[] readFieldOrderIfDiff() throws IOException {
-    Symbol.FieldOrderAction top = (Symbol.FieldOrderAction) parser.advance(Symbol.FIELD_ACTION);
-    return (top.noReorder ? null : top.fields);
+    return ((Symbol.FieldOrderAction) parser.advance(Symbols.FIELD_ACTION)).fields;
   }
 
   /**
@@ -159,104 +149,104 @@ public class ResolvingDecoder extends ValidatingDecoder {
 
   @Override
   public long readLong() throws IOException {
-    Symbol actual = parser.advance(Symbol.LONG);
-    if (actual == Symbol.INT) {
+    Symbol actual = parser.advance(Symbols.LONG);
+    if (actual == Symbols.INT) {
       return in.readInt();
-    } else if (actual == Symbol.DOUBLE) {
+    } else if (actual == Symbols.DOUBLE) {
       return (long) in.readDouble();
     } else {
-      assert actual == Symbol.LONG;
+      assert actual == Symbols.LONG;
       return in.readLong();
     }
   }
 
   @Override
   public float readFloat() throws IOException {
-    Symbol actual = parser.advance(Symbol.FLOAT);
-    if (actual == Symbol.INT) {
+    Symbol actual = parser.advance(Symbols.FLOAT);
+    if (actual == Symbols.INT) {
       return (float) in.readInt();
-    } else if (actual == Symbol.LONG) {
+    } else if (actual == Symbols.LONG) {
       return (float) in.readLong();
     } else {
-      assert actual == Symbol.FLOAT;
+      assert actual == Symbols.FLOAT;
       return in.readFloat();
     }
   }
 
   @Override
   public double readDouble() throws IOException {
-    Symbol actual = parser.advance(Symbol.DOUBLE);
-    if (actual == Symbol.INT) {
+    Symbol actual = parser.advance(Symbols.DOUBLE);
+    if (actual == Symbols.INT) {
       return (double) in.readInt();
-    } else if (actual == Symbol.LONG) {
+    } else if (actual == Symbols.LONG) {
       return (double) in.readLong();
-    } else if (actual == Symbol.FLOAT) {
+    } else if (actual == Symbols.FLOAT) {
       return (double) in.readFloat();
     } else {
-      assert actual == Symbol.DOUBLE;
+      assert actual == Symbols.DOUBLE;
       return in.readDouble();
     }
   }
 
   @Override
   public Utf8 readString(Utf8 old) throws IOException {
-    Symbol actual = parser.advance(Symbol.STRING);
-    if (actual == Symbol.BYTES) {
+    Symbol actual = parser.advance(Symbols.STRING);
+    if (actual == Symbols.BYTES) {
       return new Utf8(in.readBytes(null).array());
     } else {
-      assert actual == Symbol.STRING;
+      assert actual == Symbols.STRING;
       return in.readString(old);
     }
   }
 
   @Override
   public String readString() throws IOException {
-    Symbol actual = parser.advance(Symbol.STRING);
-    if (actual == Symbol.BYTES) {
+    Symbol actual = parser.advance(Symbols.STRING);
+    if (actual == Symbols.BYTES) {
       return new String(in.readBytes(null).array(), StandardCharsets.UTF_8);
     } else {
-      assert actual == Symbol.STRING;
+      assert actual == Symbols.STRING;
       return in.readString();
     }
   }
 
   @Override
   public void skipString() throws IOException {
-    Symbol actual = parser.advance(Symbol.STRING);
-    if (actual == Symbol.BYTES) {
+    Symbol actual = parser.advance(Symbols.STRING);
+    if (actual == Symbols.BYTES) {
       in.skipBytes();
     } else {
-      assert actual == Symbol.STRING;
+      assert actual == Symbols.STRING;
       in.skipString();
     }
   }
 
   @Override
   public ByteBuffer readBytes(ByteBuffer old) throws IOException {
-    Symbol actual = parser.advance(Symbol.BYTES);
-    if (actual == Symbol.STRING) {
+    Symbol actual = parser.advance(Symbols.BYTES);
+    if (actual == Symbols.STRING) {
       Utf8 s = in.readString(null);
       return ByteBuffer.wrap(s.getBytes(), 0, s.getByteLength());
     } else {
-      assert actual == Symbol.BYTES;
+      assert actual == Symbols.BYTES;
       return in.readBytes(old);
     }
   }
 
   @Override
   public void skipBytes() throws IOException {
-    Symbol actual = parser.advance(Symbol.BYTES);
-    if (actual == Symbol.STRING) {
+    Symbol actual = parser.advance(Symbols.BYTES);
+    if (actual == Symbols.STRING) {
       in.skipString();
     } else {
-      assert actual == Symbol.BYTES;
+      assert actual == Symbols.BYTES;
       in.skipBytes();
     }
   }
 
   @Override
   public int readEnum() throws IOException {
-    parser.advance(Symbol.ENUM);
+    parser.advance(Symbols.ENUM);
     Symbol.EnumAdjustAction top = (Symbol.EnumAdjustAction) parser.popSymbol();
     int n = in.readEnum();
     if (top.noAdjustments) {
@@ -272,7 +262,7 @@ public class ResolvingDecoder extends ValidatingDecoder {
 
   @Override
   public int readIndex() throws IOException {
-    parser.advance(Symbol.UNION);
+    parser.advance(Symbols.UNION);
     Symbol top = parser.popSymbol();
     final int result;
     if (top instanceof Symbol.UnionAdjustAction) {
@@ -289,7 +279,7 @@ public class ResolvingDecoder extends ValidatingDecoder {
   @Override
   public Symbol doAction(Symbol input, Symbol top) throws IOException {
     if (top instanceof Symbol.FieldOrderAction) {
-      return input == Symbol.FIELD_ACTION ? top : null;
+      return input == Symbols.FIELD_ACTION ? top : null;
     }
     if (top instanceof Symbol.ResolvingAction) {
       Symbol.ResolvingAction t = (Symbol.ResolvingAction) top;
@@ -310,7 +300,7 @@ public class ResolvingDecoder extends ValidatingDecoder {
       Symbol.DefaultStartAction dsa = (Symbol.DefaultStartAction) top;
       backup = in;
       in = DecoderFactory.get().binaryDecoder(dsa.contents, null);
-    } else if (top == Symbol.DEFAULT_END_ACTION) {
+    } else if (top == Symbols.DEFAULT_END_ACTION) {
       in = backup;
     } else {
       throw new AvroTypeException("Unknown action: " + top);
@@ -334,7 +324,7 @@ public class ResolvingDecoder extends ValidatingDecoder {
       Symbol.DefaultStartAction dsa = (Symbol.DefaultStartAction) top;
       backup = in;
       in = DecoderFactory.get().binaryDecoder(dsa.contents, null);
-    } else if (top == Symbol.DEFAULT_END_ACTION) {
+    } else if (top == Symbols.DEFAULT_END_ACTION) {
       in = backup;
     }
   }

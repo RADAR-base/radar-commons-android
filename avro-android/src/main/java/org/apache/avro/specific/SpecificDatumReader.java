@@ -46,32 +46,19 @@ public class SpecificDatumReader<T> extends GenericDatumReader<T> {
   }
 
   @Override
-  public void setSchema(Schema actual) {
-    // if expected is unset and actual is a specific record,
-    // then default expected to schema of currently loaded class
-    if (getExpected() == null && actual != null && actual.getType() == Schema.Type.RECORD) {
-      SpecificData data = getSpecificData();
-      Class c = data.getClass(actual);
-      if (c != null && SpecificRecord.class.isAssignableFrom(c))
-        setExpected(data.getSchema(c));
-    }
-    super.setSchema(actual);
-  }
-
-  @Override
   protected Object readRecord(Object old, Schema expected, ResolvingDecoder in) throws IOException {
     return super.readRecord(old, expected, in);
   }
 
   @Override
-  protected void readField(Object record, Schema.Field field, Object oldDatum, ResolvingDecoder in, Object state)
+  protected void readField(Object record, Schema.Field field, Object oldDatum, ResolvingDecoder in)
       throws IOException {
     if (record instanceof SpecificRecordBase) {
       Object datum;
       datum = readWithoutConversion(oldDatum, field.schema(), in);
       getData().setField(record, field.name(), field.pos(), datum);
     } else {
-      super.readField(record, field, oldDatum, in, state);
+      super.readField(record, field, oldDatum, in);
     }
   }
 }

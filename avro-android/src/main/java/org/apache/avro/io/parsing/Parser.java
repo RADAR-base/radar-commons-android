@@ -17,10 +17,10 @@
  */
 package org.apache.avro.io.parsing;
 
+import org.apache.avro.AvroTypeException;
+
 import java.io.IOException;
 import java.util.Arrays;
-
-import org.apache.avro.AvroTypeException;
 
 /**
  * Parser is the class that maintains the stack for parsing. This class is used
@@ -136,8 +136,8 @@ public class Parser {
 
   /**
    * Pushes the production for the given symbol <tt>sym</tt>. If <tt>sym</tt> is a
-   * repeater and <tt>input</tt> is either {@link Symbol#ARRAY_END} or
-   * {@link Symbol#MAP_END} pushes nothing.
+   * repeater and <tt>input</tt> is either {@link Symbols#ARRAY_END} or
+   * {@link Symbols#MAP_END} pushes nothing.
    *
    * @param sym
    */
@@ -172,13 +172,6 @@ public class Parser {
       expandStack();
     }
     stack[pos++] = sym;
-  }
-
-  /**
-   * Returns the depth of the stack.
-   */
-  public int depth() {
-    return pos;
   }
 
   public void reset() {

@@ -35,8 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * the 8-byte schema fingerprint.
  * <p>
  * Instances can decode message payloads for known {@link Schema schemas}, which
- * are schemas added using {@link #addSchema(Schema)}, schemas resolved by the
- * {@link SchemaStore} passed to the constructor, or the expected schema passed
+ * are schemas added using {@link #addSchema(Schema)}, or the expected schema passed
  * to the constructor. Messages encoded using an unknown schema will cause
  * instances to throw a {@link MissingSchemaException}.
  * <p>
@@ -51,7 +50,6 @@ public class BinaryMessageDecoder<D> extends MessageDecoder.BaseDecoder<D> {
 
   private final GenericData model;
   private final Schema readSchema;
-  private final SchemaStore resolver;
 
   private final Map<Long, RawMessageDecoder<D>> codecByFingerprint = new ConcurrentHashMap<>();
 
@@ -75,34 +73,8 @@ public class BinaryMessageDecoder<D> extends MessageDecoder.BaseDecoder<D> {
    * @param readSchema the {@link Schema} used to construct datum instances
    */
   public BinaryMessageDecoder(GenericData model, Schema readSchema) {
-    this(model, readSchema, null);
-  }
-
-  /**
-   * Creates a new {@link BinaryMessageEncoder} that uses the given
-   * {@link GenericData data model} to construct datum instances described by the
-   * {@link Schema schema}.
-   * <p>
-   * The {@code readSchema} is used as the expected schema (read schema). Datum
-   * instances created by this class will be described by the expected schema.
-   * <p>
-   * If {@code readSchema} is {@code null}, the write schema of an incoming buffer
-   * is used as read schema for that datum instance.
-   * <p>
-   * The schema used to decode incoming buffers is determined by the schema
-   * fingerprint encoded in the message header. This class can decode messages
-   * that were encoded using the {@code readSchema} (if any), other schemas that
-   * are added using {@link #addSchema(Schema)}, or schemas returned by the
-   * {@code resolver}.
-   *
-   * @param model      the {@link GenericData data model} for datum instances
-   * @param readSchema the {@link Schema} used to construct datum instances
-   * @param resolver   a {@link SchemaStore} used to find schemas by fingerprint
-   */
-  public BinaryMessageDecoder(GenericData model, Schema readSchema, SchemaStore resolver) {
     this.model = model;
     this.readSchema = readSchema;
-    this.resolver = resolver;
     if (readSchema != null) {
       addSchema(readSchema);
     }
@@ -124,15 +96,6 @@ public class BinaryMessageDecoder<D> extends MessageDecoder.BaseDecoder<D> {
     if (decoder != null) {
       return decoder;
     }
-
-    if (resolver != null) {
-      Schema writeSchema = resolver.findByFingerprint(fp);
-      if (writeSchema != null) {
-        addSchema(writeSchema);
-        return codecByFingerprint.get(fp);
-      }
-    }
-
     throw new MissingSchemaException("Cannot resolve schema for fingerprint: " + fp);
   }
 

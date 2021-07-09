@@ -37,7 +37,4 @@ public interface GenericArray<T> extends List<T>, GenericContainer {
   /** clean up reusable objects from array (if reset didn't already) */
   default void prune() {
   }
-
-  /** Reverses the order of the elements in this array. */
-  void reverse();
 }

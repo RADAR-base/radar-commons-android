@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.io.parsing.JsonGrammarGenerator;
 import org.apache.avro.io.parsing.Parser;
 import org.apache.avro.io.parsing.Symbol;
+import org.apache.avro.io.parsing.Symbols;
 import org.apache.avro.util.Utf8;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -39,11 +40,11 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-import static org.apache.avro.io.parsing.Symbol.ARRAY_END;
-import static org.apache.avro.io.parsing.Symbol.ITEM_END;
-import static org.apache.avro.io.parsing.Symbol.MAP_END;
-import static org.apache.avro.io.parsing.Symbol.RECORD_END;
-import static org.apache.avro.io.parsing.Symbol.UNION_END;
+import static org.apache.avro.io.parsing.Symbols.ARRAY_END;
+import static org.apache.avro.io.parsing.Symbols.ITEM_END;
+import static org.apache.avro.io.parsing.Symbols.MAP_END;
+import static org.apache.avro.io.parsing.Symbols.RECORD_END;
+import static org.apache.avro.io.parsing.Symbols.UNION_END;
 
 /**
  * A {@link Decoder} for Avro's JSON data encoding.
@@ -94,7 +95,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public void readNull() throws IOException {
-    advance(Symbol.NULL);
+    advance(Symbols.NULL);
     Object result = currentState.next("null");
     if (result != JSONObject.NULL) {
       throw error("null", result);
@@ -103,7 +104,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public boolean readBoolean() throws IOException {
-    advance(Symbol.BOOLEAN);
+    advance(Symbols.BOOLEAN);
     Object result = currentState.next("boolean");
     if (result instanceof Boolean) {
       return (boolean) result;
@@ -114,7 +115,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public int readInt() throws IOException {
-    advance(Symbol.INT);
+    advance(Symbols.INT);
     Object result = currentState.next("int");
     if (result instanceof Number) {
       return ((Number) result).intValue();
@@ -125,7 +126,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public long readLong() throws IOException {
-    advance(Symbol.LONG);
+    advance(Symbols.LONG);
     Object result = currentState.next("long");
     if (result instanceof Number) {
       return ((Number) result).longValue();
@@ -136,7 +137,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public float readFloat() throws IOException {
-    advance(Symbol.FLOAT);
+    advance(Symbols.FLOAT);
     Object result = currentState.next("float");
     if (result instanceof Number) {
       return ((Number) result).floatValue();
@@ -147,7 +148,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public double readDouble() throws IOException {
-    advance(Symbol.DOUBLE);
+    advance(Symbols.DOUBLE);
     Object result = currentState.next("double");
     if (result instanceof Number) {
       return ((Number) result).doubleValue();
@@ -166,9 +167,9 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public String readString() throws IOException {
-    advance(Symbol.STRING);
-    if (parser.topSymbol() == Symbol.MAP_KEY_MARKER) {
-      parser.advance(Symbol.MAP_KEY_MARKER);
+    advance(Symbols.STRING);
+    if (parser.topSymbol() == Symbols.MAP_KEY_MARKER) {
+      parser.advance(Symbols.MAP_KEY_MARKER);
       return readString("map-key");
     } else {
       return readString("string");
@@ -185,13 +186,13 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public void skipString() throws IOException {
-    advance(Symbol.STRING);
+    advance(Symbols.STRING);
     readString();
   }
 
   @Override
   public ByteBuffer readBytes(ByteBuffer old) throws IOException {
-    advance(Symbol.BYTES);
+    advance(Symbols.BYTES);
     byte[] result = readByteArray("bytes");
     return ByteBuffer.wrap(result);
   }
@@ -202,7 +203,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public void skipBytes() throws IOException {
-    advance(Symbol.BYTES);
+    advance(Symbols.BYTES);
     readByteArray("bytes");
   }
 
@@ -216,7 +217,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public void readFixed(byte[] bytes, int start, int len) throws IOException {
-    advance(Symbol.FIXED);
+    advance(Symbols.FIXED);
     checkFixed(len);
     byte[] result = readByteArray("fixed");
     if (result.length != len) {
@@ -227,7 +228,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public void skipFixed(int length) throws IOException {
-    advance(Symbol.FIXED);
+    advance(Symbols.FIXED);
     checkFixed(length);
     doSkipFixed(length);
   }
@@ -242,14 +243,14 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   protected void skipFixed() throws IOException {
-    advance(Symbol.FIXED);
+    advance(Symbols.FIXED);
     Symbol.IntCheckAction top = (Symbol.IntCheckAction) parser.popSymbol();
     doSkipFixed(top.size);
   }
 
   @Override
   public int readEnum() throws IOException {
-    advance(Symbol.ENUM);
+    advance(Symbols.ENUM);
     Symbol.EnumLabelsAction top = (Symbol.EnumLabelsAction) parser.popSymbol();
     String symbol = readString("enum");
     int n = top.findLabel(symbol);
@@ -261,7 +262,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public long readArrayStart() throws IOException {
-    advance(Symbol.ARRAY_START);
+    advance(Symbols.ARRAY_START);
     Object next = currentState.next("array-start");
     if (next instanceof JSONArray) {
       stateDeque.push(currentState);
@@ -272,6 +273,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public long arrayNext() throws IOException {
+    parser.processTrailingImplicitActions();
     return doArrayNext();
   }
 
@@ -290,7 +292,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public long skipArray() throws IOException {
-    advance(Symbol.ARRAY_START);
+    advance(Symbols.ARRAY_START);
     Object next = currentState.next("array-start");
     if (!(next instanceof JSONArray)) {
       throw error("array-start", next);
@@ -302,7 +304,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public long readMapStart() throws IOException {
-    advance(Symbol.MAP_START);
+    advance(Symbols.MAP_START);
     Object next = currentState.next("map-start");
     if (next instanceof JSONObject) {
       stateDeque.push(currentState);
@@ -331,7 +333,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public long skipMap() throws IOException {
-    advance(Symbol.MAP_START);
+    advance(Symbols.MAP_START);
     Object next = currentState.next("map-start");
     if (!(next instanceof JSONObject)) {
       throw error("map-start", next);
@@ -343,7 +345,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
 
   @Override
   public int readIndex() throws IOException {
-    advance(Symbol.UNION);
+    advance(Symbols.UNION);
     Symbol.Alternative a = (Symbol.Alternative) parser.popSymbol();
 
     String label;
@@ -366,7 +368,7 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
     } else {
       throw error("start-union", next);
     }
-    parser.pushSymbol(Symbol.UNION_END);
+    parser.pushSymbol(Symbols.UNION_END);
     int n = a.findLabel(label);
     if (n < 0)
       throw new AvroTypeException("Unknown union branch " + label);
@@ -383,11 +385,11 @@ public class JsonDecoder extends ParsingDecoder implements Parser.ActionHandler 
         JSONRecordStackElement recordElement = (JSONRecordStackElement) currentState;
         recordElement.setKey(name);
       }
-    } else if (top == Symbol.FIELD_END) {
+    } else if (top == Symbols.FIELD_END) {
       if (currentState instanceof JSONRecordStackElement) {
         ((JSONRecordStackElement) currentState).setKey(null);
       }
-    } else if (top == Symbol.RECORD_START) {
+    } else if (top == Symbols.RECORD_START) {
       Object next = currentState.next("record-start");
       if (!(next instanceof JSONObject)) {
         throw error("record-start", next.getClass().getSimpleName());

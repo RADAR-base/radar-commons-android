@@ -20,7 +20,6 @@
 package org.apache.avro.message;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -38,14 +37,5 @@ public interface MessageEncoder<D> {
    * @throws IOException
    */
   ByteBuffer encode(D datum) throws IOException;
-
-  /**
-   * Serialize a single datum to an OutputStream.
-   *
-   * @param datum  a datum
-   * @param stream an OutputStream to serialize the datum to
-   * @throws IOException
-   */
-  void encode(D datum, OutputStream stream) throws IOException;
 
 }

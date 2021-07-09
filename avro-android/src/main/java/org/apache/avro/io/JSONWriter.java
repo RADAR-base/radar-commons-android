@@ -6,7 +6,6 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -95,7 +94,7 @@ public class JSONWriter {
      * Unlike the original implementation, this stack isn't limited to 20
      * levels of nesting.
      */
-    private final List<Scope> stack = new ArrayList<Scope>();
+    private final List<Scope> stack = new ArrayList<>();
     private final Appendable out;
     private boolean isEmpty = true;
 
@@ -108,13 +107,6 @@ public class JSONWriter {
     public JSONWriter(Appendable appendable) {
         this.out = appendable;
         indent = null;
-    }
-
-    public JSONWriter(Appendable appendable, int indentSpaces) {
-        char[] indentChars = new char[indentSpaces];
-        Arrays.fill(indentChars, ' ');
-        indent = new String(indentChars);
-        this.out = appendable;
     }
 
     /**

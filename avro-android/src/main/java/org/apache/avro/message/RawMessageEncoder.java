@@ -47,21 +47,6 @@ public class RawMessageEncoder<D> implements MessageEncoder<D> {
    * {@link GenericData data model} to deconstruct datum instances described by
    * the {@link Schema schema}.
    * <p>
-   * Buffers returned by {@link RawMessageEncoder#encode} are copied and will not
-   * be modified by future calls to {@code encode}.
-   *
-   * @param model  the {@link GenericData data model} for datum instances
-   * @param schema the {@link Schema} for datum instances
-   */
-  public RawMessageEncoder(GenericData model, Schema schema) {
-    this(model, schema, true);
-  }
-
-  /**
-   * Creates a new {@link RawMessageEncoder} that uses the given
-   * {@link GenericData data model} to deconstruct datum instances described by
-   * the {@link Schema schema}.
-   * <p>
    * If {@code shouldCopy} is true, then buffers returned by
    * {@link RawMessageEncoder#encode} are copied and will not be modified by
    * future calls to {@code encode}.
@@ -77,9 +62,8 @@ public class RawMessageEncoder<D> implements MessageEncoder<D> {
    * @param shouldCopy whether to copy buffers before returning encoded results
    */
   public RawMessageEncoder(GenericData model, Schema schema, boolean shouldCopy) {
-    Schema writeSchema = schema;
     this.copyOutputBytes = shouldCopy;
-    this.writer = model.createDatumWriter(writeSchema);
+    this.writer = model.createDatumWriter(schema);
   }
 
   @Override
@@ -95,7 +79,6 @@ public class RawMessageEncoder<D> implements MessageEncoder<D> {
     }
   }
 
-  @Override
   public void encode(D datum, OutputStream stream) throws IOException {
     BinaryEncoder encoder = EncoderFactory.get().directBinaryEncoder(stream, ENCODER.get());
     ENCODER.set(encoder);
