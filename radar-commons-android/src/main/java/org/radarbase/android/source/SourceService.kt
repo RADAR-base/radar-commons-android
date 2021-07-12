@@ -79,7 +79,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private lateinit var authConnection: AuthServiceConnection
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
-    private lateinit var handler: SafeHandler
+    protected lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
     private lateinit var broadcaster: LocalBroadcastManager
     private var needsRegisteredSources: Boolean = true
@@ -242,7 +242,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
     }
 
-    private fun doStart(acceptableIds: Set<String>) {
+    protected open fun doStart(acceptableIds: Set<String>) {
         val expectedNames = expectedSourceNames
         val actualIds = if (expectedNames.isEmpty()) acceptableIds else expectedNames
 
@@ -291,7 +291,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
     }
 
-    fun restartRecording(acceptableIds: Set<String>) {
+    open fun restartRecording(acceptableIds: Set<String>) {
         handler.execute {
             doStop()
             doStart(acceptableIds)
@@ -302,7 +302,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         handler.stop { doStop() }
     }
 
-    private fun doStop() {
+    protected open fun doStop() {
         delayedStart = null
         startFuture?.let {
             it.cancel()

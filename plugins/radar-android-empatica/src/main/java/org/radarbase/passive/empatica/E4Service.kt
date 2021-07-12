@@ -35,7 +35,7 @@ class E4Service : SourceService<E4State>() {
     private var apiKey: String? = null
     private var hasInvalidApiKey: Boolean = false
     private val delegate = E4Delegate(this)
-
+    private var waitForRestart = false
 
     override fun onCreate() {
         super.onCreate()
@@ -44,7 +44,12 @@ class E4Service : SourceService<E4State>() {
     }
 
     override fun createSourceManager(): E4Manager {
-        val localE4Manager = empaManager ?: EmpaDeviceManager(this, delegate, delegate, delegate)
+        val localE4Manager = mHandler.compute {
+            if (empaManager == null) {
+                empaManager = EmpaDeviceManager(this, delegate, delegate, delegate)
+            }
+            requireNotNull(empaManager)
+        }
         return E4Manager(this, localE4Manager, mHandler)
     }
 
@@ -66,6 +71,34 @@ class E4Service : SourceService<E4State>() {
             }
         }
     }
+
+    override fun restartRecording(acceptableIds: Set<String>) {
+        handler.execute {
+            doStop()
+            waitForRestart = true
+            mHandler.execute {
+                empaManager?.let {
+                    empaManager = null
+                    it.cleanUp()
+                }
+                handler.delay(5_000) {
+                    waitForRestart = false
+                    doStart(acceptableIds)
+                }
+            }
+        }
+    }
+
+    override fun doStop() {
+        if (waitForRestart) return
+        super.doStop()
+    }
+
+    override fun doStart(acceptableIds: Set<String>) {
+        if (waitForRestart) return
+        super.doStart(acceptableIds)
+    }
+
 
     override fun sourceStatusUpdated(manager: SourceManager<*>, status: SourceStatusListener.Status) {
         if (status == SourceStatusListener.Status.DISCONNECTED && hasInvalidApiKey) {
