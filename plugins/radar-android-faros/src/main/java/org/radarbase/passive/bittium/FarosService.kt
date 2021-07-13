@@ -29,18 +29,18 @@ import org.radarcns.bittium.faros.FarosSdkFactory
  */
 class FarosService : SourceService<FarosState>() {
     private lateinit var farosFactory: FarosSdkFactory
-    private lateinit var handler: SafeHandler
+    private lateinit var deviceHandler: SafeHandler
 
     override val defaultState: FarosState
         get() = FarosState()
 
     override fun onCreate() {
         super.onCreate()
-        handler = SafeHandler.getInstance("Faros", THREAD_PRIORITY_FOREGROUND)
+        deviceHandler = SafeHandler.getInstance("Faros", THREAD_PRIORITY_FOREGROUND)
         farosFactory = FarosSdkFactory()
     }
 
-    override fun createSourceManager() = FarosManager(this, farosFactory, handler)
+    override fun createSourceManager() = FarosManager(this, farosFactory, deviceHandler)
 
     override fun configureSourceManager(manager: SourceManager<FarosState>, config: SingleRadarConfiguration) {
         manager as FarosManager
