@@ -205,7 +205,6 @@ open class PermissionHandler(
         ).startActivityForResult(BATTERY_OPT_CODE)
     }
 
-
     private fun requestPackageUsageStats() {
         alertDialog {
             setTitle(R.string.enable_package_usage_title)

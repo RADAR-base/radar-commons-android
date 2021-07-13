@@ -34,6 +34,7 @@ import java.io.IOException
 import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
 import java.util.*
+import kotlin.collections.ArrayList
 
 class CacheStore(
         private val serializationFactories: List<SerializationFactory> = listOf(TapeAvroSerializationFactory())
@@ -66,24 +67,39 @@ class CacheStore(
         } else this.handler
         val ref = tables[topic.name] as SynchronizedReference<DataCacheGroup<K, V>>?
                 ?: SynchronizedReference {
-                    loadCache(
-                        context.cacheDir.absolutePath + "/" + topic.name,
+                    val cacheBase = context.cacheDir.absolutePath + "/" + topic.name
+                    val oldCache = loadExistingCaches(
+                        cacheBase,
                         topic,
                         config,
                         useHandler,
                     )
+                    val filesBase = context.filesDir.absolutePath + "/topics/" + topic.name
+                    val newCache = loadExistingCaches(
+                        filesBase,
+                        topic,
+                        config,
+                        useHandler,
+                    )
+                    val activeCache = newCache.activeDataCache ?: createActiveDataCache(filesBase, topic, config, useHandler)
+                    val combinedCache = DataCacheGroup(
+                        activeCache,
+                        newCache.deprecatedCaches,
+                    )
+                    oldCache.activeDataCache?.let { combinedCache.deprecatedCaches += it }
+                    combinedCache.deprecatedCaches += oldCache.deprecatedCaches
+                    combinedCache
                 }.also { tables[topic.name] = it as SynchronizedReference<DataCacheGroup<*, *>> }
 
         return ref.get()
     }
-
     @Throws(IOException::class)
-    private fun <K: Any, V: Any> loadCache(
-            base: String,
-            topic: AvroTopic<K, V>,
-            config: CacheConfiguration,
-            handler: SafeHandler,
-    ): DataCacheGroup<K, V> {
+    private fun <K: Any, V: Any> loadExistingCaches(
+        base: String,
+        topic: AvroTopic<K, V>,
+        config: CacheConfiguration,
+        handler: SafeHandler,
+    ): OptionalDataCacheGroup<K, V> {
         val fileBases = getFileBases(base)
         logger.debug("Files for topic {}: {}", topic.name, fileBases)
 
@@ -93,54 +109,65 @@ class CacheStore(
         for ((fileBase, serialization) in fileBases) {
             val tapeFile = File(fileBase + serialization.fileExtension)
             val (keySchema, valueSchema) = loadSchemas(topic, fileBase)
-                    ?: continue  // no use in reading without valid schemas
+                ?: continue  // no use in reading without valid schemas
 
             val outputTopic = AvroTopic(topic.name,
-                    keySchema, valueSchema,
-                    Any::class.java, Any::class.java)
+                keySchema, valueSchema,
+                Any::class.java, Any::class.java)
 
             if (keySchema == topic.keySchema
-                    && valueSchema == topic.valueSchema
-                    && serialization == serializationFactories.first()) {
+                && valueSchema == topic.valueSchema
+                && serialization == serializationFactories.first()) {
                 if (activeDataCache != null) {
                     logger.error("Cannot have more than one active cache")
                 }
 
                 logger.info("Loading matching data store with schemas {}", tapeFile)
                 activeDataCache = TapeCache(
-                        tapeFile, topic, outputTopic, handler, serialization, config)
+                    tapeFile, topic, outputTopic, handler, serialization, config)
             } else {
                 logger.debug("Loading deprecated data store {}", tapeFile)
                 deprecatedDataCaches.add(TapeCache(
-                        tapeFile, outputTopic, outputTopic, handler, serialization, config))
+                    tapeFile, outputTopic, outputTopic, handler, serialization, config))
             }
         }
+        return OptionalDataCacheGroup(activeDataCache, deprecatedDataCaches)
+    }
 
-        if (activeDataCache == null) {
-            val baseDir = File(base)
-            if (!baseDir.exists() && !baseDir.mkdirs()) {
-                throw IOException("Cannot make data cache directory")
-            }
-            val serialization = serializationFactories.first()
-            activeDataCache = IntRange(0, 99)
-                    .map { "$base/cache-$it" }
-                    .find { fileBase -> fileBases.none { it.first == fileBase } }
-                    ?.let { fileBase ->
-                        storeSchema(topic.keySchema, File(fileBase + KEY_SCHEMA_EXTENSION))
-                        storeSchema(topic.valueSchema, File(fileBase + VALUE_SCHEMA_EXTENSION))
+    private data class OptionalDataCacheGroup<K: Any, V: Any>(
+        val activeDataCache: DataCache<K, V>?,
+        val deprecatedCaches: MutableList<ReadableDataCache>
+    )
 
-                        val outputTopic = AvroTopic(topic.name,
-                                topic.keySchema, topic.valueSchema,
-                                Any::class.java, Any::class.java)
-
-                        val tapeFile = File(fileBase + serialization.fileExtension)
-                        logger.info("Creating new data store {}", tapeFile)
-                        TapeCache(
-                                tapeFile, topic, outputTopic, handler, serialization, config)
-                    } ?: throw IOException("No empty slot to store active data cache in.")
+    @Throws(IOException::class)
+    private fun <K: Any, V: Any> createActiveDataCache(
+            base: String,
+            topic: AvroTopic<K, V>,
+            config: CacheConfiguration,
+            handler: SafeHandler,
+    ): DataCache<K, V> {
+        val fileBases = getFileBases(base)
+        val baseDir = File(base)
+        if (!baseDir.exists() && !baseDir.mkdirs()) {
+            throw IOException("Cannot make data cache directory")
         }
+        val serialization = serializationFactories.first()
+        return IntRange(0, 99)
+                .map { "$base/cache-$it" }
+                .find { fileBase -> fileBases.none { it.first == fileBase } }
+                ?.let { fileBase ->
+                    storeSchema(topic.keySchema, File(fileBase + KEY_SCHEMA_EXTENSION))
+                    storeSchema(topic.valueSchema, File(fileBase + VALUE_SCHEMA_EXTENSION))
 
-        return DataCacheGroup(activeDataCache, deprecatedDataCaches)
+                    val outputTopic = AvroTopic(topic.name,
+                            topic.keySchema, topic.valueSchema,
+                            Any::class.java, Any::class.java)
+
+                    val tapeFile = File(fileBase + serialization.fileExtension)
+                    logger.info("Creating new data store {}", tapeFile)
+                    TapeCache(
+                            tapeFile, topic, outputTopic, handler, serialization, config)
+                } ?: throw IOException("No empty slot to store active data cache in.")
     }
 
     private fun loadSchemas(topic: AvroTopic<*, *>, base: String): Pair<Schema, Schema>? {

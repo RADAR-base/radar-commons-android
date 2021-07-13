@@ -56,9 +56,10 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
             handler(SafeHandler.getInstance("RADARAudio", Process.THREAD_PRIORITY_BACKGROUND))
             wake = true
         }
-        val externalDirectory = service.getExternalFilesDir("")
+        val externalDirectory = service.filesDir
         status = if (externalDirectory != null) {
             dataDirectory = File(externalDirectory, "org.radarbase.passive.audio")
+            dataDirectory.mkdirs()
             clearDataDirectory()
             SourceStatusListener.Status.READY
         } else {
