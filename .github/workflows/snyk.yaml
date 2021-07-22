@@ -16,4 +16,4 @@ jobs:
       - name: Run Snyk to check for vulnerabilities
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-sub-projects --org=radar-base  --fail-on=upgradable --configuration-matching='^releaseRuntimeClasspath$'
+        run: snyk test --all-sub-projects --org=radar-base  --fail-on=upgradable --configuration-matching='^releaseRuntimeClasspath$' --exclude plugins/radar-android-empatica
