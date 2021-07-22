@@ -19,7 +19,7 @@ jobs:
       - name: Run Snyk to check for vulnerabilities
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-sub-projects --severity-threshold=high --json-file-output=${{ env.REPORT_FILE }}
+        run: snyk test --org=RADAR-base --all-sub-projects --severity-threshold=high --json-file-output=${{ env.REPORT_FILE }}
 
       - name: Report new vulnerabilities
         uses: thehyve/report-vulnerability@master
