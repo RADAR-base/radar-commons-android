@@ -17,7 +17,6 @@
 package org.radarbase.passive.audio
 
 import android.Manifest.permission.RECORD_AUDIO
-import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
 import android.content.pm.PackageManager
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
@@ -40,7 +39,7 @@ open class OpenSmileAudioProvider(radarService: RadarService) : SourceProvider<B
     override val description: String?
         get() = radarService.getString(R.string.audio_description)
 
-    override val permissionsNeeded: List<String> = listOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE)
+    override val permissionsNeeded: List<String> = listOf(RECORD_AUDIO)
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_MICROPHONE)
     override val sourceProducer: String = "OpenSmile"
     override val sourceModel: String = "Audio"
