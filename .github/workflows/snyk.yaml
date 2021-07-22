@@ -16,4 +16,4 @@ jobs:
       - name: Run Snyk to check for vulnerabilities
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --org=RADAR-base --all-sub-projects --severity-threshold=high
+        run: snyk test --all-sub-projects --org=radar-base  --fail-on=upgradable --configuration-matching='^releaseRuntimeClasspath$'
