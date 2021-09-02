@@ -168,7 +168,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         } else {
             val bundle = Bundle().apply {
                 putInt(ContentResolver.QUERY_ARG_LIMIT, SQLITE_LIMIT)
-                putString(ContentResolver.QUERY_ARG_SORT_COLUMNS, dateColumn)
+                putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(dateColumn))
                 putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_ASCENDING)
                 putString(ContentResolver.QUERY_ARG_SQL_SELECTION, where)
             }

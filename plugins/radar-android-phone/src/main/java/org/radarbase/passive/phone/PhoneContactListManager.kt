@@ -79,7 +79,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
         val bundle = Bundle().apply {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
-                putString(ContentResolver.QUERY_ARG_SORT_COLUMNS, "lookup")
+                putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf("lookup"))
                 putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION,
                     ContentResolver.QUERY_SORT_DIRECTION_ASCENDING)
             }
