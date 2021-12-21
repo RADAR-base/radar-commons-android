@@ -51,7 +51,7 @@ dependencies {
     api "androidx.lifecycle:lifecycle-service:2.3.1"
 
     implementation 'com.google.firebase:firebase-config:21.0.0'
-    implementation 'com.google.firebase:firebase-core:19.0.0'
+    implementation 'com.google.firebase:firebase-core:20.0.2'
     implementation 'com.google.firebase:firebase-crashlytics:18.1.0'
     implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:1.7.30'
 }
