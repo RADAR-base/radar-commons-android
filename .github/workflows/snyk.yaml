@@ -1,0 +1,19 @@
+name: Snyk test
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [master]
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - uses: snyk/actions/setup@master
+      - uses: actions/setup-java@v1
+        with:
+          java-version: 11
+      - name: Run Snyk to check for vulnerabilities
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test --all-sub-projects --org=radar-base  --fail-on=upgradable --configuration-matching='^releaseRuntimeClasspath$' --exclude plugins/radar-android-empatica
