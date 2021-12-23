@@ -2,15 +2,18 @@ package org.radarbase.android.util
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothAdapter.STATE_CONNECTED
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Context.BLUETOOTH_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import org.slf4j.LoggerFactory
 
 class BluetoothStateReceiver(
-        private val context: Context,
-        private val listener: (enabled: Boolean) -> Unit): SpecificReceiver {
+    private val context: Context,
+    private val listener: (enabled: Boolean) -> Unit
+): SpecificReceiver {
 
     private val stateCache = ChangeRunner<Boolean>()
     private var isRegistered = false
@@ -31,7 +34,7 @@ class BluetoothStateReceiver(
     }
 
     init {
-        stateCache.applyIfChanged(bluetoothIsEnabled) {
+        stateCache.applyIfChanged(context.bluetoothIsEnabled) {
             notifyListener()
         }
     }
@@ -59,7 +62,10 @@ class BluetoothStateReceiver(
     companion object {
         private val logger = LoggerFactory.getLogger(BluetoothStateReceiver::class.java)
 
-        val bluetoothIsEnabled: Boolean
-            get() = BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
+        val Context.bluetoothAdapter: BluetoothAdapter?
+            get() = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+
+        val Context.bluetoothIsEnabled: Boolean
+            get() = bluetoothAdapter?.isEnabled == true
     }
 }

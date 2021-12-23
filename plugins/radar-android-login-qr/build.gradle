@@ -13,7 +13,7 @@ description = 'RADAR Android QR LoginManager.'
 dependencies {
     api project(':radar-commons-android')
     implementation('com.journeyapps:zxing-android-embedded:4.2.0') { transitive = false }
-    implementation 'androidx.appcompat:appcompat:1.3.0'
+    implementation 'androidx.appcompat:appcompat:1.4.0'
     // Support Android 14+
     implementation 'com.google.zxing:core:3.3.2'
 }
