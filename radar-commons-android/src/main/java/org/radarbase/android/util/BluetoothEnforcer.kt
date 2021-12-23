@@ -109,7 +109,7 @@ class BluetoothEnforcer(
                 return@post
             }
             isRequestingBluetooth = handler.postDelayed({
-                if (isEnabled && !bluetoothIsEnabled) {
+                if (isEnabled && !context.bluetoothIsEnabled) {
                     prefs.edit()
                         .putLong(LAST_REQUEST, System.currentTimeMillis())
                         .apply()

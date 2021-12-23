@@ -18,6 +18,7 @@ package org.radarbase.passive.phone
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -26,6 +27,7 @@ import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothAdapter
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneBluetoothDevices
@@ -55,7 +57,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     }
 
     private fun processBluetoothDevices() {
-        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        val bluetoothAdapter = service.bluetoothAdapter
         if (bluetoothAdapter == null) {
             logger.error("Bluetooth is not available.")
             return

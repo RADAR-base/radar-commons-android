@@ -8,6 +8,9 @@ android {
         ndk {
             moduleName rootProject.name
         }
+        packagingOptions {
+            doNotStrip '**.so'
+        }
     }
 
     // Encapsulates your external native build configurations.
