@@ -14,7 +14,7 @@ android {
 }
 
 dependencies {
-    implementation("org.slf4j:slf4j-api:1.7.31")
+    implementation("org.slf4j:slf4j-api:1.7.32")
 
     testImplementation(project(":radar-commons-android")) {
         exclude group: 'org.apache.avro', module: 'avro'
