@@ -35,14 +35,10 @@ dependencies {
     api ('org.radarbase:radar-schemas-commons:0.7.4') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    //noinspection GradleDependency
-    api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
-        exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
-        exclude group: 'org.xerial.snappy', module: 'snappy-java'
-        exclude group: 'org.tukaani', module: 'xz'
-        exclude group: 'org.apache.commons', module: 'commons-compress'
-    }
-    api "androidx.appcompat:appcompat:1.4.0"
+    api(project(':avro-android'))
+    api("org.slf4j:slf4j-api:1.7.32")
+    api("androidx.appcompat:appcompat:1.4.0")
+
     implementation "com.squareup.okhttp3:okhttp:4.9.3"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
