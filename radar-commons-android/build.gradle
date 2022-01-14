@@ -36,7 +36,7 @@ dependencies {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api(project(':avro-android'))
-    api("org.slf4j:slf4j-api:1.7.32")
+    api("org.slf4j:slf4j-api:1.7.33")
     api("androidx.appcompat:appcompat:1.4.0")
 
     implementation "com.squareup.okhttp3:okhttp:4.9.3"
