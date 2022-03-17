@@ -105,9 +105,9 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         status = SourceStatusListener.Status.READY
 
         handler.execute {
+            isStarted = true
             batteryLevelReceiver.register()
             status = SourceStatusListener.Status.CONNECTED
-            isStarted = true
         }
     }
 

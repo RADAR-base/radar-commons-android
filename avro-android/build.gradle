@@ -1,10 +1,11 @@
 apply from: "$rootDir/gradle/android.gradle"
+apply from: "$rootDir/gradle/publishing.gradle"
 apply from: "$rootDir/gradle/test.gradle"
 
 android {
     defaultConfig {
         // Specifies the fully-qualified class name of the test instrumentation runner.
-        testInstrumentationRunner "android.test.InstrumentationTestRunner"
+        testInstrumentationRunner "androidx.test.InstrumentationTestRunner"
     }
     // Gradle automatically adds 'android.test.runner' as a dependency.
     useLibrary 'android.test.runner'
@@ -14,7 +15,7 @@ android {
 }
 
 dependencies {
-    implementation("org.slf4j:slf4j-api:1.7.32")
+    implementation("org.slf4j:slf4j-api:1.7.36")
 
     testImplementation(project(":radar-commons-android")) {
         exclude group: 'org.apache.avro', module: 'avro'

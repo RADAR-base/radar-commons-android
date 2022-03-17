@@ -18,6 +18,7 @@ package org.radarbase.passive.bittium
 
 import android.Manifest.permission.*
 import android.content.pm.PackageManager
+import android.os.Build
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
@@ -37,12 +38,23 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
 
     override val hasDetailView: Boolean = true
 
-    override val permissionsNeeded: List<String> = listOf(
-        ACCESS_COARSE_LOCATION,
-        ACCESS_FINE_LOCATION,
-        BLUETOOTH,
-        BLUETOOTH_ADMIN,
-    )
+    override val permissionsNeeded: List<String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        listOf(
+            ACCESS_COARSE_LOCATION,
+            ACCESS_FINE_LOCATION,
+            BLUETOOTH,
+            BLUETOOTH_ADMIN,
+            BLUETOOTH_CONNECT,
+            BLUETOOTH_SCAN,
+        )
+    } else {
+        listOf(
+            ACCESS_COARSE_LOCATION,
+            ACCESS_FINE_LOCATION,
+            BLUETOOTH,
+            BLUETOOTH_ADMIN,
+        )
+    }
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)
 

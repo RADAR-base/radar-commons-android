@@ -32,18 +32,18 @@ dependencies {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarbase:radar-schemas-commons:0.7.4') {
+    api ('org.radarbase:radar-schemas-commons:0.7.7') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api(project(':avro-android'))
-    api("org.slf4j:slf4j-api:1.7.32")
-    api("androidx.appcompat:appcompat:1.4.0")
+    api("org.slf4j:slf4j-api:1.7.36")
+    api("androidx.appcompat:appcompat:1.4.1")
 
     implementation "com.squareup.okhttp3:okhttp:4.9.3"
-    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
-    api "androidx.lifecycle:lifecycle-service:2.4.0"
+    api "androidx.lifecycle:lifecycle-service:2.4.1"
 
     implementation platform('com.google.firebase:firebase-bom:29.0.3')
     implementation 'com.google.firebase:firebase-config'

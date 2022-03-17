@@ -9,8 +9,8 @@
 
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
-            android:screenOrientation="user"
-            tools:replace="screenOrientation"/>
+            tools:replace="android:screenOrientation"
+            android:screenOrientation="user"/>
     </application>
 
 </manifest>

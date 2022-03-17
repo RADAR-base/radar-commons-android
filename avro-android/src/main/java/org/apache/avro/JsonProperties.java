@@ -19,7 +19,9 @@ package org.apache.avro;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-import java.util.Iterator;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Base class for objects that have JSON-valued properties. Avro and JSON values
@@ -118,43 +120,26 @@ public abstract class JsonProperties {
   // Also, we only ever ADD to the collection, never changing a value, so
   // putWithAbsent is the
   // only modifier
-  private final JSONObject props = new JSONObject();
+  private final Map<String, Object> props = new LinkedHashMap<>();
 
   JsonProperties() {
   }
 
-  /**
-   * Returns the value of the named, string-valued property in this schema.
-   * Returns <tt>null</tt> if there is no string-valued property with that name.
-   */
-  public String getProp(String name) {
-    String prop = props.optString(name);
-    return !prop.equals("") ? prop : null;
-  }
-
   public void addProp(String name, Object value) {
-    try {
+    if (value == null) {
+      props.remove(name);
+    } else {
       props.put(name, value);
-    } catch (JSONException ex) {
-      throw new IllegalArgumentException(ex);
     }
   }
 
   public void putAll(JsonProperties np) {
-    for (Iterator<String> it = np.props.keys(); it.hasNext(); ) {
-      String key = it.next();
-      try {
-        props.put(key, np.props.get(key));
-      } catch (JSONException e) {
-        throw new RuntimeException(e);
-      }
-    }
+    props.putAll(np.props);
   }
 
   void writeProps(JSONObject gen) throws JSONException {
-    for (Iterator<String> it = props.keys(); it.hasNext(); ) {
-      String key = it.next();
-      gen.put(key, props.get(key));
+    for (Map.Entry<String, Object> entry : props.entrySet()) {
+      gen.put(entry.getKey(), entry.getValue());
     }
   }
 
@@ -167,6 +152,6 @@ public abstract class JsonProperties {
   }
 
   public boolean hasProps() {
-    return props.length() > 0;
+    return !props.isEmpty();
   }
 }
