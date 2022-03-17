@@ -25,6 +25,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.ActivityCompat
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -91,7 +92,10 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             service.unregisterReceiver(this)
                             bluetoothBroadcastReceiver = null
 
-                            val bondedDevices = bluetoothAdapter.bondedDevices.size
+                            val hasConnectPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                                || ActivityCompat.checkSelfPermission(service, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+
+                            val bondedDevices = if (hasConnectPermission) bluetoothAdapter.bondedDevices.size else -1
 
                             if (!isClosed) {
                                 val time = currentTime
