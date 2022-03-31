@@ -29,6 +29,8 @@ import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneContactList
 import java.util.*
 import java.util.concurrent.TimeUnit
+import kotlin.collections.ArrayList
+import kotlin.collections.LinkedHashSet
 
 class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourceManager<PhoneContactsListService, BaseSourceState>(service) {
     private val preferences: SharedPreferences = service.getSharedPreferences(PhoneContactListManager::class.java.name, Context.MODE_PRIVATE)
@@ -57,43 +59,48 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
                     .remove(CONTACT_IDS)
                     .apply()
 
-            savedContactLookups = preferences.getStringSet(CONTACT_LOOKUPS, emptySet())!!
+            savedContactLookups = preferences.getStringSet(CONTACT_LOOKUPS, emptySet()) ?: emptySet()
         }
 
         status = SourceStatusListener.Status.CONNECTED
     }
 
     private fun queryContacts(): Set<String>? {
-        val contactIds = HashSet<String>()
+        val contactIds = LinkedHashSet<String>()
 
         val limit = 1000
         val sortOrder = "lookup ASC LIMIT $limit"
         var where: String? = null
         var whereArgs: Array<String>? = null
 
-        var numUpdates: Int
+        val currentIds = mutableListOf<String>()
 
         do {
-            numUpdates = 0
-            var lastLookup: String? = null
-            db.query(ContactsContract.Contacts.CONTENT_URI, LOOKUP_COLUMNS,
-                    where, whereArgs, sortOrder)?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    numUpdates++
-                    lastLookup = cursor.getString(0)
-                        .also { contactIds.add(it) }
-                }
-            } ?: return null
+            currentIds.clear()
+            val result = db.query(
+                ContactsContract.Contacts.CONTENT_URI,
+                LOOKUP_COLUMNS,
+                where,
+                whereArgs,
+                sortOrder,
+            )?: return null
 
-            lastLookup?.let { ll ->
-                if (where == null) {
-                    where = ContactsContract.Contacts.LOOKUP_KEY + " > ?"
-                    whereArgs = arrayOf(ll)
-                } else {
-                    whereArgs!![0] = ll
+            result.use { cursor ->
+                while (cursor.moveToNext()) {
+                    currentIds += cursor.getString(0)
                 }
             }
-        } while (numUpdates == limit && !processor.isDone)
+
+            if (currentIds.isNotEmpty()) {
+                if (whereArgs == null) {
+                    where = ContactsContract.Contacts.LOOKUP_KEY + " > ?"
+                    whereArgs = arrayOf(currentIds.last())
+                } else {
+                    whereArgs[0] = currentIds.last()
+                }
+                contactIds.addAll(currentIds)
+            }
+        } while (currentIds.size == limit && !processor.isDone)
 
         return contactIds
     }

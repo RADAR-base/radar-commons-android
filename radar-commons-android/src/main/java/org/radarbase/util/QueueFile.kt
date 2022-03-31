@@ -250,15 +250,15 @@ constructor(private val storage: QueueStorage) : Closeable, Iterable<InputStream
             }
 
             val current: QueueFileElement
-            if (cacheIterator?.hasNext() == true) {
-                current = cacheIterator!!.next()
-                current.updateIfMoved(previousCached!!, header)
-                previousCached!!.update(current)
+            val currentIterator = cacheIterator
+            if (currentIterator != null && currentIterator.hasNext()) {
+                current = currentIterator.next()
+                val previousCached = checkNotNull(previousCached) { "Missing previous value in iterator" }
+                current.updateIfMoved(previousCached, header)
+                previousCached.update(current)
             } else {
-                if (cacheIterator != null) {
-                    cacheIterator = null
-                    previousCached = null
-                }
+                cacheIterator = null
+                previousCached = null
                 try {
                     current = readElement(nextElementPosition)
                 } catch (ex: IOException) {

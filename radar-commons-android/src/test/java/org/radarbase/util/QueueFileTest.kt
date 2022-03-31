@@ -312,7 +312,7 @@ class QueueFileTest {
     @Test(timeout = 30_000L)
     @Throws(Throwable::class)
     fun enduranceTest() {
-        val numberOfOperations = 1_000
+        val numberOfOperations = 1_00
         val size = MINIMUM_LENGTH * 4
         val random = Random()
         val buffer = ByteArray((size * 2 / 3).toInt()) { it.toByte() }

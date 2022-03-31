@@ -75,7 +75,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
                     altitudeReference = Double.fromBits(getLong(ALTITUDE_REFERENCE, 0))
                 } catch (ex: ClassCastException) {
                     // to fix bug where this was stored as String
-                    altitudeReference = getString(ALTITUDE_REFERENCE, "0.0")!!.toDouble()
+                    altitudeReference = getString(ALTITUDE_REFERENCE, "0.0")?.toDouble() ?: 0.0
                     edit().putLong(ALTITUDE_REFERENCE, altitudeReference.toRawBits()).apply()
                 }
             } else {
@@ -96,9 +96,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     }
 
     override fun start(acceptableIds: Set<String>) {
-        if (locationManager == null) {
-            return
-        }
+        locationManager ?: return
         register()
         handler.start()
 
@@ -151,12 +149,12 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     @SuppressLint("MissingPermission")
     fun setLocationUpdateRate(periodGPS: Long, periodNetwork: Long) {
         handler.executeReentrant {
-            if (!isStarted) {
+            if (!isStarted || locationManager == null) {
                 return@executeReentrant
             }
 
             // Remove updates, if any
-            locationManager!!.removeUpdates(this@PhoneLocationManager)
+            locationManager.removeUpdates(this@PhoneLocationManager)
 
             // Initialize with last known and start listening
             when {

@@ -31,14 +31,14 @@ import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN
 import org.radarbase.android.config.SingleRadarConfiguration
+import org.radarbase.android.util.toPendingIntentFlag
 import org.slf4j.LoggerFactory
 
 class OAuth2StateManager(context: Context) {
-    private val mPrefs: SharedPreferences
-    private var mCurrentAuthState: AuthState? = null
+    private val mPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
+    private var mCurrentAuthState: AuthState
 
     init {
-        mPrefs = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
         mCurrentAuthState = readState()
     }
 
@@ -53,18 +53,22 @@ class OAuth2StateManager(context: Context) {
         val authConfig = AuthorizationServiceConfiguration(authorizeUri, tokenUri, null)
 
         val authRequestBuilder = AuthorizationRequest.Builder(
-                authConfig, // the authorization service configuration
-                clientId, // the client ID, typically pre-registered and static
-                ResponseTypeValues.CODE, // the response_type value: we want a code
-                redirectUri) // the redirect URI to which the auth response is sent
+            authConfig, // the authorization service configuration
+            clientId, // the client ID, typically pre-registered and static
+            ResponseTypeValues.CODE, // the response_type value: we want a code
+            redirectUri,  // the redirect URI to which the auth response is sent
+        )
 
         val service = AuthorizationService(context)
         service.performAuthorizationRequest(
-                authRequestBuilder.build(),
-                PendingIntent.getActivity(context,
-                        OAUTH_INTENT_HANDLER_REQUEST_CODE,
-                        Intent(context, activityClass),
-                        PendingIntent.FLAG_ONE_SHOT))
+            authRequestBuilder.build(),
+            PendingIntent.getActivity(
+                context,
+                OAUTH_INTENT_HANDLER_REQUEST_CODE,
+                Intent(context, activityClass),
+                PendingIntent.FLAG_ONE_SHOT.toPendingIntentFlag(),
+            ),
+        )
     }
 
     @AnyThread
@@ -78,7 +82,7 @@ class OAuth2StateManager(context: Context) {
         val ex = AuthorizationException.fromIntent(intent)
 
         if (resp != null || ex != null) {
-            mCurrentAuthState!!.update(resp, ex)
+            mCurrentAuthState.update(resp, ex)
             writeState(mCurrentAuthState)
         }
 
@@ -86,7 +90,9 @@ class OAuth2StateManager(context: Context) {
             val service = AuthorizationService(authService)
             // authorization succeeded
             service.performTokenRequest(
-                    resp.createTokenExchangeRequest(), processTokenResponse(authService))
+                resp.createTokenExchangeRequest(),
+                processTokenResponse(authService),
+            )
         } else if (ex != null) {
             authService.loginFailed(null, ex)
         }
@@ -96,50 +102,43 @@ class OAuth2StateManager(context: Context) {
     fun refresh(context: AuthService, refreshToken: String?) {
         val service = AuthorizationService(context)
         // refreshToken does not originate from the current auth state.
-        if (refreshToken != null && refreshToken != mCurrentAuthState!!.refreshToken) {
+        if (refreshToken != null && refreshToken != mCurrentAuthState.refreshToken) {
             try {
-                val json = mCurrentAuthState!!.jsonSerialize()
+                val json = mCurrentAuthState.jsonSerialize()
                 json.put("refreshToken", refreshToken)
                 mCurrentAuthState = AuthState.jsonDeserialize(json)
             } catch (e: JSONException) {
                 logger.error("Failed to update refresh token")
             }
-
         }
         // authorization succeeded
         service.performTokenRequest(
-                mCurrentAuthState!!.createTokenRefreshRequest(), processTokenResponse(context))
+            mCurrentAuthState.createTokenRefreshRequest(),
+            processTokenResponse(context),
+        )
     }
 
-    private fun processTokenResponse(context: AuthService): AuthorizationService.TokenResponseCallback {
-        return AuthorizationService.TokenResponseCallback { resp, ex ->
-            if (resp != null) {
-                mCurrentAuthState?.also { authState ->
-                    updateAfterTokenResponse(resp, ex)
-                    var expiration = authState.accessTokenExpirationTime
-                    if (expiration == null) {
-                        expiration = 0L
-                    }
-                    context.loginSucceeded(null, AppAuthState {
-                        token = authState.accessToken!!
-                                .also { addHeader("Authorization","Bearer $it") }
-                        tokenType = LoginManager.AUTH_TYPE_BEARER
-                        this.expiration = expiration
-                        attributes[LOGIN_REFRESH_TOKEN] = authState.refreshToken!!
-                    })
-                }
-            } else {
-                context.loginFailed(null, ex)
-            }
-        }
+    private fun processTokenResponse(
+        context: AuthService
+    ) = AuthorizationService.TokenResponseCallback { resp, ex ->
+        resp ?: return@TokenResponseCallback context.loginFailed(null, ex)
+        updateAfterTokenResponse(resp, ex)
+        context.loginSucceeded(null, AppAuthState {
+            token = checkNotNull(mCurrentAuthState.accessToken) { "Missing access token after successful login"}
+                .also { addHeader("Authorization","Bearer $it") }
+            tokenType = LoginManager.AUTH_TYPE_BEARER
+            this.expiration = mCurrentAuthState.accessTokenExpirationTime ?: 0L
+            attributes[LOGIN_REFRESH_TOKEN] = checkNotNull(mCurrentAuthState.refreshToken) { "Missing refresh token after successful login" }
+        })
     }
 
     @AnyThread
     @Synchronized
     fun updateAfterTokenResponse(
-            response: TokenResponse?,
-            ex: AuthorizationException?) {
-        mCurrentAuthState!!.update(response, ex)
+        response: TokenResponse?,
+        ex: AuthorizationException?
+    ) {
+        mCurrentAuthState.update(response, ex)
         writeState(mCurrentAuthState)
     }
 
@@ -161,11 +160,13 @@ class OAuth2StateManager(context: Context) {
     @AnyThread
     @Synchronized
     private fun writeState(state: AuthState?) {
-        if (state != null) {
-            mPrefs.edit().putString(KEY_STATE, state.jsonSerializeString()).apply()
-        } else {
-            mPrefs.edit().remove(KEY_STATE).apply()
-        }
+        mPrefs.edit().apply {
+            if (state != null) {
+                putString(KEY_STATE, state.jsonSerializeString())
+            } else {
+                remove(KEY_STATE)
+            }
+        }.apply()
     }
 
     companion object {

@@ -171,7 +171,12 @@ class NotificationHandler(private val context: Context) {
 
         if (includeIntent) {
             val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            val pendingIntent = PendingIntent.getActivity(context, 0, intent, 0)
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                NOTIFICATION_REQUEST_CODE,
+                intent,
+                0.toPendingIntentFlag()
+            )
             setContentIntent(pendingIntent)
         }
 
@@ -198,6 +203,8 @@ class NotificationHandler(private val context: Context) {
          * User response is required.
          */
         const val NOTIFICATION_CHANNEL_FINAL_ALERT = "org.radarbase.android.NotificationHandler.FINAL_ALERT"
+
+        private const val NOTIFICATION_REQUEST_CODE = 27581
     }
 
     data class NotificationRegistration(

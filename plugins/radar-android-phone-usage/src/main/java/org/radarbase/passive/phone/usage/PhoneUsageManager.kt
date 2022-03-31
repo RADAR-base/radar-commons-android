@@ -169,6 +169,8 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     }
 
     private fun sendLastEvent() {
+        usageEventTopic ?: return
+
         // Event type conversion to Schema defined
         val usageEventType = when (lastEventType) {
             ACTIVITY_RESUMED -> UsageEventType.FOREGROUND
@@ -181,7 +183,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
         val time = lastTimestamp / 1000.0
         val value = PhoneUsageEvent(time, currentTime, lastPackageName, null, null, usageEventType)
-        send(usageEventTopic!!, value)
+        send(usageEventTopic, value)
 
         if (logger.isDebugEnabled) {
             logger.debug("Event: [{}] {}\n\t{}", lastEventType, lastPackageName, Date(lastTimestamp))

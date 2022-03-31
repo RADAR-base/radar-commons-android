@@ -249,7 +249,7 @@ class KafkaDataSubmitter(
                 }
             } else null
 
-            if (keyUserId == null || keyUserId == config.userId!!) {
+            if (keyUserId == null || keyUserId == config.userId) {
                 if (uploadingNotified.compareAndSet(false, true)) {
                     dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING)
                 }

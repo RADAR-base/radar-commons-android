@@ -205,7 +205,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 .create(NOTIFICATION_CHANNEL_INFO, true) {
                     setContentText(getText(R.string.service_notification_text))
                     setContentTitle(getText(R.string.service_notification_title))
-                    setContentIntent(PendingIntent.getActivity(this@RadarService, 0, mainIntent, 0))
+                    setContentIntent(PendingIntent.getActivity(
+                        this@RadarService,
+                        BACKGROUND_REQUEST_CODE,
+                        mainIntent,
+                        0.toPendingIntentFlag(),
+                    ))
                 }
     }
 
@@ -641,6 +646,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
         val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
+
+        private const val BACKGROUND_REQUEST_CODE = 9559
 
         @Suppress("UNCHECKED_CAST")
         internal inline fun <reified T> Context.applySystemService(type: String, callback: (T) -> Boolean): Boolean? {

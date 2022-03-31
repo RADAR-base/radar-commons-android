@@ -86,10 +86,10 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
         client.httpClient.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 status = try {
-                    if (response.isSuccessful && response.body != null) {
+                    val body = response.body
+                    if (response.isSuccessful && body != null) {
                         logger.info("Successfully fetched app config body")
-                        val retrieved = response.body!!
-                        val json = JSONObject(retrieved.string())
+                        val json = JSONObject(body.string())
 
                         cache = HashMap<String, String>().apply {
                             json.optJSONArray("defaults")?.let { mergeConfig(it) }
