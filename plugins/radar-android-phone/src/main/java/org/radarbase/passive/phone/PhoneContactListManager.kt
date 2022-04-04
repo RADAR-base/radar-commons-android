@@ -19,6 +19,9 @@ package org.radarbase.passive.phone
 import android.content.ContentResolver
 import android.content.Context
 import android.content.SharedPreferences
+import android.database.Cursor
+import android.os.Build
+import android.os.Bundle
 import android.provider.ContactsContract
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -67,29 +70,31 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
 
     private fun queryContacts(): Set<String>? {
         val contactIds = LinkedHashSet<String>()
-
         val limit = 1000
-        val sortOrder = "lookup ASC LIMIT $limit"
         var where: String? = null
         var whereArgs: Array<String>? = null
 
         val currentIds = mutableListOf<String>()
+        val sortOrder = "lookup ASC LIMIT $limit"
+        val bundle = Bundle().apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
+                putString(ContentResolver.QUERY_ARG_SORT_COLUMNS, "lookup")
+                putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION,
+                    ContentResolver.QUERY_SORT_DIRECTION_ASCENDING)
+            }
+        }
 
         do {
             currentIds.clear()
-            val result = db.query(
-                ContactsContract.Contacts.CONTENT_URI,
-                LOOKUP_COLUMNS,
-                where,
-                whereArgs,
-                sortOrder,
-            )?: return null
 
-            result.use { cursor ->
-                while (cursor.moveToNext()) {
-                    currentIds += cursor.getString(0)
+            makeQuery(bundle, sortOrder, where, whereArgs)
+                ?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        currentIds += cursor.getString(0)
+                    }
                 }
-            }
+                ?: return null
 
             if (currentIds.isNotEmpty()) {
                 if (whereArgs == null) {
@@ -107,6 +112,27 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
 
     override fun onClose() {
         processor.close()
+    }
+
+    private fun makeQuery(
+        context: Bundle,
+        sortOrder: String,
+        where: String?,
+        whereArgs: Array<String>?,
+    ): Cursor? {
+        return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            db.query(ContactsContract.Contacts.CONTENT_URI, LOOKUP_COLUMNS,
+                where, whereArgs, sortOrder)
+        } else {
+            context.apply {
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, where)
+                putStringArray(
+                    ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,
+                    whereArgs
+                )
+            }
+            db.query(ContactsContract.Contacts.CONTENT_URI, LOOKUP_COLUMNS, context, null)
+        }
     }
 
     private fun processContacts() {

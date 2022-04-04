@@ -21,6 +21,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.provider.BaseColumns._ID
 import android.provider.CallLog
 import android.provider.Telephony
@@ -37,6 +38,7 @@ import java.nio.ByteBuffer
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
+import android.os.Bundle
 
 class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLogService, BaseSourceState>(context) {
     private val callTopic: DataCache<ObservationKey, PhoneCall> = createCache("android_phone_call", PhoneCall())
@@ -143,27 +145,52 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
 
     private fun processDb(contentUri: Uri, columns: Array<String>, dateColumn: String, previousTimestamp: Long, processor: Cursor.() -> Long): Long {
         val where = "$dateColumn > ?"
-        val orderBy = "$dateColumn ASC LIMIT $SQLITE_LIMIT"
-
         var numUpdates: Int
         var lastTimestamp = previousTimestamp
 
-        do {
-            val whereArgs = arrayOf(lastTimestamp.toString())
-            numUpdates = 0
-            // Query all sms with a date later than the last date seen and orderBy by date
-            try {
-                db.query(contentUri, columns, where, whereArgs, orderBy)?.use { c ->
-                    while (c.moveToNext() && !logProcessor.isDone) {
-                        numUpdates++
-                        lastTimestamp = c.processor()
-                    }
-                } ?: return lastTimestamp
-            } catch (ex: Exception) {
-                logger.error("Error in processing the sms log", ex)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            val orderBy = "$dateColumn ASC LIMIT $SQLITE_LIMIT"
+            do {
+                val whereArgs = arrayOf(lastTimestamp.toString())
+                numUpdates = 0
+                // Query all sms with a date later than the last date seen and orderBy by date
+                try {
+                    db.query(contentUri, columns, where, whereArgs, orderBy)?.use { c ->
+                        while (c.moveToNext() && !logProcessor.isDone) {
+                            numUpdates++
+                            lastTimestamp = c.processor()
+                        }
+                    } ?: return lastTimestamp
+                } catch (ex: Exception) {
+                    logger.error("Error in processing the sms log", ex)
+                }
+            } while (numUpdates == SQLITE_LIMIT && !logProcessor.isDone)
+        } else {
+            val bundle = Bundle().apply {
+                putInt(ContentResolver.QUERY_ARG_LIMIT, SQLITE_LIMIT)
+                putString(ContentResolver.QUERY_ARG_SORT_COLUMNS, dateColumn)
+                putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_ASCENDING)
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, where)
             }
-        } while (numUpdates == SQLITE_LIMIT && !logProcessor.isDone)
-
+            do {
+                bundle.putStringArray(
+                    ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,
+                    arrayOf(lastTimestamp.toString())
+                )
+                numUpdates = 0
+                // Query all sms with a date later than the last date seen and orderBy by date
+                try {
+                    db.query(contentUri, columns, bundle, null)?.use { c ->
+                        while (c.moveToNext() && !logProcessor.isDone) {
+                            numUpdates++
+                            lastTimestamp = c.processor()
+                        }
+                    } ?: return lastTimestamp
+                } catch (ex: Exception) {
+                    logger.error("Error in processing the sms log", ex)
+                }
+            } while (numUpdates == SQLITE_LIMIT && !logProcessor.isDone)
+        }
         return lastTimestamp
     }
 
