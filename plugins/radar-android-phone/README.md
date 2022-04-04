@@ -44,6 +44,7 @@ The following Firebase parameters are available:
 | `phone_location_network_interval_reduced` | int (s) | 3000 (= 50 minutes) | Interval for gathering location using network triangulation when the battery level is low. |
 | `phone_location_battery_level_reduced` | float (0-1) | 0.3 (= 30%) | Battery level threshold, below which to use the reduced interval configuration. |
 | `phone_location_battery_level_minimum` | float (0-1) | 0.15 (= 15%) | Battery level threshold, below which to stop gathering location data altogether. |
+| `phone_location_relative` | `boolean` | `true` | Whether to use relative data. If set to false, no location offsets are used and the absolute location is available. |
 | **PhoneContactListProvider** |||
 | `phone_contacts_list_interval_seconds` | int (s) | 86400 (= 1 day) | Interval for scanning contact list for changes. |
 | **PhoneBluetoothProvider** |||
