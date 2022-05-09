@@ -1,5 +1,8 @@
 package org.apache.avro.specific;
 
+import static org.junit.Assert.assertEquals;
+import static org.radarbase.producer.rest.AvroDataMapperFactory.IDENTITY_MAPPER;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaValidationException;
 import org.apache.avro.generic.GenericData;
@@ -14,6 +17,7 @@ import org.radarbase.data.AvroDecoder;
 import org.radarbase.data.AvroEncoder;
 import org.radarbase.data.Record;
 import org.radarbase.data.RemoteSchemaEncoder;
+import org.radarbase.producer.rest.AvroDataMapperFactory;
 import org.radarbase.producer.rest.ParsedSchemaMetadata;
 import org.radarbase.topic.AvroTopic;
 import org.radarcns.active.questionnaire.Answer;
@@ -29,8 +33,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
 
 public class SpecificRecordTest {
     private AvroTopic<ObservationKey, PhoneAcceleration> topic;
@@ -80,7 +82,6 @@ public class SpecificRecordTest {
         assertEquals(record.value, acceleration);
     }
 
-
     @Test
     public void avroJsonEncodingTest() throws IOException, SchemaValidationException {
         AvroEncoder encoder = new RemoteSchemaEncoder(false);
@@ -125,5 +126,14 @@ public class SpecificRecordTest {
         AvroDecoder.AvroReader<GenericRecord> reader = decoder.reader(schema, GenericRecord.class);
         GenericRecord result = reader.decode(encoded);
         assertEquals(record.build(), result);
+    }
+
+    @Test
+    public void dataMappingTest() throws SchemaValidationException {
+        Schema answer = Answer.SCHEMA$;
+        Schema serverAnswer = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Answer\",\"namespace\":\"org.radarcns.active.questionnaire\",\"fields\":[{\"name\":\"questionId\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"value\",\"type\":[\"int\",\"string\",\"double\"]},{\"name\":\"startTime\",\"type\":\"double\"},{\"name\":\"endTime\",\"type\":\"double\"}]}");
+
+        assertEquals(IDENTITY_MAPPER, AvroDataMapperFactory.get().createMapper(answer, serverAnswer, null));
+        assertEquals(IDENTITY_MAPPER, AvroDataMapperFactory.get().createMapper(serverAnswer, answer, null));
     }
 }

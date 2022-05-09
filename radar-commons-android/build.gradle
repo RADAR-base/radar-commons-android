@@ -28,11 +28,11 @@ android {
 description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarbase:radar-commons:0.13.2') {
+    api ('org.radarbase:radar-commons:0.15.0') {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarbase:radar-schemas-commons:0.7.8') {
+    api ('org.radarbase:radar-schemas-commons:0.7.9') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api(project(':avro-android'))
