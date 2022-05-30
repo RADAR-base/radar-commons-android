@@ -28,8 +28,10 @@ import android.hardware.SensorManager
 import android.os.BatteryManager.*
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
+import android.os.SystemClock
 import android.util.SparseArray
 import android.util.SparseIntArray
+import android.util.SparseLongArray
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -39,7 +41,6 @@ import org.radarbase.passive.phone.PhoneSensorService.Companion.PHONE_SENSOR_INT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.*
 import org.slf4j.LoggerFactory
-import java.util.*
 import java.util.concurrent.TimeUnit
 
 class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
@@ -63,6 +64,10 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
                 }
             }
         }
+
+    private val latestSensorUpload = SparseLongArray()
+    private val latestSensorFuture = SparseArray<SafeHandler.HandlerFuture>()
+    private val latestSensorEvent = SparseArray<SensorEvent>()
 
     private val mHandler = SafeHandler.getInstance("Phone sensors", THREAD_PRIORITY_BACKGROUND)
 
@@ -150,15 +155,40 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     }
 
     override fun onSensorChanged(event: SensorEvent) {
+        val sensorType = event.sensor.type
         mHandler.execute {
-            when (event.sensor.type) {
-                Sensor.TYPE_ACCELEROMETER -> processAcceleration(event)
-                Sensor.TYPE_LIGHT -> processLight(event)
-                Sensor.TYPE_GYROSCOPE -> processGyroscope(event)
-                Sensor.TYPE_MAGNETIC_FIELD -> processMagneticField(event)
-                Sensor.TYPE_STEP_COUNTER -> processStep(event)
-                else -> logger.debug("Phone registered unknown sensor change: '{}'", event.sensor.type)
+            val delay = sensorDelays[sensorType]
+            if (delay <= 0) return@execute
+
+            val latestUpload = latestSensorUpload[sensorType]
+            val now = SystemClock.uptimeMillis()
+            val timeUntilIntervalEnds = latestUpload + delay - now
+            if (timeUntilIntervalEnds <= 0) {
+                latestSensorUpload.put(sensorType, now)
+                latestSensorFuture[sensorType]?.cancel()
+                processSensorEvent(sensorType, event)
+            } else {
+                latestSensorEvent[sensorType] = event
+                if (latestSensorFuture[sensorType] == null) {
+                    latestSensorFuture[sensorType] = mHandler.delay(timeUntilIntervalEnds + delay) {
+                        processSensorEvent(sensorType, latestSensorEvent[sensorType])
+                    }
+                }
             }
+        }
+    }
+
+    private fun processSensorEvent(sensorType: Int, event: SensorEvent?) {
+        latestSensorEvent[sensorType] = null
+        latestSensorFuture[sensorType] = null
+        event ?: return
+        when (sensorType) {
+            Sensor.TYPE_ACCELEROMETER -> processAcceleration(event)
+            Sensor.TYPE_LIGHT -> processLight(event)
+            Sensor.TYPE_GYROSCOPE -> processGyroscope(event)
+            Sensor.TYPE_MAGNETIC_FIELD -> processMagneticField(event)
+            Sensor.TYPE_STEP_COUNTER -> processStep(event)
+            else -> logger.debug("Phone registered unknown sensor change: '{}'", event.sensor.type)
         }
     }
 
