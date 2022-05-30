@@ -8,7 +8,7 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3
+      - uses: actions/checkout@v3
 
       - uses: snyk/actions/setup@master
 
