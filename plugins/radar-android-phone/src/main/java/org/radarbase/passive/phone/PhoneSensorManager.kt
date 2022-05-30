@@ -173,14 +173,17 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
 
             } else { // later event in the interval
                 // store it
-                latestSensorEvent[sensorType] = event
+                latestSensorEvent.put(sensorType, event)
                 // delay sending it
                 if (latestSensorFuture[sensorType] == null) {
                     // wait up to 1 interval more after the current interval ends before sending this value.
                     // it may be cancelled if other events come in (in the branch above)
-                    latestSensorFuture[sensorType] = mHandler.delay(timeUntilIntervalEnds + delay) {
-                        processSensorEvent(sensorType, latestSensorEvent[sensorType])
-                    }
+                    latestSensorFuture.put(
+                        sensorType,
+                        mHandler.delay(timeUntilIntervalEnds + delay) {
+                            processSensorEvent(sensorType, latestSensorEvent[sensorType])
+                        },
+                    )
                 }
             }
         }
@@ -188,8 +191,8 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
 
     private fun processSensorEvent(sensorType: Int, event: SensorEvent?) {
         // When sending an event, discard all past events
-        latestSensorEvent[sensorType] = null
-        latestSensorFuture[sensorType] = null
+        latestSensorEvent.put(sensorType, null)
+        latestSensorFuture.put(sensorType, null)
         event ?: return
         when (sensorType) {
             Sensor.TYPE_ACCELEROMETER -> processAcceleration(event)
