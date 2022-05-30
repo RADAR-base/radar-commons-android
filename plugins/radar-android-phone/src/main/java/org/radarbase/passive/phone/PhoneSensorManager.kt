@@ -158,18 +158,26 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         val sensorType = event.sensor.type
         mHandler.execute {
             val delay = sensorDelays[sensorType]
+            // Ignore disabled sensors
             if (delay <= 0) return@execute
 
             val latestUpload = latestSensorUpload[sensorType]
             val now = SystemClock.uptimeMillis()
             val timeUntilIntervalEnds = latestUpload + delay - now
+
             if (timeUntilIntervalEnds <= 0) {
+                // first event in the interval, send it
                 latestSensorUpload.put(sensorType, now)
+                // don't send any event from previous intervals
                 latestSensorFuture[sensorType]?.cancel()
                 processSensorEvent(sensorType, event)
             } else {
+                // later event in the interval, store it
                 latestSensorEvent[sensorType] = event
+                // if it does not exist yet, delay sending the latest event.
+                // It may be cancelled if other events come in (in the branch above)
                 if (latestSensorFuture[sensorType] == null) {
+                    // wait up to 1 interval more after the current interval ends before sending this value.
                     latestSensorFuture[sensorType] = mHandler.delay(timeUntilIntervalEnds + delay) {
                         processSensorEvent(sensorType, latestSensorEvent[sensorType])
                     }
@@ -179,6 +187,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     }
 
     private fun processSensorEvent(sensorType: Int, event: SensorEvent?) {
+        // When sending an event, discard all past events
         latestSensorEvent[sensorType] = null
         latestSensorFuture[sensorType] = null
         event ?: return
