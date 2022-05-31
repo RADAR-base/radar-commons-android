@@ -158,8 +158,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             // Ignore disabled sensors
             if (delay <= 0) return@execute
 
-            val sendState = sensorSendStates[sensorType]
-                ?: SensorSendState().also { sensorSendStates.put(sensorType, it) }
+            val sendState = sensorSendStates.computeIfAbsent(sensorType) { SensorSendState() }
 
             if (sendState.mayStartNewInterval(delay)) {
                 processSensorEvent(sensorType, event, sendState)
@@ -313,6 +312,9 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             return size() == other.size()
                     && (0 until size()).all { keyAt(it) == other.keyAt(it) && valueAt(it) == other.valueAt(it) }
         }
+
+        private inline fun <T> SparseArray<T>.computeIfAbsent(key: Int, compute: () -> T) = get(key)
+            ?: compute().also { put(key, it) }
 
         data class SensorSendState(
             var lastSendTime: Long = 0,
