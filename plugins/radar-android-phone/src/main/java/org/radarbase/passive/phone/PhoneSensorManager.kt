@@ -31,7 +31,6 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.os.SystemClock
 import android.util.SparseArray
 import android.util.SparseIntArray
-import android.util.SparseLongArray
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -65,9 +64,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             }
         }
 
-    private val latestSensorUpload = SparseLongArray()
-    private val latestSensorFuture = SparseArray<SafeHandler.HandlerFuture>()
-    private val latestSensorEvent = SparseArray<SensorEvent>()
+    private val sensorSendStates = SparseArray<SensorSendState>()
 
     private val mHandler = SafeHandler.getInstance("Phone sensors", THREAD_PRIORITY_BACKGROUND)
 
@@ -161,39 +158,20 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             // Ignore disabled sensors
             if (delay <= 0) return@execute
 
-            val latestUpload = latestSensorUpload[sensorType]
-            val now = SystemClock.uptimeMillis()
-            val timeUntilIntervalEnds = latestUpload + delay - now
+            val sendState = sensorSendStates[sensorType]
+                ?: SensorSendState().also { sensorSendStates.put(sensorType, it) }
 
-            if (timeUntilIntervalEnds <= 0) { // first event in the interval
-                latestSensorUpload.put(sensorType, now)
-                // don't send any event from previous intervals
-                latestSensorFuture[sensorType]?.cancel()
-                processSensorEvent(sensorType, event)
-
-            } else { // later event in the interval
-                // store it
-                latestSensorEvent.put(sensorType, event)
-                // delay sending it
-                if (latestSensorFuture[sensorType] == null) {
-                    // wait up to 1 interval more after the current interval ends before sending this value.
-                    // it may be cancelled if other events come in (in the branch above)
-                    latestSensorFuture.put(
-                        sensorType,
-                        mHandler.delay(timeUntilIntervalEnds + delay) {
-                            processSensorEvent(sensorType, latestSensorEvent[sensorType])
-                        },
-                    )
+            if (sendState.mayStartNewInterval(delay)) {
+                processSensorEvent(sensorType, event, sendState)
+            } else {
+                sendState.postponeEvent(event, mHandler, delay) { postponedEvent ->
+                    processSensorEvent(sensorType, postponedEvent, sendState)
                 }
             }
         }
     }
 
-    private fun processSensorEvent(sensorType: Int, event: SensorEvent?) {
-        // When sending an event, discard all past events
-        latestSensorEvent.put(sensorType, null)
-        latestSensorFuture.put(sensorType, null)
-        event ?: return
+    private fun processSensorEvent(sensorType: Int, event: SensorEvent, sendState: SensorSendState) {
         when (sensorType) {
             Sensor.TYPE_ACCELEROMETER -> processAcceleration(event)
             Sensor.TYPE_LIGHT -> processLight(event)
@@ -202,6 +180,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             Sensor.TYPE_STEP_COUNTER -> processStep(event)
             else -> logger.debug("Phone registered unknown sensor change: '{}'", event.sensor.type)
         }
+        sendState.didProcessEvent()
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
@@ -333,6 +312,63 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         private fun SparseIntArray.contentsEquals(other: SparseIntArray): Boolean {
             return size() == other.size()
                     && (0 until size()).all { keyAt(it) == other.keyAt(it) && valueAt(it) == other.valueAt(it) }
+        }
+
+        data class SensorSendState(
+            var lastSendTime: Long = 0,
+            var postponedEvent: SensorEvent? = null,
+            var postponeFuture: SafeHandler.HandlerFuture? = null,
+        ) {
+            /**
+             * Whether the previous interval has ended. The interval is measured as [delay]
+             * milliseconds. The interval starts when the first event in an interval is processed.
+             */
+            fun mayStartNewInterval(delay: Int): Boolean = lastSendTime + delay <= now
+            /**
+             * Time from now when not only the current but also the next interval has ended.
+             * The interval is measured as [delay] milliseconds.
+             */
+            private fun timeUntilNextIntervalEnds(delay: Int): Long = lastSendTime + 2 * delay - now
+
+            /**
+             * Call when an event is processed. This marks the start of an interval and will discard
+             * any postponed events.
+             */
+            fun didProcessEvent() {
+                lastSendTime = now
+                postponedEvent = null
+                postponeFuture?.let {
+                    it.cancel()
+                    postponeFuture = null
+                }
+            }
+
+            /**
+             * Postpone sending [event] until the next interval ends. Only the last event
+             * in the current interval will be sent and only if no events are sent in the interval
+             * after it. This method may be called multiple times in an interval. The postponed
+             * action will be run by [mHandler]. The interval is measured as [delay] milliseconds.
+             */
+            fun postponeEvent(
+                event: SensorEvent,
+                mHandler: SafeHandler,
+                delay: Int,
+                process: (postponedEvent: SensorEvent) -> Unit,
+            ) {
+                postponedEvent = event
+                if (postponeFuture == null) {
+                    postponeFuture = mHandler.delay(timeUntilNextIntervalEnds(delay)) {
+                        postponeFuture = null
+                        val postponedEvent = postponedEvent ?: return@delay
+                        process(postponedEvent)
+                    }
+                }
+            }
+
+            companion object {
+                private val now: Long
+                    get() = SystemClock.uptimeMillis()
+            }
         }
     }
 }
