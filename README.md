@@ -40,7 +40,7 @@ repositories {
     mavenCentral()
 }
 dependencies {
-    api 'org.radarbase:radar-commons-android:1.1.1'
+    api 'org.radarbase:radar-commons-android:1.1.4'
 }
 ```
 
@@ -48,7 +48,7 @@ Include additional plugins by adding:
 
 ```gradle
 dependencies {
-    implementation 'org.radarbase:<plugin name>:1.1.1'
+    implementation 'org.radarbase:<plugin name>:1.1.4'
 }
 ```
 
