@@ -37,15 +37,15 @@ dependencies {
     }
     api(project(':avro-android'))
     api("org.slf4j:slf4j-api:1.7.36")
-    api("androidx.appcompat:appcompat:1.4.1")
+    api("androidx.appcompat:appcompat:1.4.2")
 
-    implementation "com.squareup.okhttp3:okhttp:4.9.3"
+    implementation "com.squareup.okhttp3:okhttp:4.10.0"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
     api "androidx.lifecycle:lifecycle-service:2.4.1"
 
-    implementation platform('com.google.firebase:firebase-bom:29.3.0')
+    implementation platform('com.google.firebase:firebase-bom:30.2.0')
     implementation 'com.google.firebase:firebase-config'
     implementation 'com.google.firebase:firebase-core'
     implementation 'com.google.firebase:firebase-crashlytics'
