@@ -20,7 +20,7 @@ jobs:
       - name: Run Snyk to check for vulnerabilities
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-sub-projects --org=radar-base  --configuration-matching='^releaseRuntimeClasspath$' --exclude plugins/radar-android-empatica --json-file-output=${{ env.REPORT_FILE }}
+        run: snyk test --all-projects --org=radar-base --configuration-matching='^releaseRuntimeClasspath$' --exclude=radar-android-empatica --json-file-output=${{ env.REPORT_FILE }}
 
       - name: Report new vulnerabilities
         uses: thehyve/report-vulnerability@master
