@@ -152,6 +152,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     }
 
     override fun onSensorChanged(event: SensorEvent) {
+        val time = currentTime
         val sensorType = event.sensor.type
         mHandler.execute {
             val delay = sensorDelays[sensorType]
@@ -161,22 +162,27 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             val sendState = sensorSendStates.computeIfAbsent(sensorType) { SensorSendState() }
 
             if (sendState.mayStartNewInterval(delay)) {
-                processSensorEvent(sensorType, event, sendState)
+                processSensorEvent(sensorType, time, event, sendState)
             } else {
-                sendState.postponeEvent(event, mHandler, delay) { postponedEvent ->
-                    processSensorEvent(sensorType, postponedEvent, sendState)
+                sendState.postponeEvent(time, event, mHandler, delay) { postponedTime, postponedEvent ->
+                    processSensorEvent(sensorType, postponedTime, postponedEvent, sendState)
                 }
             }
         }
     }
 
-    private fun processSensorEvent(sensorType: Int, event: SensorEvent, sendState: SensorSendState) {
+    private fun processSensorEvent(
+        sensorType: Int,
+        time: Double,
+        event: SensorEvent,
+        sendState: SensorSendState
+    ) {
         when (sensorType) {
-            Sensor.TYPE_ACCELEROMETER -> processAcceleration(event)
-            Sensor.TYPE_LIGHT -> processLight(event)
-            Sensor.TYPE_GYROSCOPE -> processGyroscope(event)
-            Sensor.TYPE_MAGNETIC_FIELD -> processMagneticField(event)
-            Sensor.TYPE_STEP_COUNTER -> processStep(event)
+            Sensor.TYPE_ACCELEROMETER -> processAcceleration(time, event)
+            Sensor.TYPE_LIGHT -> processLight(time, event)
+            Sensor.TYPE_GYROSCOPE -> processGyroscope(time, event)
+            Sensor.TYPE_MAGNETIC_FIELD -> processMagneticField(time, event)
+            Sensor.TYPE_STEP_COUNTER -> processStep(time, event)
             else -> logger.debug("Phone registered unknown sensor change: '{}'", event.sensor.type)
         }
         sendState.didProcessEvent()
@@ -186,52 +192,43 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         // no action
     }
 
-    private fun processAcceleration(event: SensorEvent) {
+    private fun processAcceleration(time: Double, event: SensorEvent) {
         // x,y,z are in m/s2
         val x = event.values[0] / SensorManager.GRAVITY_EARTH
         val y = event.values[1] / SensorManager.GRAVITY_EARTH
         val z = event.values[2] / SensorManager.GRAVITY_EARTH
         state.setAcceleration(x, y, z)
 
-        val time = currentTime
-
         send(accelerationTopic, PhoneAcceleration(time, time, x, y, z))
     }
 
-    private fun processLight(event: SensorEvent) {
+    private fun processLight(time: Double, event: SensorEvent) {
         val lightValue = event.values[0]
-
-        val time = currentTime
 
         send(lightTopic, PhoneLight(time, time, lightValue))
     }
 
-    private fun processGyroscope(event: SensorEvent) {
+    private fun processGyroscope(time: Double, event: SensorEvent) {
         // Not normalized axis of rotation in rad/s
         val axisX = event.values[0]
         val axisY = event.values[1]
         val axisZ = event.values[2]
 
-        val time = currentTime
-
         send(gyroscopeTopic, PhoneGyroscope(time, time, axisX, axisY, axisZ))
     }
 
-    private fun processMagneticField(event: SensorEvent) {
+    private fun processMagneticField(time: Double, event: SensorEvent) {
         // Magnetic field in microTesla
         val axisX = event.values[0]
         val axisY = event.values[1]
         val axisZ = event.values[2]
 
-        val time = currentTime
-
         send(magneticFieldTopic, PhoneMagneticField(time, time, axisX, axisY, axisZ))
     }
 
-    private fun processStep(event: SensorEvent) {
+    private fun processStep(time: Double, event: SensorEvent) {
         // Number of step since listening or since reboot
         val stepCount = event.values[0].toInt()
-        val time = currentTime
 
         // Send how many steps have been taken since the last time this function was triggered
         // Note: normally processStep() is called for every new step and the stepsSinceLastUpdate is 1
@@ -318,6 +315,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
 
         data class SensorSendState(
             var lastSendTime: Long = 0,
+            var postponedTime: Double? = null,
             var postponedEvent: SensorEvent? = null,
             var postponeFuture: SafeHandler.HandlerFuture? = null,
         ) {
@@ -338,6 +336,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
              */
             fun didProcessEvent() {
                 lastSendTime = now
+                postponedTime = null
                 postponedEvent = null
                 postponeFuture?.let {
                     it.cancel()
@@ -352,17 +351,21 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
              * action will be run by [mHandler]. The interval is measured as [delay] milliseconds.
              */
             fun postponeEvent(
+                time: Double,
                 event: SensorEvent,
                 mHandler: SafeHandler,
                 delay: Int,
-                process: (postponedEvent: SensorEvent) -> Unit,
+                process: (postponedTime: Double, postponedEvent: SensorEvent) -> Unit,
             ) {
+                postponedTime = time
                 postponedEvent = event
                 if (postponeFuture == null) {
                     postponeFuture = mHandler.delay(timeUntilNextIntervalEnds(delay)) {
                         postponeFuture = null
-                        val postponedEvent = postponedEvent ?: return@delay
-                        process(postponedEvent)
+                        process(
+                            postponedTime ?: return@delay,
+                            postponedEvent ?: return@delay,
+                        )
                     }
                 }
             }
