@@ -100,10 +100,12 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
 
     protected fun register(
             physicalId: String? = null,
-            name: String = this.name,
+            name: String? = null,
             attributes: Map<String, String> = emptyMap(),
             onMapping: ((SourceMetadata?) -> Unit)? = null) {
-        this.name = name
+        if (name != null) {
+            this.name = name
+        }
         service.ensureRegistration(
                 physicalId ?: RadarConfiguration.getOrSetUUID(service, SOURCE_ID_KEY),
                 name, attributes) { source ->
@@ -124,9 +126,13 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             handler: SafeHandler? = null,
     ): DataCache<ObservationKey, V> {
         try {
-            val topic = AvroTopic(name,
-                    ObservationKey.getClassSchema(), valueClass.schema,
-                    ObservationKey::class.java, valueClass::class.java)
+            val topic = AvroTopic(
+                name,
+                ObservationKey.getClassSchema(),
+                valueClass.schema,
+                ObservationKey::class.java,
+                valueClass::class.java,
+            )
             return dataHandler.registerCache(topic, handler)
         } catch (e: ReflectiveOperationException) {
             logger.error("Error creating topic {}", name, e)

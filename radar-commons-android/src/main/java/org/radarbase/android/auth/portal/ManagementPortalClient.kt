@@ -1,5 +1,6 @@
 package org.radarbase.android.auth.portal
 
+import android.content.res.Resources
 import okhttp3.Credentials
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -17,6 +18,7 @@ import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.lang.RuntimeException
 import java.net.MalformedURLException
 
 class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, clientSecret: String, client: RestClient? = null) {
@@ -106,7 +108,14 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
             when (response.code) {
                 401 -> throw AuthenticationException("Authentication failure with the ManagementPortal: $responseBody")
                 403 -> throw UnsupportedOperationException("Not allowed to update source data: $responseBody")
-                404 -> throw IOException("User ${auth.userId} is no longer registered with the ManagementPortal: $responseBody")
+                404 -> {
+                    val error = JSONObject(responseBody)
+                    if (error.getString("message").contains("source", true)) {
+                        throw SourceNotFoundException("Source ${source.sourceId} is no longer registered with the ManagementPortal: $responseBody")
+                    } else {
+                        throw UserNotFoundException("User ${auth.userId} is no longer registered with the ManagementPortal: $responseBody")
+                    }
+                }
                 409 -> throw ConflictException("Source registration conflicts with existing source registration: $responseBody")
                 in 400..599 -> throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $requestBody")
             }
@@ -215,5 +224,8 @@ class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, c
             source.attributes = GetSubjectParser.attributesToMap(
                     responseObject.optJSONObject("attributes"))
         }
+
+        class SourceNotFoundException(message: String) : RuntimeException(message)
+        class UserNotFoundException(message: String) : RuntimeException(message)
     }
 }

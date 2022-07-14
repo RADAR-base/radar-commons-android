@@ -32,6 +32,7 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.source.SourceProvider.Companion.MODEL_KEY
 import org.radarbase.android.source.SourceProvider.Companion.NEEDS_BLUETOOTH_KEY
+import org.radarbase.android.source.SourceProvider.Companion.PLUGIN_NAME_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.radarbase.android.util.BundleSerialization
@@ -41,6 +42,9 @@ import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.collections.HashSet
 
 /**
  * A service that manages a SourceManager and a TableDataHandler to send addToPreferences the data of a
@@ -83,6 +87,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private var startFuture: SafeHandler.HandlerFuture? = null
     private lateinit var broadcaster: LocalBroadcastManager
     private var needsRegisteredSources: Boolean = true
+    private lateinit var pluginName: String
     private lateinit var sourceModel: String
     private lateinit var sourceProducer: String
     private val name = javaClass.simpleName
@@ -344,6 +349,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     @CallSuper
     fun onInvocation(bundle: Bundle) {
         hasBluetoothPermission = bundle.getBoolean(NEEDS_BLUETOOTH_KEY, false)
+        pluginName = requireNotNull(bundle.getString(PLUGIN_NAME_KEY)) { "Missing source producer" }
         sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
         sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
         if (!authConnection.isBound) {
@@ -376,19 +382,21 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             }
         }
 
-        authConnection.binder?.updateSource(source,
-                { authState, updatedSource ->
-                    key.setProjectId(authState.projectId)
-                    key.setUserId(authState.userId)
-                    key.setSourceId(updatedSource.sourceId)
-                    source.sourceId = updatedSource.sourceId
-                    source.sourceName = updatedSource.sourceName
-                    source.expectedSourceName = updatedSource.expectedSourceName
-                }, onFail)
-                ?: onFail(null)
+        authConnection.binder?.updateSource(
+            source,
+            { authState, updatedSource ->
+                key.projectId = authState.projectId
+                key.userId = authState.userId
+                key.sourceId = updatedSource.sourceId
+                source.sourceId = updatedSource.sourceId
+                source.sourceName = updatedSource.sourceName
+                source.expectedSourceName = updatedSource.expectedSourceName
+            },
+            onFail,
+        ) ?: onFail(null)
     }
 
-    open fun ensureRegistration(id: String?, name: String, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
+    open fun ensureRegistration(id: String?, name: String?, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
         handler.executeReentrant {
             if (!needsRegisteredSources) {
                 onMapping(SourceMetadata(SourceType(0, sourceProducer, sourceModel, "UNKNOWN", true)).apply {
@@ -413,15 +421,17 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             val matchingSource = acceptableSources
                     .find { source ->
                         val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
+                        val pluginMatches = pluginName in source.attributes
                         val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
                         when {
+                            pluginMatches -> true
                             source.matches(id, name) -> true
                             id != null && physicalId != null && id in physicalId -> true
                             id != null && physicalId != null -> {
                                 logger.warn("Physical id {} does not match registered id {}", physicalId, id)
                                 false
                             }
-                            physicalName != null && name in physicalName -> true
+                            physicalName != null && name != null && name in physicalName -> true
                             physicalName != null -> {
                                 logger.warn("Physical name {} does not match registered name {}", physicalName, name)
                                 false
@@ -433,11 +443,15 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             if (matchingSource == null) {
                 logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
             } else {
-                key.setSourceId(matchingSource.sourceId)
-                val registeredAttributes = attributes + mapOf(
-                        "physicalId" to (id ?: ""),
-                        "physicalName" to name,
-                )
+                key.sourceId = matchingSource.sourceId
+                val registeredAttributes = buildMap(attributes.size + 2) {
+                    putAll(attributes)
+                    put("physicalId", (id ?: ""))
+                    if (pluginName !in attributes) {
+                        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
+                        put(pluginName, dateFormat.format(Date()))
+                    }
+                }
                 if (registeredAttributes.any { (k, v) -> matchingSource.attributes[k] != v }) {
                     registerSource(matchingSource, matchingSource.type!!, registeredAttributes)
                 }

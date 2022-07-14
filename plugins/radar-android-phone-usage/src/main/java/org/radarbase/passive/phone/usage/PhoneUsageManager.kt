@@ -199,11 +199,11 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     private fun storeLastEvent() {
         preferences.edit()
-                .putString(LAST_PACKAGE_NAME, lastPackageName)
-                .putLong(LAST_EVENT_TIMESTAMP, lastTimestamp)
-                .putInt(LAST_EVENT_TYPE, lastEventType)
-                .putBoolean(LAST_EVENT_IS_SENT, lastEventIsSent)
-                .apply()
+            .putString(LAST_PACKAGE_NAME, lastPackageName)
+            .putLong(LAST_EVENT_TIMESTAMP, lastTimestamp)
+            .putInt(LAST_EVENT_TYPE, lastEventType)
+            .putBoolean(LAST_EVENT_IS_SENT, lastEventIsSent)
+            .apply()
     }
 
     private fun loadLastEvent() {
