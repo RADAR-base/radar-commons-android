@@ -37,7 +37,7 @@ dependencies {
     }
     api(project(':avro-android'))
     api("org.slf4j:slf4j-api:1.7.36")
-    api("androidx.appcompat:appcompat:1.4.2")
+    api("androidx.appcompat:appcompat:1.5.0")
 
     implementation "com.squareup.okhttp3:okhttp:4.10.0"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
