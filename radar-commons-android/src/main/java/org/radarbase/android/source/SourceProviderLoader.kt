@@ -10,10 +10,14 @@ class SourceProviderLoader(private var plugins: List<SourceProvider<*>>) {
     private val pluginCache = ChangeApplier<String, List<SourceProvider<*>>>(::loadProvidersFromNames)
 
     init {
-        plugins.forEachIndexed { idx, p1 ->
-            plugins.subList(idx + 1, plugins.size).asSequence()
-                .filter { p2 -> p1.pluginNames.intersect(p2.pluginNames).isNotEmpty() }
-                .forEach { p2 -> logger.warn("Providers {} and {} have overlapping plugin names.", p1, p2) }
+        val pluginNames = plugins.map { it.pluginNames.toHashSet() }
+
+        for (i in pluginNames.indices) {
+            for (j in i + 1 until pluginNames.size) {
+                if (pluginNames[i].any { it in pluginNames[j] }) {
+                    logger.warn("Providers {} and {} have overlapping plugin names.", plugins[i], plugins[j])
+                }
+            }
         }
     }
 
@@ -39,14 +43,14 @@ class SourceProviderLoader(private var plugins: List<SourceProvider<*>>) {
      * Loads the service providers specified in given whitespace-delimited String.
      */
     private fun loadProvidersFromNames(pluginString: String): List<SourceProvider<*>> {
-        return Scanner(pluginString).asSequence()
-                .map { pluginName ->
-                    plugins.find { pluginName in it.pluginNames }
-                            .also { if (it == null) logger.warn("Plugin {} not found", pluginName) }
-                }
-                .filterNotNull()
-                .distinct()
-                .toList()
+        return Scanner(pluginString)
+            .asSequence()
+            .mapNotNull { pluginName ->
+                plugins.find { pluginName in it.pluginNames }
+                        .also { if (it == null) logger.warn("Plugin {} not found", pluginName) }
+            }
+            .distinct()
+            .toList()
     }
 
     companion object {

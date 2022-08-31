@@ -34,6 +34,7 @@ import java.io.Closeable
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.HashSet
 
 /**
  * Separate thread to read from the database and send it to the Kafka server. It cleans the
@@ -201,19 +202,20 @@ class KafkaDataSubmitter(
         try {
             val uploadingNotified = AtomicBoolean(false)
             toSend -= dataHandler.activeCaches
-                    .filter { group ->
-                        if (group.topicName in toSend) {
-                            val sentActive = uploadCache(group.activeDataCache, uploadingNotified)
-                            val sentDeprecated = group.deprecatedCaches.map { uploadCache(it, uploadingNotified) }
+                .asSequence()
+                .filter { group ->
+                    if (group.topicName in toSend) {
+                        val sentActive = uploadCache(group.activeDataCache, uploadingNotified)
+                        val sentDeprecated = group.deprecatedCaches.map { uploadCache(it, uploadingNotified) }
 
-                            if (sentDeprecated.any { it == 0 }) {
-                                group.deleteEmptyCaches()
-                            }
-                            sentActive < config.amountLimit
-                                    && sentDeprecated.all { it < config.amountLimit }
-                        } else false
-                    }
-                    .map(DataCacheGroup<*,*>::topicName)
+                        if (sentDeprecated.any { it == 0 }) {
+                            group.deleteEmptyCaches()
+                        }
+                        sentActive < config.amountLimit
+                                && sentDeprecated.all { it < config.amountLimit }
+                    } else false
+                }
+                .mapTo(HashSet(), DataCacheGroup<*,*>::topicName)
 
             if (uploadingNotified.get()) {
                 dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
