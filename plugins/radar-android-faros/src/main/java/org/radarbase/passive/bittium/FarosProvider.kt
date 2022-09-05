@@ -38,22 +38,15 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
 
     override val hasDetailView: Boolean = true
 
-    override val permissionsNeeded: List<String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        listOf(
-            ACCESS_COARSE_LOCATION,
-            ACCESS_FINE_LOCATION,
-            BLUETOOTH,
-            BLUETOOTH_ADMIN,
-            BLUETOOTH_CONNECT,
-            BLUETOOTH_SCAN,
-        )
-    } else {
-        listOf(
-            ACCESS_COARSE_LOCATION,
-            ACCESS_FINE_LOCATION,
-            BLUETOOTH,
-            BLUETOOTH_ADMIN,
-        )
+    override val permissionsNeeded: List<String> = buildList {
+        add(ACCESS_COARSE_LOCATION)
+        add(ACCESS_FINE_LOCATION)
+        add(BLUETOOTH)
+        add(BLUETOOTH_ADMIN)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(BLUETOOTH_SCAN)
+            add(BLUETOOTH_CONNECT)
+        }
     }
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)

@@ -45,37 +45,36 @@ import kotlin.collections.HashMap
  * stored to disk, not uploaded.
  */
 class TableDataHandler(
-        private val context: Context,
-        private val cacheStore: CacheStore
+    private val context: Context,
+    private val cacheStore: CacheStore,
 ) : DataHandler<ObservationKey, SpecificRecord> {
     private val tables: ConcurrentMap<String, DataCacheGroup<*, *>> = ConcurrentHashMap()
-    private val statusSync = Any()
     private val batteryLevelReceiver: BatteryStageReceiver
     private val networkConnectedReceiver: NetworkConnectedReceiver
-    private val dataHandler: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
+    private val handlerThread: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
     private val broadcaster = LocalBroadcastManager.getInstance(context)
 
     private var config = DataHandlerConfiguration()
 
+    @Volatile
+    var latestStatus: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
     override var status: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
-        get() = synchronized(statusSync) { field }
-        set(value) = synchronized(statusSync) { field = value }
 
     private val lastNumberOfRecordsSent = TreeMap<String, Long>()
     private var submitter: KafkaDataSubmitter? = null
     private var sender: RestSender? = null
 
     private val isStarted: Boolean
-        @Synchronized get() = submitter != null
+        get() = submitter != null
 
     override val recordsSent: Map<String, Long>
-        get() = synchronized(statusSync) {
+        get() = handlerThread.compute {
             HashMap(lastNumberOfRecordsSent)
         }
 
     init {
-        this.dataHandler.start()
-        this.dataHandler.repeat(10_000L, ::broadcastNumberOfRecords)
+        this.handlerThread.start()
+        this.handlerThread.repeat(10_000L, ::broadcastNumberOfRecords)
 
         this.batteryLevelReceiver = BatteryStageReceiver(context, config.batteryStageLevels) { stage ->
             when (stage) {
@@ -85,7 +84,6 @@ class TableDataHandler(
                             uploadRateMultiplier = 1
                         }
                     }
-                    start()
                 }
                 BatteryStageReceiver.BatteryStage.REDUCED -> {
                     logger.info("Battery level getting low, reducing data sending")
@@ -94,7 +92,6 @@ class TableDataHandler(
                             uploadRateMultiplier = reducedUploadMultiplier
                         }
                     }
-                    start()
                 }
                 BatteryStageReceiver.BatteryStage.EMPTY -> {
                     if (isStarted) {
@@ -121,7 +118,9 @@ class TableDataHandler(
         sender = null
 
         if (config.restConfig.kafkaConfig != null) {
-            doEnableSubmitter()
+            handlerThread.execute {
+                doEnableSubmitter()
+            }
         } else {
             logger.info("Submitter is disabled: no kafkaConfig provided in init")
             updateServerStatus(ServerStatusListener.Status.DISABLED)
@@ -144,13 +143,13 @@ class TableDataHandler(
      * This will not do anything if there is not already a submitter running, if it is disabled,
      * if the network is not connected or if the battery is running too low.
      */
-    @Synchronized
-    fun start() {
+    fun start() = handlerThread.executeReentrant {
         if (isStarted
-                || config.submitterConfig.userId == null
-                || status === ServerStatusListener.Status.DISABLED
-                || !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi)
-                || batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY) {
+            || config.submitterConfig.userId == null
+            || status === ServerStatusListener.Status.DISABLED
+            || !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi)
+            || batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY
+        ) {
             when {
                 config.submitterConfig.userId == null ->
                     logger.info("Submitter has no user ID set. Not starting.")
@@ -161,19 +160,19 @@ class TableDataHandler(
                 batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY ->
                     logger.info("Battery is empty. Not starting")
             }
-            return
+            return@executeReentrant
         }
         logger.info("Starting data submitter")
 
-        val kafkaConfig = config.restConfig.kafkaConfig ?: return
+        val kafkaConfig = config.restConfig.kafkaConfig ?: return@executeReentrant
 
         updateServerStatus(ServerStatusListener.Status.CONNECTING)
 
         val client = RestClient.global()
-                .server(kafkaConfig)
-                .gzipCompression(config.restConfig.useCompression)
-                .timeout(config.restConfig.connectionTimeout, TimeUnit.SECONDS)
-                .build()
+            .server(kafkaConfig)
+            .gzipCompression(config.restConfig.useCompression)
+            .timeout(config.restConfig.connectionTimeout, TimeUnit.SECONDS)
+            .build()
 
         val sender = RestSender.Builder().apply {
             httpClient(client)
@@ -191,8 +190,7 @@ class TableDataHandler(
      * Pause sending any data.
      * This waits for any remaining data to be sent.
      */
-    @Synchronized
-    fun stop() {
+    fun stop() = handlerThread.executeReentrant {
         submitter?.close()
         submitter = null
         sender = null
@@ -202,8 +200,7 @@ class TableDataHandler(
     }
 
     /** Do not submit any data, only cache it. If it is already disabled, this does nothing.  */
-    @Synchronized
-    fun disableSubmitter() {
+    private fun disableSubmitter() = handlerThread.executeReentrant {
         if (status !== ServerStatusListener.Status.DISABLED) {
             logger.info("Submitter is disabled")
             updateServerStatus(ServerStatusListener.Status.DISABLED)
@@ -216,8 +213,7 @@ class TableDataHandler(
     }
 
     /** Start submitting data. If it is already submitting data, this does nothing.  */
-    @Synchronized
-    fun enableSubmitter() {
+    private fun enableSubmitter() = handlerThread.executeReentrant {
         if (status === ServerStatusListener.Status.DISABLED) {
             doEnableSubmitter()
             start()
@@ -235,39 +231,19 @@ class TableDataHandler(
      * Sends any remaining data and closes the tables and connections.
      * @throws IOException if the tables cannot be flushed
      */
-    @Synchronized
     @Throws(IOException::class)
     fun close() {
-        dataHandler.stop { }
-
-        if (status !== ServerStatusListener.Status.DISABLED) {
-            networkConnectedReceiver.unregister()
-            batteryLevelReceiver.unregister()
+        handlerThread.stop {
+            if (status !== ServerStatusListener.Status.DISABLED) {
+                networkConnectedReceiver.unregister()
+                batteryLevelReceiver.unregister()
+            }
+            this.submitter?.close()
+            this.submitter = null
+            this.sender = null
         }
-        this.submitter?.close()
-        this.submitter = null
-        this.sender = null
 
         tables.values.forEach(DataCacheGroup<*, *>::close)
-    }
-
-    /**
-     * Check the connection with the server.
-     *
-     * Updates will be given to any listeners registered to
-     * [.setStatusListener].
-     */
-    @Synchronized
-    fun checkConnection() {
-        if (status === ServerStatusListener.Status.DISABLED) {
-            return
-        }
-        if (!isStarted) {
-            start()
-        }
-        if (isStarted) {
-            submitter?.checkConnection()
-        }
     }
 
     /**
@@ -287,10 +263,9 @@ class TableDataHandler(
             return caches
         }
 
-    @get:Synchronized
     override val activeCaches: List<DataCacheGroup<*, *>>
-        get() {
-            return if (submitter == null) {
+        get() = handlerThread.compute {
+            if (submitter == null) {
                 emptyList()
             } else if (networkConnectedReceiver.state.hasWifiOrEthernet || !config.sendOverDataHighPriority) {
                 ArrayList(tables.values)
@@ -300,18 +275,22 @@ class TableDataHandler(
         }
 
     var statusListener: ServerStatusListener? = null
-        get() = synchronized(statusSync) { field }
-        set(value) = synchronized(statusSync) { field = value }
+        get() = handlerThread.compute { field }
+        set(value) = handlerThread.execute { field = value }
 
     override fun updateServerStatus(status: ServerStatusListener.Status) {
-        synchronized(statusSync) {
-            statusListener?.updateServerStatus(status)
-            this.status = status
+        latestStatus = status
+        handlerThread.executeReentrant {
+            val localLatestStatus = latestStatus
+            if (localLatestStatus != this.status) {
+                statusListener?.updateServerStatus(localLatestStatus)
+                this.status = localLatestStatus
+            }
         }
     }
 
     override fun updateRecordsSent(topicName: String, numberOfRecords: Long) {
-        synchronized(statusSync) {
+        handlerThread.execute {
             statusListener?.updateRecordsSent(topicName, numberOfRecords)
 
             // Overwrite key-value if exists. Only stores the last
@@ -336,13 +315,12 @@ class TableDataHandler(
                 .activeDataCache
     }
 
-    @Synchronized
-    override fun handler(build: DataHandlerConfiguration.() -> Unit) {
+    override fun handler(build: DataHandlerConfiguration.() -> Unit) = handlerThread.executeReentrant {
         val oldConfig = config
 
         config = config.copy().apply(build)
         if (config == oldConfig) {
-            return
+            return@executeReentrant
         }
 
         if (config.restConfig.kafkaConfig != null
