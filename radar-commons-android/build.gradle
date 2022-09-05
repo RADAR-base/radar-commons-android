@@ -49,7 +49,7 @@ dependencies {
     implementation 'com.google.firebase:firebase-config'
     implementation 'com.google.firebase:firebase-core'
     implementation 'com.google.firebase:firebase-crashlytics'
-    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:1.7.30'
+    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.0'
 }
 
 apply from: "$rootDir/gradle/test.gradle"
