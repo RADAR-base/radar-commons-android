@@ -35,9 +35,12 @@ class PhoneBluetoothService : SourceService<BaseSourceState>() {
     override fun configureSourceManager(manager: SourceManager<BaseSourceState>, config: SingleRadarConfiguration) {
         manager as PhoneBluetoothManager
         manager.setCheckInterval(
-                config.getLong(PHONE_BLUETOOTH_DEVICES_SCAN_INTERVAL,
-                        BLUETOOTH_DEVICES_SCAN_INTERVAL_DEFAULT),
-                TimeUnit.SECONDS)
+            config.getLong(
+                PHONE_BLUETOOTH_DEVICES_SCAN_INTERVAL,
+                BLUETOOTH_DEVICES_SCAN_INTERVAL_DEFAULT,
+            ),
+            TimeUnit.SECONDS,
+        )
     }
 
     companion object {

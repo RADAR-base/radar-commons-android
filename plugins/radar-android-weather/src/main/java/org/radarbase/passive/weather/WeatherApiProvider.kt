@@ -41,7 +41,7 @@ open class WeatherApiProvider(radarService: RadarService) : SourceProvider<BaseS
     override val displayName: String
         get() = radarService.getString(R.string.weatherApiServiceDisplayName)
 
-    override val permissionsNeeded: List<String> = Arrays.asList(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)
+    override val permissionsNeeded: List<String> = listOf(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_LOCATION)
 

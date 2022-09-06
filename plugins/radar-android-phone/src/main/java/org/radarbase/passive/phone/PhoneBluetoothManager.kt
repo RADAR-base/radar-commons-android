@@ -19,7 +19,6 @@ package org.radarbase.passive.phone
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -67,9 +66,10 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
             return
         }
         if (bluetoothAdapter.isEnabled) {
-            if (ActivityCompat.checkSelfPermission(service,
-                    Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED
-            ) {
+            val scanPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Manifest.permission.BLUETOOTH_SCAN
+            } else Manifest.permission.BLUETOOTH_ADMIN
+            if (ActivityCompat.checkSelfPermission(service, scanPermission) != PackageManager.PERMISSION_GRANTED) {
                 logger.error("Cannot initiate Bluetooth scan without scan permissions")
                 return
             }
