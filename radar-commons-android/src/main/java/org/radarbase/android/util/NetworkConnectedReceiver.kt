@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory
  * Keeps track of whether there is a network connection (e.g., WiFi or Ethernet).
  */
 class NetworkConnectedReceiver(private val context: Context, private val listener: ((NetworkState) -> Unit)? = null) : SpecificReceiver {
-    private val connectivityManager: ConnectivityManager? = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    private val connectivityManager: ConnectivityManager? = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
     private var isReceiverRegistered: Boolean = false
     private var receiver: BroadcastReceiver? = null
     private val callback: NetworkCallback by lazy {

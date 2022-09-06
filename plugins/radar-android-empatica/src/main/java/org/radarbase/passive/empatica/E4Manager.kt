@@ -222,7 +222,7 @@ class E4Manager(
     }
 
     override fun didRequestEnableBluetooth() {
-        if (!bluetoothIsEnabled) {
+        if (!service.bluetoothIsEnabled) {
             logger.warn("Bluetooth is not enabled.")
             disconnect()
         }

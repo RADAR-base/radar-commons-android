@@ -98,19 +98,14 @@ class SourceMetadata {
                 && attributes == appSource.attributes)
     }
 
-    override fun hashCode(): Int {
-        return Objects.hash(type, sourceId)
-    }
+    override fun hashCode(): Int = Objects.hash(type, sourceId)
 
-    override fun toString(): String {
-        return ("SourceMetadata{"
-                + "type=" + type
-                + ", sourceId='" + sourceId + '\''.toString()
-                + ", sourceName='" + sourceName + '\''.toString()
-                + ", expectedSourceName='" + expectedSourceName + '\''.toString()
-                + ", attributes=" + attributes + '\''.toString()
-                + '}'.toString())
-    }
+    override fun toString(): String = "SourceMetadata{" +
+        "type=$type, " +
+        "sourceId='$sourceId', " +
+        "sourceName='$sourceName', " +
+        "expectedSourceName='$expectedSourceName', " +
+        "attributes=$attributes'}"
 
     fun toJsonString(): String {
         try {

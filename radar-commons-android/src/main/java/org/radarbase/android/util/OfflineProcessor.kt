@@ -42,15 +42,23 @@ import java.util.concurrent.TimeUnit
  * processing. If wake is set to true, [android.Manifest.permission.WAKE_LOCK] should be
  * acquired in the Manifest.
  */
-class OfflineProcessor(private val context: Context,
-                       private val config: ProcessorConfiguration) : Closeable {
+class OfflineProcessor(
+    private val context: Context,
+    private val config: ProcessorConfiguration,
+) : Closeable {
 
-    constructor(context: Context, config: ProcessorConfiguration.() -> Unit) : this(context, ProcessorConfiguration().apply(config))
+    constructor(
+        context: Context,
+        config: ProcessorConfiguration.() -> Unit,
+    ) : this(context, ProcessorConfiguration().apply(config))
 
     private val receiver: BroadcastReceiver
     private val pendingIntent: PendingIntent
     private val alarmManager: AlarmManager
     private val handler: SafeHandler
+
+    private val requestName: String = requireNotNull(config.requestName) { "Cannot start processor without request name" }
+    private val process: List<() -> Unit> = ArrayList(config.process)
 
     /** Whether the processing Runnable should stop execution.  */
     @get:Synchronized
@@ -65,14 +73,19 @@ class OfflineProcessor(private val context: Context,
     private val isRunning: Semaphore
 
     init {
-        config.validate()
+        require(process.isNotEmpty()) { "Cannot start processor without processes" }
+
         this.isDone = false
         this.alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
 
         handler = config.handlerReference.acquire()
         val intent = Intent(config.requestName)
-        pendingIntent = PendingIntent.getBroadcast(context, config.requestCode!!, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT)
+        pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requireNotNull(config.requestCode) { "Cannot start processor without request code" },
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT.toPendingIntentFlag(),
+        )
 
         this.receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -90,7 +103,7 @@ class OfflineProcessor(private val context: Context,
         }
         handler.execute {
             didStart = true
-            context.registerReceiver(this.receiver, IntentFilter(config.requestName))
+            context.registerReceiver(this.receiver, IntentFilter(requestName))
             schedule()
             initializer?.let { it() }
         }
@@ -105,11 +118,11 @@ class OfflineProcessor(private val context: Context,
             return
         }
         val wakeLock = if (config.wake) {
-            acquireWakeLock(context, config.requestName)
+            acquireWakeLock(context, requestName)
         } else null
 
         try {
-            for (runnable in config.process) {
+            for (runnable in process) {
                 handler.execute {
                     if (!isDone) {
                         try {
@@ -151,8 +164,7 @@ class OfflineProcessor(private val context: Context,
 
     private fun schedule() {
         val runImmediately = Debug.isDebuggerConnected()
-        val firstAlarm: Long
-        firstAlarm = if (runImmediately) {
+        val firstAlarm: Long = if (runImmediately) {
             trigger()
             SystemClock.elapsedRealtime() + config.intervalMillis
         } else {
@@ -203,19 +215,14 @@ class OfflineProcessor(private val context: Context,
     }
 
     data class ProcessorConfiguration(
-            var requestCode: Int? = null,
-            var requestName: String? = null,
-            var process: List<() -> Unit> = emptyList(),
-            @get:Synchronized
-            var intervalMillis: Long = -1,
-            var wake: Boolean = true,
-            var handlerReference: CountedReference<SafeHandler> = DEFAULT_HANDLER_THREAD) {
-
-        fun validate() {
-            require(requestCode != null && requestName != null) { "Cannot start processor without request code or name" }
-            require(process.isNotEmpty()) { "Cannot run without a process" }
-        }
-
+        var requestCode: Int? = null,
+        var requestName: String? = null,
+        var process: List<() -> Unit> = emptyList(),
+        @get:Synchronized
+        var intervalMillis: Long = -1,
+        var wake: Boolean = true,
+        var handlerReference: CountedReference<SafeHandler> = DEFAULT_HANDLER_THREAD
+    ) {
         @Synchronized
         fun interval(duration: Long, unit: TimeUnit): Boolean {
             require(duration > 0L) { "Duration must be positive" }
@@ -241,10 +248,14 @@ class OfflineProcessor(private val context: Context,
         })
 
         @SuppressLint("WakelockTimeout")
-        private fun acquireWakeLock(context: Context, requestName: String?): PowerManager.WakeLock? {
-            return (context.getSystemService(POWER_SERVICE) as PowerManager?)
-                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, requestName)
-                    ?.also { it.acquire() }
+        private fun acquireWakeLock(
+            context: Context,
+            requestName: String?,
+        ): PowerManager.WakeLock? {
+            val powerManager = context.getSystemService(POWER_SERVICE) as PowerManager? ?: return null
+            val lock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, requestName)
+            lock.acquire()
+            return lock
         }
     }
 }

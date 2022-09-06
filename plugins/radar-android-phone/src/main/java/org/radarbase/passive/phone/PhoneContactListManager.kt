@@ -19,6 +19,9 @@ package org.radarbase.passive.phone
 import android.content.ContentResolver
 import android.content.Context
 import android.content.SharedPreferences
+import android.database.Cursor
+import android.os.Build
+import android.os.Bundle
 import android.provider.ContactsContract
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -29,6 +32,8 @@ import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneContactList
 import java.util.*
 import java.util.concurrent.TimeUnit
+import kotlin.collections.ArrayList
+import kotlin.collections.LinkedHashSet
 
 class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourceManager<PhoneContactsListService, BaseSourceState>(service) {
     private val preferences: SharedPreferences = service.getSharedPreferences(PhoneContactListManager::class.java.name, Context.MODE_PRIVATE)
@@ -57,49 +62,77 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
                     .remove(CONTACT_IDS)
                     .apply()
 
-            savedContactLookups = preferences.getStringSet(CONTACT_LOOKUPS, emptySet())!!
+            savedContactLookups = preferences.getStringSet(CONTACT_LOOKUPS, emptySet()) ?: emptySet()
         }
 
         status = SourceStatusListener.Status.CONNECTED
     }
 
     private fun queryContacts(): Set<String>? {
-        val contactIds = HashSet<String>()
-
+        val contactIds = LinkedHashSet<String>()
         val limit = 1000
-        val sortOrder = "lookup ASC LIMIT $limit"
         var where: String? = null
         var whereArgs: Array<String>? = null
 
-        var numUpdates: Int
+        val currentIds = mutableListOf<String>()
+        val sortOrder = "lookup ASC LIMIT $limit"
+        val bundle = Bundle().apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
+                putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf("lookup"))
+                putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION,
+                    ContentResolver.QUERY_SORT_DIRECTION_ASCENDING)
+            }
+        }
 
         do {
-            numUpdates = 0
-            var lastLookup: String? = null
-            db.query(ContactsContract.Contacts.CONTENT_URI, LOOKUP_COLUMNS,
-                    where, whereArgs, sortOrder)?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    numUpdates++
-                    lastLookup = cursor.getString(0)
-                        .also { contactIds.add(it) }
-                }
-            } ?: return null
+            currentIds.clear()
 
-            lastLookup?.let { ll ->
-                if (where == null) {
-                    where = ContactsContract.Contacts.LOOKUP_KEY + " > ?"
-                    whereArgs = arrayOf(ll)
-                } else {
-                    whereArgs!![0] = ll
+            makeQuery(bundle, sortOrder, where, whereArgs)
+                ?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        currentIds += cursor.getString(0)
+                    }
                 }
+                ?: return null
+
+            if (currentIds.isNotEmpty()) {
+                if (whereArgs == null) {
+                    where = ContactsContract.Contacts.LOOKUP_KEY + " > ?"
+                    whereArgs = arrayOf(currentIds.last())
+                } else {
+                    whereArgs[0] = currentIds.last()
+                }
+                contactIds.addAll(currentIds)
             }
-        } while (numUpdates == limit && !processor.isDone)
+        } while (currentIds.size == limit && !processor.isDone)
 
         return contactIds
     }
 
     override fun onClose() {
         processor.close()
+    }
+
+    private fun makeQuery(
+        context: Bundle,
+        sortOrder: String,
+        where: String?,
+        whereArgs: Array<String>?,
+    ): Cursor? {
+        return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            db.query(ContactsContract.Contacts.CONTENT_URI, LOOKUP_COLUMNS,
+                where, whereArgs, sortOrder)
+        } else {
+            context.apply {
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, where)
+                putStringArray(
+                    ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,
+                    whereArgs
+                )
+            }
+            db.query(ContactsContract.Contacts.CONTENT_URI, LOOKUP_COLUMNS, context, null)
+        }
     }
 
     private fun processContacts() {

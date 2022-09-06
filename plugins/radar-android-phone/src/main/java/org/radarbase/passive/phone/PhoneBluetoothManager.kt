@@ -16,16 +16,21 @@
 
 package org.radarbase.passive.phone
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothAdapter
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneBluetoothDevices
@@ -55,12 +60,19 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     }
 
     private fun processBluetoothDevices() {
-        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        val bluetoothAdapter = service.bluetoothAdapter
         if (bluetoothAdapter == null) {
             logger.error("Bluetooth is not available.")
             return
         }
         if (bluetoothAdapter.isEnabled) {
+            val scanPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Manifest.permission.BLUETOOTH_SCAN
+            } else Manifest.permission.BLUETOOTH_ADMIN
+            if (ActivityCompat.checkSelfPermission(service, scanPermission) != PackageManager.PERMISSION_GRANTED) {
+                logger.error("Cannot initiate Bluetooth scan without scan permissions")
+                return
+            }
             val filter = IntentFilter().apply {
                 addAction(BluetoothDevice.ACTION_FOUND)
                 addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
@@ -80,7 +92,10 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             service.unregisterReceiver(this)
                             bluetoothBroadcastReceiver = null
 
-                            val bondedDevices = bluetoothAdapter.bondedDevices.size
+                            val hasConnectPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                                || ActivityCompat.checkSelfPermission(service, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+
+                            val bondedDevices = if (hasConnectPermission) bluetoothAdapter.bondedDevices.size else -1
 
                             if (!isClosed) {
                                 val time = currentTime

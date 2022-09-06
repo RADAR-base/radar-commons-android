@@ -25,7 +25,6 @@ import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
 import org.radarbase.android.RadarService
-import org.radarbase.android.RadarService.Companion.applySystemService
 import org.slf4j.LoggerFactory
 
 
@@ -204,7 +203,6 @@ open class PermissionHandler(
             Uri.parse("package:" + activity.packageName)
         ).startActivityForResult(BATTERY_OPT_CODE)
     }
-
 
     private fun requestPackageUsageStats() {
         alertDialog {

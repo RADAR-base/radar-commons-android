@@ -1,0 +1,13 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+dependencies {
+    implementation("org.slf4j:slf4j-api:2.0.0")
+
+    testImplementation(project(":radar-commons-android")) {
+        exclude group: 'org.apache.avro', module: 'avro'
+        exclude group: 'com.gitlab.mvysny.slf4j', module: 'slf4j-handroid'
+    }
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+apply from: "$rootDir/gradle/test.gradle"

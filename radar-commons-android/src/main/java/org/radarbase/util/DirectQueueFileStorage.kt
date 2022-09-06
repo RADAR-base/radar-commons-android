@@ -19,10 +19,7 @@ package org.radarbase.util
 import org.radarbase.util.IO.requireIO
 import org.radarbase.util.QueueFileHeader.Companion.QUEUE_HEADER_LENGTH
 import org.radarbase.util.QueueStorage.Companion.withAvailable
-import java.io.EOFException
-import java.io.File
-import java.io.IOException
-import java.io.RandomAccessFile
+import java.io.*
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 
@@ -38,9 +35,9 @@ import java.nio.channels.FileChannel
  *                     `QueueFileHeader.ELEMENT_HEADER_LENGTH`
  */
 class DirectQueueFileStorage(
-        file: File,
-        initialLength: Long,
-        maximumLength: Long,
+    private val file: File,
+    initialLength: Long,
+    maximumLength: Long,
 ) : QueueStorage {
     /**
      * The underlying file. Uses a ring buffer to store entries.
@@ -152,13 +149,40 @@ class DirectQueueFileStorage(
                 && dstPosition >= 0
                 && count > 0
                 && srcPosition + count <= length
-                && dstPosition + count <= length) {
+                && dstPosition + count <= length
+        ) {
             "Movement specification src=$srcPosition, count=$count, dst=$dstPosition is invalid for storage $this"
         }
         flush()
-        channel.position(dstPosition)
-        val bytesTransferred = channel.transferTo(srcPosition, count, channel)
-        requireIO(bytesTransferred == count) { "Cannot move all data in $this from $srcPosition to $dstPosition with size $count. Only moved $bytesTransferred." }
+        when {
+            dstPosition == srcPosition -> channel.position(dstPosition + count)
+            count <= 64 * 1024 * 1024 -> {
+                val buffer = ByteBuffer.allocate(count.toInt())
+                channel.read(buffer, srcPosition)
+                buffer.flip()
+                channel.position(dstPosition)
+                channel.write(buffer)
+            }
+            else -> {
+                val tmpFile = File.createTempFile(file.name, ".tmp", file.parentFile)
+                try {
+                    tmpFile.deleteOnExit()
+                    var bytesTransferred = FileOutputStream(tmpFile).use { out ->
+                        val outChannel = out.channel
+                        channel.transferTo(srcPosition, count, outChannel)
+                    }
+                    requireIO(bytesTransferred == count) { "Cannot move all data in $this from $srcPosition to $dstPosition with size $count. Only moved $bytesTransferred." }
+                    bytesTransferred = FileInputStream(tmpFile).use { inStream ->
+                        channel.position(dstPosition)
+                        val inChannel = inStream.channel
+                        inChannel.transferTo(0, count, channel)
+                    }
+                    requireIO(bytesTransferred == count) { "Cannot move all data in $this from $srcPosition to $dstPosition with size $count. Only moved $bytesTransferred." }
+                } finally {
+                    tmpFile.delete()
+                }
+            }
+        }
     }
 
     @Throws(IOException::class)
@@ -173,7 +197,7 @@ class DirectQueueFileStorage(
         randomAccessFile.close()
     }
 
-    override fun toString() = "DirectQueueFileStorage<$fileName>[length=$length]"
+    override fun toString() = "DirectQueueFileStorage<${file.name}>[length=$length]"
 
     companion object {
         /** Initial file size in bytes.  */

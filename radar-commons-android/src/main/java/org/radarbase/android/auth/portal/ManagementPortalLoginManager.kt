@@ -127,31 +127,43 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
         logger.debug("Handling source update")
 
-        client?.let { client ->
+        val client = client
+
+        if (client != null) {
             try {
                 val updatedSource = client.updateSource(appAuth, source)
                 success(addSource(appAuth, updatedSource), updatedSource)
             } catch (ex: UnsupportedOperationException) {
                 logger.warn("ManagementPortal does not support updating the app source.")
                 success(addSource(appAuth, source), source)
+            } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
+                logger.warn("Source no longer exists - removing from auth state")
+                val updatedAppAuth = removeSource(appAuth, source)
+                registerSource(updatedAppAuth, source, success, failure)
+            } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
+                logger.warn("User no longer exists - invalidating auth state")
+                listener.invalidate(appAuth.token, false)
+                failure(ex)
             } catch (ex: java.lang.IllegalArgumentException) {
                 logger.error("Source {} is not valid", source)
                 failure(ex)
             } catch (ex: AuthenticationException) {
                 listener.invalidate(appAuth.token, false)
                 logger.error("Authentication error; failed to update source {} of type {}",
-                        source.sourceName, source.type, ex)
+                    source.sourceName, source.type, ex)
                 failure(ex)
             } catch (ex: IOException) {
                 logger.error("Failed to update source {} with {}",
-                        source.sourceName, source.type, ex)
+                    source.sourceName, source.type, ex)
                 failure(ex)
             } catch (ex: JSONException) {
                 logger.error("Failed to update source {} with {}",
-                        source.sourceName, source.type, ex)
+                    source.sourceName, source.type, ex)
                 failure(ex)
             }
-        } ?: failure(IllegalStateException("Cannot update source without a client"))
+        } else {
+            failure(IllegalStateException("Cannot update source without a client"))
+        }
 
         return true
     }
@@ -186,6 +198,14 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
             } catch (ex: UnsupportedOperationException) {
                 logger.warn("ManagementPortal does not support updating the app source.")
                 success(addSource(authState, source), source)
+            } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
+                logger.warn("Source no longer exists - removing from auth state")
+                val updatedAuthState = removeSource(authState, source)
+                registerSource(updatedAuthState, source, success, failure)
+            } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
+                logger.warn("User no longer exists - invalidating auth state")
+                listener.invalidate(authState.token, false)
+                failure(ex)
             } catch (ex: ConflictException) {
                 try {
                     client.getSubject(authState, GetSubjectParser(authState)).let { authState ->
@@ -274,7 +294,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
             sources[sourceId] = source
 
             authState.alter {
-                val existing = sourceMetadata.filter { it.sourceId == source.sourceId }
+                val existing = sourceMetadata.filterTo(HashSet()) { it.sourceId == source.sourceId }
                 if (existing.isEmpty()) {
                     invalidate()
                 } else {
@@ -282,6 +302,18 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                 }
                 sourceMetadata += source
             }
+        }
+    }
+
+    private fun removeSource(authState: AppAuthState, source: SourceMetadata): AppAuthState {
+        sources.remove(source.sourceId)
+        return authState.alter {
+            val existing = sourceMetadata.filterTo(HashSet()) { it.sourceId == source.sourceId }
+            if (existing.isNotEmpty()) {
+                sourceMetadata -= existing
+                invalidate()
+            }
+            source.sourceId = null
         }
     }
 

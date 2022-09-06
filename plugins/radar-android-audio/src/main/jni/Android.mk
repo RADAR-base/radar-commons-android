@@ -134,7 +134,7 @@ LOCAL_SRC_FILES += smilextract.cpp
 LOCAL_CPP_FEATURES := exceptions
 
 DEFINES := -DOPENSMILE_BUILD -DBUILD_RNN -DHAVE_OPENSLES
-OPTIMIZE := -O3 -ffast-math -ftree-vectorize -funsafe-math-optimizations -fvisibility=hidden -ffunction-sections -fdata-sections
+OPTIMIZE := -g -O3 -ffast-math -ftree-vectorize -funsafe-math-optimizations -fvisibility=hidden -ffunction-sections -fdata-sections
 LOCAL_LDFLAGS += -Wl,--gc-sections
 
 LOCAL_CFLAGS := $(OPTIMIZE) -I$(OPENSMILE_ROOT)/src/include $(DEFINES)

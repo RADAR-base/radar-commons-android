@@ -12,10 +12,11 @@ description = 'RADAR Android QR LoginManager.'
 
 dependencies {
     api project(':radar-commons-android')
-    implementation('com.journeyapps:zxing-android-embedded:4.2.0') { transitive = false }
-    implementation 'androidx.appcompat:appcompat:1.2.0'
+    implementation('com.journeyapps:zxing-android-embedded:4.3.0') { transitive = false }
+    implementation 'androidx.appcompat:appcompat:1.5.0'
     // Support Android 14+
-    implementation 'com.google.zxing:core:3.3.2'
+    //noinspection GradleDependency
+    implementation 'com.google.zxing:core:3.4.0'
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"

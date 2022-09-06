@@ -28,32 +28,28 @@ android {
 description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarbase:radar-commons:0.13.2') {
+    api ('org.radarbase:radar-commons:0.15.0') {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarbase:radar-schemas-commons:0.6.0') {
+    api ('org.radarbase:radar-schemas-commons:0.7.9') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    //noinspection GradleDependency
-    api (group: 'org.apache.avro', name: 'avro', version: '1.8.2') {
-        exclude group: 'com.thoughtworks.paranamer', module: 'paranamer'
-        exclude group: 'org.xerial.snappy', module: 'snappy-java'
-        exclude group: 'org.tukaani', module: 'xz'
-        exclude group: 'org.apache.commons', module: 'commons-compress'
-    }
-    api "androidx.appcompat:appcompat:1.2.0"
-    implementation "com.squareup.okhttp3:okhttp:4.9.1"
+    api(project(':avro-android'))
+    api("org.slf4j:slf4j-api:2.0.0")
+    api("androidx.appcompat:appcompat:1.5.0")
 
-    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
+    implementation "com.squareup.okhttp3:okhttp:4.10.0"
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
-    api "androidx.lifecycle:lifecycle-service:2.3.1"
+    api "androidx.lifecycle:lifecycle-service:2.5.1"
 
-    implementation 'com.google.firebase:firebase-config:21.0.0'
-    implementation 'com.google.firebase:firebase-core:19.0.0'
-    implementation 'com.google.firebase:firebase-crashlytics:18.0.0'
-    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:1.7.30'
+    implementation platform('com.google.firebase:firebase-bom:30.4.0')
+    implementation 'com.google.firebase:firebase-config'
+    implementation 'com.google.firebase:firebase-core'
+    implementation 'com.google.firebase:firebase-crashlytics'
+    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.0'
 }
 
 apply from: "$rootDir/gradle/test.gradle"

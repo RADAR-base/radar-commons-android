@@ -2,6 +2,12 @@ apply plugin: 'maven-publish'
 apply plugin: "org.jetbrains.dokka"
 apply plugin: 'signing'
 
+android {
+    publishing {
+        singleVariant('release')
+    }
+}
+
 ext.sharedManifest = manifest {
     attributes(
             "Implementation-Title": name,
@@ -33,7 +39,7 @@ publishing {
     publications {
         mavenAar(MavenPublication) {
             afterEvaluate {
-                from components.release
+                from components.getByName('release')
             }
             artifact sourcesJar
             artifact javadocJar

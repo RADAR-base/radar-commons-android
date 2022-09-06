@@ -53,6 +53,7 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.HashSet
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private var configurationUpdateFuture: SafeHandler.HandlerFuture? = null
@@ -129,9 +130,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
                 val extraPermissions = intent.getStringArrayExtra(EXTRA_PERMISSIONS) ?: return@register
                 val extraGrants = intent.getIntArrayExtra(EXTRA_GRANT_RESULTS) ?: return@register
-                onPermissionsGranted(
-                        extraPermissions,
-                        extraGrants)
+                onPermissionsGranted(extraPermissions, extraGrants)
             }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
@@ -140,7 +139,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                         Toast.LENGTH_SHORT).show()
             }
             serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
-                serverStatus = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
+                val serverStatusChanged = intent.getIntExtra(SERVER_STATUS_CHANGED, 0)
+                serverStatus = ServerStatusListener.Status.values()[serverStatusChanged]
                 if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
                     logger.debug("Status unauthorized")
                     authConnection.applyBinder {
@@ -173,15 +173,19 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 bluetoothNotification?.cancel()
                 startScanning()
             } else {
-                mConnections.map { it.connection }
-                        .filter { it.needsBluetooth() }
-                        .forEach { it.stopRecording() }
+                mConnections.asSequence()
+                    .map { it.connection }
+                    .filter { it.needsBluetooth() }
+                    .forEach { it.stopRecording() }
 
-                bluetoothNotification = radarApp.notificationHandler
-                        .notify(BLUETOOTH_NOTIFICATION, NotificationHandler.NOTIFICATION_CHANNEL_ALERT, false) {
-                            setContentTitle(getString(R.string.notification_bluetooth_needed_title))
-                            setContentText(getString(R.string.notification_bluetooth_needed_text))
-                        }
+                bluetoothNotification = radarApp.notificationHandler.notify(
+                    BLUETOOTH_NOTIFICATION,
+                    NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                    false
+                ) {
+                    setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                    setContentText(getString(R.string.notification_bluetooth_needed_text))
+                }
             }
         }
     }
@@ -201,12 +205,19 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     protected open fun createForegroundNotification(): Notification {
         val mainIntent = Intent(this, radarApp.mainActivity)
-        return radarApp.notificationHandler
-                .create(NOTIFICATION_CHANNEL_INFO, true) {
-                    setContentText(getText(R.string.service_notification_text))
-                    setContentTitle(getText(R.string.service_notification_title))
-                    setContentIntent(PendingIntent.getActivity(this@RadarService, 0, mainIntent, 0))
-                }
+        return radarApp.notificationHandler.create(
+            NOTIFICATION_CHANNEL_INFO,
+            true
+        ) {
+            setContentText(getText(R.string.service_notification_text))
+            setContentTitle(getText(R.string.service_notification_title))
+            setContentIntent(PendingIntent.getActivity(
+                this@RadarService,
+                BACKGROUND_REQUEST_CODE,
+                mainIntent,
+                0.toPendingIntentFlag(),
+            ))
+        }
     }
 
     override fun onDestroy() {
@@ -225,8 +236,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         authConnection.unbind()
 
-        mConnections.filter(SourceProvider<*>::isBound)
-                .forEach(SourceProvider<*>::unbind)
+        mConnections.asSequence()
+            .filter(SourceProvider<*>::isBound)
+            .forEach(SourceProvider<*>::unbind)
 
         super.onDestroy()
     }
@@ -284,16 +296,15 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     private fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
-        val grantedPermissions = grantResults.asList()
-                .mapIndexedNotNull { index, granted ->
-                    val permission = permissions[index]
-                    if (granted == PERMISSION_GRANTED) {
-                        permission
-                    } else {
-                        logger.info("Denied permission {}", permission)
-                        null
-                    }
+        val grantedPermissions = buildSet {
+            grantResults.indices.forEach { index ->
+                if (grantResults[index] == PERMISSION_GRANTED) {
+                    add(permissions[index])
+                } else {
+                    logger.info("Denied permission {}", permissions[index])
                 }
+            }
+        }
 
         if (grantedPermissions.isNotEmpty()) {
             mHandler.execute {
@@ -357,14 +368,16 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 mHandler.delay(1000) { bindServices(providers, unbindFirst) }
             } else {
                 if (unbindFirst) {
-                    providers.filter { it.isBound }
-                            .forEach { provider ->
-                                logger.info("Rebinding {} after disconnect", provider)
-                                provider.unbind()
-                            }
+                    providers.asSequence()
+                        .filter { it.isBound }
+                        .forEach { provider ->
+                            logger.info("Rebinding {} after disconnect", provider)
+                            provider.unbind()
+                        }
                 }
-                providers.filter { !it.isBound && (isScanningEnabled || it.mayBeConnectedInBackground) }
-                        .forEach(SourceProvider<*>::bind)
+                providers.asSequence()
+                    .filter { !it.isBound && (isScanningEnabled || it.mayBeConnectedInBackground) }
+                    .forEach(SourceProvider<*>::bind)
             }
         }
     }
@@ -423,34 +436,42 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     protected fun startScanning() {
         mHandler.executeReentrant {
             mConnections
-                    .filter { it.isBound
-                            && it.connection.hasService()
-                            && !it.connection.isRecording
-                            && it.checkPermissions() }
-                    .forEach { provider ->
-                        val connection = provider.connection
-                        logger.info("Starting recording on connection {}", connection)
-                        connection.startRecording(sourceFilters[connection] ?: emptySet())
-                    }
+                .asSequence()
+                .filter { it.isBound &&
+                        it.connection.hasService() &&
+                        !it.connection.isRecording &&
+                        it.checkPermissions()
+                }
+                .forEach { provider ->
+                    val connection = provider.connection
+                    logger.info("Starting recording on connection {}", connection)
+                    connection.startRecording(sourceFilters[connection] ?: emptySet())
+                }
         }
     }
 
     protected fun checkPermissions() {
         mHandler.executeReentrant {
-            needsPermissions.clear()
-            needsPermissions += HashSet<String>()
-                .apply {
-                    this += servicePermissions
-                    this += mConnections.flatMap { it.permissionsNeeded }
-                    if (ACCESS_FINE_LOCATION in this || ACCESS_COARSE_LOCATION in this) {
-                        this += LOCATION_SERVICE
-                    }
+            val permissionsRequired = buildSet {
+                addAll(servicePermissions)
+                mConnections.forEach { addAll(it.permissionsNeeded) }
+                if (ACCESS_FINE_LOCATION in this || ACCESS_COARSE_LOCATION in this) {
+                    add(LOCATION_SERVICE)
                 }
-                .filterNot { isPermissionGranted(it) }
+            }
+
+            needsPermissions.clear()
+            permissionsRequired.filterTo(needsPermissions) { !isPermissionGranted(it) }
 
             if (needsPermissions.isNotEmpty()) {
-                logger.debug("Requesting permission for {}", needsPermissions)
+                logger.debug(
+                    "Requesting not granted permissions {}, out of required permissions {}",
+                    needsPermissions,
+                    permissionsRequired
+                )
                 requestPermissions(needsPermissions)
+            } else {
+                logger.debug("All required permissions are granted: {}", permissionsRequired)
             }
         }
     }
@@ -465,19 +486,23 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         val isStartedAtBoot = pm.getComponentEnabledSetting(receiver) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
         if (startAtBoot && !isStartedAtBoot) {
             logger.info("From now on, this application will start at boot")
-            pm.setComponentEnabledSetting(receiver,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP)
+            pm.setComponentEnabledSetting(
+                receiver,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP,
+            )
         } else if (!startAtBoot && isStartedAtBoot) {
             logger.info("Not starting application at boot anymore")
-            pm.setComponentEnabledSetting(receiver,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP)
+            pm.setComponentEnabledSetting(
+                receiver,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP,
+            )
         }
     }
 
     protected open fun SourceProvider<*>.checkPermissions(): Boolean {
-        val stillNeeded = permissionsNeeded.filter(needsPermissions::contains)
+        val stillNeeded = permissionsNeeded.intersect(needsPermissions)
         return if (stillNeeded.isEmpty()) {
             true
         } else {
@@ -493,12 +518,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
-    private fun removeProviders(sourceProviders: List<SourceProvider<*>>) {
+    private fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
         if (sourceProviders.isEmpty()) {
             return
         }
         logger.info("Removing plugins {}", sourceProviders.map { it.pluginName })
-        mConnections = mConnections.filterNot(sourceProviders::contains)
+        mConnections = mConnections - sourceProviders
         updateBluetoothNeeded(mConnections.any { it.isConnected && it.connection.needsBluetooth() })
         sourceProviders.forEach(SourceProvider<*>::unbind)
     }
@@ -510,7 +535,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         logger.info("Adding plugins {}", sourceProviders.map { it.pluginName })
         mConnections = mConnections + sourceProviders
 
-        sourceFilters += sourceProviders.map { Pair(it.connection, emptySet()) }
+        sourceProviders.forEach {
+            sourceFilters[it.connection] = emptySet()
+        }
 
         checkPermissions()
         bindServices(mConnections, false)
@@ -518,12 +545,20 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private fun createRegistrar(authServiceBinder: AuthService.AuthServiceBinder, providers: List<SourceProvider<*>>) {
         logger.info("Creating source registration")
-        sourceRegistrar = SourceProviderRegistrar(authServiceBinder, mHandler, providers) { unregisteredProviders, registeredProviders ->
-            logger.info("Registered providers: {}, unregistered providers: {}", registeredProviders.map { it.pluginName }, unregisteredProviders.map { it.pluginName })
-            val oldConnections = mConnections
-            removeProviders(unregisteredProviders.filter(mConnections::contains))
-            addProviders(registeredProviders.filterNot(mConnections::contains))
-            if (mConnections != oldConnections) {
+        sourceRegistrar = SourceProviderRegistrar(
+            authServiceBinder,
+            mHandler,
+            providers
+        ) { unregisteredProviders, registeredProviders ->
+            logger.info(
+                "Registered providers: {}, unregistered providers: {}",
+                registeredProviders.map { it.pluginName },
+                unregisteredProviders.map { it.pluginName }
+            )
+            val oldConnections = mConnections.toSet()
+            removeProviders(unregisteredProviders.intersect(oldConnections))
+            addProviders(registeredProviders - oldConnections)
+            if (mConnections.toSet() != oldConnections) {
                 broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
         }
@@ -547,7 +582,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         configuredProviders.applyIfChanged(supportedPlugins) { providers ->
             val previousConnections = mConnections
-            removeProviders(mConnections.filter { it !in providers })
+            removeProviders(mConnections.filterNotTo(HashSet(), providers::contains))
 
             sourceRegistrar?.let {
                 it.close()
@@ -584,9 +619,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             mHandler.execute {
                 val status = connection.sourceStatus
 
-                if (status == SourceStatusListener.Status.READY
-                        || status == SourceStatusListener.Status.CONNECTING
-                        || status == SourceStatusListener.Status.CONNECTED && !connection.isAllowedSource(allowedIds)) {
+                if (
+                    status == SourceStatusListener.Status.READY ||
+                    status == SourceStatusListener.Status.CONNECTING ||
+                    (status == SourceStatusListener.Status.CONNECTED &&
+                            !connection.isAllowedSource(allowedIds))
+                ) {
                     if (connection.isRecording) {
                         connection.stopRecording()
                         // will restart recording once the status is set to disconnected.
@@ -604,9 +642,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private fun stopActiveScanning() {
         mHandler.execute {
             isScanningEnabled = false
-            mConnections
-                    .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
-                    .forEach(SourceProvider<*>::unbind)
+            mConnections.asSequence()
+                .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
+                .forEach(SourceProvider<*>::unbind)
         }
     }
 
@@ -642,10 +680,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 
-        @Suppress("UNCHECKED_CAST")
-        internal inline fun <reified T> Context.applySystemService(type: String, callback: (T) -> Boolean): Boolean? {
-            return (getSystemService(type) as T?)?.let(callback)
-        }
+        private const val BACKGROUND_REQUEST_CODE = 9559
 
         fun Collection<String>.sanitizeIds(): Set<String> = HashSet(mapNotNull(String::takeTrimmedIfNotEmpty))
     }

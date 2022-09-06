@@ -172,6 +172,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         val permissions = permissionsNeeded
         bundle.putBoolean(NEEDS_BLUETOOTH_KEY,
                 BLUETOOTH in permissions || BLUETOOTH_ADMIN in permissions)
+        bundle.putString(PLUGIN_NAME_KEY, pluginName)
         bundle.putString(PRODUCER_KEY, sourceProducer)
         bundle.putString(MODEL_KEY, sourceModel)
     }
@@ -249,6 +250,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
 
     companion object {
         const val NEEDS_BLUETOOTH_KEY = "org.radarbase.android.source.SourceProvider.needsBluetooth"
+        const val PLUGIN_NAME_KEY = "org.radarbase.android.source.SourceProvider.pluginName"
         const val PRODUCER_KEY = "org.radarbase.android.source.SourceProvider.sourceProducer"
         const val MODEL_KEY = "org.radarbase.android.source.SourceProvider.sourceModel"
 

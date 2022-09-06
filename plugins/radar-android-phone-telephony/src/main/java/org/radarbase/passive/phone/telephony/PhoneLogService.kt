@@ -41,6 +41,6 @@ class PhoneLogService : SourceService<BaseSourceState>() {
 
     companion object {
         private const val CALL_SMS_LOG_INTERVAL = "call_sms_log_interval_seconds"
-        internal const val CALL_SMS_LOG_INTERVAL_DEFAULT = (24 * 60 * 60).toLong() // seconds
+        internal const val CALL_SMS_LOG_INTERVAL_DEFAULT = 3_600L // seconds
     }
 }

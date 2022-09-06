@@ -34,7 +34,7 @@ class CountedReference<T>(private val creator: () -> T, private val destroyer: T
             value = creator()
         }
         count++
-        return value!!
+        return checkNotNull(value) { "Reference value should have been initialized" }
     }
 
     @Synchronized

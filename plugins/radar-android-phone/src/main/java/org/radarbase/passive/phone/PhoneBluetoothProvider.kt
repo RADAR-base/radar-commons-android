@@ -18,6 +18,7 @@ package org.radarbase.passive.phone
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
@@ -43,11 +44,16 @@ open class PhoneBluetoothProvider(radarService: RadarService) : SourceProvider<B
 
     override val isDisplayable: Boolean = false
 
-    override val permissionsNeeded: List<String> = listOf(
-        Manifest.permission.BLUETOOTH_ADMIN,
-        Manifest.permission.ACCESS_COARSE_LOCATION,
-        Manifest.permission.ACCESS_FINE_LOCATION,
-    )
+    override val permissionsNeeded: List<String> = buildList {
+        add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        add(Manifest.permission.ACCESS_FINE_LOCATION)
+        add(Manifest.permission.BLUETOOTH)
+        add(Manifest.permission.BLUETOOTH_ADMIN)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_SCAN)
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+    }
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)
 

@@ -6,6 +6,7 @@ import android.os.Parcel
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
 import java.io.IOException
+import java.util.*
 
 class SourceServiceBinder<T : BaseSourceState>(private val sourceService: SourceService<T>) : Binder(), SourceBinder<T> {
     @Throws(IOException::class)
@@ -44,22 +45,21 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
 
     override val numberOfRecords: Long?
         get() = sourceService.dataHandler?.let { data ->
-            data.caches
-                    .map { it.numberOfRecords }
-                    .reduce { acc, num -> acc + num }
+            data.caches.sumOf { it.numberOfRecords }
         }
 
-    override fun needsBluetooth(): Boolean {
-        return sourceService.isBluetoothConnectionRequired
-    }
+    override fun needsBluetooth(): Boolean = sourceService.isBluetoothConnectionRequired
 
-    override fun shouldRemainInBackground(): Boolean {
-        return sourceService.state.status !in arrayOf(
-                SourceStatusListener.Status.DISCONNECTED,
-                SourceStatusListener.Status.UNAVAILABLE)
-    }
+    override fun shouldRemainInBackground(): Boolean = sourceService.state.status !in nonFunctioningStates
 
     public override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
         throw UnsupportedOperationException()
+    }
+
+    companion object {
+        private val nonFunctioningStates: Set<SourceStatusListener.Status> = EnumSet.of(
+            SourceStatusListener.Status.DISCONNECTED,
+            SourceStatusListener.Status.UNAVAILABLE,
+        )
     }
 }
