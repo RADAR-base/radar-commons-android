@@ -11,6 +11,8 @@ jobs:
       - uses: actions/checkout@v3
 
       - uses: snyk/actions/setup@master
+        with:
+          snyk-version: v1.931.0
 
       - uses: actions/setup-java@v3
         with:

@@ -36,7 +36,7 @@ dependencies {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api(project(':avro-android'))
-    api("org.slf4j:slf4j-api:1.7.36")
+    api("org.slf4j:slf4j-api:2.0.0")
     api("androidx.appcompat:appcompat:1.5.0")
 
     implementation "com.squareup.okhttp3:okhttp:4.10.0"
@@ -45,11 +45,11 @@ dependencies {
 
     api "androidx.lifecycle:lifecycle-service:2.5.1"
 
-    implementation platform('com.google.firebase:firebase-bom:30.3.2')
+    implementation platform('com.google.firebase:firebase-bom:30.4.0')
     implementation 'com.google.firebase:firebase-config'
     implementation 'com.google.firebase:firebase-core'
     implementation 'com.google.firebase:firebase-crashlytics'
-    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:1.7.30'
+    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.0'
 }
 
 apply from: "$rootDir/gradle/test.gradle"

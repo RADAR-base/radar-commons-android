@@ -248,10 +248,14 @@ class OfflineProcessor(
         })
 
         @SuppressLint("WakelockTimeout")
-        private fun acquireWakeLock(context: Context, requestName: String?): PowerManager.WakeLock? {
-            return (context.getSystemService(POWER_SERVICE) as PowerManager?)
-                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, requestName)
-                    ?.also { it.acquire() }
+        private fun acquireWakeLock(
+            context: Context,
+            requestName: String?,
+        ): PowerManager.WakeLock? {
+            val powerManager = context.getSystemService(POWER_SERVICE) as PowerManager? ?: return null
+            val lock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, requestName)
+            lock.acquire()
+            return lock
         }
     }
 }

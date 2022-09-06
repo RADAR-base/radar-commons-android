@@ -682,11 +682,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         private const val BACKGROUND_REQUEST_CODE = 9559
 
-        @Suppress("UNCHECKED_CAST")
-        internal inline fun <reified T> Context.applySystemService(type: String, callback: (T) -> Boolean): Boolean? {
-            return (getSystemService(type) as T?)?.let(callback)
-        }
-
         fun Collection<String>.sanitizeIds(): Set<String> = HashSet(mapNotNull(String::takeTrimmedIfNotEmpty))
     }
 }
