@@ -28,9 +28,8 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
      * Get a string indexed by key.
      * @throws IllegalArgumentException if the key does not have a value
      */
-    fun getString(key: String): String {
-        return requireNotNull(optString(key)) { "Key $key does not have a value" }
-    }
+    fun getString(key: String): String =
+        requireNotNull(optString(key)) { "Key $key does not have a value" }
 
     /**
      * Get a configured long value.
@@ -69,6 +68,11 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
      * Get a string indexed by key, or null if it does not exist.
      */
     fun optString(key: String): String? = config[key]
+
+    /**
+     * Get a string indexed by key, or null if it does not exist.
+     */
+    fun <T> optString(key: String, consume: (String) -> T): T? = config[key]?.let(consume)
 
     /**
      * Get a configured long value. If the configured value is not present or not a valid long,

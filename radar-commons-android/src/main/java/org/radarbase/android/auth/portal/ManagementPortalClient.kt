@@ -1,6 +1,5 @@
 package org.radarbase.android.auth.portal
 
-import android.content.res.Resources
 import okhttp3.Credentials
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,7 +20,12 @@ import java.io.IOException
 import java.lang.RuntimeException
 import java.net.MalformedURLException
 
-class ManagementPortalClient(managementPortal: ServerConfig, clientId: String, clientSecret: String, client: RestClient? = null) {
+class ManagementPortalClient constructor(
+    managementPortal: ServerConfig,
+    clientId: String,
+    clientSecret: String,
+    client: RestClient? = null,
+) {
     val client: RestClient = (client?.newBuilder() ?: RestClient.newClient())
             .server(managementPortal)
             .build()
