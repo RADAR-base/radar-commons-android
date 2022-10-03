@@ -2,7 +2,7 @@ package org.radarbase.android.data
 
 import okhttp3.Headers
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.config.ServerConfigUtil.toServerConfig
+import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.rest.SchemaRetriever

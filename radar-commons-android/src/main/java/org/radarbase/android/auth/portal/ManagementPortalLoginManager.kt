@@ -13,7 +13,7 @@ import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.config.ServerConfigUtil.toServerConfig
+import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException

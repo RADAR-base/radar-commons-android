@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.radarbase.android.config
+package org.radarbase.android.util
 
 import java.net.MalformedURLException
 import java.net.URL
@@ -30,10 +30,10 @@ object ServerConfigUtil {
         val matcher = URL_PATTERN.matchEntire(this)
             ?: throw MalformedURLException("Cannot create URL from string $this")
         val groups = matcher.groups
-        val protocol = groups[0]?.value ?: "https"
-        val host = requireNotNull(groups[1]?.value) { "Cannot create URL without host name from $this" }
-        val port = groups[2]?.value?.toIntOrNull() ?: -1
-        val path = groups[3]?.value?.toUrlPath()
+        val protocol = groups[1]?.value ?: "https"
+        val host = requireNotNull(groups[2]?.value) { "Cannot create URL without host name from $this" }
+        val port = groups[3]?.value?.toIntOrNull() ?: -1
+        val path = groups[4]?.value.toUrlPath()
 
         return org.radarbase.config.ServerConfig(
             URL(protocol, host, port, path)
@@ -42,7 +42,8 @@ object ServerConfigUtil {
         }
     }
 
-    private fun String.toUrlPath(): String {
+    private fun String?.toUrlPath(): String {
+        this ?: return "/"
         require(!contains("?")) { "Cannot set server path with query string" }
         require(!contains("#")) { "Cannot set server path with hash" }
         var newPath = trim { it <= ' ' }
