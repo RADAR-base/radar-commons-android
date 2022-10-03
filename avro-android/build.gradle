@@ -3,7 +3,7 @@ apply from: "$rootDir/gradle/android.gradle"
 description = "Version of Apache Avro compatible with Android"
 
 dependencies {
-    implementation("org.slf4j:slf4j-api:2.0.0")
+    implementation("org.slf4j:slf4j-api:2.0.3")
 
     testImplementation(project(":radar-commons-android")) {
         exclude group: 'org.apache.avro', module: 'avro'
