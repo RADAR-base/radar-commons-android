@@ -1,5 +1,9 @@
 apply from: "$rootDir/gradle/android.gradle"
 
+android {
+    namespace "org.radarbase.passive.phone"
+}
+
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
 //---------------------------------------------------------------------------//

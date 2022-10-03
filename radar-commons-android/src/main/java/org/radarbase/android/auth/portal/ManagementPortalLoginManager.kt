@@ -13,6 +13,7 @@ import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
+import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
@@ -260,10 +261,10 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
         val newClientConfig = try {
             ManagementPortalConfig(
-                    config.getString(MANAGEMENT_PORTAL_URL_KEY),
-                    config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
-                    config.getString(OAUTH2_CLIENT_ID),
-                    config.getString(OAUTH2_CLIENT_SECRET, ""),
+                config.getString(MANAGEMENT_PORTAL_URL_KEY),
+                config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
+                config.getString(OAUTH2_CLIENT_ID),
+                config.getString(OAUTH2_CLIENT_SECRET, ""),
             )
         } catch (e: MalformedURLException) {
             logger.error("Cannot construct ManagementPortalClient with malformed URL")
@@ -277,11 +278,11 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
 
         client = newClientConfig?.let {
             ManagementPortalClient(
-                    newClientConfig.serverConfig,
-                    config.getString(OAUTH2_CLIENT_ID),
-                    config.getString(OAUTH2_CLIENT_SECRET, ""),
-                    client = restClient)
-                    .also { restClient = it.client }
+                newClientConfig.serverConfig,
+                config.getString(OAUTH2_CLIENT_ID),
+                config.getString(OAUTH2_CLIENT_SECRET, ""),
+                client = restClient,
+            ).also { restClient = it.client }
         }
     }
 
@@ -324,9 +325,19 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     private data class ManagementPortalConfig(
-            val serverConfig: ServerConfig,
-            val clientId: String,
-            val clientSecret: String) {
-        constructor(url: String, unsafe: Boolean, clientId: String, clientSecret: String) : this(ServerConfig(url).apply { isUnsafe = unsafe }, clientId, clientSecret)
+        val serverConfig: ServerConfig,
+        val clientId: String,
+        val clientSecret: String,
+    ) {
+        constructor(
+            url: String,
+            unsafe: Boolean,
+            clientId: String,
+            clientSecret: String,
+        ) : this(
+            url.toServerConfig(unsafe),
+            clientId,
+            clientSecret
+        )
     }
 }

@@ -13,6 +13,7 @@ import org.radarbase.android.RadarConfiguration.Companion.BASE_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
+import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.SafeHandler
@@ -21,6 +22,7 @@ import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
+@Suppress("unused")
 class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
     private var auth: AppAuthState? = null
     private var config: SingleRadarConfiguration? = null
@@ -49,7 +51,10 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
 
     override var onStatusUpdateListener: (RadarConfiguration.RemoteConfigStatus) -> Unit = {}
 
-    private val preferences = context.getSharedPreferences("org.radarbase.android.config.AppConfigRadarConfiguration", MODE_PRIVATE)
+    private val preferences = context.getSharedPreferences(
+        "org.radarbase.android.config.AppConfigRadarConfiguration",
+        MODE_PRIVATE
+    )
 
     @Suppress("UNCHECKED_CAST")
     @get:Synchronized
@@ -151,10 +156,10 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
     @Synchronized
     private fun updateConfiguration(auth: AppAuthState?, config: SingleRadarConfiguration?) {
         val appConfig = config?.let { value ->
-            val serverConfig = value.optString(BASE_URL_KEY)?.let { baseUrl ->
-                ServerConfig("$baseUrl/appconfig/api/").apply {
-                    isUnsafe = value.getBoolean(UNSAFE_KAFKA_CONNECTION, false)
-                }
+            val serverConfig = value.optString(BASE_URL_KEY) { baseUrl ->
+                "$baseUrl/appconfig/api/".toServerConfig(
+                    isUnsafe = value.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
+                )
             }
             val clientId = value.optString(OAUTH2_CLIENT_ID)
             val timeout = config.getLong(RadarConfiguration.FETCH_TIMEOUT_MS_KEY, RadarConfiguration.FETCH_TIMEOUT_MS_DEFAULT)
@@ -181,10 +186,11 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
     }
 
     private data class AppConfigClientConfig(
-            val appAuthState: AppAuthState,
-            val serverConfig: ServerConfig,
-            val clientId: String,
-            val fetchTimeout: Long)
+        val appAuthState: AppAuthState,
+        val serverConfig: ServerConfig,
+        val clientId: String,
+        val fetchTimeout: Long,
+    )
 
     companion object {
         private val logger = LoggerFactory.getLogger(AppConfigRadarConfiguration::class.java)

@@ -17,6 +17,7 @@
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
+    namespace "org.radarbase.android"
     defaultConfig {
         buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
     }
@@ -36,8 +37,8 @@ dependencies {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api(project(':avro-android'))
-    api("org.slf4j:slf4j-api:2.0.0")
-    api("androidx.appcompat:appcompat:1.5.0")
+    api("org.slf4j:slf4j-api:2.0.3")
+    api("androidx.appcompat:appcompat:1.5.1")
 
     implementation "com.squareup.okhttp3:okhttp:4.10.0"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
@@ -45,7 +46,7 @@ dependencies {
 
     api "androidx.lifecycle:lifecycle-service:2.5.1"
 
-    implementation platform('com.google.firebase:firebase-bom:30.4.0')
+    implementation platform('com.google.firebase:firebase-bom:30.5.0')
     implementation 'com.google.firebase:firebase-config'
     implementation 'com.google.firebase:firebase-core'
     implementation 'com.google.firebase:firebase-crashlytics'

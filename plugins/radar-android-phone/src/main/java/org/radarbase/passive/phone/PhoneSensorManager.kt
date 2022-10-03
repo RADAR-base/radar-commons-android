@@ -94,9 +94,9 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         register()
         mHandler.start()
         mHandler.execute {
-            wakeLock = (service.getSystemService(POWER_SERVICE) as PowerManager?)?.let {pm ->
+            wakeLock = (service.getSystemService(POWER_SERVICE) as PowerManager?)?.let { pm ->
                 pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "org.radarcns.phone:PhoneSensorManager")
-                        .also { it.acquire() }
+                    .also { it.acquire() }
             }
             registerSensors()
             status = SourceStatusListener.Status.CONNECTED

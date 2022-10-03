@@ -51,7 +51,7 @@ class E4Service : SourceService<E4State>() {
     override fun configureSourceManager(manager: SourceManager<E4State>, config: SingleRadarConfiguration) {
         manager as E4Manager
         manager.notifyDisconnect(config.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
-        config.optString(EMPATICA_API_KEY)?.let { newApiKey ->
+        config.optString(EMPATICA_API_KEY) { newApiKey ->
             when {
                 apiKey == null -> {
                     apiKey = newApiKey

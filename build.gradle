@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 buildscript {
-    ext.kotlin_version = '1.7.10'
+    ext.kotlin_version = '1.7.20'
     ext.dokka_version = '1.7.10'
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.2.2'
+        classpath 'com.android.tools.build:gradle:7.3.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath 'com.github.bjoernq:unmockplugin:0.7.9'
         classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.18"
@@ -41,10 +41,10 @@ allprojects {
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = "1.2.0"
+    version = "1.2.1"
     group = 'org.radarbase'
 
-    ext.versionCode = 48
+    ext.versionCode = 49
 }
 
 subprojects {
