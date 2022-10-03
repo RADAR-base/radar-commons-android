@@ -17,6 +17,7 @@
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
+    namespace "org.radarbase.android"
     defaultConfig {
         buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
     }

@@ -1,4 +1,7 @@
 apply from: "$rootDir/gradle/android.gradle"
+android {
+    namespace "org.radarbase.monitor.application"
+}
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //

@@ -1,6 +1,8 @@
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
+    namespace "org.radarbase.passive.audio"
+
     // Matches Github Actions
     ndkVersion "22.1.7171670"
 
