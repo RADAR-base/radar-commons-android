@@ -3,6 +3,7 @@ package org.radarbase.android.source
 import android.os.Binder
 import android.os.Bundle
 import android.os.Parcel
+import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
 import java.io.IOException
@@ -14,6 +15,15 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
         val localDataHandler = sourceService.dataHandler ?: return null
         return localDataHandler.getCache(topic).getRecords(limit)
     }
+
+    override var manualAttributes: Map<String, String>
+        get() = sourceService.manualAttributes
+        set(value) {
+            sourceService.manualAttributes = value
+        }
+
+    override val registeredSource: SourceMetadata?
+        get() = sourceService.registeredSource
 
     override val sourceState: T
         get() = sourceService.state

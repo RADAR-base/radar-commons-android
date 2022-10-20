@@ -17,6 +17,7 @@
 package org.radarbase.android.source
 
 import android.os.Bundle
+import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
 import java.io.IOException
@@ -30,6 +31,9 @@ interface SourceBinder<T : BaseSourceState> {
     val serverStatus: ServerStatusListener.Status
     /** Get the last number of records sent  */
     val serverRecordsSent: Map<String, Long>
+
+    var manualAttributes: Map<String, String>
+    val registeredSource: SourceMetadata?
 
     /** Start scanning and recording from a compatible source.
      * @param acceptableIds a set of source IDs that may be connected to.

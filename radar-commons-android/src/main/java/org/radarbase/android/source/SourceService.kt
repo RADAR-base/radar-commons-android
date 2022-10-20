@@ -93,13 +93,45 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private val name = javaClass.simpleName
     private var delayedStart: Set<String>? = null
 
+    private var _registeredSource: SourceMetadata? = null
+
+    var registeredSource: SourceMetadata?
+        get() = handler.compute { _registeredSource }
+        private set(value) {
+            handler.execute { _registeredSource = value }
+        }
+
+    var manualAttributes: Map<String, String> = emptyMap()
+        set(value) {
+            if (value != field) {
+                val oldValue = field
+                field = value
+                // if the new manual attributes would change something about the old manual
+                // attributes and a source is already assigned, then update the registration
+                handler.execute {
+                    val currentSource = registeredSource ?: return@execute
+                    val bareAttributes = if (oldValue.isEmpty()) {
+                        currentSource.attributes
+                    } else buildMap {
+                        putAll(currentSource.attributes)
+                        oldValue.keys.forEach { remove(it) }
+                    }
+
+                    if (bareAttributes + value != currentSource.attributes) {
+                        val currentType = currentSource.type ?: return@execute
+                        registerSource(currentSource, currentType, bareAttributes)
+                    }
+                }
+            }
+        }
+
     val state: T
         get() {
             return sourceManager?.state ?: defaultState.apply {
                 id.apply {
-                    setProjectId(key.getProjectId())
-                    setUserId(key.getUserId())
-                    setSourceId(key.getSourceId())
+                    projectId = key.projectId
+                    userId = key.userId
+                    sourceId = key.sourceId
                 }
             }
         }
@@ -210,6 +242,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                     this.sourceManager = null
                 }
                 stopSourceManager(manager)
+                registeredSource = null
             }
         }
         broadcastSourceStatus(manager.name, status)
@@ -238,7 +271,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     fun startRecording(acceptableIds: Set<String>) {
         if (!handler.isStarted) handler.start()
         handler.execute {
-            if (key.getUserId() == null) {
+            if (key.userId == null) {
                 logger.error("Cannot start recording with service {}: user ID is not set.", this)
                 delayedStart = acceptableIds
             } else {
@@ -249,7 +282,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
     private fun doStart(acceptableIds: Set<String>) {
         val expectedNames = expectedSourceNames
-        val actualIds = if (expectedNames.isEmpty()) acceptableIds else expectedNames
+        val actualIds = expectedNames.ifEmpty { acceptableIds }
 
         when {
             sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED -> {
@@ -324,8 +357,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         if (!handler.isStarted) handler.start()
         handler.execute {
-            key.setProjectId(authState.projectId)
-            key.setUserId(authState.userId)
+            key.projectId = authState.projectId
+            key.userId = authState.userId
             needsRegisteredSources = authState.needsRegisteredSources
             sourceTypes = authState.sourceTypes.toHashSet()
             sources = authState.sourceMetadata
@@ -366,7 +399,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         val source = SourceMetadata(type).apply {
             sourceId = existingSource.sourceId
             sourceName = existingSource.sourceName
-            this.attributes = attributes
+            this.attributes = attributes + manualAttributes
         }
 
         val onFail: (Exception?) -> Unit = {
@@ -391,6 +424,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 source.sourceId = updatedSource.sourceId
                 source.sourceName = updatedSource.sourceName
                 source.expectedSourceName = updatedSource.expectedSourceName
+                registeredSource = source
             },
             onFail,
         ) ?: onFail(null)
