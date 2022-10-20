@@ -32,7 +32,9 @@ interface SourceBinder<T : BaseSourceState> {
     /** Get the last number of records sent  */
     val serverRecordsSent: Map<String, Long>
 
+    /** Manual attributes set by the user that will be added to a registered source. */
     var manualAttributes: Map<String, String>
+    /** Currently connected and registered source. */
     val registeredSource: SourceMetadata?
 
     /** Start scanning and recording from a compatible source.

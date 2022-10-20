@@ -103,26 +103,27 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
     var manualAttributes: Map<String, String> = emptyMap()
         set(value) {
-            if (value != field) {
-                val oldValue = field
-                field = value
-                // if the new manual attributes would change something about the old manual
-                // attributes and a source is already assigned, then update the registration
-                handler.execute {
-                    val currentSource = registeredSource ?: return@execute
-                    val bareAttributes = if (oldValue.isEmpty()) {
-                        currentSource.attributes
-                    } else buildMap {
-                        putAll(currentSource.attributes)
-                        oldValue.keys.forEach { remove(it) }
-                    }
+            if (value == field) return
+            val oldValue = field
+            field = value
+            // if the new manual attributes would change something about the old manual
+            // attributes and a source is already assigned, then update the registration
+            handler.execute {
+                val currentSource = registeredSource ?: return@execute
+                val bareAttributes = if (oldValue.isEmpty()) {
+                    currentSource.attributes
+                } else buildMap {
+                    putAll(currentSource.attributes)
+                    oldValue.keys.forEach { remove(it) }
+                }
 
-                    if (bareAttributes + value != currentSource.attributes) {
-                        val currentType = currentSource.type ?: return@execute
-                        registerSource(currentSource, currentType, bareAttributes)
-                    }
+                if (bareAttributes + value != currentSource.attributes) {
+                    val currentType = currentSource.type ?: return@execute
+                    registerSource(currentSource, currentType, bareAttributes)
                 }
             }
+
+            onManualAttributesUpdate(value)
         }
 
     val state: T
@@ -267,6 +268,12 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
      * New source manager.
      */
     protected abstract fun createSourceManager(): SourceManager<T>
+
+    /**
+     * Handle attribute updates from the user.
+     * Override to respond to changes in manual attributes.
+     */
+    protected open fun onManualAttributesUpdate(value: Map<String, String>) {}
 
     fun startRecording(acceptableIds: Set<String>) {
         if (!handler.isStarted) handler.start()
