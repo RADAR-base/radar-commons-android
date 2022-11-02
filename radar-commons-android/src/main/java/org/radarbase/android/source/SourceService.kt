@@ -108,8 +108,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             field = value
             // if the new manual attributes would change something about the old manual
             // attributes and a source is already assigned, then update the registration
-            handler.execute {
-                val currentSource = registeredSource ?: return@execute
+            handler.executeReentrant {
+                val currentSource = registeredSource ?: return@executeReentrant
                 val bareAttributes = if (oldValue.isEmpty()) {
                     currentSource.attributes
                 } else buildMap {
@@ -118,7 +118,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 }
 
                 if (bareAttributes + value != currentSource.attributes) {
-                    val currentType = currentSource.type ?: return@execute
+                    val currentType = currentSource.type ?: return@executeReentrant
                     registerSource(currentSource, currentType, bareAttributes)
                 }
             }
