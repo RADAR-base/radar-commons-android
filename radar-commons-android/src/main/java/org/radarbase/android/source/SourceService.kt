@@ -127,13 +127,11 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
 
     val state: T
-        get() {
-            return sourceManager?.state ?: defaultState.apply {
-                id.apply {
-                    projectId = key.projectId
-                    userId = key.userId
-                    sourceId = key.sourceId
-                }
+        get() = sourceManager?.state ?: defaultState.apply {
+            id.apply {
+                projectId = key.projectId
+                userId = key.userId
+                sourceId = key.sourceId
             }
         }
 
@@ -251,9 +249,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
     @Synchronized
     private fun unsetSourceManager(): SourceManager<*>? {
-        return sourceManager.also {
-            sourceManager = null
-        }
+        val oldSourceManager = sourceManager
+        sourceManager = null
+        return oldSourceManager
     }
 
     private fun stopSourceManager(manager: SourceManager<*>?) {
@@ -322,30 +320,24 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
     }
 
-    private fun startAfterDelay(acceptableIds: Set<String>) {
-        handler.executeReentrant {
-            if (startFuture == null) {
-                logger.warn("Starting recording soon for {}", name)
-                startFuture = handler.delay(100) {
-                    startFuture?.let {
-                        startFuture = null
-                        doStart(acceptableIds)
-                    }
+    private fun startAfterDelay(acceptableIds: Set<String>) = handler.executeReentrant {
+        if (startFuture == null) {
+            logger.warn("Starting recording soon for {}", name)
+            startFuture = handler.delay(100) {
+                startFuture?.let {
+                    startFuture = null
+                    doStart(acceptableIds)
                 }
             }
         }
     }
 
-    fun restartRecording(acceptableIds: Set<String>) {
-        handler.execute {
-            doStop()
-            doStart(acceptableIds)
-        }
+    fun restartRecording(acceptableIds: Set<String>) = handler.execute {
+        doStop()
+        doStart(acceptableIds)
     }
 
-    fun stopRecording() {
-        handler.stop { doStop() }
-    }
+    fun stopRecording() = handler.stop { doStop() }
 
     private fun doStop() {
         delayedStart = null
@@ -362,7 +354,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
-        if (!handler.isStarted) handler.start()
+        if (!handler.isStarted) {
+            handler.start()
+        }
         handler.execute {
             key.projectId = authState.projectId
             key.userId = authState.userId
@@ -413,9 +407,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             logger.warn("Failed to register source: {}", it.toString())
             if (registrationFuture == null) {
                 registrationFuture = handler.delay(300_000L) {
-                    if (registrationFuture == null) {
-                        return@delay
-                    }
+                    registrationFuture ?: return@delay
                     registrationFuture = null
                     registerSource(existingSource, type, attributes)
                 }
@@ -450,12 +442,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             if (!isAuthorizedForSource) {
                 logger.warn("Cannot register source {} yet: allowed source types are empty", id)
                 registrationFuture = handler.delay(100L) {
-                    if (registrationFuture == null) {
-                        return@delay
-                    }
+                    registrationFuture ?: return@delay
                     registrationFuture = null
                     ensureRegistration(id, name, attributes, onMapping)
-
                 }
             }
 

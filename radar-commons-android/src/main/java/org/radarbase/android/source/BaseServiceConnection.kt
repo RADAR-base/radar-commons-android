@@ -20,6 +20,7 @@ import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
 import org.radarbase.util.Strings
@@ -51,6 +52,16 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
 
     val sourceState: S?
         get() = serviceBinder?.sourceState
+
+    var manualAttributes: Map<String, String>?
+        get() = serviceBinder?.manualAttributes
+        set(value) {
+            value ?: return
+            serviceBinder?.manualAttributes = value
+        }
+
+    val registeredSource: SourceMetadata?
+        get() = serviceBinder?.registeredSource
 
     init {
         this.serviceBinder = null
