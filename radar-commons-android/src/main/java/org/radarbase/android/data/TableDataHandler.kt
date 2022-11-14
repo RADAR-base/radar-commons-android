@@ -58,7 +58,17 @@ class TableDataHandler(
 
     @Volatile
     var latestStatus: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
-    override var status: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
+    override var serverStatus: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
+        set(value) {
+            latestStatus = value
+            handlerThread.executeReentrant {
+                val localLatestStatus = latestStatus
+                if (localLatestStatus != this.serverStatus) {
+                    statusListener?.serverStatus = localLatestStatus
+                    field = localLatestStatus
+                }
+            }
+        }
 
     private val lastNumberOfRecordsSent = TreeMap<String, Long>()
     private var submitter: KafkaDataSubmitter? = null
@@ -123,7 +133,7 @@ class TableDataHandler(
             }
         } else {
             logger.info("Submitter is disabled: no kafkaConfig provided in init")
-            updateServerStatus(ServerStatusListener.Status.DISABLED)
+            serverStatus = ServerStatusListener.Status.DISABLED
         }
     }
 
@@ -146,14 +156,14 @@ class TableDataHandler(
     fun start() = handlerThread.executeReentrant {
         if (isStarted
             || config.submitterConfig.userId == null
-            || status === ServerStatusListener.Status.DISABLED
+            || serverStatus === ServerStatusListener.Status.DISABLED
             || !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi)
             || batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY
         ) {
             when {
                 config.submitterConfig.userId == null ->
                     logger.info("Submitter has no user ID set. Not starting.")
-                status === ServerStatusListener.Status.DISABLED ->
+                serverStatus === ServerStatusListener.Status.DISABLED ->
                     logger.info("Submitter has been disabled earlier. Not starting")
                 !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi) ->
                     logger.info("No networkconnection available. Not starting")
@@ -166,7 +176,7 @@ class TableDataHandler(
 
         val kafkaConfig = config.restConfig.kafkaConfig ?: return@executeReentrant
 
-        updateServerStatus(ServerStatusListener.Status.CONNECTING)
+        serverStatus = ServerStatusListener.Status.CONNECTING
 
         val client = RestClient.global()
             .server(kafkaConfig)
@@ -194,16 +204,16 @@ class TableDataHandler(
         submitter?.close()
         submitter = null
         sender = null
-        if (status != ServerStatusListener.Status.DISABLED) {
-            updateServerStatus(ServerStatusListener.Status.READY)
+        if (serverStatus != ServerStatusListener.Status.DISABLED) {
+            serverStatus = ServerStatusListener.Status.READY
         }
     }
 
     /** Do not submit any data, only cache it. If it is already disabled, this does nothing.  */
     private fun disableSubmitter() = handlerThread.executeReentrant {
-        if (status !== ServerStatusListener.Status.DISABLED) {
+        if (serverStatus !== ServerStatusListener.Status.DISABLED) {
             logger.info("Submitter is disabled")
-            updateServerStatus(ServerStatusListener.Status.DISABLED)
+            serverStatus = ServerStatusListener.Status.DISABLED
             if (isStarted) {
                 stop()
             }
@@ -214,7 +224,7 @@ class TableDataHandler(
 
     /** Start submitting data. If it is already submitting data, this does nothing.  */
     private fun enableSubmitter() = handlerThread.executeReentrant {
-        if (status === ServerStatusListener.Status.DISABLED) {
+        if (serverStatus === ServerStatusListener.Status.DISABLED) {
             doEnableSubmitter()
             start()
         }
@@ -222,7 +232,7 @@ class TableDataHandler(
 
     private fun doEnableSubmitter() {
         logger.info("Submitter is enabled")
-        updateServerStatus(ServerStatusListener.Status.READY)
+        serverStatus = ServerStatusListener.Status.READY
         networkConnectedReceiver.register()
         batteryLevelReceiver.register()
     }
@@ -234,7 +244,7 @@ class TableDataHandler(
     @Throws(IOException::class)
     fun close() {
         handlerThread.stop {
-            if (status !== ServerStatusListener.Status.DISABLED) {
+            if (serverStatus !== ServerStatusListener.Status.DISABLED) {
                 networkConnectedReceiver.unregister()
                 batteryLevelReceiver.unregister()
             }
@@ -278,17 +288,6 @@ class TableDataHandler(
         get() = handlerThread.compute { field }
         set(value) = handlerThread.execute { field = value }
 
-    override fun updateServerStatus(status: ServerStatusListener.Status) {
-        latestStatus = status
-        handlerThread.executeReentrant {
-            val localLatestStatus = latestStatus
-            if (localLatestStatus != this.status) {
-                statusListener?.updateServerStatus(localLatestStatus)
-                this.status = localLatestStatus
-            }
-        }
-    }
-
     override fun updateRecordsSent(topicName: String, numberOfRecords: Long) {
         handlerThread.execute {
             statusListener?.updateRecordsSent(topicName, numberOfRecords)
@@ -302,6 +301,12 @@ class TableDataHandler(
                 logger.info("{} uploaded {} records", topicName, numberOfRecords)
             }
         }
+    }
+
+    override fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit) {
+        submitter
+            ?.flush(successCallback, errorCallback)
+            ?: errorCallback()
     }
 
     @Throws(IOException::class)

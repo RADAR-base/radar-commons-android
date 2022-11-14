@@ -28,10 +28,10 @@ interface DataHandler<K, V> : ServerStatusListener {
     val activeCaches: List<DataCacheGroup<*, *>>
 
     val recordsSent: Map<String, Long>
-    val status: ServerStatusListener.Status
 
     fun <W: V> registerCache(topic: AvroTopic<K, W>, handler: SafeHandler? = null): DataCache<K, W>
 
     fun handler(build: DataHandlerConfiguration.() -> Unit)
     fun getCache(topic: String): DataCache<*, *>
+    fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
 }

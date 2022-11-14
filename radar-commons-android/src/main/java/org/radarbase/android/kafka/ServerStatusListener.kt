@@ -21,7 +21,7 @@ interface ServerStatusListener {
         CONNECTING, CONNECTED, DISCONNECTED, UPLOADING, DISABLED, READY, UPLOADING_FAILED, UNAUTHORIZED
     }
 
-    fun updateServerStatus(status: Status)
+    var serverStatus: Status
 
     fun updateRecordsSent(topicName: String, numberOfRecords: Long)
 }

@@ -49,13 +49,15 @@ class SourceType(val id: Int, val producer: String, val model: String,
                 + '}'.toString())
     }
 
-    fun addToJson(json: JSONObject) {
-        try {
-            json.put("sourceTypeId", id)
-            json.put("sourceTypeProducer", producer)
-            json.put("sourceTypeModel", model)
-            json.put("sourceTypeCatalogVersion", catalogVersion)
-            json.put("dynamicRegistration", hasDynamicRegistration)
+    fun toJson(): JSONObject {
+        return try {
+            JSONObject().apply {
+                put("sourceTypeId", id)
+                put("sourceTypeProducer", producer)
+                put("sourceTypeModel", model)
+                put("sourceTypeCatalogVersion", catalogVersion)
+                put("dynamicRegistration", hasDynamicRegistration)
+            }
         } catch (ex: JSONException) {
             throw IllegalStateException("Cannot serialize existing SourceMetadata")
         }
@@ -63,7 +65,7 @@ class SourceType(val id: Int, val producer: String, val model: String,
 
     fun toJsonString(): String {
         try {
-            return JSONObject().also { addToJson(it) }.toString()
+            return toJson().toString()
         } catch (ex: JSONException) {
             throw IllegalStateException("Cannot serialize existing SourceMetadata")
         }

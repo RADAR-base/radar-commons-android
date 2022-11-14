@@ -108,21 +108,13 @@ class SourceMetadata {
         "attributes=$attributes'}"
 
     fun toJsonString(): String {
-        try {
-            val json = JSONObject()
-            type?.addToJson(json)
-            json.put("sourceId", sourceId)
-            json.put("sourceName", sourceName)
-            json.put("expectedSourceName", expectedSourceName)
-
-            val attributeJson = JSONObject()
-            for ((key, value) in attributes) {
-                attributeJson.put(key, value)
-            }
-            json.put("attributes", JSONObject().apply {
-                attributes.forEach { (k, v) -> put(k, v) }
-            })
-            return json.toString()
+        return try {
+            (type?.toJson() ?: JSONObject()).apply {
+                put("sourceId", sourceId)
+                put("sourceName", sourceName)
+                put("expectedSourceName", expectedSourceName)
+                put("attributes", attributes.toJson())
+            }.toString()
         } catch (ex: JSONException) {
             throw IllegalStateException("Cannot serialize existing SourceMetadata")
         }
@@ -162,5 +154,8 @@ class SourceMetadata {
         private val expectedNameSplit: Regex = ",".toRegex()
         private fun Pattern.matches(string: String): Boolean = matcher(string).find()
         internal fun JSONObject.optNonEmptyString(key: String): String? = if (isNull(key)) null else optString(key).takeTrimmedIfNotEmpty().takeIf { it != "null" }
+        internal fun Map<String, Any>.toJson(): JSONObject = JSONObject().also { obj ->
+            forEach { (k, v) -> obj.put(k, v) }
+        }
     }
 }

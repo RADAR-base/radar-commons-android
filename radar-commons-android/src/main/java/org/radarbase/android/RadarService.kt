@@ -94,7 +94,20 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private var latestNumberOfRecordsSent = TimedLong(0)
 
     /** Current server status.  */
-    private lateinit var serverStatus: ServerStatusListener.Status
+    override var serverStatus: ServerStatusListener.Status = ServerStatusListener.Status.DISABLED
+        set(value) {
+            if (value === field) {
+                return
+            }
+            field = value
+            if (value == ServerStatusListener.Status.DISCONNECTED) {
+                this.latestNumberOfRecordsSent = TimedLong(-1)
+            }
+
+            broadcaster.send(SERVER_STATUS_CHANGED) {
+                putExtra(SERVER_STATUS_CHANGED, value.ordinal)
+            }
+        }
 
     private val needsPermissions = LinkedHashSet<String>()
 
@@ -328,7 +341,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
             connection.serverStatus
                     ?.also { logger.debug("Initial server status: {}", it) }
-                    ?.also(::updateServerStatus)
+                    ?.also { serverStatus = it }
 
             updateBluetoothNeeded(needsBluetooth.value || connection.needsBluetooth())
             startScanning()
@@ -379,20 +392,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     .filter { !it.isBound && (isScanningEnabled || it.mayBeConnectedInBackground) }
                     .forEach(SourceProvider<*>::bind)
             }
-        }
-    }
-
-    override fun updateServerStatus(status: ServerStatusListener.Status) {
-        if (status == this.serverStatus) {
-            return
-        }
-        this.serverStatus = status
-        if (status == ServerStatusListener.Status.DISCONNECTED) {
-            this.latestNumberOfRecordsSent = TimedLong(-1)
-        }
-
-        broadcaster.send(SERVER_STATUS_CHANGED) {
-            putExtra(SERVER_STATUS_CHANGED, status.ordinal)
         }
     }
 
@@ -637,6 +636,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             get() = this@RadarService.dataHandler
 
         override fun needsBluetooth(): Boolean = needsBluetooth.value
+
+        override fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit) {
+            dataHandler
+                ?.flushCaches(successCallback, errorCallback)
+                ?: errorCallback()
+        }
     }
 
     private fun stopActiveScanning() {

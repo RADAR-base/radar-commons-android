@@ -12,7 +12,7 @@ import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.*
+import kotlin.collections.ArrayList
 
 class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
@@ -37,12 +37,13 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
                 jsonObject.opt("attributes")?.let { attrObjects ->
                     if (attrObjects is JSONArray) {
-                        for (i in 0 until attrObjects.length()) {
-                            val attrObject = attrObjects.getJSONObject(i)
-                            attributes[attrObject.getString("key")] = attrObject.getString("value")
-                        }
+                        attrObjects
+                            .asJSONObjectSequence()
+                            .forEach { attrObject ->
+                                attributes[attrObject.getString("key")] = attrObject.getString("value")
+                            }
                     } else {
-                        attributes += attributesToMap(attrObjects as JSONObject)
+                        attributes += (attrObjects as? JSONObject).toStringMap()
                     }
                 }
                 jsonObject.optNonEmptyString("externalId")?.let {
@@ -66,58 +67,67 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
         @Throws(JSONException::class)
         internal fun parseSourceTypes(project: JSONObject): List<SourceType> {
-            val sourceTypesArr = project.getJSONArray("sourceTypes")
-            val numSources = sourceTypesArr.length()
+            val sourceTypes = project.getJSONArray("sourceTypes")
 
-            val sources = ArrayList<SourceType>(numSources)
-            for (i in 0 until numSources) {
-                sources += sourceTypesArr.getJSONObject(i).run {
-                    logger.debug("Parsing source type {}", this)
-                    SourceType(
-                            getInt("id"),
-                            getString("producer"),
-                            getString("model"),
-                            getString("catalogVersion"),
-                            getBoolean("canRegisterDynamically"))
+            return sourceTypes
+                .asJSONObjectSequence()
+                .mapTo(ArrayList(sourceTypes.length())) {
+                    it.run {
+                        logger.debug("Parsing source type {}", this)
+                        SourceType(
+                            id = getInt("id"),
+                            producer = getString("producer"),
+                            model = getString("model"),
+                            catalogVersion = getString("catalogVersion"),
+                            hasDynamicRegistration = getBoolean("canRegisterDynamically"),
+                        )
+                    }
                 }
-            }
-            return sources
         }
 
         @Throws(JSONException::class)
         internal fun parseSources(sourceTypes: List<SourceType>,
                                   sources: JSONArray): List<SourceMetadata> {
 
-            val actualSources = ArrayList<SourceMetadata>(sources.length())
+            val actualSources = sources
+                .asJSONObjectSequence()
+                .mapNotNullTo(ArrayList(sources.length())) { sourceObj ->
+                    val id = sourceObj.getString("sourceId")
+                    if (!sourceObj.optBoolean("assigned", true)) {
+                        logger.debug("Skipping unassigned source {}", id)
+                    }
+                    val sourceTypeId = sourceObj.getInt("sourceTypeId")
+                    val sourceType = sourceTypes.find { it.id == sourceTypeId }
 
-            for (i in 0 until sources.length()) {
-                val sourceObj = sources.getJSONObject(i)
-                val id = sourceObj.getString("sourceId")
-                if (!sourceObj.optBoolean("assigned", true)) {
-                    logger.debug("Skipping unassigned source {}", id)
+                    if (sourceType != null) {
+                        SourceMetadata(sourceType).apply {
+                            expectedSourceName = sourceObj.optNonEmptyString("expectedSourceName")
+                            sourceName = sourceObj.optNonEmptyString("sourceName")
+                            sourceId = id
+                            attributes = sourceObj.optJSONObject("attributes").toStringMap()
+                        }
+                    } else {
+                        logger.error("Source {} type {} not recognized", id, sourceTypeId)
+                        null
+                    }
                 }
-                val sourceTypeId = sourceObj.getInt("sourceTypeId")
-                sourceTypes.find { it.id == sourceTypeId }?.let {
-                    actualSources.add(SourceMetadata(it).apply {
-                        expectedSourceName = sourceObj.optNonEmptyString("expectedSourceName")
-                        sourceName = sourceObj.optNonEmptyString("sourceName")
-                        sourceId = id
-                        attributes = attributesToMap(sourceObj.optJSONObject("attributes"))
-                    })
-                } ?: logger.error("Source {} type {} not recognized", id, sourceTypeId)
-            }
 
             logger.info("Sources from Management Portal: {}", actualSources)
             return actualSources
         }
 
         @Throws(JSONException::class)
-        internal fun attributesToMap(attrObj: JSONObject?): Map<String, String> {
-            return attrObj?.keys()
-                    ?.asSequence()
-                    ?.map { Pair(it, attrObj.getString(it)) }
-                    ?.toMap()
-                    ?: emptyMap()
+        internal fun JSONObject?.toStringMap(): Map<String, String> = if (this == null) {
+            emptyMap()
+        } else {
+            keys().asSequence()
+                .associateWith { getString(it) }
+        }
+
+        internal fun JSONArray.asJSONObjectSequence(): Sequence<JSONObject> = sequence {
+            for (i in 0 until length()) {
+                yield(getJSONObject(i))
+            }
         }
 
         @Throws(JSONException::class)

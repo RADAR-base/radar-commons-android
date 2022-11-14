@@ -40,4 +40,6 @@ interface IRadarBinder : IBinder {
     fun stopScanning()
 
     fun needsBluetooth(): Boolean
+
+    fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
 }

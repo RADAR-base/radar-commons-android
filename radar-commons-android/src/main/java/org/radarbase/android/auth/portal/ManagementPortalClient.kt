@@ -11,6 +11,8 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
+import org.radarbase.android.auth.SourceMetadata.Companion.toJson
+import org.radarbase.android.auth.portal.GetSubjectParser.Companion.toStringMap
 import org.radarbase.android.util.Parser
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
@@ -194,21 +196,15 @@ class ManagementPortalClient constructor(
             }
             val sourceAttributes = source.attributes
             if (sourceAttributes.isNotEmpty()) {
-                val attrs = JSONObject()
-                for ((key, value) in sourceAttributes) {
-                    attrs.put(key, value)
-                }
-                requestBody.put("attributes", attrs)
+                requestBody.put("attributes", sourceAttributes.toJson())
             }
             return requestBody
         }
 
         @Throws(JSONException::class)
-        internal fun sourceUpdateBody(source: SourceMetadata): JSONObject {
-            return JSONObject().apply {
-                for ((key, value) in source.attributes) {
-                    put(key, value)
-                }
+        internal fun sourceUpdateBody(source: SourceMetadata): JSONObject = JSONObject().apply {
+            for ((key, value) in source.attributes) {
+                put(key, value)
             }
         }
 
@@ -222,11 +218,12 @@ class ManagementPortalClient constructor(
         internal fun parseSourceRegistration(body: String, source: SourceMetadata) {
             logger.debug("Parsing source from {}", body)
             val responseObject = JSONObject(body)
-            source.sourceId = responseObject.getString("sourceId")
-            source.sourceName = responseObject.optNonEmptyString("sourceName") ?: source.sourceId
-            source.expectedSourceName = responseObject.optNonEmptyString("expectedSourceName")
-            source.attributes = GetSubjectParser.attributesToMap(
-                    responseObject.optJSONObject("attributes"))
+            source.apply {
+                sourceId = responseObject.getString("sourceId")
+                sourceName = responseObject.optNonEmptyString("sourceName") ?: source.sourceId
+                expectedSourceName = responseObject.optNonEmptyString("expectedSourceName")
+                attributes = responseObject.optJSONObject("attributes").toStringMap()
+            }
         }
 
         class SourceNotFoundException(message: String) : RuntimeException(message)

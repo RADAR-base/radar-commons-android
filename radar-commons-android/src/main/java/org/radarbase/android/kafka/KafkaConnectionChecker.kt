@@ -32,10 +32,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * conversely, if it is assessed to be severed, [didDisconnect] should be
  * called.
  */
-internal class KafkaConnectionChecker(private val sender: KafkaSender,
-                                      private val mHandler: SafeHandler,
-                                      private val listener: ServerStatusListener,
-                                      heartbeatSecondsInterval: Long) {
+internal class KafkaConnectionChecker(
+    private val sender: KafkaSender,
+    private val mHandler: SafeHandler,
+    private val listener: ServerStatusListener,
+    heartbeatSecondsInterval: Long,
+) {
     private val isConnectedBacking: AtomicBoolean = AtomicBoolean(false)
     private var future: SafeHandler.HandlerFuture? = null
     private val heartbeatInterval: Long = heartbeatSecondsInterval * 1000L
@@ -65,7 +67,7 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
             if (!isConnected) {
                 if (sender.resetConnection()) {
                     didConnect()
-                    listener.updateServerStatus(ServerStatusListener.Status.CONNECTED)
+                    listener.serverStatus = ServerStatusListener.Status.CONNECTED
                     logger.info("Sender reconnected")
                 } else {
                     retry()
@@ -117,9 +119,9 @@ internal class KafkaConnectionChecker(private val sender: KafkaSender,
                 future = mHandler.delay(INCREMENTAL_BACKOFF_MILLISECONDS, ::makeCheck)
                 if (ex is AuthenticationException) {
                     logger.warn("Failed to authenticate to server: {}", ex.message)
-                    listener.updateServerStatus(ServerStatusListener.Status.UNAUTHORIZED)
+                    listener.serverStatus = ServerStatusListener.Status.UNAUTHORIZED
                 } else {
-                    listener.updateServerStatus(ServerStatusListener.Status.DISCONNECTED)
+                    listener.serverStatus = ServerStatusListener.Status.DISCONNECTED
                 }
             }
         }

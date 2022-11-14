@@ -13,6 +13,7 @@ import org.radarbase.android.RadarConfiguration.Companion.BASE_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
+import org.radarbase.android.auth.portal.GetSubjectParser.Companion.asJSONObjectSequence
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.DelayedRetry
@@ -197,16 +198,16 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
         private const val LAST_FETCH = "org.radarbase.android.config.AppConfigRadarConfiguration.lastFetch"
 
         private fun MutableMap<String, String>.mergeConfig(configs: JSONArray) {
-            for (index in 0 until configs.length()) {
-                val singleConfig = configs.getJSONObject(index)
-                val name = singleConfig.getString("name")
-                val value = singleConfig.optString("value")
-                if (value.isEmpty()) {
-                    remove(name)
-                } else {
-                    put(name, value)
+            configs.asJSONObjectSequence()
+                .forEach { singleConfig ->
+                    val name = singleConfig.getString("name")
+                    val value = singleConfig.optString("value")
+                    if (value.isEmpty()) {
+                        remove(name)
+                    } else {
+                        put(name, value)
+                    }
                 }
-            }
         }
     }
 }

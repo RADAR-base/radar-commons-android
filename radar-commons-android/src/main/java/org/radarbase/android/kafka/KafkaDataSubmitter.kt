@@ -82,10 +82,10 @@ class KafkaDataSubmitter(
 
             try {
                 if (sender.isConnected) {
-                    dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
+                    dataHandler.serverStatus = ServerStatusListener.Status.CONNECTED
                     connection.didConnect()
                 } else {
-                    dataHandler.updateServerStatus(ServerStatusListener.Status.DISCONNECTED)
+                    dataHandler.serverStatus = ServerStatusListener.Status.DISCONNECTED
                     connection.didDisconnect(null)
                 }
             } catch (ex: AuthenticationException) {
@@ -106,19 +106,33 @@ class KafkaDataSubmitter(
         uploadIfNeededFuture?.cancel()
 
         // Get upload frequency from system property
-        uploadFuture = this.submitHandler.repeat(uploadRate) {
-            val topicsToSend = dataHandler.activeCaches.mapTo(HashSet()) { it.topicName }
-            while (connection.isConnected && topicsToSend.isNotEmpty()) {
-                logger.debug("Uploading topics {}", topicsToSend)
-                uploadCaches(topicsToSend)
-            }
-        }
+        uploadFuture = this.submitHandler.repeat(uploadRate, ::uploadAllCaches)
+        uploadIfNeededFuture = this.submitHandler.repeat(uploadRate / 5, ::uploadFullCaches)
+    }
 
-        uploadIfNeededFuture = this.submitHandler.repeat(uploadRate / 5) {
-            var sendAgain = true
-            while (connection.isConnected && sendAgain) {
-                logger.debug("Uploading full topics")
-                sendAgain = uploadCachesIfNeeded()
+    private fun uploadAllCaches() {
+        val topicsToSend = dataHandler.activeCaches.mapTo(HashSet()) { it.topicName }
+        while (connection.isConnected && topicsToSend.isNotEmpty()) {
+            logger.debug("Uploading topics {}", topicsToSend)
+            uploadCaches(topicsToSend)
+        }
+    }
+
+    private fun uploadFullCaches() {
+        var sendAgain = true
+        while (connection.isConnected && sendAgain) {
+            logger.debug("Uploading full topics")
+            sendAgain = uploadCachesIfNeeded()
+        }
+    }
+
+    fun flush(successCallback: () -> Unit, errorCallback: () -> Unit) {
+        this.submitHandler.execute {
+            uploadAllCaches()
+            if (dataHandler.serverStatus == ServerStatusListener.Status.CONNECTED) {
+                successCallback()
+            } else {
+                errorCallback()
             }
         }
     }
@@ -184,7 +198,7 @@ class KafkaDataSubmitter(
                 }
             }
             if (uploadingNotified.get()) {
-                dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
+                dataHandler.serverStatus = ServerStatusListener.Status.CONNECTED
                 connection.didConnect()
             }
         } catch (ex: Exception) {
@@ -218,7 +232,7 @@ class KafkaDataSubmitter(
                 .mapTo(HashSet(), DataCacheGroup<*,*>::topicName)
 
             if (uploadingNotified.get()) {
-                dataHandler.updateServerStatus(ServerStatusListener.Status.CONNECTED)
+                dataHandler.serverStatus = ServerStatusListener.Status.CONNECTED
                 connection.didConnect()
             }
         } catch (ex: Exception) {
@@ -253,7 +267,7 @@ class KafkaDataSubmitter(
 
             if (keyUserId == null || keyUserId == config.userId) {
                 if (uploadingNotified.compareAndSet(false, true)) {
-                    dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING)
+                    dataHandler.serverStatus = ServerStatusListener.Status.UPLOADING
                 }
 
                 try {
@@ -266,7 +280,7 @@ class KafkaDataSubmitter(
                     dataHandler.updateRecordsSent(topic.name, -1)
                     throw ex
                 } catch (e: Exception) {
-                    dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING_FAILED)
+                    dataHandler.serverStatus = ServerStatusListener.Status.UPLOADING_FAILED
                     dataHandler.updateRecordsSent(topic.name, -1)
                     throw e
                 }

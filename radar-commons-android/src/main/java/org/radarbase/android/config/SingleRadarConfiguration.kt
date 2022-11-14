@@ -20,6 +20,7 @@ import org.radarbase.android.RadarConfiguration
 import java.util.*
 import java.util.regex.Pattern
 import java.util.regex.Pattern.CASE_INSENSITIVE
+import kotlin.collections.HashMap
 
 class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus, val config: Map<String, String>) {
     val keys: Set<String> = config.keys
