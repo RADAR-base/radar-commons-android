@@ -20,7 +20,6 @@ import android.Manifest.permission.*
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -44,7 +43,6 @@ import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.*
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
-import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
@@ -53,7 +51,6 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.HashSet
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private var configurationUpdateFuture: SafeHandler.HandlerFuture? = null
@@ -78,7 +75,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
-    private lateinit var serverStatusReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
     private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
 
@@ -104,8 +100,16 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 this.latestNumberOfRecordsSent = TimedLong(-1)
             }
 
-            broadcaster.send(SERVER_STATUS_CHANGED) {
-                putExtra(SERVER_STATUS_CHANGED, value.ordinal)
+            mHandler.execute {
+                if (value == ServerStatusListener.Status.UNAUTHORIZED) {
+                    logger.debug("Status unauthorized")
+                    authConnection.applyBinder {
+                        if (isMakingAuthRequest.compareAndSet(false, true)) {
+                            invalidate(null, false)
+                            refresh()
+                        }
+                    }
+                }
             }
         }
 
@@ -128,7 +132,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     override fun onCreate() {
         super.onCreate()
-        serverStatus = ServerStatusListener.Status.DISABLED
         binder = createBinder()
         mHandler = SafeHandler.getInstance("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
             start()
@@ -150,19 +153,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                         getString(R.string.cannot_connect_device,
                                 intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
                         Toast.LENGTH_SHORT).show()
-            }
-            serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
-                val serverStatusChanged = intent.getIntExtra(SERVER_STATUS_CHANGED, 0)
-                serverStatus = ServerStatusListener.Status.values()[serverStatusChanged]
-                if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
-                    logger.debug("Status unauthorized")
-                    authConnection.applyBinder {
-                        if (isMakingAuthRequest.compareAndSet(false, true)) {
-                            invalidate(null, false)
-                            refresh()
-                        }
-                    }
-                }
             }
         }
 
@@ -201,6 +191,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
             }
         }
+        serverStatus = ServerStatusListener.Status.DISABLED
     }
 
     protected open fun createBinder(): IBinder {
@@ -239,7 +230,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         permissionsBroadcastReceiver.unregister()
         sourceFailedReceiver.unregister()
-        serverStatusReceiver.unregister()
 
         mHandler.stop {
             sourceRegistrar?.let {
