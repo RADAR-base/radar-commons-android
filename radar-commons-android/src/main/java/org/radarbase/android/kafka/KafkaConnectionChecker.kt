@@ -49,7 +49,7 @@ internal class KafkaConnectionChecker(
 
     init {
         mHandler.execute {
-            if (sender.isConnected) {
+            if (sender.connectionState) {
                 isConnectedBacking.set(false)
                 didConnect()
             } else {

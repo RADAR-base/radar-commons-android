@@ -1,33 +1,36 @@
 package org.radarbase.android.auth
 
-import android.app.Service
 import android.content.Intent
 import android.content.Intent.*
 import android.os.Binder
 import android.os.IBinder
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.Keep
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.auth.LoginActivity.Companion.ACTION_LOGIN_SUCCESS
 import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.android.util.send
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.util.concurrent.TimeUnit
 
 @Keep
-abstract class AuthService : Service(), LoginListener {
-    private lateinit var appAuth: AppAuthState
+abstract class AuthService : LifecycleService(), LoginListener {
     lateinit var loginManagers: List<LoginManager>
     private val listeners: MutableList<LoginListenerRegistration> = mutableListOf()
     lateinit var config: RadarConfiguration
-    val handler = SafeHandler.getInstance("AuthService", THREAD_PRIORITY_BACKGROUND)
     var loginListenerId: Long = 0
     private lateinit var networkConnectedListener: NetworkConnectedReceiver
     private var configRegistration: LoginListenerRegistration? = null
@@ -35,6 +38,8 @@ abstract class AuthService : Service(), LoginListener {
     private var isConnected: Boolean = false
     private var sourceRegistrationStarted: Boolean = false
     private val successHandlers: MutableList<() -> Unit> = mutableListOf()
+    private val _authState: MutableStateFlow<AppAuthState> = MutableStateFlow(AppAuthState())
+    private val authState: StateFlow<AppAuthState> = _authState
 
     open val authSerialization: AuthSerialization by lazy {
         SharedPreferencesAuthSerialization(this)
@@ -43,39 +48,46 @@ abstract class AuthService : Service(), LoginListener {
     @Volatile
     private var isInLoginActivity: Boolean = false
 
-    private lateinit var broadcaster: LocalBroadcastManager
-
     override fun onCreate() {
         super.onCreate()
-        broadcaster = LocalBroadcastManager.getInstance(this)
-        appAuth = authSerialization.load() ?: AppAuthState()
-        config = radarConfig
-        config.updateWithAuthState(this, appAuth)
-        handler.start()
-        loginManagers = createLoginManagers(appAuth)
-        networkConnectedListener = NetworkConnectedReceiver(this, object : NetworkConnectedReceiver.NetworkConnectedListener {
-            override fun onNetworkConnectionChanged(state: NetworkConnectedReceiver.NetworkState) {
-                handler.execute {
-                    isConnected = state.isConnected
-                    if (isConnected && !appAuth.isValidFor(5, TimeUnit.MINUTES)) {
-                        refresh()
-                    }
+
+        networkConnectedListener = NetworkConnectedReceiver(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch(Dispatchers.Default) {
+                    authState
+                        .collectLatest { state ->
+                            authSerialization.store(state)
+                        }
+                }
+                launch(Dispatchers.Default) {
+                    authState
+                        .collectLatest { state ->
+                            radarConfig.updateWithAuthState(this@AuthService, state)
+                        }
+                }
+                launch(Dispatchers.Default) {
+                    networkConnectedListener.state
+                        .map { it != NetworkConnectedReceiver.NetworkState.Disconnected }
+                        .distinctUntilChanged()
+                        .onEach { isConnected = it }
+                        .combine(authState) { isConnected, authState ->
+                            Pair(isConnected, authState)
+                        }
+                        .collectLatest { (isConnected, authState) ->
+                            if (isConnected && !authState.isValidFor(5, TimeUnit.MINUTES)) {
+                                refresh()
+                            }
+                        }
                 }
             }
-        })
-        networkConnectedListener.register()
+        }
+        lifecycleScope.launch(Dispatchers.Default) {
+            val loadedAuth = authSerialization.load() ?: return@launch
+            _authState.value = loadedAuth
+        }
 
-        configRegistration = addLoginListener(object : LoginListener {
-            override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
-                // no action required
-            }
-
-            override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
-                refreshDelay.reset()
-                authSerialization.store(appAuth)
-                config.updateWithAuthState(this@AuthService, appAuth)
-            }
-        })
+        loginManagers = createLoginManagers(appAuth)
     }
 
     /**
@@ -84,26 +96,14 @@ abstract class AuthService : Service(), LoginListener {
      * the current authentication is not valid and it is not possible to refresh the authentication
      * this opens the login activity.
      */
-    fun refresh() {
-        handler.execute {
-            logger.info("Refreshing authentication state")
-            if (appAuth.isValidFor(5, TimeUnit.MINUTES)) {
-                callListeners(sinceUpdate = appAuth.lastUpdate) {
-                    it.loginListener.loginSucceeded(null, appAuth)
-                }
-            } else {
-                doRefresh()
-            }
+    suspend fun refresh() {
+        logger.info("Refreshing authentication state")
+        if (!authState.last().isValidFor(5, TimeUnit.MINUTES)) {
+            doRefresh()
         }
     }
 
-    fun triggerFlush() {
-        handler.executeReentrant {
-            authSerialization.store(appAuth)
-        }
-    }
-
-    private fun doRefresh() {
+    private suspend fun doRefresh() {
         if (relevantManagers.none { it.refresh(appAuth) }) {
             startLogin()
         }
@@ -199,8 +199,6 @@ abstract class AuthService : Service(), LoginListener {
             isConnected = true
             refreshDelay.reset()
             appAuth = authState
-
-            broadcaster.send(ACTION_LOGIN_SUCCESS)
 
             callListeners(sinceUpdate = appAuth.lastUpdate) {
                 it.loginListener.loginSucceeded(manager, appAuth)
@@ -325,8 +323,6 @@ abstract class AuthService : Service(), LoginListener {
             get() = loginManagers
 
         fun update(manager: LoginManager) = this@AuthService.update(manager)
-
-        fun triggerFlush() = this@AuthService.triggerFlush()
 
         fun refresh() = this@AuthService.refresh()
 

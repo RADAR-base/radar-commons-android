@@ -16,6 +16,7 @@
 
 package org.radarbase.android.data
 
+import org.apache.avro.Schema
 import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.data.RecordData
 import org.radarbase.topic.AvroTopic
@@ -27,6 +28,7 @@ interface ReadableDataCache : Closeable {
     /** Get the topic the cache stores.  */
     val readTopic: AvroTopic<Any, Any>
     val serialization: SerializationFactory
+    val readUserIdField: Schema.Field?
 
     val file: File
     /**
@@ -37,7 +39,7 @@ interface ReadableDataCache : Closeable {
      * @return records or null if none are found.
      */
     @Throws(IOException::class)
-    fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any?>?
+    fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any>?
 
     /**
      * Get latest records in the cache, from new to old.

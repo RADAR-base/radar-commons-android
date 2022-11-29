@@ -34,7 +34,7 @@ interface LoginManager {
      * be passed to a LoginListener.
      * @return whether the current login manager will attempt to refresh the authentication state.
      */
-    fun refresh(authState: AppAuthState): Boolean
+    suspend fun refresh(authState: AppAuthState): Boolean
 
     /**
      * Without user interaction, assess whether the current authentication state was valid under the
@@ -52,7 +52,7 @@ interface LoginManager {
      *
      * @param authState current authentication state
      */
-    fun start(authState: AppAuthState)
+    suspend fun start(authState: AppAuthState)
 
     /**
      * Initialization at the end of [LoginActivity.onCreate].

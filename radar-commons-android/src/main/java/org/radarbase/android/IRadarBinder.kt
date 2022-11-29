@@ -42,4 +42,5 @@ interface IRadarBinder : IBinder {
     fun needsBluetooth(): Boolean
 
     fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
+    fun permissionGranted(permissions: Array<String>, grantResults: IntArray)
 }

@@ -3,6 +3,8 @@ package org.radarbase.android.source
 import android.os.Binder
 import android.os.Bundle
 import android.os.Parcel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
@@ -10,6 +12,9 @@ import java.io.IOException
 import java.util.*
 
 class SourceServiceBinder<T : BaseSourceState>(private val sourceService: SourceService<T>) : Binder(), SourceBinder<T> {
+    override val sourceStatus: LiveData<SourceStatusListener.Status>
+        get() = sourceService.status
+
     @Throws(IOException::class)
     override fun getRecords(topic: String, limit: Int): RecordData<Any, Any>? {
         val localDataHandler = sourceService.dataHandler ?: return null

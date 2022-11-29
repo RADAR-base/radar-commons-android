@@ -1,5 +1,13 @@
 package org.radarbase.android.auth.portal
 
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.auth.*
+import io.ktor.client.plugins.auth.providers.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import okhttp3.Credentials
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -26,13 +34,24 @@ class ManagementPortalClient constructor(
     managementPortal: ServerConfig,
     clientId: String,
     clientSecret: String,
-    client: RestClient? = null,
+    client: HttpClient,
 ) {
-    val client: RestClient = (client?.newBuilder() ?: RestClient.newClient())
-            .server(managementPortal)
-            .build()
-
-    private val credentials = Credentials.basic(clientId, clientSecret)
+    val client: HttpClient = client.config {
+        install(Auth) {
+            basic {
+                credentials {
+                    BasicAuthCredentials(clientId, clientSecret)
+                }
+            }
+        }
+        install(ContentNegotiation) {
+            jsonObject()
+        }
+        defaultRequest {
+            url(managementPortal.urlString)
+            accept(ContentType.Application.Json)
+        }
+    }
 
     /**
      * Get refresh-token from meta-token url.
@@ -42,12 +61,11 @@ class ManagementPortalClient constructor(
      * response.
      */
     @Throws(IOException::class)
-    fun getRefreshToken(metaTokenUrl: String, parser: AuthStringParser): AppAuthState {
-        val request = client.requestBuilder(metaTokenUrl)
-                .header("Accept", APPLICATION_JSON)
-                .build()
-
-        logger.debug("Requesting refreshToken with token-url {}", metaTokenUrl)
+    suspend fun getRefreshToken(metaTokenUrl: String, parser: AuthStringParser): AppAuthState {
+        val request = client.prepareRequest {
+            url(metaTokenUrl)
+            logger.debug("Requesting refreshToken with token-url {}", metaTokenUrl)
+        }
 
         return handleRequest(request, parser)
     }
@@ -60,7 +78,7 @@ class ManagementPortalClient constructor(
      * response.
      */
     @Throws(IOException::class)
-    fun getSubject(state: AppAuthState, parser: AuthStringParser): AppAuthState {
+    suspend fun getSubject(state: AppAuthState, parser: AuthStringParser): AppAuthState {
         if (state.userId == null) {
             throw IOException("Authentication state does not contain user ID")
         }
@@ -93,7 +111,7 @@ class ManagementPortalClient constructor(
         source,
     )
 
-    private fun handleSourceUpdateRequest(
+    private suspend fun handleSourceUpdateRequest(
         auth: AppAuthState,
         relativePath: String,
         requestBody: JSONObject,
@@ -132,7 +150,7 @@ class ManagementPortalClient constructor(
     }
 
     @Throws(IOException::class)
-    fun refreshToken(authState: AppAuthState, parser: AuthStringParser): AppAuthState {
+    suspend fun refreshToken(authState: AppAuthState, parser: AuthStringParser): AppAuthState {
         try {
             val refreshToken = requireNotNull(authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY)) {
                 "No refresh token found"
@@ -156,15 +174,15 @@ class ManagementPortalClient constructor(
     }
 
     @Throws(IOException::class)
-    private fun <T> handleRequest(request: Request, parser: Parser<String, T>): T {
-        return client.request(request).use { response ->
-            val body = RestClient.responseBody(response)
-                ?.takeIf { it.isNotEmpty() }
-                ?: throw IOException("ManagementPortal did not yield a response body.")
+    private suspend fun <T> handleRequest(request: HttpStatement, parser: Parser<JSONObject, T>): T {
+        return request.execute { response ->
+            val body: JSONObject = response.body()
 
-            when (response.code) {
-                401 -> throw AuthenticationException("QR code is invalid: $body")
-                in 400 .. 599 -> throw IOException("Failed to make request; response $body")
+            if (response.status == HttpStatusCode.Unauthorized) {
+                throw AuthenticationException("QR code is invalid: $body")
+            }
+            if (!response.status.isSuccess()) {
+                throw IOException("Failed to make request; response $body")
             }
 
             parser.parse(body)

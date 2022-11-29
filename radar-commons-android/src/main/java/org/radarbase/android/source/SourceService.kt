@@ -1,4 +1,4 @@
-/*
+    /*
  * Copyright 2017 The Hyve
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,8 +22,12 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.MutableLiveData
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.newSingleThreadContext
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
@@ -53,7 +57,9 @@ import kotlin.collections.HashSet
  * Specific wearables should extend this class.
  */
 @Keep
-abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceStatusListener, LoginListener {
+abstract class SourceService<T : BaseSourceState> :
+    LifecycleService(), SourceStatusListener, LoginListener
+{
     private var registrationFuture: SafeHandler.HandlerFuture? = null
     val key = ObservationKey()
 
@@ -67,6 +73,12 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private var hasBluetoothPermission: Boolean = false
     var sources: List<SourceMetadata> = emptyList()
     var sourceTypes: Set<SourceType> = emptySet()
+
+    val status: MutableLiveData<SourceStatusListener.Status> by lazy {
+        MutableLiveData(SourceStatusListener.Status.DISCONNECTED)
+    }
+
+    private val dispatcher = Dispatchers.Default.limitedParallelism(1)
 
     private val acceptableSourceTypes: Set<SourceType>
         get() = sourceTypes.filterTo(HashSet()) {
@@ -158,11 +170,12 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
         authConnection = AuthServiceConnection(this, this)
 
-        radarConnection = ManagedServiceConnection(this, radarApp.radarService)
-        radarConnection.onBoundListeners.add { binder ->
-            dataHandler = binder.dataHandler
-            handler.execute {
-                startFuture?.runNow()
+        radarConnection = ManagedServiceConnection<IRadarBinder>(this, radarApp.radarService).apply {
+            onBoundListeners.add { binder ->
+                dataHandler = binder.dataHandler
+                handler.execute {
+                    startFuture?.runNow()
+                }
             }
         }
         radarConnection.bind()
@@ -226,12 +239,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
     }
 
-    private fun broadcastSourceStatus(name: String?, status: SourceStatusListener.Status) {
-        broadcaster.send(SOURCE_STATUS_CHANGED) {
-            putExtra(SOURCE_STATUS_CHANGED, status.ordinal)
-            putExtra(SOURCE_SERVICE_CLASS, this@SourceService.javaClass.name)
-            name?.let { putExtra(SOURCE_STATUS_NAME, it) }
-        }
+    private fun broadcastSourceStatus(status: SourceStatusListener.Status) {
+        this.status.postValue(status)
     }
 
     override fun sourceStatusUpdated(manager: SourceManager<*>, status: SourceStatusListener.Status) {
@@ -244,7 +253,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 registeredSource = null
             }
         }
-        broadcastSourceStatus(manager.name, status)
+        broadcastSourceStatus(status)
     }
 
     @Synchronized
@@ -448,27 +457,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 }
             }
 
-            val matchingSource = acceptableSources
-                    .find { source ->
-                        val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
-                        val pluginMatches = pluginName in source.attributes
-                        val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
-                        when {
-                            pluginMatches -> true
-                            source.matches(id, name) -> true
-                            id != null && physicalId != null && id in physicalId -> true
-                            id != null && physicalId != null -> {
-                                logger.warn("Physical id {} does not match registered id {}", physicalId, id)
-                                false
-                            }
-                            physicalName != null && name != null && name in physicalName -> true
-                            physicalName != null -> {
-                                logger.warn("Physical name {} does not match registered name {}", physicalName, name)
-                                false
-                            }
-                            else -> false
-                        }
-                    }
+            val matchingSource = findMatchingSource(id, name)
 
             if (matchingSource == null) {
                 logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)
@@ -490,6 +479,28 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
     }
 
+    open fun findMatchingSource(id: String?, name: String?): SourceMetadata? = acceptableSources
+        .find { source ->
+            val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
+            val pluginMatches = pluginName in source.attributes
+            val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
+            when {
+                pluginMatches -> true
+                source.matches(id, name) -> true
+                id != null && physicalId != null && id in physicalId -> true
+                id != null && physicalId != null -> {
+                    logger.warn("Physical id {} does not match registered id {}", physicalId, id)
+                    false
+                }
+                physicalName != null && name != null && name in physicalName -> true
+                physicalName != null -> {
+                    logger.warn("Physical name {} does not match registered name {}", physicalName, name)
+                    false
+                }
+                else -> false
+            }
+        }
+
     override fun toString() = "$name<${sourceManager?.name}>"
 
     companion object {
@@ -500,7 +511,6 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         const val CACHE_TOPIC = PREFIX + "DataCache.topic"
         const val CACHE_RECORDS_UNSENT_NUMBER = PREFIX + "DataCache.numberOfRecords.first"
         const val SOURCE_SERVICE_CLASS = PREFIX + "SourceService.getClass"
-        const val SOURCE_STATUS_CHANGED = PREFIX + "SourceStatusListener.Status"
         const val SOURCE_STATUS_NAME = PREFIX + "SourceManager.getName"
         const val SOURCE_CONNECT_FAILED = PREFIX + "SourceStatusListener.sourceFailedToConnect"
 

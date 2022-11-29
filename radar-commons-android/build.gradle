@@ -29,16 +29,20 @@ android {
 description = 'Kafka backend for processing device data.'
 
 dependencies {
-    api ('org.radarbase:radar-commons:0.15.0') {
+    api ('org.radarbase:radar-commons:0.16.0-SNAPSHOT') {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarbase:radar-schemas-commons:0.7.9') {
+    api ('org.radarbase:radar-schemas-commons:0.8.1') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api(project(':avro-android'))
-    api("org.slf4j:slf4j-api:2.0.3")
+    api("org.slf4j:slf4j-api:2.0.5")
     api("androidx.appcompat:appcompat:1.5.1")
+
+    def lifecycleVersion = "2.5.1"
+    implementation("androidx.lifecycle:lifecycle-service:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
 
     implementation "com.squareup.okhttp3:okhttp:4.10.0"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"

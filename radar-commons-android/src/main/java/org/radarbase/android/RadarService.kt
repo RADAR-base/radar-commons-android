@@ -143,11 +143,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         broadcaster.run {
-            permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
-                val extraPermissions = intent.getStringArrayExtra(EXTRA_PERMISSIONS) ?: return@register
-                val extraGrants = intent.getIntArrayExtra(EXTRA_GRANT_RESULTS) ?: return@register
-                onPermissionsGranted(extraPermissions, extraGrants)
-            }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
                         getString(R.string.cannot_connect_device,
@@ -203,7 +198,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         configure(configuration.latestConfig)
         checkPermissions()
         startForeground(1, createForegroundNotification())
-
+        radarApp.radarServiceImplementation = this
         return START_STICKY
     }
 
@@ -230,7 +225,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         permissionsBroadcastReceiver.unregister()
         sourceFailedReceiver.unregister()
-
+        radarApp.radarServiceImplementation = null
         mHandler.stop {
             sourceRegistrar?.let {
                 it.close()
@@ -606,7 +601,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             sourceFilters[connection] = allowedIds.sanitizeIds()
 
             mHandler.execute {
-                val status = connection.sourceStatus
+                val status = connection.sourceStatus?.value
+                    ?: SourceStatusListener.Status.UNAVAILABLE
 
                 if (
                     status == SourceStatusListener.Status.READY ||
@@ -631,6 +627,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             dataHandler
                 ?.flushCaches(successCallback, errorCallback)
                 ?: errorCallback()
+        }
+
+        override fun permissionGranted(permissions: Array<String>, grantResults: IntArray) {
+            onPermissionsGranted(permissions, grantResults)
         }
     }
 

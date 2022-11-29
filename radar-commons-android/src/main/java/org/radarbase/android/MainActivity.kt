@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
+@Suppress("MemberVisibilityCanBePrivate")
 abstract class MainActivity : AppCompatActivity() {
 
     /** Time between refreshes.  */
@@ -85,7 +86,9 @@ abstract class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
         mHandler = SafeHandler.getInstance("Main background handler", Process.THREAD_PRIORITY_BACKGROUND)
-        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeoutMs)
+        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeoutMs) { permissions, grantResults ->
+            radarService?.permissionGranted(permissions, grantResults)
+        }
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
@@ -210,6 +213,7 @@ abstract class MainActivity : AppCompatActivity() {
         connectionsUpdatedReceiver?.unregister()
     }
 
+    @Deprecated("Super was deprecated in favor of Activity Result API")
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         super.onActivityResult(requestCode, resultCode, result)
         bluetoothEnforcer.onActivityResult(requestCode, resultCode)

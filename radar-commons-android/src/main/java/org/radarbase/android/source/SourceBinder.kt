@@ -17,6 +17,7 @@
 package org.radarbase.android.source
 
 import android.os.Bundle
+import androidx.lifecycle.LiveData
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.data.RecordData
@@ -61,4 +62,5 @@ interface SourceBinder<T : BaseSourceState> {
     fun needsBluetooth(): Boolean
 
     fun shouldRemainInBackground(): Boolean
+    val sourceStatus: LiveData<SourceStatusListener.Status>
 }

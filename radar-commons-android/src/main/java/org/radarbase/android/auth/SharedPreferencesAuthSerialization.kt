@@ -1,7 +1,13 @@
 package org.radarbase.android.auth
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONException
 import org.radarbase.android.auth.portal.ManagementPortalClient
 import org.slf4j.LoggerFactory
@@ -9,66 +15,68 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.Serializable
-import java.util.*
 
+@SuppressLint("CommitPrefEdits")
 class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
+    private val prefLock = Mutex()
     private val prefs = context.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE)
 
-    override fun load(): AppAuthState? {
+    override suspend fun load(): AppAuthState? {
         val builder = AppAuthState.Builder()
+        prefLock.withLock {
+            try {
+                readSerializable(LOGIN_PROPERTIES)
+                    ?.let {
+                        @Suppress("UNCHECKED_CAST")
+                        it as HashMap<String, out Serializable>?
+                    }?.also {
+                        @Suppress("DEPRECATION")
+                        builder.properties(it)
+                    }
+            } catch (ex: Exception) {
+                logger.warn("Cannot read AppAuthState properties", ex)
+            }
 
-        try {
-            readSerializable(LOGIN_PROPERTIES)
-                ?.let {
-                    @Suppress("UNCHECKED_CAST")
-                    it as HashMap<String, out Serializable>?
-                }?.also {
-                    @Suppress("DEPRECATION")
-                    builder.properties(it)
-                }
-        } catch (ex: Exception) {
-            logger.warn("Cannot read AppAuthState properties", ex)
-        }
+            try {
+                readSerializable(LOGIN_HEADERS)
+                    ?.let {
+                        @Suppress("UNCHECKED_CAST")
+                        it as ArrayList<Map.Entry<String, String>>?
+                    }
+                    ?.also { builder.headers += it }
+            } catch (ex: Exception) {
+                logger.warn("Cannot read AppAuthState parseHeaders", ex)
+            }
 
-        try {
-            readSerializable(LOGIN_HEADERS)
-                ?.let {
-                    @Suppress("UNCHECKED_CAST")
-                    it as ArrayList<Map.Entry<String, String>>?
-                }
-                ?.also { builder.headers += it }
-        } catch (ex: Exception) {
-            logger.warn("Cannot read AppAuthState parseHeaders", ex)
+            try {
+                prefs.getStringSet(LOGIN_APP_SOURCES_LIST, null)
+                    ?.also { builder.parseSourceMetadata(it) }
+            } catch (ex: JSONException) {
+                logger.warn("Cannot parse source metadata parseHeaders", ex)
+            }
+            try {
+                prefs.getStringSet(LOGIN_SOURCE_TYPES, null)
+                    ?.also { builder.parseSourceTypes(it) }
+            } catch (ex: JSONException) {
+                logger.warn("Cannot parse source types parseHeaders", ex)
+            }
+            builder.apply {
+                projectId = prefs.getString(LOGIN_PROJECT_ID, null)
+                userId = prefs.getString(LOGIN_USER_ID, null) ?: return null
+                token = prefs.getString(LOGIN_TOKEN, null)
+                tokenType = prefs.getInt(LOGIN_TOKEN_TYPE, 0)
+                expiration = prefs.getLong(LOGIN_EXPIRATION, 0L)
+                parseAttributes(prefs.getString(LOGIN_ATTRIBUTES, null))
+                parseHeaders(prefs.getString(LOGIN_HEADERS_LIST, null))
+                isPrivacyPolicyAccepted = prefs.getBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, false)
+                needsRegisteredSources = prefs.getBoolean(LOGIN_NEEDS_REGISTERD_SOURCES, true)
+            }
         }
-
-        try {
-            prefs.getStringSet(LOGIN_APP_SOURCES_LIST, null)
-                ?.also { builder.parseSourceMetadata(it) }
-        } catch (ex: JSONException) {
-            logger.warn("Cannot parse source metadata parseHeaders", ex)
-        }
-        try {
-            prefs.getStringSet(LOGIN_SOURCE_TYPES, null)
-                ?.also { builder.parseSourceTypes(it) }
-        } catch (ex: JSONException) {
-            logger.warn("Cannot parse source types parseHeaders", ex)
-        }
-
-        return builder.apply {
-            projectId = prefs.getString(LOGIN_PROJECT_ID, null)
-            userId = prefs.getString(LOGIN_USER_ID, null) ?: return null
-            token = prefs.getString(LOGIN_TOKEN, null)
-            tokenType = prefs.getInt(LOGIN_TOKEN_TYPE, 0)
-            expiration = prefs.getLong(LOGIN_EXPIRATION, 0L)
-            parseAttributes(prefs.getString(LOGIN_ATTRIBUTES, null))
-            parseHeaders(prefs.getString(LOGIN_HEADERS_LIST, null))
-            isPrivacyPolicyAccepted = prefs.getBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, false)
-            needsRegisteredSources = prefs.getBoolean(LOGIN_NEEDS_REGISTERD_SOURCES, true)
-        }.build()
+        return builder.build()
     }
 
-    override fun store(state: AppAuthState) {
-        prefs.edit().apply {
+    override suspend fun store(state: AppAuthState) {
+        val editor = prefs.edit().apply {
             putString(LOGIN_PROJECT_ID, state.projectId)
             putString(LOGIN_USER_ID, state.userId)
             putString(LOGIN_TOKEN, state.token)
@@ -88,11 +96,12 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
                 addAll(state.sourceTypes.map(SourceType::toJsonString))
             })
             remove(ManagementPortalClient.SOURCES_PROPERTY)
-        }.apply()
+        }
+        editor.lockedCommit()
     }
 
-    override fun remove() {
-        prefs.edit().apply {
+    override suspend fun remove() {
+        val editor = prefs.edit().apply {
             remove(LOGIN_PROJECT_ID)
             remove(LOGIN_USER_ID)
             remove(LOGIN_TOKEN)
@@ -108,7 +117,14 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
             remove(LOGIN_APP_SOURCES_LIST)
             remove(LOGIN_SOURCE_TYPES)
             remove(ManagementPortalClient.SOURCES_PROPERTY)
-        }.apply()
+        }
+        editor.lockedCommit()
+    }
+
+    private suspend fun SharedPreferences.Editor.lockedCommit() = prefLock.withLock {
+        withContext(Dispatchers.IO) {
+            commit()
+        }
     }
 
     private fun readSerializable(key: String): Any? {

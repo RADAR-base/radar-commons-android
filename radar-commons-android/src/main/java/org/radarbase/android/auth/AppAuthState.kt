@@ -146,7 +146,13 @@ class AppAuthState private constructor(builder: Builder) {
         fun invalidate(): Builder = apply { expiration = 0L }
 
         fun setHeader(name: String, value: String): Builder = apply {
-            headers -= headers.filter { it.key == name }
+            with (headers.iterator()) {
+                while (hasNext()) {
+                    if (next().key == name) {
+                        remove()
+                    }
+                }
+            }
             addHeader(name, value)
         }
 

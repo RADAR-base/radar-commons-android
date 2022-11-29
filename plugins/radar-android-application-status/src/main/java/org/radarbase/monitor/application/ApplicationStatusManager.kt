@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 
 class ApplicationStatusManager(
-        service: ApplicationStatusService
+    service: ApplicationStatusService
 ) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
     private val serverTopic: DataCache<ObservationKey, ApplicationServerStatus> = createCache("application_server_status", ApplicationServerStatus())
     private val recordCountsTopic: DataCache<ObservationKey, ApplicationRecordCounts> = createCache("application_record_counts", ApplicationRecordCounts())

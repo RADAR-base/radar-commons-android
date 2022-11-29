@@ -16,6 +16,7 @@
 
 package org.radarbase.android.data
 
+import org.apache.avro.Schema
 import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
@@ -78,6 +79,10 @@ constructor(
 
     private val maximumSize: Long
         get() = config.maximumSize.takeIf { it <= Int.MAX_VALUE } ?: Int.MAX_VALUE.toLong()
+
+    override val readUserIdField: Schema.Field?
+        get() = topic.keySchema.takeIf { it.type == Schema.Type.RECORD }
+            ?.getField("userId")
 
     init {
         queueFile = try {

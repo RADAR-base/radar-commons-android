@@ -159,7 +159,8 @@ class E4Manager(
                             Pair("macAddress", address),
                             Pair("serialNumber", empaDevice.serialNumber))) {
                 if (it == null) {
-                    logger.info("Device {} with ID {} is not listed in acceptable device IDs", deviceName, address)
+                    logger.info("Device {} with ID {} is not listed in acceptable device IDs",
+                        deviceName, address)
                     service.sourceFailedToConnect(deviceName)
                 } else {
                     handler.execute {

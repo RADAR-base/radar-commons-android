@@ -2,6 +2,9 @@ package org.radarbase.android.auth.portal
 
 import android.app.Activity
 import androidx.lifecycle.Observer
+import io.ktor.client.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONException
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
@@ -17,19 +20,20 @@ import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
-import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.MalformedURLException
-import java.util.concurrent.locks.ReentrantLock
 
-class ManagementPortalLoginManager(private val listener: AuthService, state: AppAuthState) : LoginManager {
+class ManagementPortalLoginManager(
+    private val listener: AuthService,
+    state: AppAuthState
+) : LoginManager {
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
 
     private var client: ManagementPortalClient? = null
     private var clientConfig: ManagementPortalConfig? = null
-    private var restClient: RestClient? = null
-    private val refreshLock: ReentrantLock
+    private var restClient: HttpClient? = null
+    private val refreshLock = Mutex()
     private val config = listener.radarConfig
     private val configUpdateObserver = Observer<SingleRadarConfiguration> {
         ensureClientConnectivity(it)
@@ -38,16 +42,15 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     init {
         config.config.observeForever(configUpdateObserver)
         updateSources(state)
-        refreshLock = ReentrantLock()
     }
 
-    fun setRefreshToken(authState: AppAuthState, refreshToken: String) {
+    suspend fun setRefreshToken(authState: AppAuthState, refreshToken: String) {
         refresh(authState.alter { attributes[MP_REFRESH_TOKEN_PROPERTY] = refreshToken })
     }
 
-    fun setTokenFromUrl(authState: AppAuthState, refreshTokenUrl: String) {
+    suspend fun setTokenFromUrl(authState: AppAuthState, refreshTokenUrl: String) {
         client?.let { client ->
-            if (refreshLock.tryLock()) {
+            refreshLock.withLock {
                 try {
                     // create parser
                     val parser = MetaTokenParser(authState)
@@ -56,7 +59,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                     client.getRefreshToken(refreshTokenUrl, parser).let { authState ->
                         // update radarConfig
                         config.updateWithAuthState(listener, authState)
-                            // refresh client
+                        // refresh client
                         ensureClientConnectivity(config.latestConfig)
                         logger.info("Retrieved refreshToken from url")
                         // refresh token
@@ -65,14 +68,12 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                 } catch (ex: Exception) {
                     logger.error("Failed to get meta token", ex)
                     listener.loginFailed(this, ex)
-                } finally {
-                    refreshLock.unlock()
                 }
             }
         }
     }
 
-    override fun refresh(authState: AppAuthState): Boolean {
+    override suspend fun refresh(authState: AppAuthState): Boolean {
         if (authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
         }
@@ -104,7 +105,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                 && authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY) != null
     }
 
-    override fun start(authState: AppAuthState) {
+    override suspend fun start(authState: AppAuthState) {
         refresh(authState)
     }
 
