@@ -51,7 +51,7 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
         // initialize crashlytics
         HandroidLoggerAdapter.DEBUG = BuildConfig.DEBUG
         HandroidLoggerAdapter.APP_NAME = packageName
-        HandroidLoggerAdapter.enableLoggingToCrashlytics()
+        HandroidLoggerAdapter.enableLoggingToFirebaseCrashlytics()
     }
 
     /**

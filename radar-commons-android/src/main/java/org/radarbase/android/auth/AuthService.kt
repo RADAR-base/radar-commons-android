@@ -70,6 +70,11 @@ abstract class AuthService : Service(), LoginListener {
                 // no action required
             }
 
+            override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+                authSerialization.store(appAuth)
+                config.updateWithAuthState(this@AuthService, appAuth)
+            }
+
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 refreshDelay.reset()
                 authSerialization.store(appAuth)
