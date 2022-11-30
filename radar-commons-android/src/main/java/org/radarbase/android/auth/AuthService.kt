@@ -162,17 +162,15 @@ abstract class AuthService : Service(), LoginListener {
     override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
         handler.executeReentrant {
             logger.info("Login failed: {}", ex?.toString())
-            when (ex) {
-                is ConnectException -> {
-                    isConnected = false
-                    handler.delay(refreshDelay.nextDelay(), ::refresh)
-                }
-                is AuthenticationException -> {
-                    callListeners {
-                        it.loginListener.loginFailed(manager, ex)
-                    }
-                }
-                else -> handler.delay(refreshDelay.nextDelay(), ::refresh)
+
+            if (ex is ConnectException) {
+                isConnected = false
+            }
+            callListeners {
+                it.loginListener.loginFailed(manager, ex)
+            }
+            if (ex !is AuthenticationException) {
+                handler.delay(refreshDelay.nextDelay(), ::refresh)
             }
         }
     }
