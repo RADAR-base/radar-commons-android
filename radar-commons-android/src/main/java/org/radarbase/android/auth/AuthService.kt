@@ -211,6 +211,16 @@ abstract class AuthService : Service(), LoginListener {
         }
     }
 
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        handler.executeReentrant {
+            logger.info("Log out succeeded.")
+            appAuth = authState
+            callListeners {
+                it.loginListener.logoutSucceeded(manager, appAuth)
+            }
+        }
+    }
+
     override fun onDestroy() {
         networkConnectedListener.unregister()
         configRegistration?.let { removeLoginListener(it) }
