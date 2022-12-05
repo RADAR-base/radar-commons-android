@@ -7,8 +7,10 @@ import org.radarbase.android.util.ManagedServiceConnection
 import org.slf4j.LoggerFactory
 
 @Keep
-open class AuthServiceConnection(context: Context, private val listener: LoginListener):
-        ManagedServiceConnection<AuthService.AuthServiceBinder>(context, (context.applicationContext as RadarApplication).authService) {
+open class AuthServiceConnection(
+    context: Context,
+    private val listener: LoginListener,
+) : ManagedServiceConnection<AuthService.AuthServiceBinder>(context, (context.applicationContext as RadarApplication).authService) {
     private lateinit var registration: AuthService.LoginListenerRegistration
 
     init {

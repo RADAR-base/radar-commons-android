@@ -169,13 +169,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         super.onStart()
         mHandler.start()
         authConnection.bind()
-        authConnection.applyBinder {
-            applyState {
-                if (userId == null) {
-                    this@MainActivity.logoutSucceeded(null, this)
-                }
-            }
-        }
         bluetoothEnforcer.start()
 
         val radarServiceCls = radarApp.radarService
