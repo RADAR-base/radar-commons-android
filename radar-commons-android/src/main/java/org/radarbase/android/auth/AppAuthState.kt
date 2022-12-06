@@ -22,11 +22,8 @@ import okhttp3.Headers
 import org.json.JSONArray
 import org.json.JSONException
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
-import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCES_PROPERTY
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
-import org.radarcns.android.auth.AppSource
 import org.slf4j.LoggerFactory
-import java.io.Serializable
 import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlin.collections.HashMap
@@ -82,6 +79,10 @@ class AppAuthState private constructor(builder: Builder) {
     val timeSinceLastUpdate: Long
             get() = SystemClock.elapsedRealtime() - lastUpdate
 
+    fun reset(): AppAuthState {
+        return Builder().build()
+    }
+
     fun alter(changes: Builder.() -> Unit): AppAuthState {
         return Builder().also {
             it.projectId = projectId
@@ -96,7 +97,8 @@ class AppAuthState private constructor(builder: Builder) {
             it.sourceMetadata += sourceMetadata
             it.sourceTypes += sourceTypes
             it.headers += headers
-        }.apply(changes).build()
+            it.changes()
+        }.build()
     }
 
     class Builder {
@@ -117,74 +119,45 @@ class AppAuthState private constructor(builder: Builder) {
         var isPrivacyPolicyAccepted = false
         val sourceTypes: MutableCollection<SourceType> = mutableListOf()
 
-        @Deprecated("Use safe attributes instead of properties", replaceWith = ReplaceWith("attributes.addAll(properties)"))
-        fun properties(properties: Map<String, Serializable>?): Builder {
-            if (properties != null) {
-                for ((key, value) in properties) {
-                    @Suppress("UNCHECKED_CAST", "deprecation")
-                    when {
-                        key == SOURCES_PROPERTY -> appSources(value as List<AppSource>)
-                        value is String -> this.attributes[key] = value
-                        else -> logger.warn("Property {} no longer mapped in AppAuthState. Value discarded: {}", key, value)
-                    }
-                }
-            }
-            return this
-        }
-
-        fun parseAttributes(jsonString: String?): Builder = apply {
-            jsonString?.also {
-                attributes += try {
-                    deserializedMap(it)
-                } catch (e: JSONException) {
-                    logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
-                    emptyMap<String, String>()
-                }
+        fun parseAttributes(jsonString: String?) {
+            jsonString ?: return
+            try {
+                attributes += deserializedMap(jsonString)
+            } catch (e: JSONException) {
+                logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
         }
 
         fun invalidate(): Builder = apply { expiration = 0L }
 
-        fun setHeader(name: String, value: String): Builder = apply {
-            headers -= headers.filter { it.key == name }
+        fun setHeader(name: String, value: String) {
+            headers.removeAll { it.key == name }
             addHeader(name, value)
         }
 
-        fun addHeader(name: String, value: String): Builder = apply {
+        fun addHeader(name: String, value: String) {
             headers += AbstractMap.SimpleImmutableEntry(name, value)
         }
 
-        fun parseHeaders(jsonString: String?): Builder = apply {
-            jsonString?.also {
-                this.headers += try {
-                    deserializedEntryList(it)
-                } catch (e: JSONException) {
-                    logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
-                    emptyList<Map.Entry<String, String>>()
-                }
-            }
-        }
-
-        @Deprecated("Use safe sourceMetadata instead of appSources", replaceWith = ReplaceWith("sourceMetadata.addAll(appSources)"))
-        @Suppress("deprecation")
-        private fun appSources(appSources: List<AppSource>?): Builder = apply {
-            appSources?.also { sources ->
-                sourceMetadata += sources.map { SourceMetadata(it) }
+        fun parseHeaders(jsonString: String?) {
+            jsonString ?: return
+            try {
+                this.headers += deserializedEntryList(jsonString)
+            } catch (e: JSONException) {
+                logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
         }
 
         @Throws(JSONException::class)
-        fun parseSourceTypes(sourceJson: Collection<String>?): Builder = apply {
-            sourceJson?.also { types ->
-                sourceTypes += types.map { SourceType(it) }
-            }
+        fun parseSourceTypes(sourceJson: Collection<String>?) {
+            sourceJson ?: return
+            sourceTypes += sourceJson.map { SourceType(it) }
         }
 
         @Throws(JSONException::class)
-        fun parseSourceMetadata(sourceJson: Collection<String>?): Builder = apply {
-            sourceJson?.also { sources ->
-                sourceMetadata += sources.map { SourceMetadata(it) }
-            }
+        fun parseSourceMetadata(sourceJson: Collection<String>?) {
+            sourceJson ?: return
+            sourceMetadata += sourceJson.map { SourceMetadata(it) }
         }
 
         fun build(): AppAuthState {

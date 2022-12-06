@@ -116,10 +116,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
         return when {
             authState.authenticationSource != SOURCE_TYPE -> null
             disableRefresh -> {
-                val loggedOutAuthState = authState.alter {
-                    attributes -= MP_REFRESH_TOKEN_PROPERTY
-                    isPrivacyPolicyAccepted = false
-                }
+                val loggedOutAuthState = authState.reset()
                 listener.logoutSucceeded(this, loggedOutAuthState)
                 loggedOutAuthState
             }

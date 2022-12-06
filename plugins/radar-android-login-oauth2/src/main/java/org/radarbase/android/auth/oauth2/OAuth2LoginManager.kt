@@ -59,14 +59,10 @@ class OAuth2LoginManager(
         return when {
             authState.tokenType != LoginManager.AUTH_TYPE_BEARER -> return null
             disableRefresh -> {
-                val loggedOutAuthState = authState.alter {
-                    attributes -= LOGIN_REFRESH_TOKEN
-                    isPrivacyPolicyAccepted = false
-                }
+                val loggedOutAuthState = authState.reset()
                 logoutSucceeded(this, loggedOutAuthState)
                 loggedOutAuthState
             }
-
             else -> authState
         }
     }

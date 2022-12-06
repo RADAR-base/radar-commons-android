@@ -18,20 +18,7 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
         val builder = AppAuthState.Builder()
 
         try {
-            readSerializable(LOGIN_PROPERTIES)
-                ?.let {
-                    @Suppress("UNCHECKED_CAST")
-                    it as HashMap<String, out Serializable>?
-                }?.also {
-                    @Suppress("DEPRECATION")
-                    builder.properties(it)
-                }
-        } catch (ex: Exception) {
-            logger.warn("Cannot read AppAuthState properties", ex)
-        }
-
-        try {
-            readSerializable(LOGIN_HEADERS)
+            LOGIN_HEADERS.readSerializable()
                 ?.let {
                     @Suppress("UNCHECKED_CAST")
                     it as ArrayList<Map.Entry<String, String>>?
@@ -111,8 +98,8 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
         }.apply()
     }
 
-    private fun readSerializable(key: String): Any? {
-        val propString = prefs.getString(key, null)
+    private fun String.readSerializable(): Any? {
+        val propString = prefs.getString(this, null)
         if (propString != null) {
             val propBytes = Base64.decode(propString, Base64.NO_WRAP)
             try {
@@ -120,9 +107,9 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
                     ObjectInputStream(bi).use { it.readObject() }
                 }
             } catch (ex: IOException) {
-                logger.warn("Failed to deserialize object {} from preferences", key, ex)
+                logger.warn("Failed to deserialize object {} from preferences", this, ex)
             } catch (ex: ClassNotFoundException) {
-                logger.warn("Failed to deserialize object {} from preferences", key, ex)
+                logger.warn("Failed to deserialize object {} from preferences", this, ex)
             }
         }
         return null

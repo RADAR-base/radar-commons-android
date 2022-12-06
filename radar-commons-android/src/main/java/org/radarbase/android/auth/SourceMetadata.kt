@@ -5,11 +5,9 @@ import org.json.JSONObject
 import org.radarbase.android.RadarService.Companion.sanitizeIds
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.util.Strings
-import org.radarcns.android.auth.AppSource
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.regex.Pattern
-import kotlin.collections.HashMap
 
 class SourceMetadata {
     var type: SourceType? = null
@@ -29,22 +27,6 @@ class SourceMetadata {
 
     constructor(type: SourceType) {
         this.type = type
-    }
-
-    @Deprecated("Use direct constructor instead")
-    @SuppressWarnings("deprecation")
-    @Suppress("DEPRECATION")
-    constructor(appSource: AppSource) {
-        this.type = SourceType(
-                appSource.sourceTypeId.toInt(),
-                appSource.sourceTypeProducer,
-                appSource.sourceTypeModel,
-                appSource.sourceTypeCatalogVersion,
-                appSource.hasDynamicRegistration())
-        this.sourceId = appSource.sourceId
-        this.sourceName = appSource.sourceName
-        this.expectedSourceName = appSource.expectedSourceName
-        this.attributes = HashMap(appSource.attributes)
     }
 
     @Throws(JSONException::class)
