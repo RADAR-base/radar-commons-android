@@ -23,6 +23,8 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
+import org.radarbase.android.util.buildJsonArray
+import org.radarbase.android.util.equalTo
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -41,14 +43,12 @@ class AppAuthState private constructor(builder: Builder) {
     val expiration: Long = builder.expiration
     val lastUpdate: Long = builder.lastUpdate
     val attributes: Map<String, String> = HashMap(builder.attributes)
-    val headers: List<Map.Entry<String, String>> = ArrayList(builder.headers)
+    val headers: List<Pair<String, String>> = ArrayList(builder.headers)
     val sourceMetadata: List<SourceMetadata> = ArrayList(builder.sourceMetadata)
     val sourceTypes: List<SourceType> = ArrayList(builder.sourceTypes)
     val isPrivacyPolicyAccepted: Boolean = builder.isPrivacyPolicyAccepted
     val okHttpHeaders: Headers = Headers.Builder().apply {
-        for (header in headers) {
-            add(header.key, header.value)
-        }
+        headers.forEach { (k, v) -> add(k, v) }
     }.build()
     val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.trimEndSlash()
 
@@ -64,9 +64,19 @@ class AppAuthState private constructor(builder: Builder) {
 
     fun getAttribute(key: String) = attributes[key]
 
-    fun serializableAttributeList() = attributes.entries.toArrayString()
+    fun serializableAttributeList() = buildJsonArray {
+        attributes.forEach { (k, v) ->
+            put(k)
+            put(v)
+        }
+    }.toString()
 
-    fun serializableHeaderList() = headers.toArrayString()
+    fun serializableHeaderList() = buildJsonArray {
+        headers.forEach { (k, v) ->
+            put(k)
+            put(v)
+        }
+    }.toString()
 
     fun isValidFor(time: Long, unit: TimeUnit) = isPrivacyPolicyAccepted
             && expiration - unit.toMillis(time) > System.currentTimeMillis()
@@ -104,7 +114,7 @@ class AppAuthState private constructor(builder: Builder) {
     class Builder {
         val lastUpdate = SystemClock.elapsedRealtime()
 
-        val headers: MutableCollection<Map.Entry<String, String>> = mutableListOf()
+        val headers: MutableCollection<Pair<String, String>> = mutableListOf()
         val sourceMetadata: MutableCollection<SourceMetadata> = mutableListOf()
         val attributes: MutableMap<String, String> = mutableMapOf()
 
@@ -122,7 +132,7 @@ class AppAuthState private constructor(builder: Builder) {
         fun parseAttributes(jsonString: String?) {
             jsonString ?: return
             try {
-                attributes += jsonString.toStringMap()
+                attributes += JSONArray(jsonString).toStringPairs().toMap()
             } catch (e: JSONException) {
                 logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
@@ -133,18 +143,18 @@ class AppAuthState private constructor(builder: Builder) {
         }
 
         fun setHeader(name: String, value: String) {
-            headers.removeAll { it.key == name }
+            headers.removeAll { (k, _) -> k == name }
             addHeader(name, value)
         }
 
         fun addHeader(name: String, value: String) {
-            headers += AbstractMap.SimpleImmutableEntry(name, value)
+            headers += name to value
         }
 
         fun parseHeaders(jsonString: String?) {
             jsonString ?: return
             try {
-                this.headers += jsonString.toEntryList()
+                this.headers += JSONArray(jsonString).toStringPairs()
             } catch (e: JSONException) {
                 logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
@@ -187,56 +197,31 @@ class AppAuthState private constructor(builder: Builder) {
         """.trimIndent()
     }
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as AppAuthState
-
-        return projectId == other.projectId
-            && userId == other.userId
-            && token == other.token
-            && tokenType == other.tokenType
-            && authenticationSource == other.authenticationSource
-            && needsRegisteredSources == other.needsRegisteredSources
-            && expiration == other.expiration
-            && attributes == other.attributes
-            && headers == other.headers
-            && sourceMetadata == other.sourceMetadata
-            && sourceTypes == other.sourceTypes
-            && isPrivacyPolicyAccepted == other.isPrivacyPolicyAccepted
-
-    }
+    override fun equals(other: Any?) = equalTo(
+        other,
+        AppAuthState::projectId,
+        AppAuthState::userId,
+        AppAuthState::token,
+        AppAuthState::tokenType,
+        AppAuthState::authenticationSource,
+        AppAuthState::needsRegisteredSources,
+        AppAuthState::expiration,
+        AppAuthState::attributes,
+        AppAuthState::headers,
+        AppAuthState::sourceMetadata,
+        AppAuthState::sourceTypes,
+        AppAuthState::isPrivacyPolicyAccepted,
+    )
 
     override fun hashCode(): Int = Objects.hash(projectId, userId, token)
 
     companion object {
         private val logger = LoggerFactory.getLogger(AppAuthState::class.java)
 
-        private fun Collection<Map.Entry<String, String>>.toArrayString(): String {
-            val array = JSONArray()
-            for (entry in this) {
-                array.put(entry.key)
-                array.put(entry.value)
-            }
-            return array.toString()
-        }
-
         @Throws(JSONException::class)
-        private fun String.toStringMap(): Map<String, String> = buildMap {
-            val array = JSONArray(this)
-            for (i in 0 until array.length() step 2) {
-                put(array.getString(i), array.getString(i + 1))
-            }
-        }
-
-        @Throws(JSONException::class)
-        private fun String.toEntryList(): List<Map.Entry<String, String>> {
-            val array = JSONArray(this)
-            return buildList(array.length() / 2) {
-                for (i in 0 until array.length() step 2) {
-                    add(AbstractMap.SimpleImmutableEntry(array.getString(i), array.getString(i + 1)))
-                }
+        private fun JSONArray.toStringPairs(): List<Pair<String, String>> = buildList(length() / 2) {
+            for (i in 0 until length() step 2) {
+                add(Pair(getString(i), getString(i + 1)))
             }
         }
 

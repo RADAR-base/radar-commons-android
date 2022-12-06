@@ -27,6 +27,6 @@ class AccessTokenParserTest {
         assertTrue(parsedState.isValidFor(9, TimeUnit.SECONDS))
         assertFalse(parsedState.isValidFor(11, TimeUnit.SECONDS))
         assertEquals(AUTH_TYPE_BEARER, parsedState.tokenType)
-        assertEquals("Bearer abcd", parsedState.headers[0].value)
+        assertEquals("Bearer abcd", parsedState.headers[0].second)
     }
 }

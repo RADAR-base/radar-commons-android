@@ -3,8 +3,8 @@ package org.radarbase.android.auth
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.RadarService.Companion.sanitizeIds
+import org.radarbase.android.util.*
 import org.radarbase.android.util.optNonEmptyString
-import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.android.util.toJson
 import org.radarbase.android.util.toStringMap
 import org.radarbase.util.Strings
@@ -59,20 +59,14 @@ class SourceMetadata {
         }
     }
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) {
-            return true
-        }
-        if (other == null || javaClass != other.javaClass) {
-            return false
-        }
-        other as SourceMetadata
-        return (type == other.type
-                && sourceId == other.sourceId
-                && sourceName == other.sourceName
-                && expectedSourceName == other.expectedSourceName
-                && attributes == other.attributes)
-    }
+    override fun equals(other: Any?) = equalTo(
+        other,
+        SourceMetadata::type,
+        SourceMetadata::sourceId,
+        SourceMetadata::sourceName,
+        SourceMetadata::expectedSourceName,
+        SourceMetadata::attributes,
+    )
 
     override fun hashCode(): Int = Objects.hash(type, sourceId)
 

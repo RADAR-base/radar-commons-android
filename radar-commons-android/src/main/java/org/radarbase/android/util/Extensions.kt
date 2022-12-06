@@ -29,6 +29,10 @@ internal inline fun buildJson(config: JSONObject.() -> Unit): JSONObject {
     return JSONObject().apply(config)
 }
 
+internal inline fun buildJsonArray(config: JSONArray.() -> Unit): JSONArray {
+    return JSONArray().apply(config)
+}
+
 internal fun JSONObject.optNonEmptyString(key: String): String? = if (isNull(key)) null else optString(key).takeTrimmedIfNotEmpty()?.takeIf { it != "null" }
 
 internal fun JSONObject.toStringMap(): Map<String, String> = buildMap {
@@ -47,4 +51,11 @@ internal fun JSONObject.putAll(map: Map<String, Any?>) {
     for (entry in map) {
         put(entry.key, entry.value)
     }
+}
+
+internal inline fun <reified T: Any> T.equalTo(other: Any?, vararg fields: T.() -> Any?): Boolean {
+    if (this === other) return true
+    if (other == null || javaClass !== other.javaClass) return false
+    other as T
+    return fields.all { field -> field() == other.field() }
 }
