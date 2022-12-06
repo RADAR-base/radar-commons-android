@@ -1,15 +1,9 @@
 package org.radarbase.android.auth
 
 import android.content.Context
-import android.util.Base64
 import org.json.JSONException
 import org.radarbase.android.auth.portal.ManagementPortalClient
 import org.slf4j.LoggerFactory
-import java.io.ByteArrayInputStream
-import java.io.IOException
-import java.io.ObjectInputStream
-import java.io.Serializable
-import java.util.*
 
 class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
     private val prefs = context.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE)
@@ -18,25 +12,14 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
         val builder = AppAuthState.Builder()
 
         try {
-            LOGIN_HEADERS.readSerializable()
-                ?.let {
-                    @Suppress("UNCHECKED_CAST")
-                    it as ArrayList<Map.Entry<String, String>>?
-                }
-                ?.also { builder.headers += it }
-        } catch (ex: Exception) {
-            logger.warn("Cannot read AppAuthState parseHeaders", ex)
-        }
-
-        try {
-            prefs.getStringSet(LOGIN_APP_SOURCES_LIST, null)
-                ?.also { builder.parseSourceMetadata(it) }
+            val sourceMetadataSet = prefs.getStringSet(LOGIN_APP_SOURCES_LIST, null)
+            if (sourceMetadataSet != null) builder.parseSourceMetadata(sourceMetadataSet)
         } catch (ex: JSONException) {
             logger.warn("Cannot parse source metadata parseHeaders", ex)
         }
         try {
-            prefs.getStringSet(LOGIN_SOURCE_TYPES, null)
-                ?.also { builder.parseSourceTypes(it) }
+            val sourceTypeSet = prefs.getStringSet(LOGIN_SOURCE_TYPES, null)
+            if (sourceTypeSet != null) builder.parseSourceTypes(sourceTypeSet)
         } catch (ex: JSONException) {
             logger.warn("Cannot parse source types parseHeaders", ex)
         }
@@ -66,13 +49,15 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
             putBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, state.isPrivacyPolicyAccepted)
             putString(LOGIN_AUTHENTICATION_SOURCE, state.authenticationSource)
             putBoolean(LOGIN_NEEDS_REGISTERD_SOURCES, state.needsRegisteredSources)
-            remove(LOGIN_PROPERTIES)
-            remove(LOGIN_HEADERS)
-            putStringSet(LOGIN_APP_SOURCES_LIST, HashSet<String>().apply {
-                addAll(state.sourceMetadata.map(SourceMetadata::toJsonString))
+            putStringSet(LOGIN_APP_SOURCES_LIST, buildSet(state.sourceMetadata.size) {
+                state.sourceMetadata.forEach {
+                    add(it.toJson().toString())
+                }
             })
-            putStringSet(LOGIN_SOURCE_TYPES, HashSet<String>().apply {
-                addAll(state.sourceTypes.map(SourceType::toJsonString))
+            putStringSet(LOGIN_SOURCE_TYPES, buildSet(state.sourceTypes.size) {
+                state.sourceTypes.forEach {
+                    add(it.toJson().toString())
+                }
             })
             remove(ManagementPortalClient.SOURCES_PROPERTY)
         }.apply()
@@ -90,29 +75,10 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
             remove(LOGIN_PRIVACY_POLICY_ACCEPTED)
             remove(LOGIN_AUTHENTICATION_SOURCE)
             remove(LOGIN_NEEDS_REGISTERD_SOURCES)
-            remove(LOGIN_PROPERTIES)
-            remove(LOGIN_HEADERS)
             remove(LOGIN_APP_SOURCES_LIST)
             remove(LOGIN_SOURCE_TYPES)
             remove(ManagementPortalClient.SOURCES_PROPERTY)
         }.apply()
-    }
-
-    private fun String.readSerializable(): Any? {
-        val propString = prefs.getString(this, null)
-        if (propString != null) {
-            val propBytes = Base64.decode(propString, Base64.NO_WRAP)
-            try {
-                ByteArrayInputStream(propBytes).use { bi ->
-                    ObjectInputStream(bi).use { it.readObject() }
-                }
-            } catch (ex: IOException) {
-                logger.warn("Failed to deserialize object {} from preferences", this, ex)
-            } catch (ex: ClassNotFoundException) {
-                logger.warn("Failed to deserialize object {} from preferences", this, ex)
-            }
-        }
-        return null
     }
 
     companion object {
@@ -124,9 +90,7 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
         private const val LOGIN_TOKEN_TYPE = "org.radarcns.android.auth.AppAuthState.tokenType"
         private const val LOGIN_EXPIRATION = "org.radarcns.android.auth.AppAuthState.expiration"
         internal const val AUTH_PREFS = "org.radarcns.auth"
-        private const val LOGIN_PROPERTIES = "org.radarcns.android.auth.AppAuthState.properties"
         private const val LOGIN_ATTRIBUTES = "org.radarcns.android.auth.AppAuthState.attributes"
-        private const val LOGIN_HEADERS = "org.radarcns.android.auth.AppAuthState.parseHeaders"
         private const val LOGIN_HEADERS_LIST = "org.radarcns.android.auth.AppAuthState.headerList"
         private const val LOGIN_APP_SOURCES_LIST = "org.radarcns.android.auth.AppAuthState.appSourcesList"
         private const val LOGIN_PRIVACY_POLICY_ACCEPTED = "org.radarcns.android.auth.AppAuthState.isPrivacyPolicyAccepted"

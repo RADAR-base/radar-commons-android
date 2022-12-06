@@ -3,7 +3,10 @@ package org.radarbase.android.auth
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.RadarService.Companion.sanitizeIds
+import org.radarbase.android.util.optNonEmptyString
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
+import org.radarbase.android.util.toJson
+import org.radarbase.android.util.toStringMap
 import org.radarbase.util.Strings
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -42,26 +45,17 @@ class SourceMetadata {
         this.sourceName = json.optNonEmptyString("sourceName")
         this.expectedSourceName = json.optNonEmptyString("expectedSourceName")
 
-        val attr = HashMap<String, String>()
-        val attributesJson = json.optJSONObject("attributes")
-        if (attributesJson != null) {
-            val it = attributesJson.keys()
-            while (it.hasNext()) {
-                val key = it.next()
-                attr[key] = attributesJson.getString(key)
-            }
-        }
-        this.attributes = attr
+        this.attributes = json.optJSONObject("attributes") ?.toStringMap()
+            ?: emptyMap()
     }
 
     fun deduplicateType(types: MutableCollection<SourceType>) {
-        type?.let { t ->
-            val storedType = types.find { it.id == t.id }
-            if (storedType == null) {
-                types += t
-            } else {
-                type = storedType
-            }
+        val currentType = type ?: return
+        val storedType = types.find { it.id == currentType.id }
+        if (storedType != null) {
+            type = storedType
+        } else {
+            types += currentType
         }
     }
 
@@ -72,12 +66,12 @@ class SourceMetadata {
         if (other == null || javaClass != other.javaClass) {
             return false
         }
-        val appSource = other as SourceMetadata
-        return (type == appSource.type
-                && sourceId == appSource.sourceId
-                && sourceName == appSource.sourceName
-                && expectedSourceName == appSource.expectedSourceName
-                && attributes == appSource.attributes)
+        other as SourceMetadata
+        return (type == other.type
+                && sourceId == other.sourceId
+                && sourceName == other.sourceName
+                && expectedSourceName == other.expectedSourceName
+                && attributes == other.attributes)
     }
 
     override fun hashCode(): Int = Objects.hash(type, sourceId)
@@ -89,14 +83,14 @@ class SourceMetadata {
         "expectedSourceName='$expectedSourceName', " +
         "attributes=$attributes'}"
 
-    fun toJsonString(): String {
+    fun toJson(): JSONObject {
         return try {
             (type?.toJson() ?: JSONObject()).apply {
                 put("sourceId", sourceId)
                 put("sourceName", sourceName)
                 put("expectedSourceName", expectedSourceName)
                 put("attributes", attributes.toJson())
-            }.toString()
+            }
         } catch (ex: JSONException) {
             throw IllegalStateException("Cannot serialize existing SourceMetadata")
         }
@@ -135,9 +129,5 @@ class SourceMetadata {
         private val logger = LoggerFactory.getLogger(SourceMetadata::class.java)
         private val expectedNameSplit: Regex = ",".toRegex()
         private fun Pattern.matches(string: String): Boolean = matcher(string).find()
-        internal fun JSONObject.optNonEmptyString(key: String): String? = if (isNull(key)) null else optString(key).takeTrimmedIfNotEmpty().takeIf { it != "null" }
-        internal fun Map<String, Any>.toJson(): JSONObject = JSONObject().also { obj ->
-            forEach { (k, v) -> obj.put(k, v) }
-        }
     }
 }

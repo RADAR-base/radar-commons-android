@@ -2,6 +2,7 @@ package org.radarbase.android.auth
 
 import org.json.JSONException
 import org.json.JSONObject
+import org.radarbase.android.util.buildJson
 import org.slf4j.LoggerFactory
 import java.util.*
 
@@ -15,11 +16,12 @@ class SourceType(val id: Int, val producer: String, val model: String,
 
     @Throws(JSONException::class)
     constructor(json: JSONObject) : this(
-            json.getInt("sourceTypeId"),
-            json.getString("sourceTypeProducer"),
-            json.getString("sourceTypeModel"),
-            json.getString("sourceTypeCatalogVersion"),
-            json.optBoolean("dynamicRegistration", false))
+        id = json.getInt("sourceTypeId"),
+        producer = json.getString("sourceTypeProducer"),
+        model = json.getString("sourceTypeModel"),
+        catalogVersion = json.getString("sourceTypeCatalogVersion"),
+        hasDynamicRegistration = json.optBoolean("dynamicRegistration", false),
+    )
 
     override fun equals(other: Any?): Boolean {
         if (this === other) {
@@ -28,47 +30,33 @@ class SourceType(val id: Int, val producer: String, val model: String,
         if (other == null || javaClass != other.javaClass) {
             return false
         }
-        val type = other as SourceType
-        return (id == type.id
-                && producer == type.producer
-                && model == type.model
-                && catalogVersion == type.catalogVersion)
+        other as SourceType
+        return (id == other.id
+                && producer == other.producer
+                && model == other.model
+                && catalogVersion == other.catalogVersion)
     }
 
-    override fun hashCode(): Int {
-        return Objects.hash(id)
-    }
+    override fun hashCode(): Int = Objects.hash(id)
 
-    override fun toString(): String {
-        return ("SourceType{"
-                + "id='" + id + '\''.toString()
-                + ", producer='" + producer + '\''.toString()
-                + ", model='" + model + '\''.toString()
-                + ", catalogVersion='" + catalogVersion + '\''.toString()
-                + ", dynamicRegistration=" + hasDynamicRegistration
-                + '}'.toString())
-    }
+    override fun toString(): String = ("SourceType{"
+            + "id='" + id + '\''.toString()
+            + ", producer='" + producer + '\''.toString()
+            + ", model='" + model + '\''.toString()
+            + ", catalogVersion='" + catalogVersion + '\''.toString()
+            + ", dynamicRegistration=" + hasDynamicRegistration
+            + '}'.toString())
 
-    fun toJson(): JSONObject {
-        return try {
-            JSONObject().apply {
-                put("sourceTypeId", id)
-                put("sourceTypeProducer", producer)
-                put("sourceTypeModel", model)
-                put("sourceTypeCatalogVersion", catalogVersion)
-                put("dynamicRegistration", hasDynamicRegistration)
-            }
-        } catch (ex: JSONException) {
-            throw IllegalStateException("Cannot serialize existing SourceMetadata")
+    fun toJson(): JSONObject = try {
+        buildJson {
+            put("sourceTypeId", id)
+            put("sourceTypeProducer", producer)
+            put("sourceTypeModel", model)
+            put("sourceTypeCatalogVersion", catalogVersion)
+            put("dynamicRegistration", hasDynamicRegistration)
         }
-    }
-
-    fun toJsonString(): String {
-        try {
-            return toJson().toString()
-        } catch (ex: JSONException) {
-            throw IllegalStateException("Cannot serialize existing SourceMetadata")
-        }
+    } catch (ex: JSONException) {
+        throw IllegalStateException("Cannot serialize existing SourceMetadata")
     }
 
     companion object {

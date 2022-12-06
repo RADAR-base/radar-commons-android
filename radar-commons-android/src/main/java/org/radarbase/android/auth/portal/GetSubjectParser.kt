@@ -6,10 +6,12 @@ import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
-import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
 import org.radarbase.android.auth.SourceType
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE
+import org.radarbase.android.util.asJSONObjectSequence
+import org.radarbase.android.util.optNonEmptyString
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
+import org.radarbase.android.util.toStringMap
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import kotlin.collections.ArrayList
@@ -42,8 +44,8 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                             .forEach { attrObject ->
                                 attributes[attrObject.getString("key")] = attrObject.getString("value")
                             }
-                    } else {
-                        attributes += (attrObjects as? JSONObject).toStringMap()
+                    } else if (attrObjects is JSONObject) {
+                        attributes += attrObjects.toStringMap()
                     }
                 }
                 jsonObject.optNonEmptyString("externalId")?.let {
@@ -104,7 +106,8 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                             expectedSourceName = sourceObj.optNonEmptyString("expectedSourceName")
                             sourceName = sourceObj.optNonEmptyString("sourceName")
                             sourceId = id
-                            attributes = sourceObj.optJSONObject("attributes").toStringMap()
+                            attributes = sourceObj.optJSONObject("attributes")?.toStringMap()
+                                ?: emptyMap()
                         }
                     } else {
                         logger.error("Source {} type {} not recognized", id, sourceTypeId)
@@ -114,20 +117,6 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
             logger.info("Sources from Management Portal: {}", actualSources)
             return actualSources
-        }
-
-        @Throws(JSONException::class)
-        internal fun JSONObject?.toStringMap(): Map<String, String> = if (this == null) {
-            emptyMap()
-        } else {
-            keys().asSequence()
-                .associateWith { getString(it) }
-        }
-
-        internal fun JSONArray.asJSONObjectSequence(): Sequence<JSONObject> = sequence {
-            for (i in 0 until length()) {
-                yield(getJSONObject(i))
-            }
         }
 
         @Throws(JSONException::class)
