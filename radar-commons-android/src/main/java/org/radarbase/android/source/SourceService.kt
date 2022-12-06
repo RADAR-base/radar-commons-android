@@ -383,6 +383,8 @@ abstract class SourceService<T : BaseSourceState> :
 
     }
 
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
     /**
      * Override this function to get any parameters from the given intent.
      * Bundle classloader needs to be set correctly for this to work.

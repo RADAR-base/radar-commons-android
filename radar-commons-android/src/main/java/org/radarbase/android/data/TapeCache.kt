@@ -16,6 +16,9 @@
 
 package org.radarbase.android.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import org.apache.avro.Schema
 import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.android.util.ChangeRunner
@@ -69,6 +72,8 @@ constructor(
 
     private val configCache = ChangeRunner(config)
 
+    private val mutex: Mutex
+
     override var config
         get() = handler.compute { configCache.value }
         set(value) = handler.execute {
@@ -96,6 +101,20 @@ constructor(
             }
         }
         this.queue = BackedObjectQueue(queueFile, serializer, deserializer)
+    }
+
+    suspend fun initialize() = withContext(Dispatchers.IO) {
+        queueFile = try {
+            queueFileFactory.generate(Objects.requireNonNull(file), maximumSize)
+        } catch (ex: IOException) {
+            logger.error("TapeCache {} was corrupted. Removing old cache.", file, ex)
+            if (file.delete()) {
+                queueFileFactory.generate(file, maximumSize)
+            } else {
+                throw ex
+            }
+        }
+        queue = BackedObjectQueue(queueFile, serializer, deserializer)
     }
 
     @Throws(IOException::class)

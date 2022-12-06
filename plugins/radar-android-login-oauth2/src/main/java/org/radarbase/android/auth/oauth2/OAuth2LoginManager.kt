@@ -26,9 +26,9 @@ import org.radarbase.producer.AuthenticationException
  * Authenticates against the RADAR Management Portal.
  */
 class OAuth2LoginManager(
-        private val service: AuthService,
-        private val projectIdClaim: String,
-        private val userIdClaim: String
+    private val service: AuthService,
+    private val projectIdClaim: String,
+    private val userIdClaim: String
 ) : LoginManager, LoginListener {
     private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
 
@@ -58,9 +58,10 @@ class OAuth2LoginManager(
     override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
         return when {
             authState.tokenType != LoginManager.AUTH_TYPE_BEARER -> return null
-            disableRefresh -> authState.alter {
-                attributes -= LOGIN_REFRESH_TOKEN
-                isPrivacyPolicyAccepted = false
+            disableRefresh -> {
+                val loggedOutAuthState = authState.reset()
+                logoutSucceeded(this, loggedOutAuthState)
+                loggedOutAuthState
             }
             else -> authState
         }
@@ -89,16 +90,16 @@ class OAuth2LoginManager(
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         val token = authState.token
         if (token == null) {
-            this.service.loginFailed(this,
+            loginFailed(this,
                     IllegalArgumentException("Cannot login using OAuth2 without a token"))
             return
         }
         try {
             processJwt(authState, Jwt.parse(token)).let {
-                this.service.loginSucceeded(this, it)
+                service.loginSucceeded(this, it)
             }
         } catch (ex: JSONException) {
-            this.service.loginFailed(this, ex)
+            loginFailed(this, ex)
         }
 
     }
@@ -116,6 +117,7 @@ class OAuth2LoginManager(
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = this.service.logoutSucceeded(this, authState)
 
     companion object {
         private const val OAUTH2_SOURCE_TYPE = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"

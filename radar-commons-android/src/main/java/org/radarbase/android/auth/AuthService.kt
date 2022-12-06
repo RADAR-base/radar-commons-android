@@ -4,23 +4,19 @@ import android.content.Intent
 import android.content.Intent.*
 import android.os.Binder
 import android.os.IBinder
-import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.Keep
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.NetworkConnectedReceiver
-import org.radarbase.android.util.SafeHandler
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
@@ -88,6 +84,22 @@ abstract class AuthService : LifecycleService(), LoginListener {
         }
 
         loginManagers = createLoginManagers(appAuth)
+        configRegistration = addLoginListener(object : LoginListener {
+            override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
+                // no action required
+            }
+
+            override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+                authSerialization.store(appAuth)
+                config.updateWithAuthState(this@AuthService, appAuth)
+            }
+
+            override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+                refreshDelay.reset()
+                authSerialization.store(appAuth)
+                config.updateWithAuthState(this@AuthService, appAuth)
+            }
+        })
     }
 
     /**
@@ -157,17 +169,15 @@ abstract class AuthService : LifecycleService(), LoginListener {
     override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
         handler.executeReentrant {
             logger.info("Login failed: {}", ex?.toString())
-            when (ex) {
-                is ConnectException -> {
-                    isConnected = false
-                    handler.delay(refreshDelay.nextDelay(), ::refresh)
-                }
-                is AuthenticationException -> {
-                    callListeners {
-                        it.loginListener.loginFailed(manager, ex)
-                    }
-                }
-                else -> handler.delay(refreshDelay.nextDelay(), ::refresh)
+
+            if (ex is ConnectException) {
+                isConnected = false
+            }
+            callListeners {
+                it.loginListener.loginFailed(manager, ex)
+            }
+            if (ex !is AuthenticationException) {
+                handler.delay(refreshDelay.nextDelay(), ::refresh)
             }
         }
     }
@@ -202,6 +212,16 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
             callListeners(sinceUpdate = appAuth.lastUpdate) {
                 it.loginListener.loginSucceeded(manager, appAuth)
+            }
+        }
+    }
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        handler.executeReentrant {
+            logger.info("Log out succeeded.")
+            appAuth = authState
+            callListeners {
+                it.loginListener.logoutSucceeded(manager, appAuth)
             }
         }
     }

@@ -559,10 +559,13 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
         }
 
-        val packageManager = packageManager
-
-        val supportedPlugins = providerLoader.loadProvidersFromNames(config)
-            .filter { hasFeatures(it, packageManager) }
+        val supportedPlugins = if (authState.userId != null) {
+            val packageManager = packageManager
+            providerLoader.loadProvidersFromNames(config)
+                .filter { hasFeatures(it, packageManager) }
+        } else {
+            emptyList()
+        }
 
         configuredProviders.applyIfChanged(supportedPlugins) { providers ->
             val previousConnections = mConnections
@@ -582,6 +585,14 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
         isMakingAuthRequest.set(false)
+    }
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        mHandler.execute {
+            updateProviders(authState, configuration.latestConfig)
+        }
+        stopForeground(true)
+        stopSelf()
     }
 
     protected inner class RadarBinder : Binder(), IRadarBinder {
@@ -662,9 +673,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         const val ACTION_CHECK_PERMISSIONS = "$RADAR_PACKAGE.ACTION_CHECK_PERMISSIONS"
         const val EXTRA_PERMISSIONS = "$RADAR_PACKAGE.EXTRA_PERMISSIONS"
-
-        const val ACTION_PERMISSIONS_GRANTED = "$RADAR_PACKAGE.ACTION_PERMISSIONS_GRANTED"
-        const val EXTRA_GRANT_RESULTS = "$RADAR_PACKAGE.EXTRA_GRANT_RESULTS"
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 

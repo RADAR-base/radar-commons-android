@@ -33,14 +33,16 @@ import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
-import org.radarbase.android.auth.AuthService
+import org.radarbase.android.auth.*
+import org.radarbase.android.splash.SplashActivity
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
+
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
 @Suppress("MemberVisibilityCanBePrivate")
-abstract class MainActivity : AppCompatActivity() {
+abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     /** Time between refreshes.  */
     private var uiRefreshRate: Long = 0
@@ -100,7 +102,15 @@ abstract class MainActivity : AppCompatActivity() {
         }
 
         bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
-        authConnection = ManagedServiceConnection(this, radarApp.authService)
+        authConnection = AuthServiceConnection(this, this).apply {
+            onBoundListeners += { binder ->
+                binder.applyState {
+                    if (userId == null) {
+                        this@MainActivity.logoutSucceeded(null, this)
+                    }
+                }
+            }
+        }
         create()
     }
 
@@ -233,6 +243,17 @@ abstract class MainActivity : AppCompatActivity() {
      */
     protected fun logout(disableRefresh: Boolean) {
         authConnection.applyBinder { invalidate(null, disableRefresh) }
+    }
+
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        logger.info("Starting SplashActivity")
+        val intent = packageManager.getLaunchIntentForPackage(BuildConfig.LIBRARY_PACKAGE_NAME) ?: return
+        startActivity(intent.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        })
+        finish()
     }
 
     companion object {

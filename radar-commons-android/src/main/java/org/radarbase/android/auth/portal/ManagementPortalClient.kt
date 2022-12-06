@@ -18,10 +18,11 @@ import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
-import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
-import org.radarbase.android.auth.SourceMetadata.Companion.toJson
-import org.radarbase.android.auth.portal.GetSubjectParser.Companion.toStringMap
-import org.radarbase.android.util.Parser
+import org.radarbase.android.util.*
+import org.radarbase.android.util.buildJson
+import org.radarbase.android.util.optNonEmptyString
+import org.radarbase.android.util.toJson
+import org.radarbase.android.util.toStringMap
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.rest.RestClient
@@ -220,10 +221,8 @@ class ManagementPortalClient constructor(
         }
 
         @Throws(JSONException::class)
-        internal fun sourceUpdateBody(source: SourceMetadata): JSONObject = JSONObject().apply {
-            for ((key, value) in source.attributes) {
-                put(key, value)
-            }
+        internal fun sourceUpdateBody(source: SourceMetadata): JSONObject = buildJson {
+            putAll(source.attributes)
         }
 
         /**
@@ -240,7 +239,8 @@ class ManagementPortalClient constructor(
                 sourceId = responseObject.getString("sourceId")
                 sourceName = responseObject.optNonEmptyString("sourceName") ?: source.sourceId
                 expectedSourceName = responseObject.optNonEmptyString("expectedSourceName")
-                attributes = responseObject.optJSONObject("attributes").toStringMap()
+                attributes = responseObject.optJSONObject("attributes")?.toStringMap()
+                    ?: emptyMap()
             }
         }
 

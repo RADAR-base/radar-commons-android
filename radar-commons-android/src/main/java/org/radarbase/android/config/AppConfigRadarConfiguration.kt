@@ -13,11 +13,11 @@ import org.radarbase.android.RadarConfiguration.Companion.BASE_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
-import org.radarbase.android.auth.portal.GetSubjectParser.Companion.asJSONObjectSequence
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.asJSONObjectSequence
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory

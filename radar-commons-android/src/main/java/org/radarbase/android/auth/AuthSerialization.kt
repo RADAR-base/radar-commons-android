@@ -1,7 +1,5 @@
 package org.radarbase.android.auth
 
-import kotlinx.coroutines.CoroutineScope
-
 /** Manages persistence of the AppAuthState. */
 interface AuthSerialization {
     /**

@@ -9,10 +9,10 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 
 class SourceProviderRegistrar(
-        private val authServiceBinder: AuthService.AuthServiceBinder,
-        private val handler: SafeHandler,
-        private val providers: List<SourceProvider<*>>,
-        val onUpdate: (unregisteredProviders: List<SourceProvider<*>>, registeredProviders: List<SourceProvider<*>>) -> Unit
+    private val authServiceBinder: AuthService.AuthServiceBinder,
+    private val handler: SafeHandler,
+    private val providers: List<SourceProvider<*>>,
+    val onUpdate: (unregisteredProviders: List<SourceProvider<*>>, registeredProviders: List<SourceProvider<*>>) -> Unit
 ): LoginListener, Closeable {
     private val authRegistration: AuthService.LoginListenerRegistration = authServiceBinder.addLoginListener(this)
     private var isClosed: Boolean = false
@@ -66,6 +66,8 @@ class SourceProviderRegistrar(
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
     }
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 
     private fun resetRetry() {
         retry.values.forEach { (_, future) ->

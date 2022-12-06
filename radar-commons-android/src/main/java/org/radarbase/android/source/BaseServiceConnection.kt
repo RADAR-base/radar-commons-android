@@ -23,6 +23,7 @@ import android.os.IBinder
 import androidx.lifecycle.LiveData
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.util.equalTo
 import org.radarbase.data.RecordData
 import org.radarbase.util.Strings
 import org.slf4j.LoggerFactory
@@ -83,9 +84,8 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
     }
 
     @Throws(IOException::class)
-    fun getRecords(topic: String, limit: Int): RecordData<Any, Any>? {
-        return serviceBinder?.getRecords(topic, limit)
-    }
+    fun getRecords(topic: String, limit: Int): RecordData<Any, Any>? =
+        serviceBinder?.getRecords(topic, limit)
 
     /**
      * Start looking for sources to record.
@@ -99,21 +99,17 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
         }
     }
 
-    fun restartRecording(acceptableIds: Set<String>) {
-        try {
-            serviceBinder?.restartRecording(acceptableIds)
-        } catch (ex: IllegalStateException) {
-            logger.error("Cannot restart service {}: {}", this, ex.message)
-        }
+    fun restartRecording(acceptableIds: Set<String>) = try {
+        serviceBinder?.restartRecording(acceptableIds)
+    } catch (ex: IllegalStateException) {
+        logger.error("Cannot restart service {}: {}", this, ex.message)
     }
 
     fun stopRecording() {
         serviceBinder?.stopRecording()
     }
 
-    fun hasService(): Boolean {
-        return serviceBinder != null
-    }
+    fun hasService(): Boolean = serviceBinder != null
 
     override fun onServiceDisconnected(className: ComponentName?) {
         // only do these steps once
@@ -128,9 +124,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
         serviceBinder?.updateConfiguration(bundle)
     }
 
-    fun numberOfRecords(): Long? {
-        return serviceBinder?.numberOfRecords
-    }
+    fun numberOfRecords(): Long? = serviceBinder?.numberOfRecords
 
     /**
      * True if given string is a substring of the source name.
@@ -157,24 +151,11 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
         return serviceBinder?.shouldRemainInBackground() == false
     }
 
-    override fun equals(other: Any?): Boolean {
-        if (other === this) {
-            return true
-        }
-        if (other == null || javaClass != other.javaClass) {
-            return false
-        }
-        val otherService = other as BaseServiceConnection<*>
-        return this.serviceClassName == otherService.serviceClassName
-    }
+    override fun equals(other: Any?) = equalTo(other, BaseServiceConnection<*>::serviceClassName)
 
-    override fun hashCode(): Int {
-        return serviceClassName.hashCode()
-    }
+    override fun hashCode(): Int = serviceClassName.hashCode()
 
-    override fun toString(): String {
-        return "ServiceConnection<$serviceClassName>"
-    }
+    override fun toString(): String = "ServiceConnection<$serviceClassName>"
 
     companion object {
         private val logger = LoggerFactory.getLogger(BaseServiceConnection::class.java)

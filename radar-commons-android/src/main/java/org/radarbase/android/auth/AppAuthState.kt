@@ -22,11 +22,10 @@ import okhttp3.Headers
 import org.json.JSONArray
 import org.json.JSONException
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
-import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCES_PROPERTY
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
-import org.radarcns.android.auth.AppSource
+import org.radarbase.android.util.buildJsonArray
+import org.radarbase.android.util.equalTo
 import org.slf4j.LoggerFactory
-import java.io.Serializable
 import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlin.collections.HashMap
@@ -44,16 +43,14 @@ class AppAuthState private constructor(builder: Builder) {
     val expiration: Long = builder.expiration
     val lastUpdate: Long = builder.lastUpdate
     val attributes: Map<String, String> = HashMap(builder.attributes)
-    val headers: List<Map.Entry<String, String>> = ArrayList(builder.headers)
+    val headers: List<Pair<String, String>> = ArrayList(builder.headers)
     val sourceMetadata: List<SourceMetadata> = ArrayList(builder.sourceMetadata)
     val sourceTypes: List<SourceType> = ArrayList(builder.sourceTypes)
     val isPrivacyPolicyAccepted: Boolean = builder.isPrivacyPolicyAccepted
     val okHttpHeaders: Headers = Headers.Builder().apply {
-        for (header in headers) {
-            add(header.key, header.value)
-        }
+        headers.forEach { (k, v) -> add(k, v) }
     }.build()
-    val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.stripEndSlashes()
+    val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.trimEndSlash()
 
     val isValid: Boolean
         get() = isPrivacyPolicyAccepted && expiration > System.currentTimeMillis()
@@ -67,9 +64,19 @@ class AppAuthState private constructor(builder: Builder) {
 
     fun getAttribute(key: String) = attributes[key]
 
-    fun serializableAttributeList() = serializedMap(attributes.entries)
+    fun serializableAttributeList() = buildJsonArray {
+        attributes.forEach { (k, v) ->
+            put(k)
+            put(v)
+        }
+    }.toString()
 
-    fun serializableHeaderList() = serializedMap(headers)
+    fun serializableHeaderList() = buildJsonArray {
+        headers.forEach { (k, v) ->
+            put(k)
+            put(v)
+        }
+    }.toString()
 
     fun isValidFor(time: Long, unit: TimeUnit) = isPrivacyPolicyAccepted
             && expiration - unit.toMillis(time) > System.currentTimeMillis()
@@ -81,6 +88,10 @@ class AppAuthState private constructor(builder: Builder) {
 
     val timeSinceLastUpdate: Long
             get() = SystemClock.elapsedRealtime() - lastUpdate
+
+    fun reset(): AppAuthState {
+        return Builder().build()
+    }
 
     fun alter(changes: Builder.() -> Unit): AppAuthState {
         return Builder().also {
@@ -96,13 +107,14 @@ class AppAuthState private constructor(builder: Builder) {
             it.sourceMetadata += sourceMetadata
             it.sourceTypes += sourceTypes
             it.headers += headers
-        }.apply(changes).build()
+            it.changes()
+        }.build()
     }
 
     class Builder {
         val lastUpdate = SystemClock.elapsedRealtime()
 
-        val headers: MutableCollection<Map.Entry<String, String>> = mutableListOf()
+        val headers: MutableCollection<Pair<String, String>> = mutableListOf()
         val sourceMetadata: MutableCollection<SourceMetadata> = mutableListOf()
         val attributes: MutableMap<String, String> = mutableMapOf()
 
@@ -117,80 +129,47 @@ class AppAuthState private constructor(builder: Builder) {
         var isPrivacyPolicyAccepted = false
         val sourceTypes: MutableCollection<SourceType> = mutableListOf()
 
-        @Deprecated("Use safe attributes instead of properties", replaceWith = ReplaceWith("attributes.addAll(properties)"))
-        fun properties(properties: Map<String, Serializable>?): Builder {
-            if (properties != null) {
-                for ((key, value) in properties) {
-                    @Suppress("UNCHECKED_CAST", "deprecation")
-                    when {
-                        key == SOURCES_PROPERTY -> appSources(value as List<AppSource>)
-                        value is String -> this.attributes[key] = value
-                        else -> logger.warn("Property {} no longer mapped in AppAuthState. Value discarded: {}", key, value)
-                    }
-                }
-            }
-            return this
-        }
-
-        fun parseAttributes(jsonString: String?): Builder = apply {
-            jsonString?.also {
-                attributes += try {
-                    deserializedMap(it)
-                } catch (e: JSONException) {
-                    logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
-                    emptyMap<String, String>()
-                }
+        fun parseAttributes(jsonString: String?) {
+            jsonString ?: return
+            try {
+                attributes += JSONArray(jsonString).toStringPairs().toMap()
+            } catch (e: JSONException) {
+                logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
         }
 
-        fun invalidate(): Builder = apply { expiration = 0L }
+        fun invalidate() {
+            expiration = 0L
+        }
 
-        fun setHeader(name: String, value: String): Builder = apply {
-            with (headers.iterator()) {
-                while (hasNext()) {
-                    if (next().key == name) {
-                        remove()
-                    }
-                }
-            }
+        fun setHeader(name: String, value: String) {
+            headers.removeAll { (k, _) -> k == name }
             addHeader(name, value)
         }
 
-        fun addHeader(name: String, value: String): Builder = apply {
-            headers += AbstractMap.SimpleImmutableEntry(name, value)
+        fun addHeader(name: String, value: String) {
+            headers += name to value
         }
 
-        fun parseHeaders(jsonString: String?): Builder = apply {
-            jsonString?.also {
-                this.headers += try {
-                    deserializedEntryList(it)
-                } catch (e: JSONException) {
-                    logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
-                    emptyList<Map.Entry<String, String>>()
-                }
-            }
-        }
-
-        @Deprecated("Use safe sourceMetadata instead of appSources", replaceWith = ReplaceWith("sourceMetadata.addAll(appSources)"))
-        @Suppress("deprecation")
-        private fun appSources(appSources: List<AppSource>?): Builder = apply {
-            appSources?.also { sources ->
-                sourceMetadata += sources.map { SourceMetadata(it) }
+        fun parseHeaders(jsonString: String?) {
+            jsonString ?: return
+            try {
+                this.headers += JSONArray(jsonString).toStringPairs()
+            } catch (e: JSONException) {
+                logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
         }
 
         @Throws(JSONException::class)
-        fun parseSourceTypes(sourceJson: Collection<String>?): Builder = apply {
-            sourceJson?.also { types ->
-                sourceTypes += types.map { SourceType(it) }
-            }
+        fun parseSourceTypes(sourceJson: Collection<String>?) {
+            sourceJson ?: return
+            sourceTypes += sourceJson.map { SourceType(it) }
         }
 
         @Throws(JSONException::class)
-        fun parseSourceMetadata(sourceJson: Collection<String>?): Builder = apply {
-            sourceJson?.also { sources ->
-                sourceMetadata += sources.map { SourceMetadata(it) }
-            }
+        fun parseSourceMetadata(sourceJson: Collection<String>?) {
+            sourceJson ?: return
+            sourceMetadata += sourceJson.map { SourceMetadata(it) }
         }
 
         fun build(): AppAuthState {
@@ -218,80 +197,46 @@ class AppAuthState private constructor(builder: Builder) {
         """.trimIndent()
     }
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as AppAuthState
-
-        return projectId == other.projectId
-            && userId == other.userId
-            && token == other.token
-            && tokenType == other.tokenType
-            && authenticationSource == other.authenticationSource
-            && needsRegisteredSources == other.needsRegisteredSources
-            && expiration == other.expiration
-            && attributes == other.attributes
-            && headers == other.headers
-            && sourceMetadata == other.sourceMetadata
-            && sourceTypes == other.sourceTypes
-            && isPrivacyPolicyAccepted == other.isPrivacyPolicyAccepted
-
-    }
+    override fun equals(other: Any?) = equalTo(
+        other,
+        AppAuthState::projectId,
+        AppAuthState::userId,
+        AppAuthState::token,
+        AppAuthState::tokenType,
+        AppAuthState::authenticationSource,
+        AppAuthState::needsRegisteredSources,
+        AppAuthState::expiration,
+        AppAuthState::attributes,
+        AppAuthState::headers,
+        AppAuthState::sourceMetadata,
+        AppAuthState::sourceTypes,
+        AppAuthState::isPrivacyPolicyAccepted,
+    )
 
     override fun hashCode(): Int = Objects.hash(projectId, userId, token)
 
     companion object {
         private val logger = LoggerFactory.getLogger(AppAuthState::class.java)
 
-        private fun serializedMap(map: Collection<Map.Entry<String, String>>): String {
-            val array = JSONArray()
-            for (entry in map) {
-                array.put(entry.key)
-                array.put(entry.value)
-            }
-            return array.toString()
-        }
-
         @Throws(JSONException::class)
-        private fun deserializedMap(jsonString: String): Map<String, String> {
-            val array = JSONArray(jsonString)
-            val map = HashMap<String, String>(array.length() * 4 / 6 + 1)
-            var i = 0
-            while (i < array.length()) {
-                map[array.getString(i)] = array.getString(i + 1)
-                i += 2
+        private fun JSONArray.toStringPairs(): List<Pair<String, String>> = buildList(length() / 2) {
+            for (i in 0 until length() step 2) {
+                add(Pair(getString(i), getString(i + 1)))
             }
-            return map
-        }
-
-        @Throws(JSONException::class)
-        private fun deserializedEntryList(jsonString: String): List<Map.Entry<String, String>> {
-            val array = JSONArray(jsonString)
-            val list = ArrayList<Map.Entry<String, String>>(array.length() / 2)
-            var i = 0
-            while (i < array.length()) {
-                list += AbstractMap.SimpleImmutableEntry(array.getString(i), array.getString(i + 1))
-                i += 2
-            }
-            return list
         }
 
         /**
          * Strips all slashes from the end of a URL.
-         * @param url string to strip
+         * @receiver string to strip
          * @return stripped URL or null if that would result in an empty or null string.
          */
-        private fun String.stripEndSlashes(): String? {
-            var lastIndex = length - 1
-            while (lastIndex >= 0 && this[lastIndex] == '/') {
-                lastIndex--
-            }
-            if (lastIndex == -1) {
+        private fun String.trimEndSlash(): String? {
+            val result = trimEnd('/')
+            if (result.isEmpty()) {
                 logger.warn("Base URL '{}' should be a valid URL.", this)
                 return null
             }
-            return substring(0, lastIndex + 1)
+            return result
         }
     }
 }

@@ -153,6 +153,8 @@ abstract class SplashActivity : AppCompatActivity() {
                 }
             }
 
+            override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 if (authState.isPrivacyPolicyAccepted) {
                     startActivity(radarApp.mainActivity)
@@ -186,8 +188,8 @@ abstract class SplashActivity : AppCompatActivity() {
                 finish()
             }.also { runnable ->
                 startActivityFuture = runnable
-                val delayRemaining = Math.max(0, delayMs - (SystemClock.elapsedRealtime() - startedAt))
-                handler.postDelayed(runnable, delayRemaining)
+                val delayRemaining = delayMs - (SystemClock.elapsedRealtime() - startedAt)
+                handler.postDelayed(runnable, delayRemaining.coerceAtLeast(0))
             }
         }
     }

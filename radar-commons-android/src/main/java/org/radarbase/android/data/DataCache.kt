@@ -20,7 +20,7 @@ import org.radarbase.topic.AvroTopic
 
 import java.io.Flushable
 
-interface DataCache<K, V> : Flushable, ReadableDataCache {
+interface DataCache<K: Any, V: Any> : Flushable, ReadableDataCache {
     /** Get the topic the cache stores.  */
     val topic: AvroTopic<K, V>
 

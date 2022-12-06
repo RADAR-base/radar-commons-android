@@ -116,9 +116,10 @@ class ManagementPortalLoginManager(
     override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
         return when {
             authState.authenticationSource != SOURCE_TYPE -> null
-            disableRefresh -> authState.alter {
-                attributes -= MP_REFRESH_TOKEN_PROPERTY
-                isPrivacyPolicyAccepted = false
+            disableRefresh -> {
+                val loggedOutAuthState = authState.reset()
+                listener.logoutSucceeded(this, loggedOutAuthState)
+                loggedOutAuthState
             }
             else -> authState
         }
