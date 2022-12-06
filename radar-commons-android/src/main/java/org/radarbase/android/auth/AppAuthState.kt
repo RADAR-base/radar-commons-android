@@ -50,7 +50,7 @@ class AppAuthState private constructor(builder: Builder) {
             add(header.key, header.value)
         }
     }.build()
-    val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.stripEndSlashes()
+    val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.trimEndSlash()
 
     val isValid: Boolean
         get() = isPrivacyPolicyAccepted && expiration > System.currentTimeMillis()
@@ -64,9 +64,9 @@ class AppAuthState private constructor(builder: Builder) {
 
     fun getAttribute(key: String) = attributes[key]
 
-    fun serializableAttributeList() = serializedMap(attributes.entries)
+    fun serializableAttributeList() = attributes.entries.toArrayString()
 
-    fun serializableHeaderList() = serializedMap(headers)
+    fun serializableHeaderList() = headers.toArrayString()
 
     fun isValidFor(time: Long, unit: TimeUnit) = isPrivacyPolicyAccepted
             && expiration - unit.toMillis(time) > System.currentTimeMillis()
@@ -122,13 +122,15 @@ class AppAuthState private constructor(builder: Builder) {
         fun parseAttributes(jsonString: String?) {
             jsonString ?: return
             try {
-                attributes += deserializedMap(jsonString)
+                attributes += jsonString.toStringMap()
             } catch (e: JSONException) {
                 logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
         }
 
-        fun invalidate(): Builder = apply { expiration = 0L }
+        fun invalidate() {
+            expiration = 0L
+        }
 
         fun setHeader(name: String, value: String) {
             headers.removeAll { it.key == name }
@@ -142,7 +144,7 @@ class AppAuthState private constructor(builder: Builder) {
         fun parseHeaders(jsonString: String?) {
             jsonString ?: return
             try {
-                this.headers += deserializedEntryList(jsonString)
+                this.headers += jsonString.toEntryList()
             } catch (e: JSONException) {
                 logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
             }
@@ -211,9 +213,9 @@ class AppAuthState private constructor(builder: Builder) {
     companion object {
         private val logger = LoggerFactory.getLogger(AppAuthState::class.java)
 
-        private fun serializedMap(map: Collection<Map.Entry<String, String>>): String {
+        private fun Collection<Map.Entry<String, String>>.toArrayString(): String {
             val array = JSONArray()
-            for (entry in map) {
+            for (entry in this) {
                 array.put(entry.key)
                 array.put(entry.value)
             }
@@ -221,44 +223,35 @@ class AppAuthState private constructor(builder: Builder) {
         }
 
         @Throws(JSONException::class)
-        private fun deserializedMap(jsonString: String): Map<String, String> {
-            val array = JSONArray(jsonString)
-            val map = HashMap<String, String>(array.length() * 4 / 6 + 1)
-            var i = 0
-            while (i < array.length()) {
-                map[array.getString(i)] = array.getString(i + 1)
-                i += 2
+        private fun String.toStringMap(): Map<String, String> = buildMap {
+            val array = JSONArray(this)
+            for (i in 0 until array.length() step 2) {
+                put(array.getString(i), array.getString(i + 1))
             }
-            return map
         }
 
         @Throws(JSONException::class)
-        private fun deserializedEntryList(jsonString: String): List<Map.Entry<String, String>> {
-            val array = JSONArray(jsonString)
-            val list = ArrayList<Map.Entry<String, String>>(array.length() / 2)
-            var i = 0
-            while (i < array.length()) {
-                list += AbstractMap.SimpleImmutableEntry(array.getString(i), array.getString(i + 1))
-                i += 2
+        private fun String.toEntryList(): List<Map.Entry<String, String>> {
+            val array = JSONArray(this)
+            return buildList(array.length() / 2) {
+                for (i in 0 until array.length() step 2) {
+                    add(AbstractMap.SimpleImmutableEntry(array.getString(i), array.getString(i + 1)))
+                }
             }
-            return list
         }
 
         /**
          * Strips all slashes from the end of a URL.
-         * @param url string to strip
+         * @receiver string to strip
          * @return stripped URL or null if that would result in an empty or null string.
          */
-        private fun String.stripEndSlashes(): String? {
-            var lastIndex = length - 1
-            while (lastIndex >= 0 && this[lastIndex] == '/') {
-                lastIndex--
-            }
-            if (lastIndex == -1) {
+        private fun String.trimEndSlash(): String? {
+            val result = trimEnd('/')
+            if (result.isEmpty()) {
                 logger.warn("Base URL '{}' should be a valid URL.", this)
                 return null
             }
-            return substring(0, lastIndex + 1)
+            return result
         }
     }
 }
