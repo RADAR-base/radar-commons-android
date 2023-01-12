@@ -88,7 +88,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             numberOfDevices++
                             val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                             val macAddress = device.address
-                            val hashgenerator = HashGenerator(context,name)
+                            val hashgenerator = HashGenerator(context,"app")
                             val hash = hashgenerator.createhash(macAddress)
                         }
 
