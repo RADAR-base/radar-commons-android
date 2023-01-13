@@ -90,6 +90,13 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                             val macAddress = device.address
 ]                            val hash = hashgenerator.createhash(macAddress)
+                            val bluetoothScannedTopic = createCache("android_phone_bluetooth_device_scanned", PhoneBluetoothDeviceScanned())
+                            send(bluetoothScannedTopic, PhoneBluetoothDeviceScanned.Builder().apply {
+                                time = currentTime
+                                timeReceived = time
+                                macAddressHash = hash
+                            }.build())
+
                         }
 
                         BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
