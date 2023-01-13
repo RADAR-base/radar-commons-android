@@ -41,6 +41,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     private val processor: OfflineProcessor
     private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache("android_phone_bluetooth_devices", PhoneBluetoothDevices())
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
+    private val hashgenerator = HashGenerator(context,"bluetooth_devices")
 
     init {
         name = service.getString(R.string.bluetooth_devices)
@@ -88,8 +89,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             numberOfDevices++
                             val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                             val macAddress = device.address
-                            val hashgenerator = HashGenerator(context,"app")
-                            val hash = hashgenerator.createhash(macAddress)
+]                            val hash = hashgenerator.createhash(macAddress)
                         }
 
                         BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
