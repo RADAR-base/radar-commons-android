@@ -19,14 +19,14 @@ package org.radarbase.android
 import android.os.IBinder
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.data.DataHandler
-import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.source.SourceProvider
 import org.radarbase.android.source.SourceServiceConnection
 import org.radarbase.android.util.TimedLong
 import org.radarcns.kafka.ObservationKey
 
 interface IRadarBinder : IBinder {
-    val serverStatus: ServerStatusListener.Status
+    val serverStatus: ServerStatus
 
     val latestNumberOfRecordsSent: TimedLong
 

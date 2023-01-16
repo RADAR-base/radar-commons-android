@@ -7,6 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.json.JSONException
 import org.radarbase.android.auth.portal.ManagementPortalClient
 import org.slf4j.LoggerFactory
@@ -58,15 +60,11 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
             putBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, state.isPrivacyPolicyAccepted)
             putString(LOGIN_AUTHENTICATION_SOURCE, state.authenticationSource)
             putBoolean(LOGIN_NEEDS_REGISTERD_SOURCES, state.needsRegisteredSources)
-            putStringSet(LOGIN_APP_SOURCES_LIST, buildSet(state.sourceMetadata.size) {
-                state.sourceMetadata.forEach {
-                    add(it.toJson().toString())
-                }
+            putStringSet(LOGIN_APP_SOURCES_LIST, state.sourceMetadata.mapTo(HashSet()) {
+                Json.encodeToString(it)
             })
-            putStringSet(LOGIN_SOURCE_TYPES, buildSet(state.sourceTypes.size) {
-                state.sourceTypes.forEach {
-                    add(it.toJson().toString())
-                }
+            putStringSet(LOGIN_SOURCE_TYPES, state.sourceTypes.mapTo(HashSet()) {
+                Json.encodeToString(it)
             })
             remove(ManagementPortalClient.SOURCES_PROPERTY)
         }

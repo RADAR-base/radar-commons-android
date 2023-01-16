@@ -1,123 +1,189 @@
 package org.radarbase.android.util
 
 import android.Manifest.permission.*
-import android.annotation.SuppressLint
-import android.app.Activity
+import android.app.Activity.LOCATION_SERVICE
+import android.app.Activity.RESULT_OK
 import android.app.AlertDialog
 import android.app.AppOpsManager
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager.PERMISSION_DENIED
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.location.LocationManager
 import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.PowerManager
-import android.os.Process
-import android.provider.Settings
-import androidx.annotation.RequiresApi
+import android.os.*
+import android.provider.Settings.*
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.DefaultLifecycleObserver
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import org.radarbase.android.R
-import org.radarbase.android.RadarService
+import org.radarbase.android.util.PermissionHandler.PermissionResult.Companion.toPermissionResult
 import org.slf4j.LoggerFactory
+import java.lang.System
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 
 open class PermissionHandler(
     private val activity: AppCompatActivity,
-    private val mHandler: SafeHandler,
-    private val requestPermissionTimeoutMs: Long,
-    private val permissionGrantedListener: (permissions: Array<String>, grantResults: IntArray) -> Unit,
-) {
-    private val needsPermissions: MutableSet<String> = HashSet()
-    private val isRequestingPermissions: MutableSet<String> = HashSet()
-    private var isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
-    private var requestFuture: SafeHandler.HandlerFuture? = null
+    private val registry : ActivityResultRegistry,
+    private val requestPermissionTimeout: Duration,
+): DefaultLifecycleObserver {
+    private val needsPermissions = MutableStateFlow<Set<PermissionRequest>>(emptySet())
+    private val isRequestingPermissions = MutableStateFlow<Set<PermissionRequest>>(emptySet())
+
+    private val _permissionsGranted = MutableSharedFlow<PermissionGrantResult>(128)
+    val permissionsGranted: SharedFlow<PermissionGrantResult> = _permissionsGranted
+    private val requestPermissionLauncher = registry.register("request-permissions", ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        results.forEach { (permission, granted) ->
+            _permissionsGranted.tryEmit(PermissionGrantResult(permission, granted.toPermissionResult()))
+        }
+    }
+    private val customLaunchers = sequence {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            yield(StartSettingsActivityForResult(SYSTEM_ALERT_WINDOW, ACTION_MANAGE_OVERLAY_PERMISSION))
+            yield(StartSettingsActivityForResult(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT, ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS))
+        }
+        yield(StartSettingsActivityForResult(PACKAGE_USAGE_STATS_COMPAT, ACTION_USAGE_ACCESS_SETTINGS, ACTION_SETTINGS))
+        yield(StartSettingsActivityForResult(Context.LOCATION_SERVICE, ACTION_LOCATION_SOURCE_SETTINGS))
+    }.associate { resultContract ->
+        resultContract.key to registry.register(resultContract.key, resultContract) { _permissionsGranted.tryEmit(it) }
+    }
+
+    private class StartSettingsActivityForResult(
+        val key: String,
+        vararg val activityNames: String,
+    ) : ActivityResultContract<Unit, PermissionGrantResult>() {
+        override fun createIntent(context: Context, input: Unit): Intent =
+            requireNotNull(internalCreateIntent(context))
+
+        private fun internalCreateIntent(context: Context): Intent? = activityNames
+            .asSequence()
+            .map { Intent(it, Uri.parse("package:${context.packageName}")) }
+            .firstOrNull { it.resolveActivity(context.packageManager) != null }
+
+        override fun parseResult(
+            resultCode: Int,
+            intent: Intent?,
+        ): PermissionGrantResult = PermissionGrantResult(
+            key,
+            if (resultCode == RESULT_OK) PermissionResult.GRANTED else PermissionResult.DENIED,
+        )
+
+        override fun getSynchronousResult(
+            context: Context,
+            input: Unit
+        ): SynchronousResult<PermissionGrantResult>? = if (
+            context.isPermissionGranted(key) ||
+            internalCreateIntent(context) == null
+        ) {
+            SynchronousResult(PermissionGrantResult(key, PermissionResult.GRANTED))
+        } else null
+    }
+
+    @OptIn(FlowPreview::class)
+    suspend fun monitor() {
+        coroutineScope {
+            launch {
+                permissionsGranted
+                    .collectLatest { (permission, status) ->
+                        if (status == PermissionResult.GRANTED || activity.isPermissionGranted(permission.permission)) {
+                            needsPermissions.value = needsPermissions.value - permission
+                        }
+                    }
+            }
+
+            launch {
+                needsPermissions
+                    .debounce(5.seconds)
+                    .combine(isRequestingPermissions) { needed, requesting ->
+                        buildSet {
+                            needed.forEach { permission ->
+                                if (permission !in requesting && !activity.isPermissionGranted(permission.permission)) {
+                                    add(permission.permission)
+                                }
+                            }
+                            if (ACCESS_COARSE_LOCATION in this || ACCESS_FINE_LOCATION in this) {
+                                remove(ACCESS_BACKGROUND_LOCATION_COMPAT)
+                            }
+                        }
+                    }
+                    .collectLatest { requestPermissions(it) }
+            }
+
+            launch {
+                isRequestingPermissions
+                    .debounce(5.seconds)
+                    .onEach { delay(requestPermissionTimeout) }
+                    .combine(needsPermissions) { requesting, needed ->
+                        requesting.filterTo(HashSet()) { it !in needed || it.isExpired(requestPermissionTimeout) }
+                    }
+                    .collect {
+                        isRequestingPermissions.value = isRequestingPermissions.value - it
+                    }
+            }
+        }
+    }
 
     private fun onPermissionRequestResult(permission: String, granted: Boolean) {
-        mHandler.execute {
-            needsPermissions.remove(permission)
+        _permissionsGranted.tryEmit(PermissionGrantResult(permission, granted.toPermissionResult()))
+    }
 
-            val result = if (granted) PERMISSION_GRANTED else PERMISSION_DENIED
-            permissionGrantedListener(
-                arrayOf(Context.LOCATION_SERVICE),
-                intArrayOf(result),
-            )
+    enum class PermissionResult {
+        GRANTED, DENIED;
 
-            isRequestingPermissions.remove(permission)
-            requestPermissions()
+        companion object {
+            fun Boolean.toPermissionResult(): PermissionResult = if (this) GRANTED else DENIED
+            fun Int.toPermissionResult(): PermissionResult = if (this == PERMISSION_GRANTED) GRANTED else DENIED
         }
     }
 
-    private fun requestPermissions() {
-        mHandler.executeReentrant {
-            requestFuture?.cancel()
-            requestFuture = mHandler.delay(500L) {
-                doRequestPermission()
-                requestFuture = null
-            }
-        }
-    }
-
-    private fun doRequestPermission() {
-        val externallyGrantedPermissions = needsPermissions
-            .filterTo(HashSet()) { activity.isPermissionGranted(it) }
-
-        if (externallyGrantedPermissions.isNotEmpty()) {
-            permissionGrantedListener(
-                externallyGrantedPermissions.toTypedArray(),
-                IntArray(externallyGrantedPermissions.size) { PERMISSION_GRANTED }
-            )
-            isRequestingPermissions -= externallyGrantedPermissions
-            needsPermissions -= externallyGrantedPermissions
-        }
-
-        val currentlyNeeded: Set<String> = HashSet(needsPermissions).apply {
-            this -= isRequestingPermissions
-            if (
-                ACCESS_COARSE_LOCATION in this
-                || ACCESS_FINE_LOCATION in this
-            ) {
-                this -= RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT
-            }
-        }
-
+    private fun requestPermissions(permissions: Set<String>) {
         when {
-            currentlyNeeded.isEmpty() -> logger.info("Already requested all permissions.")
-            Context.LOCATION_SERVICE in currentlyNeeded -> {
-                addRequestingPermissions(Context.LOCATION_SERVICE)
-                requestLocationProvider()
-            }
-            SYSTEM_ALERT_WINDOW in currentlyNeeded -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    addRequestingPermissions(SYSTEM_ALERT_WINDOW)
-                    requestSystemWindowPermissions()
+            permissions.isEmpty() -> logger.info("Already requested all permissions.")
+            LOCATION_SERVICE in permissions -> invokeLauncher(LOCATION_SERVICE) { invoke, cancel ->
+                alertDialog {
+                    setTitle(R.string.enable_location_title)
+                    setMessage(R.string.enable_location)
+                    setPositiveButton(android.R.string.ok) { dialog, _ ->
+                        dialog.cancel()
+                        invoke()
+                    }
+                    setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                        dialog.cancel()
+                        cancel()
+                    }
+                    setIcon(android.R.drawable.ic_dialog_alert)
                 }
             }
-            RadarService.PACKAGE_USAGE_STATS_COMPAT in currentlyNeeded -> {
-                addRequestingPermissions(RadarService.PACKAGE_USAGE_STATS_COMPAT)
-                requestPackageUsageStats()
-            }
-            RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT in currentlyNeeded -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    addRequestingPermissions(RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT)
-                    requestDisableBatteryOptimization()
-                } else {
-                    needsPermissions.remove(RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT)
+            SYSTEM_ALERT_WINDOW in permissions -> invokeLauncher(SYSTEM_ALERT_WINDOW)
+            PACKAGE_USAGE_STATS_COMPAT in permissions -> invokeLauncher(PACKAGE_USAGE_STATS_COMPAT) { invoke, cancel ->
+                alertDialog {
+                    setTitle(R.string.enable_package_usage_title)
+                    setMessage(R.string.enable_package_usage)
+                    setPositiveButton(android.R.string.ok) { dialog, _ ->
+                        dialog.cancel()
+                        invoke()
+                    }
+                    setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                        dialog.cancel()
+                        cancel()
+                    }
+                    setIcon(android.R.drawable.ic_dialog_alert)
                 }
             }
+            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT in permissions -> invokeLauncher(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT)
             else -> {
-                addRequestingPermissions(currentlyNeeded)
+                addRequestingPermissions(permissions)
                 try {
-                    ActivityCompat.requestPermissions(
-                        activity,
-                        currentlyNeeded.toTypedArray(),
-                        REQUEST_ENABLE_PERMISSIONS,
-                    )
+                    requestPermissionLauncher.launch(permissions.toTypedArray())
                 } catch (ex: IllegalStateException) {
                     logger.warn("Cannot request permission on closing activity")
                 }
@@ -125,9 +191,19 @@ open class PermissionHandler(
         }
     }
 
+    private fun invokeLauncher(permission: String, invoke: (doInvoke: () -> Unit, doCancel: () -> Unit) -> Unit = { doInvoke, _ -> doInvoke() }) {
+        addRequestingPermissions(permission)
+        val launcher = customLaunchers[permission]
+        val doCancel = { _permissionsGranted.tryEmit(PermissionGrantResult(permission, PermissionResult.GRANTED)) }
+        if (launcher == null) {
+            doCancel()
+        } else {
+            invoke({ launcher.launch(Unit) }, doCancel)
+        }
+    }
+
     private fun resetRequestingPermission() {
-        isRequestingPermissions.clear()
-        isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
+        isRequestingPermissions.value = emptySet()
     }
 
     private fun addRequestingPermissions(permission: String) {
@@ -135,13 +211,10 @@ open class PermissionHandler(
     }
 
     private fun addRequestingPermissions(permissions: Set<String>) {
-        isRequestingPermissions.addAll(permissions)
-
-        if (isRequestingPermissionsTime != java.lang.Long.MAX_VALUE) {
-            isRequestingPermissionsTime = System.currentTimeMillis()
-            mHandler.delay(requestPermissionTimeoutMs) {
-                resetRequestingPermission()
-                requestPermissions()
+        isRequestingPermissions.value = buildSet {
+            addAll(isRequestingPermissions.value)
+            permissions.forEach { permission ->
+                add(PermissionRequest(permission))
             }
         }
     }
@@ -158,176 +231,92 @@ open class PermissionHandler(
         }
     }
 
-    private fun requestLocationProvider() {
-        alertDialog {
-            setTitle(R.string.enable_location_title)
-            setMessage(R.string.enable_location)
-            setPositiveButton(android.R.string.ok) { dialog, _ ->
-                dialog.cancel()
-                Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                    .startActivityForResult(LOCATION_REQUEST_CODE)
-            }
-            setIcon(android.R.drawable.ic_dialog_alert)
-        }
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.M)
-    private fun requestSystemWindowPermissions() {
-        // Show alert dialog to the user saying a separate permission is needed
-        // Launch the settings activity if the user prefers
-        Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:" + activity.packageName)
-        ).startActivityForResult(ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
-    }
-
-    private fun Intent.startActivityForResult(code: Int) {
-        resolveActivity(activity.packageManager) ?: return
-        try {
-            activity.startActivityForResult(this, code)
-        } catch (ex: ActivityNotFoundException) {
-            logger.error("Failed to ask for usage code", ex)
-        } catch (ex: IllegalStateException) {
-            logger.warn("Cannot start activity on closed app")
-        }
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.M)
-    @SuppressLint("BatteryLife")
-    private fun requestDisableBatteryOptimization() {
-        Intent(
-            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-            Uri.parse("package:" + activity.packageName)
-        ).startActivityForResult(BATTERY_OPT_CODE)
-    }
-
-    private fun requestPackageUsageStats() {
-        alertDialog {
-            setTitle(R.string.enable_package_usage_title)
-            setMessage(R.string.enable_package_usage)
-            setPositiveButton(android.R.string.ok) { dialog, _ ->
-                dialog.cancel()
-                var intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                if (intent.resolveActivity(activity.packageManager) == null) {
-                    intent = Intent(Settings.ACTION_SETTINGS)
-                }
-                intent.startActivityForResult(USAGE_REQUEST_CODE)
-            }
-            setIcon(android.R.drawable.ic_dialog_alert)
-        }
-    }
-
-    fun onActivityResult(requestCode: Int, resultCode: Int) {
-        when (requestCode) {
-            LOCATION_REQUEST_CODE -> onPermissionRequestResult(
-                Context.LOCATION_SERVICE,
-                resultCode == Activity.RESULT_OK
-            )
-            USAGE_REQUEST_CODE -> onPermissionRequestResult(
-                RadarService.PACKAGE_USAGE_STATS_COMPAT,
-                resultCode == Activity.RESULT_OK
-            )
-            BATTERY_OPT_CODE -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val powerManager =
-                        activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
-                    val granted = resultCode == Activity.RESULT_OK
-                            || powerManager?.isIgnoringBatteryOptimizations(activity.applicationContext.packageName) != false
-                    onPermissionRequestResult(
-                        RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT,
-                        granted
-                    )
-                }
-            }
-            ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE -> onPermissionRequestResult(
-                SYSTEM_ALERT_WINDOW,
-                resultCode == Activity.RESULT_OK
-            )
-        }
-    }
-
-    fun invalidateCache() {
-        mHandler.execute {
-            if (isRequestingPermissions.isNotEmpty()) {
-                val timeToExpire = isRequestingPermissionsTime + requestPermissionTimeoutMs - System.currentTimeMillis()
-                if (timeToExpire <= 0L) {
-                    resetRequestingPermission()
-                } else {
-                    mHandler.delay(timeToExpire, ::resetRequestingPermission)
-                }
-            }
-        }
-    }
-
-
     fun replaceNeededPermissions(newPermissions: Array<out String>?) {
         newPermissions ?: return
-        mHandler.execute {
-            needsPermissions.clear()
-
-            needsPermissions += ArrayList<String>(newPermissions.size + 1).apply {
-                this += newPermissions
-                if (ACCESS_FINE_LOCATION in this || ACCESS_COARSE_LOCATION in this) {
-                    this += LifecycleService.LOCATION_SERVICE
+        needsPermissions.tryEmit(
+            newPermissions
+                .asSequence()
+                .flatMap {
+                    if (activity.isPermissionGranted(it)) {
+                        emptySequence()
+                    } else {
+                        sequence {
+                            if (it == ACCESS_FINE_LOCATION || it == ACCESS_COARSE_LOCATION) {
+                                yield(LOCATION_SERVICE)
+                            }
+                            yield(it)
+                        }
+                    }
                 }
-            }.filterNot { activity.isPermissionGranted(it) }
-
-            requestPermissions()
-        }
+                .map { PermissionRequest(it) }
+                .toHashSet()
+        )
     }
 
-
-    fun permissionsGranted(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        if (requestCode == REQUEST_ENABLE_PERMISSIONS) {
-            permissionGrantedListener(permissions, grantResults)
-        }
-    }
 
     fun saveInstanceState(savedInstanceState: Bundle) {
         savedInstanceState.putStringArrayList(
-            "isRequestingPermissions", ArrayList(
-                isRequestingPermissions
-            )
+            "isRequestingPermissions", isRequestingPermissions.value.mapTo(ArrayList()) { it.permission }
         )
-        savedInstanceState.putLong("isRequestingPermissionsTime", isRequestingPermissionsTime)
+        savedInstanceState.putLong("isRequestingPermissionsTime", System.currentTimeMillis() - SystemClock.elapsedRealtime() + isRequestingPermissions.value.maxOf { it.time })
     }
 
     fun restoreInstanceState(savedInstanceState: Bundle) {
-        savedInstanceState.getStringArrayList("isRequestingPermissions")
-            ?.let { isRequestingPermissions += it }
-
-        isRequestingPermissionsTime = savedInstanceState.getLong(
-            "isRequestingPermissionsTime",
-            java.lang.Long.MAX_VALUE
-        )
+        val now = System.currentTimeMillis()
+        val time = savedInstanceState.getLong("isRequestingPermissionsTime", now) - now + SystemClock.elapsedRealtime()
+        val savedPermissions = savedInstanceState.getStringArrayList("isRequestingPermissions") ?: emptyList()
+        isRequestingPermissions.value = isRequestingPermissions.value + savedPermissions.map { PermissionRequest(it, time) }
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(PermissionHandler::class.java)
 
-        private const val REQUEST_ENABLE_PERMISSIONS = 2
-        // can only use lower 16 bits for request code
-        private const val LOCATION_REQUEST_CODE = 232619694 and 0xFFFF
-        private const val USAGE_REQUEST_CODE = 232619695 and 0xFFFF
-        private const val BATTERY_OPT_CODE = 232619696 and 0xFFFF
-        private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 232619697 and 0xFFFF
-
         fun Context.isPermissionGranted(permission: String): Boolean = when (permission) {
-            LifecycleService.LOCATION_SERVICE -> applySystemService<LocationManager>(Context.LOCATION_SERVICE) { locationManager ->
+            LOCATION_SERVICE -> applySystemService<LocationManager>(LOCATION_SERVICE) { locationManager ->
                 locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
                         || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
             } ?: true
-            RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT -> applySystemService<PowerManager>(Context.POWER_SERVICE) { powerManager ->
+            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT -> applySystemService<PowerManager>(Context.POWER_SERVICE) { powerManager ->
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                         || powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
             } ?: true
-            RadarService.PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager>(Context.APP_OPS_SERVICE) { appOps ->
+            PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager>(Context.APP_OPS_SERVICE) { appOps ->
                 @Suppress("DEPRECATION")
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                         || AppOpsManager.MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName)
             } ?: true
-            SYSTEM_ALERT_WINDOW -> Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+            SYSTEM_ALERT_WINDOW -> Build.VERSION.SDK_INT < Build.VERSION_CODES.M || canDrawOverlays(this)
             else -> PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, permission)
+        }
+
+        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
+        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
+
+        data class PermissionGrantResult(
+            val permission: PermissionRequest,
+            val status: PermissionResult,
+        ) {
+            constructor(permission: String, status: PermissionResult) : this(PermissionRequest(permission), status)
+        }
+
+        class PermissionRequest(
+            val permission: String,
+            val time: Long = SystemClock.elapsedRealtime()
+        ) {
+            fun isExpired(duration: Duration): Boolean = SystemClock.elapsedRealtime() >= time + duration.inWholeMilliseconds
+
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (javaClass != other?.javaClass) return false
+                other as PermissionRequest
+                return permission == other.permission
+            }
+
+            override fun hashCode(): Int = permission.hashCode()
         }
     }
 }

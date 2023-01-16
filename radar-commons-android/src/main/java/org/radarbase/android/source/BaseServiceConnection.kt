@@ -22,7 +22,7 @@ import android.os.Bundle
 import android.os.IBinder
 import androidx.lifecycle.LiveData
 import org.radarbase.android.auth.SourceMetadata
-import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.util.equalTo
 import org.radarbase.data.RecordData
 import org.radarbase.util.Strings
@@ -43,7 +43,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
             SourceStatusListener.Status.UNAVAILABLE,
         )
 
-    val serverStatus: ServerStatusListener.Status?
+    val serverStatus: ServerStatus?
         get() = serviceBinder?.serverStatus
 
     val serverSent: Map<String, Long>?

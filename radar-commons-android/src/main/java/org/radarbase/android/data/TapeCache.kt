@@ -17,6 +17,7 @@
 package org.radarbase.android.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import org.apache.avro.Schema
@@ -73,6 +74,7 @@ constructor(
     private val configCache = ChangeRunner(config)
 
     private val mutex: Mutex
+    override val numberOfRecords: MutableStateFlow<Long>
 
     override var config
         get() = handler.compute { configCache.value }
@@ -100,25 +102,13 @@ constructor(
                 throw ex
             }
         }
-        this.queue = BackedObjectQueue(queueFile, serializer, deserializer)
-    }
-
-    suspend fun initialize() = withContext(Dispatchers.IO) {
-        queueFile = try {
-            queueFileFactory.generate(Objects.requireNonNull(file), maximumSize)
-        } catch (ex: IOException) {
-            logger.error("TapeCache {} was corrupted. Removing old cache.", file, ex)
-            if (file.delete()) {
-                queueFileFactory.generate(file, maximumSize)
-            } else {
-                throw ex
-            }
-        }
         queue = BackedObjectQueue(queueFile, serializer, deserializer)
+
+        numberOfRecords = MutableStateFlow(queue.size.toLong())
     }
 
     @Throws(IOException::class)
-    override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any?>? {
+    override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any>? {
         logger.debug("Trying to retrieve records from topic {}", topic.name)
         return try {
              handler.compute {
@@ -185,16 +175,14 @@ constructor(
         }
     }
 
-    override val numberOfRecords: Long
-        get() = handler.compute { queue.size.toLong() }
-
     @Throws(IOException::class)
     override fun remove(number: Int) {
         return handler.execute {
-            val actualNumber = number.coerceAtMost(queue.size)
-            if (actualNumber > 0) {
-                logger.debug("Removing {} records from topic {}", actualNumber, topic.name)
-                queue -= actualNumber
+            val actualRemoveSize = number.coerceAtMost(queue.size)
+            if (actualRemoveSize > 0) {
+                logger.debug("Removing {} records from topic {}", actualRemoveSize, topic.name)
+                queue -= actualRemoveSize
+                numberOfRecords.value = numberOfRecords.value - actualRemoveSize
             }
         }
     }
@@ -248,6 +236,7 @@ constructor(
         try {
             logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
             queue += measurementsToAdd
+            numberOfRecords.value = numberOfRecords.value + measurementsToAdd.size
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
             throw RuntimeException(ex)
@@ -287,6 +276,7 @@ constructor(
         if (file.delete()) {
             queueFile = queueFileFactory.generate(file, maximumSize)
             queue = BackedObjectQueue(queueFile, serializer, deserializer)
+            numberOfRecords.value = 0L
         } else {
             throw IOException("Cannot create new cache.")
         }

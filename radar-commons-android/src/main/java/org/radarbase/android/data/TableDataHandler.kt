@@ -19,9 +19,12 @@ package org.radarbase.android.data
 import android.content.Context
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import org.apache.avro.specific.SpecificRecord
-import org.radarbase.android.kafka.KafkaDataSubmitter
-import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.kafka.*
 import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.util.BatteryStageReceiver
@@ -50,25 +53,15 @@ class TableDataHandler(
 ) : DataHandler<ObservationKey, SpecificRecord> {
     private val tables: ConcurrentMap<String, DataCacheGroup<*, *>> = ConcurrentHashMap()
     private val batteryLevelReceiver: BatteryStageReceiver
-    private val networkConnectedReceiver: NetworkConnectedReceiver
+    private val networkConnectedReceiver: NetworkConnectedReceiver = NetworkConnectedReceiver(context)
     private val handlerThread: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
-    private val broadcaster = LocalBroadcastManager.getInstance(context)
 
     private var config = DataHandlerConfiguration()
 
     @Volatile
-    var latestStatus: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
-    override var serverStatus: ServerStatusListener.Status = ServerStatusListener.Status.DISCONNECTED
-        set(value) {
-            latestStatus = value
-            handlerThread.executeReentrant {
-                val localLatestStatus = latestStatus
-                if (localLatestStatus != this.serverStatus) {
-                    statusListener?.serverStatus = localLatestStatus
-                    field = localLatestStatus
-                }
-            }
-        }
+    var latestStatus: ServerStatus = ServerStatus.DISCONNECTED
+
+    override var serverStatus = MutableStateFlow(ServerStatus.DISCONNECTED)
 
     private val lastNumberOfRecordsSent = TreeMap<String, Long>()
     private var submitter: KafkaDataSubmitter? = null
@@ -77,12 +70,13 @@ class TableDataHandler(
     private val isStarted: Boolean
         get() = submitter != null
 
-    override val recordsSent: Map<String, Long>
-        get() = handlerThread.compute {
-            HashMap(lastNumberOfRecordsSent)
-        }
+    override val recordsSent = MutableSharedFlow<TopicSendResult>(
+        replay = 1000,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
 
     init {
+
         this.handlerThread.start()
         this.handlerThread.repeat(10_000L, ::broadcastNumberOfRecords)
 
@@ -111,18 +105,6 @@ class TableDataHandler(
                 }
             }
         }
-        this.networkConnectedReceiver = NetworkConnectedReceiver(context) { state ->
-            if (isStarted) {
-                if (!state.hasConnection(config.sendOnlyWithWifi)) {
-                    logger.info("Network was disconnected, stopping data sending")
-                    stop()
-                }
-            } else {
-                // Just try to start: the start method will not do anything if the parameters
-                // are not right.
-                start()
-            }
-        }
 
         submitter = null
         sender = null
@@ -133,7 +115,26 @@ class TableDataHandler(
             }
         } else {
             logger.info("Submitter is disabled: no kafkaConfig provided in init")
-            serverStatus = ServerStatusListener.Status.DISABLED
+            serverStatus.value = ServerStatus.DISABLED
+        }
+    }
+
+    suspend fun monitor() {
+        coroutineScope {
+            launch {
+                networkConnectedReceiver.state.collectLatest { state ->
+                    if (isStarted) {
+                        if (!state.hasConnection(config.sendOnlyWithWifi)) {
+                            logger.info("Network was disconnected, stopping data sending")
+                            stop()
+                        }
+                    } else {
+                        // Just try to start: the start method will not do anything if the parameters
+                        // are not right.
+                        start()
+                    }
+                }
+            }
         }
     }
 
@@ -156,14 +157,14 @@ class TableDataHandler(
     fun start() = handlerThread.executeReentrant {
         if (isStarted
             || config.submitterConfig.userId == null
-            || serverStatus === ServerStatusListener.Status.DISABLED
+            || serverStatus === ServerStatus.DISABLED
             || !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi)
             || batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY
         ) {
             when {
                 config.submitterConfig.userId == null ->
                     logger.info("Submitter has no user ID set. Not starting.")
-                serverStatus === ServerStatusListener.Status.DISABLED ->
+                serverStatus === ServerStatus.DISABLED ->
                     logger.info("Submitter has been disabled earlier. Not starting")
                 !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi) ->
                     logger.info("No networkconnection available. Not starting")
@@ -176,7 +177,7 @@ class TableDataHandler(
 
         val kafkaConfig = config.restConfig.kafkaConfig ?: return@executeReentrant
 
-        serverStatus = ServerStatusListener.Status.CONNECTING
+        serverStatus = ServerStatus.CONNECTING
 
         val client = RestClient.global()
             .server(kafkaConfig)
@@ -204,16 +205,16 @@ class TableDataHandler(
         submitter?.close()
         submitter = null
         sender = null
-        if (serverStatus != ServerStatusListener.Status.DISABLED) {
-            serverStatus = ServerStatusListener.Status.READY
+        if (serverStatus != ServerStatus.DISABLED) {
+            serverStatus = ServerStatus.READY
         }
     }
 
     /** Do not submit any data, only cache it. If it is already disabled, this does nothing.  */
     private fun disableSubmitter() = handlerThread.executeReentrant {
-        if (serverStatus !== ServerStatusListener.Status.DISABLED) {
+        if (serverStatus !== ServerStatus.DISABLED) {
             logger.info("Submitter is disabled")
-            serverStatus = ServerStatusListener.Status.DISABLED
+            serverStatus = ServerStatus.DISABLED
             if (isStarted) {
                 stop()
             }
@@ -224,7 +225,7 @@ class TableDataHandler(
 
     /** Start submitting data. If it is already submitting data, this does nothing.  */
     private fun enableSubmitter() = handlerThread.executeReentrant {
-        if (serverStatus === ServerStatusListener.Status.DISABLED) {
+        if (serverStatus === ServerStatus.DISABLED) {
             doEnableSubmitter()
             start()
         }
@@ -232,7 +233,7 @@ class TableDataHandler(
 
     private fun doEnableSubmitter() {
         logger.info("Submitter is enabled")
-        serverStatus = ServerStatusListener.Status.READY
+        serverStatus = ServerStatus.READY
         networkConnectedReceiver.register()
         batteryLevelReceiver.register()
     }
@@ -244,7 +245,7 @@ class TableDataHandler(
     @Throws(IOException::class)
     fun close() {
         handlerThread.stop {
-            if (serverStatus !== ServerStatusListener.Status.DISABLED) {
+            if (serverStatus !== ServerStatus.DISABLED) {
                 networkConnectedReceiver.unregister()
                 batteryLevelReceiver.unregister()
             }

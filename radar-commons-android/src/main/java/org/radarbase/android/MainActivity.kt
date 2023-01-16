@@ -24,6 +24,7 @@ import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.flow.StateFlow
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
@@ -34,9 +35,10 @@ import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.*
-import org.radarbase.android.splash.SplashActivity
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
@@ -65,11 +67,11 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
-    protected open val requestPermissionTimeoutMs: Long
-        get() = REQUEST_PERMISSION_TIMEOUT_MS
+    protected open val requestPermissionTimeout: Duration
+        get() = REQUEST_PERMISSION_TIMEOUT
 
-    val radarService: IRadarBinder?
-        get() = radarConnection.binder
+    val radarService: StateFlow<BindState<IRadarBinder>>
+        get() = radarConnection.state
 
     val userId: String?
         get() = configuration.latestConfig.optString(USER_ID_KEY)
@@ -88,8 +90,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
         mHandler = SafeHandler.getInstance("Main background handler", Process.THREAD_PRIORITY_BACKGROUND)
-        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeoutMs) { permissions, grantResults ->
-            radarService?.permissionGranted(permissions, grantResults)
+        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeout) { permissions, grantResults ->
+            radarService.value.applyBinder { permissionGranted(permissions, grantResults) }
         }
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
@@ -188,8 +190,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
         radarConnection.bind()
 
-        permissionHandler.invalidateCache()
-
         LocalBroadcastManager.getInstance(this).apply {
             connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
                 synchronized(this@MainActivity) {
@@ -227,12 +227,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         super.onActivityResult(requestCode, resultCode, result)
         bluetoothEnforcer.onActivityResult(requestCode, resultCode)
-        permissionHandler.onActivityResult(requestCode, resultCode)
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        permissionHandler.permissionsGranted(requestCode, permissions, grantResults)
     }
 
     /**
@@ -259,6 +253,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     companion object {
         private val logger = LoggerFactory.getLogger(MainActivity::class.java)
 
-        private const val REQUEST_PERMISSION_TIMEOUT_MS = 86_400_000L // 1 day
+        private val REQUEST_PERMISSION_TIMEOUT = 86_400_000.milliseconds // 1 day
     }
 }

@@ -4,9 +4,8 @@ import android.os.Binder
 import android.os.Bundle
 import android.os.Parcel
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import org.radarbase.android.auth.SourceMetadata
-import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.data.RecordData
 import java.io.IOException
 import java.util.*
@@ -48,8 +47,8 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
         sourceService.stopRecording()
     }
 
-    override val serverStatus: ServerStatusListener.Status
-        get() = sourceService.dataHandler?.serverStatus ?: ServerStatusListener.Status.DISCONNECTED
+    override val serverStatus: ServerStatus
+        get() = sourceService.dataHandler?.serverStatus ?: ServerStatus.DISCONNECTED
 
     override val serverRecordsSent: Map<String, Long>
         get() = sourceService.dataHandler?.recordsSent ?: mapOf()

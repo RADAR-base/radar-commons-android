@@ -26,6 +26,7 @@ buildscript {
         classpath 'com.github.bjoernq:unmockplugin:0.7.9'
         classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.18"
         classpath("org.jetbrains.dokka:dokka-gradle-plugin:$dokka_version")
+        classpath "org.jetbrains.kotlin:kotlin-serialization:$kotlin_version"
     }
 }
 
@@ -66,6 +67,7 @@ subprojects {
     repositories {
         google()
         mavenCentral()
+        mavenLocal()
         maven { url = "https://oss.sonatype.org/content/repositories/snapshots" }
     }
 

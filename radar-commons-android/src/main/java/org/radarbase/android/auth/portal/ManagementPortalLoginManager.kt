@@ -3,6 +3,11 @@ package org.radarbase.android.auth.portal
 import android.app.Activity
 import androidx.lifecycle.Observer
 import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.plugins.auth.providers.*
+import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONException
@@ -19,6 +24,9 @@ import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REF
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.config.ServerConfig
+import org.radarbase.management.auth.MPOAuth2AccessToken
+import org.radarbase.management.client.MPClient
+import org.radarbase.management.client.mpClient
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -26,14 +34,12 @@ import java.net.MalformedURLException
 
 class ManagementPortalLoginManager(
     private val listener: AuthService,
-    state: AppAuthState
+    private val authState: StateFlow<AppAuthState>
 ) : LoginManager {
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
 
-    private var client: ManagementPortalClient? = null
+    private var client: MPClient? = null
     private var clientConfig: ManagementPortalConfig? = null
-    private var restClient: HttpClient? = null
-    private val refreshLock = Mutex()
     private val config = listener.radarConfig
     private val configUpdateObserver = Observer<SingleRadarConfiguration> {
         ensureClientConnectivity(it)
@@ -41,14 +47,14 @@ class ManagementPortalLoginManager(
 
     init {
         config.config.observeForever(configUpdateObserver)
-        updateSources(state)
+        updateSources(authState)
     }
 
-    suspend fun setRefreshToken(authState: AppAuthState, refreshToken: String) {
+    suspend fun setRefreshToken(authState: AppAuthState.Builder, refreshToken: String) {
         refresh(authState.alter { attributes[MP_REFRESH_TOKEN_PROPERTY] = refreshToken })
     }
 
-    suspend fun setTokenFromUrl(authState: AppAuthState, refreshTokenUrl: String) {
+    suspend fun setTokenFromUrl(authState: AppAuthState.Builder, refreshTokenUrl: String) {
         client?.let { client ->
             refreshLock.withLock {
                 try {
@@ -73,30 +79,24 @@ class ManagementPortalLoginManager(
         }
     }
 
-    override suspend fun refresh(authState: AppAuthState): Boolean {
-        if (authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY) == null) {
-            return false
-        }
-        client?.let { client ->
-            if (refreshLock.tryLock()) {
-                try {
-                    val parser = SubjectTokenParser(client, authState)
+    override suspend fun refresh(authState: AppAuthState.Builder): Boolean {
+        val client = client ?: return true
+        return refreshLock.withLock {
+            try {
+                val parser = SubjectTokenParser(client, authState)
 
-                    client.refreshToken(authState, parser).let { authState ->
-                        logger.info("Refreshed JWT")
+                client.refreshToken(authState, parser).let { authState ->
+                    logger.info("Refreshed JWT")
 
-                        updateSources(authState)
-                        listener.loginSucceeded(this, authState)
-                    }
-                } catch (ex: Exception) {
-                    logger.error("Failed to get access token", ex)
-                    listener.loginFailed(this, ex)
-                } finally {
-                    refreshLock.unlock()
+                    updateSources(authState)
+                    listener.loginSucceeded(this, authState)
                 }
+                true
+            } catch (ex: Exception) {
+                logger.error("Failed to get access token", ex)
+                throw ex
             }
         }
-        return true
     }
 
     override fun isRefreshable(authState: AppAuthState): Boolean {
@@ -113,19 +113,13 @@ class ManagementPortalLoginManager(
         return false
     }
 
-    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
-        return when {
-            authState.authenticationSource != SOURCE_TYPE -> null
-            disableRefresh -> {
-                val loggedOutAuthState = authState.reset()
-                listener.logoutSucceeded(this, loggedOutAuthState)
-                loggedOutAuthState
-            }
-            else -> authState
+    override suspend fun invalidate(authState: AppAuthState.Builder, disableRefresh: Boolean) {
+        if (disableRefresh) {
+            authState.clear()
         }
     }
 
-    override val sourceTypes: List<String> = sourceTypeList
+    override val sourceTypes: Set<String> = sourceTypeList
 
     override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
         logger.debug("Handling source update")
@@ -141,7 +135,7 @@ class ManagementPortalLoginManager(
                 success(addSource(appAuth, source), source)
             } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
                 logger.warn("Source no longer exists - removing from auth state")
-                val updatedAppAuth = removeSource(appAuth, source)
+                val updatedAppAuth = appAuth.removeSource(source)
                 registerSource(updatedAppAuth, source, success, failure)
             } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
                 logger.warn("User no longer exists - invalidating auth state")
@@ -171,76 +165,73 @@ class ManagementPortalLoginManager(
         return true
     }
 
-    override fun registerSource(authState: AppAuthState, source: SourceMetadata,
-                                success: (AppAuthState, SourceMetadata) -> Unit,
-                                failure: (Exception?) -> Unit): Boolean {
+    override suspend fun registerSource(authState: AppAuthState.Builder, source: SourceMetadata): SourceMetadata {
         logger.debug("Handling source registration")
 
         val existingSource = sources[source.sourceId]
         if (existingSource != null) {
-            success(authState, existingSource)
-            return true
+            return existingSource
         }
 
-        client?.let { client ->
-            try {
-                val updatedSource = if (source.sourceId == null) {
-                    // temporary measure to reuse existing source IDs if they exist
-                    source.type?.id
-                            ?.let { sourceType -> sources.values.find { it.type?.id == sourceType } }
-                            ?.let {
-                                source.sourceId = it.sourceId
-                                source.sourceName = it.sourceName
-                                client.updateSource(authState, source)
-                            }
-                            ?: client.registerSource(authState, source)
-                } else {
-                    client.updateSource(authState, source)
-                }
-                success(addSource(authState, updatedSource), updatedSource)
-            } catch (ex: UnsupportedOperationException) {
-                logger.warn("ManagementPortal does not support updating the app source.")
-                success(addSource(authState, source), source)
-            } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
-                logger.warn("Source no longer exists - removing from auth state")
-                val updatedAuthState = removeSource(authState, source)
-                registerSource(updatedAuthState, source, success, failure)
-            } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
-                logger.warn("User no longer exists - invalidating auth state")
-                listener.invalidate(authState.token, false)
-                failure(ex)
-            } catch (ex: ConflictException) {
-                try {
-                    client.getSubject(authState, GetSubjectParser(authState)).let { authState ->
-                        updateSources(authState)
-                        sources[source.sourceId]?.let { source ->
-                            success(authState, source)
-                        } ?: failure(IllegalStateException("Source was not added to ManagementPortal, even though conflict was reported."))
-                    }
-                } catch (ioex: IOException) {
-                    logger.error("Failed to register source {} with {}: already registered",
-                            source.sourceName, source.type, ex)
+        val client = requireNotNull(client) { "Cannot register source without a client" }
+        requireNotNull(authState.original) { "Cannot register source without a base authentication." }
 
-                    failure(ex)
-                }
-            } catch (ex: java.lang.IllegalArgumentException) {
-                logger.error("Source {} is not valid", source)
-                failure(ex)
-            } catch (ex: AuthenticationException) {
-                listener.invalidate(authState.token, false)
-                logger.error("Authentication error; failed to register source {} of type {}",
-                        source.sourceName, source.type, ex)
-                failure(ex)
-            } catch (ex: IOException) {
-                logger.error("Failed to register source {} with {}",
-                        source.sourceName, source.type, ex)
-                failure(ex)
-            } catch (ex: JSONException) {
-                logger.error("Failed to register source {} with {}",
-                        source.sourceName, source.type, ex)
-                failure(ex)
+        return try {
+            val updatedSource = if (source.sourceId == null) {
+                // temporary measure to reuse existing source IDs if they exist
+                source.type?.id
+                        ?.let { sourceType -> sources.values.find { it.type?.id == sourceType } }
+                        ?.let {
+                            source.sourceId = it.sourceId
+                            source.sourceName = it.sourceName
+                            client.updateSource(authState.original, source)
+                        }
+                        ?: client.registerSource(authState.original, source)
+            } else {
+                client.updateSource(authState.original, source)
             }
-        } ?: failure(IllegalStateException("Cannot register source without a client"))
+            authState.addSource(updatedSource)
+            updatedSource
+        } catch (ex: UnsupportedOperationException) {
+            logger.warn("ManagementPortal does not support updating the app source.")
+            authState.addSource(source)
+            source
+        } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
+            logger.warn("Source no longer exists - removing from auth state")
+            authState.removeSource(source)
+            registerSource(authState, source)
+        } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
+            logger.warn("User no longer exists - invalidating auth state")
+            listener.invalidate(authState.token, false)
+            throw ex
+        } catch (ex: ConflictException) {
+            try {
+                client.getSubject(authState, GetSubjectParser(authState)).let { authState ->
+                    updateSources(authState)
+                    requireNotNull(sources[source.sourceId]) { "Source was not added to ManagementPortal, even though conflict was reported." }
+                }
+            } catch (ioex: IOException) {
+                logger.error("Failed to register source {} with {}: already registered",
+                        source.sourceName, source.type, ex)
+                throw ex
+            }
+        } catch (ex: java.lang.IllegalArgumentException) {
+            logger.error("Source {} is not valid", source)
+            throw ex
+        } catch (ex: AuthenticationException) {
+            listener.invalidate(authState.token, false)
+            logger.error("Authentication error; failed to register source {} of type {}",
+                    source.sourceName, source.type, ex)
+            throw ex
+        } catch (ex: IOException) {
+            logger.error("Failed to register source {} with {}",
+                    source.sourceName, source.type, ex)
+            throw ex
+        } catch (ex: JSONException) {
+            logger.error("Failed to register source {} with {}",
+                    source.sourceName, source.type, ex)
+            throw ex
+        }
 
         return true
     }
@@ -278,52 +269,68 @@ class ManagementPortalLoginManager(
 
         if (newClientConfig == clientConfig) return
 
-        client = newClientConfig?.let {
-            ManagementPortalClient(
-                newClientConfig.serverConfig,
-                config.getString(OAUTH2_CLIENT_ID),
-                config.getString(OAUTH2_CLIENT_SECRET, ""),
-                client = restClient,
-            ).also { restClient = it.client }
+        client = mpClient {
+            url = config.getString(MANAGEMENT_PORTAL_URL_KEY)
+            auth { emit ->
+                bearer {
+                    refreshTokens {
+                        val oldRefreshToken = oldTokens?.refreshToken
+                            ?: authState.value.attributes[MP_REFRESH_TOKEN_PROPERTY]
+                            ?: return@refreshTokens null
+
+                        val oauthToken = client.post("oauth/token") {
+                            setBody(formData {
+                                append("grant_type", "refresh_token")
+                                append("refresh_token", oldRefreshToken)
+                            })
+                            basicAuth(
+                                config.getString(OAUTH2_CLIENT_ID),
+                                config.getString(OAUTH2_CLIENT_SECRET, ""),
+                            )
+                            markAsRefreshTokenRequest()
+                        }.body<MPOAuth2AccessToken>()
+
+                        emit(oauthToken)
+
+                        val accessToken = oauthToken.accessToken
+                        val refreshToken = oauthToken.refreshToken
+                        if (accessToken != null && refreshToken != null) {
+                            BearerTokens(accessToken, refreshToken)
+                        } else null
+                    }
+                }
+            }
         }
     }
 
-    private fun addSource(authState: AppAuthState, source: SourceMetadata): AppAuthState {
+    private fun AppAuthState.Builder.addSource(source: SourceMetadata) {
         val sourceId = source.sourceId
         return if (sourceId == null) {
             logger.error("Cannot add source {} without ID", source)
-            authState
         } else {
             sources[sourceId] = source
 
-            authState.alter {
-                val existing = sourceMetadata.filterTo(HashSet()) { it.sourceId == source.sourceId }
-                if (existing.isEmpty()) {
-                    invalidate()
-                } else {
-                    sourceMetadata -= existing
-                }
-                sourceMetadata += source
+            val containedPreviousSource = sourceMetadata.removeAll { it.sourceId == sourceId }
+            if (!containedPreviousSource) {
+                invalidate()
             }
+            sourceMetadata += source
         }
     }
 
-    private fun removeSource(authState: AppAuthState, source: SourceMetadata): AppAuthState {
+    private fun AppAuthState.Builder.removeSource(source: SourceMetadata) {
         sources.remove(source.sourceId)
-        return authState.alter {
-            val existing = sourceMetadata.filterTo(HashSet()) { it.sourceId == source.sourceId }
-            if (existing.isNotEmpty()) {
-                sourceMetadata -= existing
-                invalidate()
-            }
-            source.sourceId = null
+        val containedPreviousSource = sourceMetadata.removeAll { it.sourceId == source.sourceId }
+        if (containedPreviousSource) {
+            invalidate()
         }
+        source.sourceId = null
     }
 
     companion object {
         const val SOURCE_TYPE = "org.radarcns.auth.portal.ManagementPortal"
         private val logger = LoggerFactory.getLogger(ManagementPortalLoginManager::class.java)
-        val sourceTypeList = listOf(SOURCE_TYPE)
+        val sourceTypeList = setOf(SOURCE_TYPE)
     }
 
     private data class ManagementPortalConfig(

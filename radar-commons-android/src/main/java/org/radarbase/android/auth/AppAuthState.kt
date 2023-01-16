@@ -18,9 +18,9 @@ package org.radarbase.android.auth
 
 import android.os.SystemClock
 import androidx.annotation.Keep
-import okhttp3.Headers
-import org.json.JSONArray
-import org.json.JSONException
+import io.ktor.http.*
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
 import org.radarbase.android.util.buildJsonArray
@@ -28,12 +28,13 @@ import org.radarbase.android.util.equalTo
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.TimeUnit
-import kotlin.collections.HashMap
 
 /** Authentication state of the application.  */
 @Keep
 @Suppress("unused")
-class AppAuthState private constructor(builder: Builder) {
+class AppAuthState(builder: Builder) {
+    private val lastUpdate: Long = builder.lastUpdate
+
     val projectId: String? = builder.projectId
     val userId: String? = builder.userId
     val token: String? = builder.token
@@ -41,15 +42,14 @@ class AppAuthState private constructor(builder: Builder) {
     val authenticationSource: String? = builder.authenticationSource
     val needsRegisteredSources: Boolean = builder.needsRegisteredSources
     val expiration: Long = builder.expiration
-    val lastUpdate: Long = builder.lastUpdate
     val attributes: Map<String, String> = HashMap(builder.attributes)
     val headers: List<Pair<String, String>> = ArrayList(builder.headers)
-    val sourceMetadata: List<SourceMetadata> = ArrayList(builder.sourceMetadata)
-    val sourceTypes: List<SourceType> = ArrayList(builder.sourceTypes)
+    val sourceMetadata: List<SourceMetadata>
+    val sourceTypes: List<SourceType>
     val isPrivacyPolicyAccepted: Boolean = builder.isPrivacyPolicyAccepted
-    val okHttpHeaders: Headers = Headers.Builder().apply {
-        headers.forEach { (k, v) -> add(k, v) }
-    }.build()
+    val ktorHeaders = Headers.build {
+        headers.forEach { (k, v) -> append(k, v) }
+    }
     val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.trimEndSlash()
 
     val isValid: Boolean
@@ -61,6 +61,13 @@ class AppAuthState private constructor(builder: Builder) {
     constructor() : this(Builder())
 
     constructor(initializer: Builder.() -> Unit) : this(Builder().also(initializer))
+
+    init {
+        sourceTypes = buildList {
+            addAll(builder.sourceTypes)
+            sourceMetadata = builder.sourceMetadata.map { it.deduplicateType(this) }
+        }
+    }
 
     fun getAttribute(key: String) = attributes[key]
 
@@ -82,19 +89,21 @@ class AppAuthState private constructor(builder: Builder) {
             && expiration - unit.toMillis(time) > System.currentTimeMillis()
 
     fun isAuthorizedForSource(sourceId: String?): Boolean {
-        return !this.needsRegisteredSources
-                || (sourceId != null && attributes[SOURCE_IDS_PROPERTY]?.let { sourceId in it } == true)
+        if (!needsRegisteredSources) return true
+        sourceId ?: return false
+        val registeredSourceIds = attributes[SOURCE_IDS_PROPERTY] ?: return false
+        return sourceId in registeredSourceIds
     }
 
     val timeSinceLastUpdate: Long
-            get() = SystemClock.elapsedRealtime() - lastUpdate
+        get() = SystemClock.elapsedRealtime() - lastUpdate
 
     fun reset(): AppAuthState {
         return Builder().build()
     }
 
-    fun alter(changes: Builder.() -> Unit): AppAuthState {
-        return Builder().also {
+    suspend fun alter(changes: suspend Builder.() -> Unit): AppAuthState {
+        return Builder(this).also {
             it.projectId = projectId
             it.userId = userId
             it.token = token
@@ -102,6 +111,7 @@ class AppAuthState private constructor(builder: Builder) {
             it.expiration = expiration
             it.authenticationSource = authenticationSource
             it.isPrivacyPolicyAccepted = isPrivacyPolicyAccepted
+            it.needsRegisteredSources = needsRegisteredSources
 
             it.attributes += attributes
             it.sourceMetadata += sourceMetadata
@@ -111,7 +121,7 @@ class AppAuthState private constructor(builder: Builder) {
         }.build()
     }
 
-    class Builder {
+    class Builder(val original: AppAuthState? = null) {
         val lastUpdate = SystemClock.elapsedRealtime()
 
         val headers: MutableCollection<Pair<String, String>> = mutableListOf()
@@ -129,13 +139,28 @@ class AppAuthState private constructor(builder: Builder) {
         var isPrivacyPolicyAccepted = false
         val sourceTypes: MutableCollection<SourceType> = mutableListOf()
 
+        fun clear() {
+            headers.clear()
+            sourceMetadata.clear()
+            sourceTypes.clear()
+            attributes.clear()
+
+            needsRegisteredSources = true
+            projectId = null
+            userId = null
+            token = null
+            tokenType = AUTH_TYPE_UNKNOWN
+            authenticationSource = null
+            expiration = 0
+            isPrivacyPolicyAccepted = false
+        }
+
         fun parseAttributes(jsonString: String?) {
             jsonString ?: return
-            try {
-                attributes += JSONArray(jsonString).toStringPairs().toMap()
-            } catch (e: JSONException) {
-                logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
-            }
+            Json.decodeFromString<Sequence<String>>(jsonString)
+                .zipWithNext()
+                .filterIndexed { i, _ -> i % 2 == 0 }
+                .toMap(attributes)
         }
 
         fun invalidate() {
@@ -153,29 +178,22 @@ class AppAuthState private constructor(builder: Builder) {
 
         fun parseHeaders(jsonString: String?) {
             jsonString ?: return
-            try {
-                this.headers += JSONArray(jsonString).toStringPairs()
-            } catch (e: JSONException) {
-                logger.warn("Cannot deserialize AppAuthState attributes: {}", e.toString())
-            }
+            Json.decodeFromString<Sequence<String>>(jsonString)
+                .zipWithNext()
+                .filterIndexedTo(this.headers) { i, _ -> i % 2 == 0 }
         }
 
-        @Throws(JSONException::class)
         fun parseSourceTypes(sourceJson: Collection<String>?) {
             sourceJson ?: return
-            sourceTypes += sourceJson.map { SourceType(it) }
+            sourceJson.mapTo(sourceTypes) { Json.decodeFromString(it) }
         }
 
-        @Throws(JSONException::class)
         fun parseSourceMetadata(sourceJson: Collection<String>?) {
             sourceJson ?: return
-            sourceMetadata += sourceJson.map { SourceMetadata(it) }
+            sourceJson.mapTo(sourceMetadata) { Json.decodeFromString(it) }
         }
 
-        fun build(): AppAuthState {
-            sourceMetadata.forEach { it.deduplicateType(sourceTypes) }
-            return AppAuthState(this)
-        }
+        fun build(): AppAuthState = AppAuthState(this)
     }
 
     override fun toString(): String {
@@ -199,6 +217,7 @@ class AppAuthState private constructor(builder: Builder) {
 
     override fun equals(other: Any?) = equalTo(
         other,
+        AppAuthState::lastUpdate,
         AppAuthState::projectId,
         AppAuthState::userId,
         AppAuthState::token,
@@ -217,13 +236,6 @@ class AppAuthState private constructor(builder: Builder) {
 
     companion object {
         private val logger = LoggerFactory.getLogger(AppAuthState::class.java)
-
-        @Throws(JSONException::class)
-        private fun JSONArray.toStringPairs(): List<Pair<String, String>> = buildList(length() / 2) {
-            for (i in 0 until length() step 2) {
-                add(Pair(getString(i), getString(i + 1)))
-            }
-        }
 
         /**
          * Strips all slashes from the end of a URL.

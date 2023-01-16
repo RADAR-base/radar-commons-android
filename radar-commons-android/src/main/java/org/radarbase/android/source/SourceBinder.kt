@@ -19,7 +19,7 @@ package org.radarbase.android.source
 import android.os.Bundle
 import androidx.lifecycle.LiveData
 import org.radarbase.android.auth.SourceMetadata
-import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.data.RecordData
 import java.io.IOException
 
@@ -29,7 +29,7 @@ interface SourceBinder<T : BaseSourceState> {
     /** Get the current source name, or null if unknown.  */
     val sourceName: String?
     /** Get the current server status  */
-    val serverStatus: ServerStatusListener.Status
+    val serverStatus: ServerStatus
     /** Get the last number of records sent  */
     val serverRecordsSent: Map<String, Long>
 

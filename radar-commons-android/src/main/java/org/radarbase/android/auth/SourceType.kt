@@ -1,5 +1,7 @@
 package org.radarbase.android.auth
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.util.buildJson
@@ -7,34 +9,26 @@ import org.radarbase.android.util.equalTo
 import org.slf4j.LoggerFactory
 import java.util.*
 
+@Serializable
 class SourceType(
+    @SerialName("sourceTypeId")
     val id: Int,
+    @SerialName("sourceTypeProducer")
     val producer: String,
+    @SerialName("sourceTypeModel")
     val model: String,
+    @SerialName("sourceTypeCatalogVersion")
     val catalogVersion: String,
+    @SerialName("dynamicRegistration")
     val hasDynamicRegistration: Boolean,
 ) {
-
-    @Throws(JSONException::class)
-    constructor(jsonString: String) : this(JSONObject(jsonString)) {
-        logger.debug("Creating source type from {}", jsonString)
-    }
-
-    @Throws(JSONException::class)
-    constructor(json: JSONObject) : this(
-        id = json.getInt("sourceTypeId"),
-        producer = json.getString("sourceTypeProducer"),
-        model = json.getString("sourceTypeModel"),
-        catalogVersion = json.getString("sourceTypeCatalogVersion"),
-        hasDynamicRegistration = json.optBoolean("dynamicRegistration", false),
-    )
-
     override fun equals(other: Any?): Boolean = equalTo(
         other,
         SourceType::id,
         SourceType::producer,
         SourceType::model,
-        SourceType::catalogVersion
+        SourceType::catalogVersion,
+        SourceType::hasDynamicRegistration,
     )
 
     override fun hashCode(): Int = Objects.hash(id)
@@ -45,20 +39,4 @@ class SourceType(
             "model='$model', " +
             "catalogVersion='$catalogVersion', " +
             "dynamicRegistration=$hasDynamicRegistration}"
-
-    fun toJson(): JSONObject = try {
-        buildJson {
-            put("sourceTypeId", id)
-            put("sourceTypeProducer", producer)
-            put("sourceTypeModel", model)
-            put("sourceTypeCatalogVersion", catalogVersion)
-            put("dynamicRegistration", hasDynamicRegistration)
-        }
-    } catch (ex: JSONException) {
-        throw IllegalStateException("Cannot serialize existing SourceMetadata")
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(SourceType::class.java)
-    }
 }

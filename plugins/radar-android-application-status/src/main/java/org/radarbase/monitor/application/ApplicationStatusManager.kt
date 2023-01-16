@@ -23,7 +23,6 @@ import android.os.Build
 import android.os.SystemClock
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
@@ -135,7 +134,7 @@ class ApplicationStatusManager(
         logger.info("Starting ApplicationStatusManager")
         LocalBroadcastManager.getInstance(service).apply {
             serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
-                state.serverStatus = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
+                state.serverStatus = org.radarbase.android.kafka.ServerStatus.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
             }
             serverRecordsReceiver = register(SERVER_RECORDS_SENT_TOPIC) { _, intent ->
                 val numberOfRecordsSent = intent.getLongExtra(SERVER_RECORDS_SENT_NUMBER, 0)
@@ -339,13 +338,13 @@ class ApplicationStatusManager(
 
         private fun Long.toIntCapped(): Int = if (this <= Int.MAX_VALUE) toInt() else Int.MAX_VALUE
 
-        private fun ServerStatusListener.Status?.toServerStatus(): ServerStatus = when (this) {
-            ServerStatusListener.Status.CONNECTED,
-            ServerStatusListener.Status.READY,
-            ServerStatusListener.Status.UPLOADING -> ServerStatus.CONNECTED
-            ServerStatusListener.Status.DISCONNECTED,
-            ServerStatusListener.Status.DISABLED,
-            ServerStatusListener.Status.UPLOADING_FAILED -> ServerStatus.DISCONNECTED
+        private fun org.radarbase.android.kafka.ServerStatus?.toServerStatus(): ServerStatus = when (this) {
+            org.radarbase.android.kafka.ServerStatus.CONNECTED,
+            org.radarbase.android.kafka.ServerStatus.READY,
+            org.radarbase.android.kafka.ServerStatus.UPLOADING -> ServerStatus.CONNECTED
+            org.radarbase.android.kafka.ServerStatus.DISCONNECTED,
+            org.radarbase.android.kafka.ServerStatus.DISABLED,
+            org.radarbase.android.kafka.ServerStatus.UPLOADING_FAILED -> ServerStatus.DISCONNECTED
             else -> ServerStatus.UNKNOWN
         }
     }

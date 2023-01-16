@@ -16,6 +16,8 @@
 
 package org.radarbase.android.data
 
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.apache.avro.Schema
 import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.data.RecordData
@@ -52,7 +54,7 @@ interface ReadableDataCache : Closeable {
     /**
      * Number of unsent records in cache.
      */
-    val numberOfRecords: Long
+    val numberOfRecords: StateFlow<Long>
 
     /**
      * Remove oldest records.

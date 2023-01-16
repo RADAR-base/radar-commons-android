@@ -16,7 +16,6 @@
 
 package org.radarbase.android.kafka
 
-import android.os.Process
 import org.apache.avro.SchemaValidationException
 import org.apache.avro.generic.IndexedRecord
 import org.radarbase.android.data.DataCacheGroup
@@ -82,10 +81,10 @@ class KafkaDataSubmitter(
 
             try {
                 if (sender.isConnected) {
-                    dataHandler.serverStatus = ServerStatusListener.Status.CONNECTED
+                    dataHandler.serverStatus = ServerStatus.CONNECTED
                     connection.didConnect()
                 } else {
-                    dataHandler.serverStatus = ServerStatusListener.Status.DISCONNECTED
+                    dataHandler.serverStatus = ServerStatus.DISCONNECTED
                     connection.didDisconnect(null)
                 }
             } catch (ex: AuthenticationException) {
@@ -130,7 +129,7 @@ class KafkaDataSubmitter(
         uploadAllCaches()
         this.submitHandler.execute {
             uploadAllCaches()
-            if (dataHandler.serverStatus == ServerStatusListener.Status.CONNECTED) {
+            if (dataHandler.serverStatus == ServerStatus.CONNECTED) {
                 successCallback()
             } else {
                 errorCallback()
@@ -183,7 +182,7 @@ class KafkaDataSubmitter(
                 }
             }
             if (uploadingNotified.get()) {
-                dataHandler.serverStatus = ServerStatusListener.Status.CONNECTED
+                dataHandler.serverStatus = ServerStatus.CONNECTED
                 connection.didConnect()
             }
         } catch (ex: Exception) {
@@ -216,7 +215,7 @@ class KafkaDataSubmitter(
                 .mapTo(HashSet(), DataCacheGroup<*,*>::topicName)
 
             if (uploadingNotified.get()) {
-                dataHandler.serverStatus = ServerStatusListener.Status.CONNECTED
+                dataHandler.serverStatus = ServerStatus.CONNECTED
                 connection.didConnect()
             }
         } catch (ex: Exception) {
@@ -247,7 +246,7 @@ class KafkaDataSubmitter(
 
             if (recordUserId == null || recordUserId == config.userId) {
                 if (uploadingNotified.compareAndSet(false, true)) {
-                    dataHandler.serverStatus = ServerStatusListener.Status.UPLOADING
+                    dataHandler.serverStatus = ServerStatus.UPLOADING
                 }
 
                 try {
@@ -259,7 +258,7 @@ class KafkaDataSubmitter(
                     dataHandler.updateRecordsSent(topic.name, -1)
                     throw ex
                 } catch (e: Exception) {
-                    dataHandler.serverStatus = ServerStatusListener.Status.UPLOADING_FAILED
+                    dataHandler.serverStatus = ServerStatus.UPLOADING_FAILED
                     dataHandler.updateRecordsSent(topic.name, -1)
                     throw e
                 }
