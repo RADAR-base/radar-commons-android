@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 buildscript {
-    ext.kotlin_version = '1.7.20'
-    ext.dokka_version = '1.7.10'
+    ext.kotlin_version = '1.7.22'
+    ext.dokka_version = '1.7.20'
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.3.0'
+        classpath 'com.android.tools.build:gradle:7.3.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath 'com.github.bjoernq:unmockplugin:0.7.9'
         classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.18"
