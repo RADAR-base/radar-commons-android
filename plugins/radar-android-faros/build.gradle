@@ -1,7 +1,7 @@
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
-    namespace "org.radarbase.passive.bittium"
+    namespace 'org.radarbase.passive.bittium'
 }
 
 //---------------------------------------------------------------------------//
