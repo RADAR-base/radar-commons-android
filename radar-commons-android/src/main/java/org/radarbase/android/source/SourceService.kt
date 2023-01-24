@@ -370,9 +370,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         }
     }
 
-    override fun loginFailed(manager: LoginManager?, ex: Exception?) {
-
-    }
+    override fun loginFailed(manager: LoginManager?, ex: Exception?) = Unit
 
     override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 

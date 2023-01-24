@@ -176,13 +176,13 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     private fun callListeners(call: (LoginListenerRegistration) -> Unit) {
-        synchronized(listeners) {
+        handler.execute {
             listeners.forEach(call)
         }
     }
 
     private fun callListeners(sinceUpdate: Long, call: (LoginListenerRegistration) -> Unit) {
-        synchronized(listeners) {
+        handler.execute {
             listeners.filter { it.lastUpdate < sinceUpdate }
                     .forEach { listener ->
                         listener.lastUpdate = sinceUpdate
@@ -192,9 +192,14 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     private val relevantManagers: List<LoginManager>
-        get() = appAuth.authenticationSource?.let { authSource ->
-                loginManagers.filter { authSource in it.sourceTypes }
-            } ?: loginManagers
+        get() {
+            val authSource = appAuth.authenticationSource
+            return if (authSource != null) {
+                loginManagers.filter { manager -> authSource in manager.sourceTypes }
+            } else {
+                loginManagers
+            }
+        }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         handler.executeReentrant {
@@ -238,22 +243,22 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     fun addLoginListener(loginListener: LoginListener): LoginListenerRegistration {
+        val registration = handler.compute {
+            LoginListenerRegistration(loginListener)
+                .also { listeners += it }
+        }
         handler.execute {
             if (appAuth.isValid) {
                 loginListener.loginSucceeded(null, appAuth)
             }
         }
-
-        return LoginListenerRegistration(loginListener)
-                .also {
-                    synchronized(listeners) { listeners += it }
-                }
+        return registration
     }
 
     fun removeLoginListener(registration: LoginListenerRegistration) {
-        synchronized(listeners) {
+        handler.execute {
             logger.debug("Removing login listener #{}: {} (starting with {} listeners)", registration.id, registration.loginListener, listeners.size)
-            listeners -= listeners.filter { it.id == registration.id }
+            listeners.removeAll { it.id == registration.id }
         }
     }
 
@@ -265,31 +270,31 @@ abstract class AuthService : Service(), LoginListener {
      */
     protected abstract fun createLoginManagers(appAuth: AppAuthState): List<LoginManager>
 
-    private fun updateState(update: AppAuthState.Builder.() -> Unit) {
-        handler.executeReentrant {
-            appAuth = appAuth.alter(update)
-        }
+    private fun updateState(update: AppAuthState.Builder.() -> Unit) = handler.executeReentrant {
+        appAuth = appAuth.alter(update)
     }
 
-    private fun applyState(function: AppAuthState.() -> Unit) {
-        handler.executeReentrant {
-            appAuth.function()
-        }
+    private fun applyState(function: AppAuthState.() -> Unit) = handler.executeReentrant {
+        appAuth.function()
     }
 
     fun invalidate(token: String?, disableRefresh: Boolean) {
         handler.executeReentrant {
             logger.info("Invalidating authentication state")
-            if (token?.let { it == appAuth.token } != false) {
-                appAuth = appAuth.alter { invalidate() }
+            if (token == null || token == appAuth.token) {
+                val (updatedManager, updatedAuth) = relevantManagers.asSequence()
+                    .map { it to it.invalidate(appAuth, disableRefresh) }
+                    .firstOrNull { (_, updatedAuth) -> updatedAuth != null }
+                    ?: Pair(null, appAuth)
 
-                if (relevantManagers.any { manager ->
-                    manager.invalidate(appAuth, disableRefresh)
-                            ?.also { appAuth = it } != null
-                }) {
-                    authSerialization.store(appAuth)
-                    refresh()
+                val invalidatedAuth = if (disableRefresh) {
+                    updatedAuth!!.reset()
+                } else {
+                    updatedAuth!!.alter { invalidate() }
                 }
+
+                logoutSucceeded(updatedManager, invalidatedAuth)
+                refresh()
             }
         }
     }
@@ -379,7 +384,7 @@ abstract class AuthService : Service(), LoginListener {
     private fun unregisterSources(sources: Iterable<SourceMetadata>) {
         handler.execute {
             updateState {
-                sourceMetadata -= sources
+                sourceMetadata -= sources.toHashSet()
             }
             doRefresh()
         }

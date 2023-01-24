@@ -112,19 +112,10 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
         return false
     }
 
-    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
-        return when {
-            authState.authenticationSource != SOURCE_TYPE -> null
-            disableRefresh -> {
-                val loggedOutAuthState = authState.reset()
-                listener.logoutSucceeded(this, loggedOutAuthState)
-                loggedOutAuthState
-            }
-            else -> authState
-        }
-    }
+    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? =
+        authState.takeIf { it.authenticationSource == SOURCE_TYPE }
 
-    override val sourceTypes: List<String> = sourceTypeList
+    override val sourceTypes: List<String> = listOf(SOURCE_TYPE)
 
     override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
         logger.debug("Handling source update")
@@ -322,7 +313,6 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     companion object {
         const val SOURCE_TYPE = "org.radarcns.auth.portal.ManagementPortal"
         private val logger = LoggerFactory.getLogger(ManagementPortalLoginManager::class.java)
-        val sourceTypeList = listOf(SOURCE_TYPE)
     }
 
     private data class ManagementPortalConfig(

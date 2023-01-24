@@ -595,9 +595,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
         mHandler.execute {
             updateProviders(authState, configuration.latestConfig)
+            stopForeground(true)
+            stopSelf()
         }
-        stopForeground(true)
-        stopSelf()
     }
 
     protected inner class RadarBinder : Binder(), IRadarBinder {

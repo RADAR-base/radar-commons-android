@@ -20,6 +20,7 @@ import android.app.Activity
 import org.json.JSONException
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.auth.*
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager
 import org.radarbase.producer.AuthenticationException
 
 /**
@@ -55,17 +56,8 @@ class OAuth2LoginManager(
         return true
     }
 
-    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
-        return when {
-            authState.tokenType != LoginManager.AUTH_TYPE_BEARER -> return null
-            disableRefresh -> {
-                val loggedOutAuthState = authState.reset()
-                logoutSucceeded(this, loggedOutAuthState)
-                loggedOutAuthState
-            }
-            else -> authState
-        }
-    }
+    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? =
+        authState.takeIf { it.authenticationSource == OAUTH2_SOURCE_TYPE }
 
     override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
 
