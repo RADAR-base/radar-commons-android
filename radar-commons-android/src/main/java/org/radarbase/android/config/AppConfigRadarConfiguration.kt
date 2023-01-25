@@ -97,9 +97,9 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
                         logger.info("Successfully fetched app config body")
                         val json = JSONObject(body.string())
 
-                        cache = HashMap<String, String>().apply {
-                            json.optJSONArray("defaults")?.let { mergeConfig(it) }
-                            json.optJSONArray("config")?.let { mergeConfig(it) }
+                        cache = buildMap {
+                            mergeConfig(json.optJSONArray("defaults"))
+                            mergeConfig(json.optJSONArray("config"))
                         }
                         lastFetch = System.currentTimeMillis()
 
@@ -197,7 +197,8 @@ class AppConfigRadarConfiguration(context: Context) : RemoteConfig {
         private val logger = LoggerFactory.getLogger(AppConfigRadarConfiguration::class.java)
         private const val LAST_FETCH = "org.radarbase.android.config.AppConfigRadarConfiguration.lastFetch"
 
-        private fun MutableMap<String, String>.mergeConfig(configs: JSONArray) {
+        private fun MutableMap<String, String>.mergeConfig(configs: JSONArray?) {
+            configs ?: return
             configs.asJSONObjectSequence()
                 .forEach { singleConfig ->
                     val name = singleConfig.getString("name")
