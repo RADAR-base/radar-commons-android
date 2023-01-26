@@ -2,6 +2,7 @@ package org.radarbase.android.config
 
 import android.content.Context
 import androidx.lifecycle.MutableLiveData
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.BASE_URL_KEY
@@ -107,6 +108,10 @@ class CombinedRadarConfig(
     override fun toString(): String = latestConfig.toString()
 
     override fun updateWithAuthState(context: Context, appAuthState: AppAuthState?) {
+        val enableAnalytics = appAuthState?.isPrivacyPolicyAccepted == true
+        logger.debug("Setting Firebase Analytics enabled: {}", enableAnalytics)
+        FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(enableAnalytics)
+
         appAuthState ?: return
 
         val baseUrl = appAuthState.baseUrl
