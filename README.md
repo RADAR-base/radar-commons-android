@@ -40,7 +40,7 @@ repositories {
     mavenCentral()
 }
 dependencies {
-    api 'org.radarbase:radar-commons-android:1.2.1'
+    api 'org.radarbase:radar-commons-android:1.2.2'
 }
 ```
 
@@ -48,7 +48,7 @@ Include additional plugins by adding:
 
 ```gradle
 dependencies {
-    implementation 'org.radarbase:<plugin name>:1.2.1'
+    implementation 'org.radarbase:<plugin name>:1.2.2'
 }
 ```
 
@@ -96,6 +96,35 @@ For latest code use `dev` branch. Code should be formatted using the [Google Jav
 To only build plugins that are of interest to you, add a `gradle.skip` file in all plugin directories that should not be built.
 
 If you want to contribute a feature or fix browse our [issues](https://github.com/RADAR-base/radar-commons-android/issues), and please make a pull request.
+
+## Publishing Schemas to Maven Local
+
+While the plugin is in development phase schemas are not published centrally. To access the java generated file from avro schemas first publish them to maven local.
+To publish schemas locally to Maven, please follow these steps:
+
+1. Change your working directory to java-sdk in RADAR-Schemas.
+
+2. Run the following commands in your terminal:
+```shell
+./gradlew build 
+./gradlew publishToMavenLocal
+```
+
+3. In your build.gradle file, add the following to your repositories block:
+```gradle
+repositories {
+    mavenLocal()
+}
+```
+
+4. In the same build.gradle file, add the following to your dependencies block, replacing `$radarSchemasVersion` with its corresponding value:
+```gradle
+dependencies {
+    implementation "org.radarbase:radar-schemas-commons:$radarSchemasVersion"
+}
+```
+
+You can find the version value in the metadata of your local Maven repository. It should end in `SNAPSHOT`.
 
 ## Licensing
 
