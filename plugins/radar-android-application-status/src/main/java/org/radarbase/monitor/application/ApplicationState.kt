@@ -29,10 +29,29 @@ class ApplicationState : BaseSourceState() {
     var recordsSent = 0L
         private set
 
+    @get:Synchronized
+    var recordsSentPerTopic = 0L
+    private set
+
+    @get:Synchronized
+    var topicName:String? = ""
+    private set
+
     val cachedRecords: MutableMap<String, Long> = ConcurrentHashMap()
 
     @Synchronized
     fun addRecordsSent(nRecords: Long) {
         recordsSent += nRecords
     }
+
+    @Synchronized
+    fun recordSentPerTopic(nRecordsTopic:Long){
+        recordsSentPerTopic= nRecordsTopic
+    }
+
+    @Synchronized
+    fun topicInfo(name:String?){
+        topicName = name
+    }
+
 }

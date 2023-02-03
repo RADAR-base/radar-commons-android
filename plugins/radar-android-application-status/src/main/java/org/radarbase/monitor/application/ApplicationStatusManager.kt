@@ -52,6 +52,7 @@ class ApplicationStatusManager(
     private val ntpTopic: DataCache<ObservationKey, ApplicationExternalTime> = createCache("application_external_time", ApplicationExternalTime())
     private val timeZoneTopic: DataCache<ObservationKey, ApplicationTimeZone> = createCache("application_time_zone", ApplicationTimeZone())
     private val deviceInfoTopic: DataCache<ObservationKey, ApplicationDeviceInfo> = createCache("application_device_info", ApplicationDeviceInfo())
+    private val applicationRecordsSentTopic:DataCache<ObservationKey,ApplicationTopicRecordsSent> = createCache("application_topic_records_sent",ApplicationTopicRecordsSent())
 
     private val processor: OfflineProcessor
     private val creationTimeStamp: Long = SystemClock.elapsedRealtime()
@@ -87,6 +88,7 @@ class ApplicationStatusManager(
                 ::processRecordsSent,
                 ::processReferenceTime,
                 ::processDeviceInfo,
+                ::processTopicReocrdSent,
             )
             requestCode = APPLICATION_PROCESSOR_REQUEST_CODE
             requestName = APPLICATION_PROCESSOR_REQUEST_NAME
@@ -139,7 +141,10 @@ class ApplicationStatusManager(
             }
             serverRecordsReceiver = register(SERVER_RECORDS_SENT_TOPIC) { _, intent ->
                 val numberOfRecordsSent = intent.getLongExtra(SERVER_RECORDS_SENT_NUMBER, 0)
+                val topicName = intent.getStringExtra(SERVER_RECORDS_SENT_TOPIC)
                 state.addRecordsSent(numberOfRecordsSent.coerceAtLeast(0))
+                state.recordSentPerTopic(numberOfRecordsSent)
+                state.topicInfo(topicName)
             }
             cacheReceiver = register(CACHE_TOPIC) { _, intent ->
                 val topic = intent.getStringExtra(CACHE_TOPIC) ?: return@register
@@ -262,6 +267,19 @@ class ApplicationStatusManager(
             recordsSent, recordsCached, recordsCached)
         send(recordCountsTopic, ApplicationRecordCounts(time,
             recordsCached, recordsSent, recordsCached.toIntCapped()))
+    }
+
+    private fun processTopicReocrdSent(){
+        val time = currentTime
+        val recordsSent = state.recordsSent
+        val topic:String? = state.topicName
+        var success:Boolean
+        val status: ServerStatus = state.serverStatus.toServerStatus()
+        if (status  == ServerStatus.CONNECTED) success = true
+        success = false
+        send(applicationRecordsSentTopic,ApplicationTopicRecordsSent(
+            time, topic, success, recordsSent
+        ))
     }
 
     override fun onClose() {
