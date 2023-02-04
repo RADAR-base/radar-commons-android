@@ -16,20 +16,26 @@
 
 package org.radarbase.monitor.application
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
+import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.SourceService
 import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
 import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
+import org.radarbase.android.source.SourceService.Companion.SOURCE_SERVICE_CLASS
+import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_CHANGED
+import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_NAME
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.*
 import org.radarbase.monitor.application.ApplicationStatusService.Companion.UPDATE_RATE_DEFAULT
@@ -52,7 +58,8 @@ class ApplicationStatusManager(
     private val ntpTopic: DataCache<ObservationKey, ApplicationExternalTime> = createCache("application_external_time", ApplicationExternalTime())
     private val timeZoneTopic: DataCache<ObservationKey, ApplicationTimeZone> = createCache("application_time_zone", ApplicationTimeZone())
     private val deviceInfoTopic: DataCache<ObservationKey, ApplicationDeviceInfo> = createCache("application_device_info", ApplicationDeviceInfo())
-    private val applicationRecordsSentTopic:DataCache<ObservationKey,ApplicationTopicRecordsSent> = createCache("application_topic_records_sent",ApplicationTopicRecordsSent())
+    private val recordsSentTopic:DataCache<ObservationKey,ApplicationTopicRecordsSent> = createCache("application_topic_records_sent",ApplicationTopicRecordsSent())
+    private val pluginStatusTopic:DataCache<ObservationKey,ApplicationPluginStatus> = createCache("application_plugin_status",ApplicationPluginStatus())
 
     private val processor: OfflineProcessor
     private val creationTimeStamp: Long = SystemClock.elapsedRealtime()
@@ -78,6 +85,8 @@ class ApplicationStatusManager(
     private lateinit var serverStatusReceiver: BroadcastRegistration
     private lateinit var serverRecordsReceiver: BroadcastRegistration
     private lateinit var cacheReceiver: BroadcastRegistration
+    private lateinit var sourceStatusReceiver: BroadcastRegistration
+    private lateinit var sourceFailedReceiver: BroadcastRegistration
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
@@ -89,6 +98,7 @@ class ApplicationStatusManager(
                 ::processReferenceTime,
                 ::processDeviceInfo,
                 ::processTopicReocrdSent,
+                ::processPluginStatus,
             )
             requestCode = APPLICATION_PROCESSOR_REQUEST_CODE
             requestName = APPLICATION_PROCESSOR_REQUEST_NAME
@@ -150,6 +160,15 @@ class ApplicationStatusManager(
                 val topic = intent.getStringExtra(CACHE_TOPIC) ?: return@register
                 val records = intent.getLongExtra(CACHE_RECORDS_UNSENT_NUMBER, 0)
                 state.cachedRecords[topic] = records.coerceAtLeast(0)
+            }
+            sourceStatusReceiver = register(SOURCE_STATUS_CHANGED){_, intent->
+                val pluginName = intent.getStringExtra(SOURCE_SERVICE_CLASS)
+                val pluginStatus = intent.getStringExtra(SOURCE_STATUS_NAME)
+                state.getPluginName(pluginName)
+                state.getPluginStatus(pluginStatus)
+            }
+            sourceFailedReceiver = register(SourceService.SOURCE_CONNECT_FAILED) { context, intent ->
+                     val error =   intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)
             }
         }
 
@@ -277,8 +296,17 @@ class ApplicationStatusManager(
         val status: ServerStatus = state.serverStatus.toServerStatus()
         if (status  == ServerStatus.CONNECTED) success = true
         success = false
-        send(applicationRecordsSentTopic,ApplicationTopicRecordsSent(
+        send(recordsSentTopic,ApplicationTopicRecordsSent(
             time, topic, success, recordsSent
+        ))
+    }
+
+    private fun processPluginStatus(){
+        val time = currentTime
+        val plugin = state.pluginName
+        val status = state.pluginStatus
+        send(pluginStatusTopic, ApplicationPluginStatus(
+            time,plugin,status
         ))
     }
 

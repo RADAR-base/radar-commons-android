@@ -37,6 +37,18 @@ class ApplicationState : BaseSourceState() {
     var topicName:String? = ""
     private set
 
+    @get:Synchronized
+    var pluginName:String? = ""
+    private set
+
+    @get:Synchronized
+    var pluginStatus:String? = ""
+    private set
+
+    @get:Synchronized
+    var error:String? = ""
+        private set
+
     val cachedRecords: MutableMap<String, Long> = ConcurrentHashMap()
 
     @Synchronized
@@ -52,6 +64,21 @@ class ApplicationState : BaseSourceState() {
     @Synchronized
     fun topicInfo(name:String?){
         topicName = name
+    }
+
+    @Synchronized
+    fun getPluginName(name:String?){
+        pluginName = name
+    }
+
+    @Synchronized
+    fun getPluginStatus(status:String?){
+        pluginStatus = status
+    }
+
+    @Synchronized
+    fun getError(error:String?){
+        pluginStatus = error
     }
 
 }
