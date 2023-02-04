@@ -16,13 +16,11 @@
 
 package org.radarbase.monitor.application
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
-import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.kafka.ServerStatusListener
