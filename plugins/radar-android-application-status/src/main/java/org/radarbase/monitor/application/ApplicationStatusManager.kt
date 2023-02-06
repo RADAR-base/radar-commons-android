@@ -160,13 +160,13 @@ class ApplicationStatusManager(
                 state.cachedRecords[topic] = records.coerceAtLeast(0)
             }
             sourceStatusReceiver = register(SOURCE_STATUS_CHANGED){_, intent->
-                val pluginName = intent.getStringExtra(SOURCE_SERVICE_CLASS)
-                val pluginStatus = intent.getStringExtra(SOURCE_STATUS_NAME)
+                val pluginName = intent.getStringExtra(SOURCE_STATUS_NAME)
+                state.sourceStatus = SourceStatusListener.Status.values()[intent.getIntExtra(SOURCE_STATUS_CHANGED,0)]
                 state.getPluginName(pluginName)
-                state.getPluginStatus(pluginStatus)
             }
-            sourceFailedReceiver = register(SourceService.SOURCE_CONNECT_FAILED) { context, intent ->
-                     val error =   intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)
+            sourceFailedReceiver = register(SourceService.SOURCE_CONNECT_FAILED) {_, intent ->
+                val pluginName = intent.getStringExtra(SOURCE_SERVICE_CLASS)
+                val error =   intent.getStringExtra(SOURCE_STATUS_NAME)
             }
         }
 
@@ -301,8 +301,8 @@ class ApplicationStatusManager(
 
     private fun processPluginStatus(){
         val time = currentTime
-        val plugin = state.pluginName
-        val status = state.pluginStatus
+        val plugin =state.pluginName
+        val status = state.sourceStatus.toSourceStatus()
         send(pluginStatusTopic, ApplicationPluginStatus(
             time,plugin,status
         ))
@@ -313,6 +313,8 @@ class ApplicationStatusManager(
         cacheReceiver.unregister()
         serverRecordsReceiver.unregister()
         serverStatusReceiver.unregister()
+        sourceStatusReceiver.unregister()
+        sourceFailedReceiver.unregister()
     }
 
     private fun processTimeZone() {
@@ -391,6 +393,15 @@ class ApplicationStatusManager(
             ServerStatusListener.Status.DISABLED,
             ServerStatusListener.Status.UPLOADING_FAILED -> ServerStatus.DISCONNECTED
             else -> ServerStatus.UNKNOWN
+        }
+        private fun SourceStatusListener.Status?.toSourceStatus(): SourceStatus = when (this) {
+            SourceStatusListener.Status.CONNECTED -> SourceStatus.CONNECTED
+            SourceStatusListener.Status.CONNECTING -> SourceStatus.CONNECTING
+            SourceStatusListener.Status.DISCONNECTING -> SourceStatus.DISCONNECTING
+            SourceStatusListener.Status.READY  -> SourceStatus.READY
+            SourceStatusListener.Status.UNAVAILABLE -> SourceStatus.UNAVAILABLE
+            SourceStatusListener.Status.DISCONNECTED  -> SourceStatus.DISCONNECTED
+            else -> SourceStatus.UNKNOWN
         }
     }
 }

@@ -18,12 +18,17 @@ package org.radarbase.monitor.application
 
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceStatusListener
 import java.util.concurrent.ConcurrentHashMap
 
 class ApplicationState : BaseSourceState() {
     @set:Synchronized
     var serverStatus: ServerStatusListener.Status? = null
         @Synchronized get() = field ?: ServerStatusListener.Status.DISCONNECTED
+
+    @set:Synchronized
+    var sourceStatus: SourceStatusListener.Status? = null
+        @Synchronized get() = field ?: SourceStatusListener.Status.DISCONNECTED
 
     @get:Synchronized
     var recordsSent = 0L
@@ -69,11 +74,6 @@ class ApplicationState : BaseSourceState() {
     @Synchronized
     fun getPluginName(name:String?){
         pluginName = name
-    }
-
-    @Synchronized
-    fun getPluginStatus(status:String?){
-        pluginStatus = status
     }
 
     @Synchronized
