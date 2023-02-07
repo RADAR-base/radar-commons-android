@@ -294,8 +294,12 @@ class ApplicationStatusManager(
         val topic:String? = state.topicName
         var success:Boolean
         val status: ServerStatus = state.serverStatus.toServerStatus()
-        if (status  == ServerStatus.CONNECTED) success = true
-        success = false
+        if (status  == ServerStatus.CONNECTED){
+            success = true
+        }
+        else{
+            success = false
+        }
         send(recordsSentTopic,ApplicationTopicRecordsSent(
             time, topic, success, recordsSent
         ))
