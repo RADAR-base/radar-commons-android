@@ -31,6 +31,7 @@ import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
 import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
+import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
 import org.radarbase.android.source.SourceService.Companion.SOURCE_SERVICE_CLASS
 import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_CHANGED
 import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_NAME
@@ -56,8 +57,9 @@ class ApplicationStatusManager(
     private val ntpTopic: DataCache<ObservationKey, ApplicationExternalTime> = createCache("application_external_time", ApplicationExternalTime())
     private val timeZoneTopic: DataCache<ObservationKey, ApplicationTimeZone> = createCache("application_time_zone", ApplicationTimeZone())
     private val deviceInfoTopic: DataCache<ObservationKey, ApplicationDeviceInfo> = createCache("application_device_info", ApplicationDeviceInfo())
-    private val recordsSentTopic:DataCache<ObservationKey,ApplicationTopicRecordsSent> = createCache("application_topic_records_sent",ApplicationTopicRecordsSent())
-    private val pluginStatusTopic:DataCache<ObservationKey,ApplicationPluginStatus> = createCache("application_plugin_status",ApplicationPluginStatus())
+    private val recordsSentTopic: DataCache<ObservationKey,ApplicationTopicRecordsSent> = createCache("application_topic_records_sent",ApplicationTopicRecordsSent())
+    private val pluginStatusTopic: DataCache<ObservationKey,ApplicationPluginStatus> = createCache("application_plugin_status",ApplicationPluginStatus())
+    private val errorTopic: DataCache<ObservationKey,ApplicationError> = createCache("application_error",ApplicationError())
 
     private val processor: OfflineProcessor
     private val creationTimeStamp: Long = SystemClock.elapsedRealtime()
@@ -97,6 +99,7 @@ class ApplicationStatusManager(
                 ::processDeviceInfo,
                 ::processTopicReocrdSent,
                 ::processPluginStatus,
+                ::processError,
             )
             requestCode = APPLICATION_PROCESSOR_REQUEST_CODE
             requestName = APPLICATION_PROCESSOR_REQUEST_NAME
@@ -164,9 +167,8 @@ class ApplicationStatusManager(
                 state.sourceStatus = SourceStatusListener.Status.values()[intent.getIntExtra(SOURCE_STATUS_CHANGED,0)]
                 state.getPluginName(pluginName)
             }
-            sourceFailedReceiver = register(SourceService.SOURCE_CONNECT_FAILED) {_, intent ->
-                val pluginName = intent.getStringExtra(SOURCE_SERVICE_CLASS)
-                val error =   intent.getStringExtra(SOURCE_STATUS_NAME)
+            sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) {_, intent ->
+
             }
         }
 
@@ -306,6 +308,13 @@ class ApplicationStatusManager(
         send(pluginStatusTopic, ApplicationPluginStatus(
             time,plugin,status
         ))
+    }
+
+    private fun processError(){
+        val time = currentTime
+        send(errorTopic,ApplicationError(
+             time,plugin,code,message
+        ) )
     }
 
     override fun onClose() {
