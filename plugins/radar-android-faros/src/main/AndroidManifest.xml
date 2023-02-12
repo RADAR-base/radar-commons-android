@@ -13,6 +13,9 @@
 
     <application>
         <service android:name=".FarosService"
-            android:foregroundServiceType="location"/>
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="Service for the eMotion Faros 180 and 360 devices."
+            />
     </application>
 </manifest>

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <service android:name=".ApplicationStatusService"/>
+        <service android:name=".ApplicationStatusService"
+            android:exported="false"
+            android:description="Service that sends application statuses about the RADAR pRMT app."/>
     </application>
 </manifest>

@@ -7,6 +7,8 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"/>
 
     <application android:allowBackup="true">
-        <service android:name=".PhoneUsageService"/>
+        <service android:name=".PhoneUsageService"
+            android:exported="false"
+            android:description="Service to monitor app usage on an Android device." />
     </application>
 </manifest>
