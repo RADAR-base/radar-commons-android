@@ -33,12 +33,12 @@ dependencies {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarbase:radar-schemas-commons:0.7.9') {
+    api ('org.radarbase:radar-schemas-commons:0.8.2') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     api(project(':avro-android'))
-    api("org.slf4j:slf4j-api:2.0.3")
-    api("androidx.appcompat:appcompat:1.5.1")
+    api("org.slf4j:slf4j-api:2.0.6")
+    api("androidx.appcompat:appcompat:1.6.0")
 
     implementation "com.squareup.okhttp3:okhttp:4.10.0"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
@@ -46,11 +46,11 @@ dependencies {
 
     api "androidx.lifecycle:lifecycle-service:2.5.1"
 
-    implementation platform('com.google.firebase:firebase-bom:30.5.0')
+    implementation platform('com.google.firebase:firebase-bom:31.2.0')
+    implementation 'com.google.firebase:firebase-analytics'
     implementation 'com.google.firebase:firebase-config'
-    implementation 'com.google.firebase:firebase-core'
     implementation 'com.google.firebase:firebase-crashlytics'
-    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.0'
+    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.4'
 }
 
 apply from: "$rootDir/gradle/test.gradle"

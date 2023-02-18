@@ -1,18 +1,17 @@
 name: Snyk test
 on:
-  push:
-    branches: [dev, master]
   pull_request:
-    branches: [master]
+    branches:
+      - master
+
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - uses: snyk/actions/setup@master
         with:
-          snyk-version: v1.931.0
+          snyk-version: v1.1032.0
 
       - uses: actions/setup-java@v3
         with:
@@ -24,7 +23,15 @@ jobs:
         env:
           E4LINK_PASSPHRASE: ${{ secrets.E4LINK_PASSPHRASE }}
 
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+
       - name: Run Snyk to check for vulnerabilities
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-sub-projects --org=radar-base  --fail-on=upgradable --configuration-matching='^releaseRuntimeClasspath$'
+        run: >
+          snyk test
+          --all-sub-projects
+          --configuration-matching='^releaseRuntimeClasspath$'
+          --org=radar-base
+          --policy-path=$PWD/.snyk
