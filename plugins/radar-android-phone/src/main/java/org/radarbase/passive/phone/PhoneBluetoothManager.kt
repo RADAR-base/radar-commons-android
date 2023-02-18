@@ -31,6 +31,7 @@ import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothAdapter
+import org.radarbase.android.util.HashGenerator
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneBluetoothDevices
@@ -41,7 +42,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     private val processor: OfflineProcessor
     private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache("android_phone_bluetooth_devices", PhoneBluetoothDevices())
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
-    private val hashgenerator = HashGenerator(context,"bluetooth_devices")
+    private val hashgenerator = HashGenerator(service,"bluetooth_devices")
     private val bluetoothScannedTopic = createCache("android_phone_bluetooth_device_scanned", PhoneBluetoothDeviceScanned())
 
 
@@ -89,14 +90,16 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                     when (action) {
                         BluetoothDevice.ACTION_FOUND -> {
                             numberOfDevices++
-                            val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                            val macAddress = device.address
-]                            val hash = hashgenerator.createhash(macAddress)
+                             val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                             val macAddress = device?.address ?: ""
+                             val hash = hashgenerator.createHash(macAddress)
                              val time = currentTime
                              val timeReceived = time
                              val macAddressHash = hash
                             send(bluetoothScannedTopic, PhoneBluetoothDeviceScanned.Builder().apply {
-                               time, timeReceived,macAddressHash
+                                time
+                                timeReceived
+                                macAddressHash
                             }.build())
 
                         }
