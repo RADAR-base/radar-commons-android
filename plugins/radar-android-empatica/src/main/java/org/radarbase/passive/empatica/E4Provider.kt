@@ -41,6 +41,9 @@ open class E4Provider(radarService: RadarService) : SourceProvider<E4State>(rada
             add(BLUETOOTH_SCAN)
             add(BLUETOOTH_CONNECT)
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            add(ACCESS_BACKGROUND_LOCATION)
+        }
     }
 
     override val featuresNeeded = listOf(PackageManager.FEATURE_BLUETOOTH, PackageManager.FEATURE_BLUETOOTH_LE)

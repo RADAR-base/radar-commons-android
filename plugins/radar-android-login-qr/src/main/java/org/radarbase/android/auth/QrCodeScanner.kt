@@ -16,11 +16,11 @@
 
 package org.radarbase.android.auth
 
-import android.app.Activity
-import android.content.Intent
+import androidx.appcompat.app.AppCompatActivity
 import com.google.zxing.client.android.Intents.Scan.MODE
 import com.google.zxing.client.android.Intents.Scan.QR_CODE_MODE
-import com.google.zxing.integration.android.IntentIntegrator
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 /**
  * QR code scanner.
@@ -28,23 +28,15 @@ import com.google.zxing.integration.android.IntentIntegrator
  *                 `null` otherwise.
  * @param activity to call back to when scanning has finished.
  */
-class QrCodeScanner(private val activity: Activity, private val callback: (String?) -> Unit) {
-    /** Start scanning for a QR code. */
-    fun start() {
-        IntentIntegrator(activity).apply {
-            addExtra(MODE, QR_CODE_MODE)
-            initiateScan()
-        }
+class QrCodeScanner(private val activity: AppCompatActivity, private val callback: (String?) -> Unit) {
+    private val launcher = activity.registerForActivityResult(ScanContract()) {
+        callback(it.contents)
     }
 
-    /**
-     * Call when onActivityResult of the given activity is called. Only call this if
-     * the intent is not null.
-     * @param requestCode request code provided to [Activity.onActivityResult]
-     * @param resultCode result code provided to [Activity.onActivityResult]
-     * @param data Intent provided to [Activity.onActivityResult]
-     */
-    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent) {
-        callback(IntentIntegrator.parseActivityResult(requestCode, resultCode, data)?.contents)
+    /** Start scanning for a QR code. */
+    fun start() {
+        launcher.launch(ScanOptions().apply {
+            addExtra(MODE, QR_CODE_MODE)
+        })
     }
 }

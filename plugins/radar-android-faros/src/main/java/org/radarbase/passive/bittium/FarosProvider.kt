@@ -47,6 +47,9 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
             add(BLUETOOTH_SCAN)
             add(BLUETOOTH_CONNECT)
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            add(ACCESS_BACKGROUND_LOCATION)
+        }
     }
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)

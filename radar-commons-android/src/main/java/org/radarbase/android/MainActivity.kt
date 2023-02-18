@@ -24,6 +24,7 @@ import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.google.firebase.analytics.FirebaseAnalytics
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
@@ -34,6 +35,7 @@ import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AuthService
+import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
 
@@ -229,6 +231,8 @@ abstract class MainActivity : AppCompatActivity() {
      */
     protected fun logout(disableRefresh: Boolean) {
         authConnection.applyBinder { invalidate(null, disableRefresh) }
+        logger.debug("Disabling Firebase Analytics")
+        FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
     }
 
     companion object {
