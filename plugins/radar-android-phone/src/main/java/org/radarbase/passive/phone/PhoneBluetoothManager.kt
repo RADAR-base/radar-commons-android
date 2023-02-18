@@ -41,9 +41,9 @@ import java.util.concurrent.TimeUnit
 class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceManager<PhoneBluetoothService, BaseSourceState>(service) {
     private val processor: OfflineProcessor
     private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache("android_phone_bluetooth_devices", PhoneBluetoothDevices())
+    private val bluetoothScannedTopic: DataCache<ObservationKey, PhoneBluetoothDevicesScanned> = createCache("android_phone_bluetooth_device_scanned", PhoneBluetoothDevicesScanned())
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
     private val hashgenerator = HashGenerator(service,"bluetooth_devices")
-    private val bluetoothScannedTopic = createCache("android_phone_bluetooth_device_scanned", PhoneBluetoothDeviceScanned())
 
 
     init {
@@ -96,12 +96,11 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                              val time = currentTime
                              val timeReceived = time
                              val macAddressHash = hash
-                            send(bluetoothScannedTopic, PhoneBluetoothDeviceScanned.Builder().apply {
+                            send(bluetoothScannedTopic, PhoneBluetoothDevicesScanned.Builder().apply {
                                 time
                                 timeReceived
                                 macAddressHash
                             }.build())
-
                         }
 
                         BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
