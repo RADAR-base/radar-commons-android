@@ -290,9 +290,9 @@ class ApplicationStatusManager(
 
     private fun processTopicReocrdSent(){
         val time = currentTime
-        val recordsSent = state.recordsSent
+        val recordsSent = state.recordsSentPerTopic
         val topic:String? = state.topicName
-        var success:Boolean
+        val success:Boolean
         val status: ServerStatus = state.serverStatus.toServerStatus()
         if (status  == ServerStatus.CONNECTED){
             success = true
