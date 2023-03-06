@@ -3,6 +3,8 @@ package org.radarbase.android.util
 import android.app.PendingIntent
 import android.content.Context
 import android.os.Build
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Transformations
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -59,3 +61,13 @@ internal inline fun <reified T: Any> T.equalTo(other: Any?, vararg fields: T.() 
     other as T
     return fields.all { field -> field() == other.field() }
 }
+
+
+inline fun <T, R> LiveData<T>.map(crossinline transform: (T) -> R): LiveData<R> =
+    Transformations.map(this) { transform(it) }
+
+fun <T> LiveData<T>.distinctUntilChanged(): LiveData<T> =
+    Transformations.distinctUntilChanged(this)
+
+inline fun <T, R> LiveData<T>.switchMap(crossinline transform: (T) -> LiveData<R>): LiveData<R> =
+    Transformations.switchMap(this) { transform(it) }

@@ -21,12 +21,13 @@ class LocalConfiguration(context: Context) : LocalConfig {
             .toMap(ConcurrentHashMap())
 
     override fun put(key: String, value: Any): String? {
-        require((value is String
-                || value is Long
-                || value is Int
-                || value is Float
-                || value is Boolean)) { ("Cannot put value of type " + value.javaClass
-                + " into RadarConfiguration") }
+        require(
+            value is String ||
+                    value is Long ||
+                    value is Int ||
+                    value is Float ||
+                    value is Boolean
+        ) { "Cannot put value of type ${value.javaClass} into RadarConfiguration" }
         val stringValue = value as? String ?: value.toString()
         val oldValue = config[key]
         if (stringValue.isNotEmpty()) {
