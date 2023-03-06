@@ -1,5 +1,6 @@
 package org.radarbase.android.util
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothAdapter.STATE_CONNECTED
 import android.bluetooth.BluetoothManager
@@ -8,6 +9,9 @@ import android.content.Context
 import android.content.Context.BLUETOOTH_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
 import org.slf4j.LoggerFactory
 
 class BluetoothStateReceiver(
@@ -67,5 +71,25 @@ class BluetoothStateReceiver(
 
         val Context.bluetoothIsEnabled: Boolean
             get() = bluetoothAdapter?.isEnabled == true
+
+        val bluetoothPermissionList: List<String> = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            } else {
+                add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+                add(Manifest.permission.BLUETOOTH)
+                add(Manifest.permission.BLUETOOTH_ADMIN)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                }
+            }
+        }
+
+        val Context.hasBluetoothPermission: Boolean
+            get() = bluetoothPermissionList.all { permission ->
+                ActivityCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+            }
     }
 }

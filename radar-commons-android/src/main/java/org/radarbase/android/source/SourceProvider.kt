@@ -16,8 +16,6 @@
 
 package org.radarbase.android.source
 
-import android.Manifest.permission.BLUETOOTH
-import android.Manifest.permission.BLUETOOTH_ADMIN
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -31,6 +29,7 @@ import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarService
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceType
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothPermissionList
 import org.slf4j.LoggerFactory
 
 /**
@@ -170,8 +169,9 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         // Add the default configuration parameters given to the service intents
         radarService.radarApp.configureProvider(bundle)
         val permissions = permissionsNeeded
-        bundle.putBoolean(NEEDS_BLUETOOTH_KEY,
-                BLUETOOTH in permissions || BLUETOOTH_ADMIN in permissions)
+        bundle.putBoolean(NEEDS_BLUETOOTH_KEY, bluetoothPermissionList.any { p ->
+            "BLUETOOTH" in p && p in permissions
+        })
         bundle.putString(PLUGIN_NAME_KEY, pluginName)
         bundle.putString(PRODUCER_KEY, sourceProducer)
         bundle.putString(MODEL_KEY, sourceModel)
