@@ -50,6 +50,7 @@ class BluetoothEnforcer(
     private val prefs = context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
     private val resetBluetoothRequests = Runnable {
         config.reset(ENABLE_BLUETOOTH_REQUESTS)
+        isEnabled = config.latestConfig.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true)
     }
 
     init {
@@ -68,7 +69,9 @@ class BluetoothEnforcer(
         )
 
         bluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
-            if (!enabled) requestEnableBt()
+            if (!enabled) {
+                requestEnableBt()
+            }
         }
     }
 
@@ -111,7 +114,7 @@ class BluetoothEnforcer(
      */
     private fun requestEnableBt() {
         handler.post {
-            if (isRequestingBluetooth || !context.hasBluetoothPermission) {
+            if (isRequestingBluetooth || !context.hasBluetoothPermission || !isEnabled) {
                 return@post
             }
             isRequestingBluetooth = handler.postDelayed({
@@ -127,6 +130,8 @@ class BluetoothEnforcer(
 
                         handler.removeCallbacks(resetBluetoothRequests)
                         handler.postDelayed(resetBluetoothRequests, cooldown.inWholeMilliseconds)
+
+                        isEnabled = false
 
                         context.startActivityForResult(Intent().apply {
                             action = BluetoothAdapter.ACTION_REQUEST_ENABLE
