@@ -36,8 +36,8 @@ interface DataHandler<K, V> : ServerStatusListener {
     fun flushCaches(callback: FlushCallback)
 
     interface FlushCallback {
-        fun success()
-        fun error(ex: Throwable)
-        fun progress(current: Long, total: Long)
+        fun success() = Unit
+        fun error(ex: Throwable) = Unit
+        fun progress(current: Long, total: Long) = Unit
     }
 }
