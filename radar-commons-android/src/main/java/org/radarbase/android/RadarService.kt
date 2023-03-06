@@ -49,6 +49,7 @@ import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHA
 import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
+import java.net.ConnectException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -638,10 +639,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         override fun needsBluetooth(): Boolean = needsBluetooth.value
 
-        override fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit) {
+        override fun flushCaches(callback: DataHandler.FlushCallback) {
             dataHandler
-                ?.flushCaches(successCallback, errorCallback)
-                ?: errorCallback()
+                ?.flushCaches(callback)
+                ?: callback.error(ConnectException("Failed to connect to data handler"))
         }
     }
 

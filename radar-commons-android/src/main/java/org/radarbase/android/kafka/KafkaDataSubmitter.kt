@@ -32,8 +32,10 @@ import org.radarbase.topic.AvroTopic
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
+import java.net.ConnectException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.HashMap
 import kotlin.collections.HashSet
 
 /**
@@ -48,6 +50,7 @@ class KafkaDataSubmitter(
     config: SubmitterConfiguration,
 ) : Closeable {
 
+    private val listeners: MutableSet<(String, Long) -> Boolean>
     private val submitHandler = SafeHandler.getInstance("KafkaDataSubmitter", Process.THREAD_PRIORITY_BACKGROUND)
     private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>> = HashMap()
     private val connection: KafkaConnectionChecker
@@ -94,6 +97,11 @@ class KafkaDataSubmitter(
 
             schedule()
         }
+
+        listeners = mutableSetOf({ topic, numberOfRecords ->
+            dataHandler.updateRecordsSent(topic, numberOfRecords)
+            true
+        })
     }
 
     private fun validate(config: SubmitterConfiguration) {
@@ -126,15 +134,48 @@ class KafkaDataSubmitter(
         }
     }
 
-    fun flush(successCallback: () -> Unit, errorCallback: () -> Unit) {
+    fun flush(callback: DataHandler.FlushCallback) {
         this.submitHandler.execute {
-            uploadAllCaches()
-            if (dataHandler.serverStatus == ServerStatusListener.Status.CONNECTED) {
-                successCallback()
-            } else {
-                errorCallback()
+            val cacheNumRecords = HashMap<String, Long>().apply {
+                dataHandler.activeCaches.forEach { cache ->
+                    put(
+                        cache.topicName,
+                        cache.activeDataCache.numberOfRecords +
+                                cache.deprecatedCaches.sumOf { it.numberOfRecords }
+                    )
+                }
             }
+            val totalRecords = cacheNumRecords.values.sum()
+            var currentRecords = 0L
+            listeners += { topicName, numberOfRecords ->
+                if (numberOfRecords < 0) {
+                    callback.error(ConnectException("Uploading failed"))
+                    false
+                } else {
+                    val oldValue = cacheNumRecords[topicName] ?: 0
+                    val difference = numberOfRecords.coerceAtMost(oldValue)
+                    if (difference > 0) {
+                        cacheNumRecords[topicName] = oldValue - difference
+                        currentRecords += difference
+                    }
+                    if (currentRecords < totalRecords) {
+                        callback.progress(currentRecords, totalRecords)
+                        true
+                    } else {
+                        callback.success()
+                        false
+                    }
+                }
+            }
+
+            uploadAllCaches()
         }
+    }
+
+    private fun updateRecordsSent(name: String, size: Long) = submitHandler.executeReentrant {
+        listeners
+            .filter { listener -> !listener(name, size) }
+            .forEach { listeners.remove(it) }
     }
 
     /**
@@ -275,13 +316,13 @@ class KafkaDataSubmitter(
                         send(AvroRecordData<Any, Any>(data.topic, data.key, recordsNotNull))
                         flush()
                     }
-                    dataHandler.updateRecordsSent(topic.name, size.toLong())
+                    updateRecordsSent(topic.name, size.toLong())
                 } catch (ex: AuthenticationException) {
-                    dataHandler.updateRecordsSent(topic.name, -1)
+                    updateRecordsSent(topic.name, -1)
                     throw ex
                 } catch (e: Exception) {
                     dataHandler.serverStatus = ServerStatusListener.Status.UPLOADING_FAILED
-                    dataHandler.updateRecordsSent(topic.name, -1)
+                    updateRecordsSent(topic.name, -1)
                     throw e
                 }
 

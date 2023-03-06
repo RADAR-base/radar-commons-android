@@ -41,5 +41,5 @@ interface IRadarBinder : IBinder {
 
     fun needsBluetooth(): Boolean
 
-    fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
+    fun flushCaches(callback: DataHandler.FlushCallback)
 }
