@@ -15,12 +15,15 @@ import org.radarbase.android.RadarService
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.hasBluetoothPermission
 import org.slf4j.LoggerFactory
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.seconds
 
 class BluetoothEnforcer(
     private val context: ComponentActivity,
     private val radarConnection: ManagedServiceConnection<IRadarBinder>,
 ) {
+    private val cooldown: Duration
     private val handler = Handler(Looper.getMainLooper())
     private var isRequestingBluetooth = false
     private val config = context.radarConfig
@@ -45,15 +48,16 @@ class BluetoothEnforcer(
         }
 
     private val prefs = context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
+    private val resetBluetoothRequests = Runnable {
+        config.reset(ENABLE_BLUETOOTH_REQUESTS)
+    }
 
     init {
         val latestConfig = config.latestConfig
         val lastRequest = prefs.getLong(LAST_REQUEST, 0L)
-        val cooldown = TimeUnit.SECONDS.toMillis(
-            latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3))
-        )
-        if (lastRequest + cooldown < System.currentTimeMillis()) {
-            config.reset(ENABLE_BLUETOOTH_REQUESTS)
+        cooldown = latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, 3.days.inWholeSeconds).seconds
+        if (lastRequest + cooldown.inWholeMilliseconds < System.currentTimeMillis()) {
+            resetBluetoothRequests.run()
         }
 
         radarConnection.onBoundListeners += {
@@ -120,6 +124,9 @@ class BluetoothEnforcer(
                         prefs.edit()
                             .putLong(LAST_REQUEST, System.currentTimeMillis())
                             .apply()
+
+                        handler.removeCallbacks(resetBluetoothRequests)
+                        handler.postDelayed(resetBluetoothRequests, cooldown.inWholeMilliseconds)
 
                         context.startActivityForResult(Intent().apply {
                             action = BluetoothAdapter.ACTION_REQUEST_ENABLE
