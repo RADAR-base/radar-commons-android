@@ -13,12 +13,17 @@ import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.ENABLE_BLUETOOTH_REQUESTS
 import org.radarbase.android.RadarService
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
-import java.util.concurrent.TimeUnit
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.hasBluetoothPermission
+import org.slf4j.LoggerFactory
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.seconds
 
 class BluetoothEnforcer(
     private val context: ComponentActivity,
     private val radarConnection: ManagedServiceConnection<IRadarBinder>,
 ) {
+    private val cooldown: Duration
     private val handler = Handler(Looper.getMainLooper())
     private var isRequestingBluetooth = false
     private val config = context.radarConfig
@@ -43,15 +48,17 @@ class BluetoothEnforcer(
         }
 
     private val prefs = context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
+    private val resetBluetoothRequests = Runnable {
+        config.reset(ENABLE_BLUETOOTH_REQUESTS)
+        isEnabled = config.latestConfig.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true)
+    }
 
     init {
         val latestConfig = config.latestConfig
         val lastRequest = prefs.getLong(LAST_REQUEST, 0L)
-        val cooldown = TimeUnit.SECONDS.toMillis(
-            latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3))
-        )
-        if (lastRequest + cooldown < System.currentTimeMillis()) {
-            config.reset(ENABLE_BLUETOOTH_REQUESTS)
+        cooldown = latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, 3.days.inWholeSeconds).seconds
+        if (lastRequest + cooldown.inWholeMilliseconds < System.currentTimeMillis()) {
+            resetBluetoothRequests.run()
         }
 
         radarConnection.onBoundListeners += {
@@ -62,7 +69,9 @@ class BluetoothEnforcer(
         )
 
         bluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
-            if (!enabled) requestEnableBt()
+            if (!enabled) {
+                requestEnableBt()
+            }
         }
     }
 
@@ -105,21 +114,35 @@ class BluetoothEnforcer(
      */
     private fun requestEnableBt() {
         handler.post {
-            if (isRequestingBluetooth) {
+            if (isRequestingBluetooth || !context.hasBluetoothPermission || !isEnabled) {
                 return@post
             }
             isRequestingBluetooth = handler.postDelayed({
-                if (isEnabled && !context.bluetoothIsEnabled) {
-                    prefs.edit()
-                        .putLong(LAST_REQUEST, System.currentTimeMillis())
-                        .apply()
+                try {
+                    if (!context.hasBluetoothPermission) {
+                        logger.error("Cannot initiate Bluetooth scan without scan permissions")
+                        return@postDelayed
+                    }
+                    if (isEnabled && !context.bluetoothIsEnabled) {
+                        prefs.edit()
+                            .putLong(LAST_REQUEST, System.currentTimeMillis())
+                            .apply()
 
-                    context.startActivityForResult(Intent().apply {
-                        action = BluetoothAdapter.ACTION_REQUEST_ENABLE
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }, REQUEST_ENABLE_BT)
+                        handler.removeCallbacks(resetBluetoothRequests)
+                        handler.postDelayed(resetBluetoothRequests, cooldown.inWholeMilliseconds)
+
+                        isEnabled = false
+
+                        context.startActivityForResult(Intent().apply {
+                            action = BluetoothAdapter.ACTION_REQUEST_ENABLE
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }, REQUEST_ENABLE_BT)
+                    }
+                } catch (ex: Throwable) {
+                    logger.error("Failed to request Bluetooth permissions", ex)
+                } finally {
+                    isRequestingBluetooth = false
                 }
-                isRequestingBluetooth = false
             }, 1000L)
         }
     }
@@ -131,6 +154,7 @@ class BluetoothEnforcer(
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(BluetoothEnforcer::class.java)
         const val REQUEST_ENABLE_BT: Int = 6944
         private const val LAST_REQUEST: String = "lastRequest"
         private const val BLUETOOTH_REQUEST_COOLDOWN = "bluetooth_request_cooldown"
