@@ -34,6 +34,7 @@ import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.net.ConnectException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
@@ -303,10 +304,10 @@ class TableDataHandler(
         }
     }
 
-    override fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit) {
+    override fun flushCaches(callback: DataHandler.FlushCallback) {
         submitter
-            ?.flush(successCallback, errorCallback)
-            ?: errorCallback()
+            ?.flush(callback)
+            ?: callback.error(ConnectException("Failed to connect to data handler"))
     }
 
     @Throws(IOException::class)

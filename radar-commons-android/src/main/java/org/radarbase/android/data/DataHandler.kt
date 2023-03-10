@@ -33,5 +33,11 @@ interface DataHandler<K, V> : ServerStatusListener {
 
     fun handler(build: DataHandlerConfiguration.() -> Unit)
     fun getCache(topic: String): DataCache<*, *>
-    fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
+    fun flushCaches(callback: FlushCallback)
+
+    interface FlushCallback {
+        fun success() = Unit
+        fun error(ex: Throwable) = Unit
+        fun progress(current: Long, total: Long) = Unit
+    }
 }
