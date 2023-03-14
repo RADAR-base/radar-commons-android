@@ -47,7 +47,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     private var uiRefreshRate: Long = 0
 
     /** Hander in the background. It is set to null whenever the activity is not running.  */
-    private lateinit var mHandler: SafeHandler
+    protected lateinit var mHandler: SafeHandler
 
     /** The UI to show the service data.  */
     @get:Synchronized
@@ -80,7 +80,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     override fun onSaveInstanceState(savedInstanceState: Bundle) {
         super.onSaveInstanceState(savedInstanceState)
         permissionHandler.saveInstanceState(savedInstanceState)
-
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
