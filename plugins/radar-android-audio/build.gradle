@@ -4,14 +4,11 @@ android {
     namespace "org.radarbase.passive.audio"
 
     // Matches Github Actions
-    ndkVersion "22.1.7171670"
+    ndkVersion "25.2.9519653"
 
     defaultConfig {
         ndk {
             moduleName rootProject.name
-        }
-        packagingOptions {
-            doNotStrip '**.so'
         }
     }
 
