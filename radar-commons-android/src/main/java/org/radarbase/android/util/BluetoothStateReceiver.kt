@@ -58,7 +58,11 @@ class BluetoothStateReceiver(
     @Synchronized
     override fun unregister() {
         if (isRegistered) {
-            context.unregisterReceiver(receiver)
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (ex: Exception) {
+                logger.debug("Failed to unregister BluetoothStateReceiver: {}", ex.toString())
+            }
             isRegistered = false
         }
     }

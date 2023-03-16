@@ -122,10 +122,14 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
         if (!isReceiverRegistered) {
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            connectivityManager?.unregisterNetworkCallback(callback)
-        } else {
-            context.unregisterReceiver(receiver)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connectivityManager?.unregisterNetworkCallback(callback)
+            } else {
+                context.unregisterReceiver(receiver)
+            }
+        } catch (ex: Exception) {
+            logger.debug("Skipping unregistered receiver: {}", ex.toString())
         }
         isReceiverRegistered = false
     }

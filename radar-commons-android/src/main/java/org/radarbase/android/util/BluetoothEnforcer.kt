@@ -55,6 +55,9 @@ class BluetoothEnforcer(
 
     init {
         val latestConfig = config.latestConfig
+        enableBluetoothRequests = ChangeRunner(
+            latestConfig.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true)
+        )
         val lastRequest = prefs.getLong(LAST_REQUEST, 0L)
         cooldown = latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, 3.days.inWholeSeconds).seconds
         if (lastRequest + cooldown.inWholeMilliseconds < System.currentTimeMillis()) {
@@ -64,9 +67,6 @@ class BluetoothEnforcer(
         radarConnection.onBoundListeners += {
             updateNeedsBluetooth(it.needsBluetooth())
         }
-        enableBluetoothRequests = ChangeRunner(
-            latestConfig.getBoolean(ENABLE_BLUETOOTH_REQUESTS, true)
-        )
 
         bluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
             if (!enabled) {
