@@ -174,8 +174,9 @@ abstract class SplashActivity : AppCompatActivity() {
             updateState(STATE_STARTING)
             startActivityFuture?.also {
                 handler.removeCallbacks(it)
+                startActivityFuture = null
             }
-            Runnable {
+            val startActivityRunnable = Runnable {
                 updateState(STATE_FINISHED)
 
                 logger.info("Starting SplashActivity")
@@ -186,11 +187,10 @@ abstract class SplashActivity : AppCompatActivity() {
                     onDidStartActivity()
                 }
                 finish()
-            }.also { runnable ->
-                startActivityFuture = runnable
-                val delayRemaining = delayMs - (SystemClock.elapsedRealtime() - startedAt)
-                handler.postDelayed(runnable, delayRemaining.coerceAtLeast(0))
             }
+            startActivityFuture = startActivityRunnable
+            val delayRemaining = delayMs - (SystemClock.elapsedRealtime() - startedAt)
+            handler.postDelayed(startActivityRunnable, delayRemaining)
         }
     }
 
