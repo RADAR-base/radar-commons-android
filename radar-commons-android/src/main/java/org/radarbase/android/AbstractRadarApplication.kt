@@ -27,6 +27,7 @@ import org.radarbase.android.config.RemoteConfig
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.NotificationHandler
 import org.slf4j.impl.HandroidLoggerAdapter
+import java.util.*
 import java.util.concurrent.ConcurrentSkipListSet
 
 /** Provides the name and some metadata of the main activity  */
@@ -39,7 +40,9 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
 
     override lateinit var configuration: RadarConfiguration
 
-    override val activeActivities: MutableSet<Class<out Activity>> = ConcurrentSkipListSet()
+    override val activeActivities: MutableSet<Class<out Activity>> = Collections.synchronizedSet(
+        mutableSetOf(),
+    )
 
     override fun configureProvider(bundle: Bundle) {}
     override fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean) {}
