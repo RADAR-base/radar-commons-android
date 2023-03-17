@@ -53,20 +53,15 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
             Boast.makeText(this, R.string.login_failed, Toast.LENGTH_LONG).show()
         }
 
-        authConnection = AuthServiceConnection(this, this)
-        authConnection.onBoundListeners.add(0) { binder ->
-            binder.isInLoginActivity = true
-        }
-        authConnection.onBoundListeners.add { binder ->
-            binder.refresh()
-            binder.managers
+        authConnection = AuthServiceConnection(this, this).apply {
+            onBoundListeners.add { binder ->
+                binder.refresh()
+                binder.managers
                     .find { it.onActivityCreate(this@LoginActivity)}
                     ?.let { binder.update(it) }
+            }
+            bind()
         }
-        authConnection.onUnboundListeners.add { binder ->
-            binder.isInLoginActivity = false
-        }
-        authConnection.bind()
     }
 
     override fun onDestroy() {

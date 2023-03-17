@@ -16,24 +16,30 @@
 
 package org.radarbase.android
 
+import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import androidx.annotation.CallSuper
+import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.config.LocalConfiguration
 import org.radarbase.android.config.RemoteConfig
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.NotificationHandler
 import org.slf4j.impl.HandroidLoggerAdapter
+import java.util.concurrent.ConcurrentSkipListSet
 
 /** Provides the name and some metadata of the main activity  */
 abstract class AbstractRadarApplication : Application(), RadarApplication {
+    private lateinit var lifecycleListener: ActivityLifecycleCallbacks
     private lateinit var innerNotificationHandler: NotificationHandler
 
     override val notificationHandler: NotificationHandler
         get() = innerNotificationHandler.apply { onCreate() }
 
     override lateinit var configuration: RadarConfiguration
+
+    override val activeActivities: MutableSet<Class<out Activity>> = ConcurrentSkipListSet()
 
     override fun configureProvider(bundle: Bundle) {}
     override fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean) {}
@@ -43,6 +49,26 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
     override fun onCreate() {
         super.onCreate()
         setupLogging()
+        lifecycleListener = object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+
+            override fun onActivityStarted(activity: Activity) {
+                activeActivities += activity.javaClass
+            }
+
+            override fun onActivityResumed(activity: Activity) = Unit
+
+            override fun onActivityPaused(activity: Activity) = Unit
+
+            override fun onActivityStopped(activity: Activity) {
+                activeActivities -= activity.javaClass
+            }
+
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        }
+        registerActivityLifecycleCallbacks(lifecycleListener)
         configuration = createConfiguration()
         innerNotificationHandler = NotificationHandler(this)
     }

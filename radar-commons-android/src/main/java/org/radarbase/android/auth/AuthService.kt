@@ -4,11 +4,13 @@ import android.app.Service
 import android.content.Intent
 import android.content.Intent.*
 import android.os.Binder
+import android.os.Handler
 import android.os.IBinder
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.Keep
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarApplication
+import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.LoginActivity.Companion.ACTION_LOGIN_SUCCESS
@@ -23,6 +25,7 @@ import java.util.concurrent.TimeUnit
 
 @Keep
 abstract class AuthService : Service(), LoginListener {
+    private lateinit var mainHandler: Handler
     private lateinit var appAuth: AppAuthState
     lateinit var loginManagers: List<LoginManager>
     private val listeners: MutableList<LoginListenerRegistration> = mutableListOf()
@@ -40,14 +43,12 @@ abstract class AuthService : Service(), LoginListener {
         SharedPreferencesAuthSerialization(this)
     }
 
-    @Volatile
-    private var isInLoginActivity: Boolean = false
-
     private lateinit var broadcaster: LocalBroadcastManager
 
     override fun onCreate() {
         super.onCreate()
         broadcaster = LocalBroadcastManager.getInstance(this)
+        mainHandler = Handler(mainLooper)
         appAuth = authSerialization.load() ?: AppAuthState()
         config = radarConfig
         config.updateWithAuthState(this, appAuth)
@@ -144,11 +145,14 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     protected open fun startLogin() {
-        if (!isInLoginActivity) {
+        mainHandler.post {
+            if (radarApp.loginActivity in radarApp.activeActivities) return@post
+
             try {
                 logger.info("Starting login activity")
                 val intent = Intent(this, (application as RadarApplication).loginActivity)
-                intent.flags = FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_TASK_ON_HOME or FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP
+                intent.flags =
+                    FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_TASK_ON_HOME or FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP
                 startActivity(intent)
             } catch (ex: IllegalStateException) {
                 logger.warn("Failed to start login activity. Notifying about login.")
@@ -365,12 +369,6 @@ abstract class AuthService : Service(), LoginListener {
                 this@AuthService.unregisterSources(sources)
 
         fun invalidate(token: String?, disableRefresh: Boolean) = this@AuthService.invalidate(token, disableRefresh)
-
-        var isInLoginActivity: Boolean
-            get() = this@AuthService.isInLoginActivity
-            set(value) {
-                this@AuthService.isInLoginActivity = value
-            }
     }
 
     private fun updateSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) {
