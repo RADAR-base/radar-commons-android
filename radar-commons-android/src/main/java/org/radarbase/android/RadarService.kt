@@ -565,7 +565,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
         }
 
-        val supportedPlugins = if (authState.userId != null) {
+        val supportedPlugins = if (
+            authState.userId != null &&
+            authState.isPrivacyPolicyAccepted
+        ) {
             val packageManager = packageManager
             providerLoader.loadProvidersFromNames(config)
                 .filter { hasFeatures(it, packageManager) }
