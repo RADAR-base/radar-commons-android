@@ -44,6 +44,9 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
         mutableSetOf(),
     )
 
+    @Volatile
+    override var sourceTypeSuffix: String? = null
+
     override fun configureProvider(bundle: Bundle) {}
     override fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean) {}
     override fun onSourceServiceDestroy(service: SourceService<*>) {}

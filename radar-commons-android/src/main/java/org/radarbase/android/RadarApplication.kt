@@ -46,6 +46,9 @@ interface RadarApplication {
 
     val activeActivities: Set<Class<out Activity>>
 
+    /** Adds a suffix to all source type models. */
+    var sourceTypeSuffix: String?
+
     fun configureProvider(bundle: Bundle)
     fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean)
     fun onSourceServiceDestroy(service: SourceService<*>)

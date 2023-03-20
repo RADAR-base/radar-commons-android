@@ -91,6 +91,13 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
 
     abstract val sourceModel: String
 
+    private val appSourceModel: String
+        get() {
+            val suffix = radarService.radarApp.sourceTypeSuffix
+                ?: return sourceModel
+            return sourceModel + suffix
+        }
+
     abstract val version: String
 
     /**
@@ -174,7 +181,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         })
         bundle.putString(PLUGIN_NAME_KEY, pluginName)
         bundle.putString(PRODUCER_KEY, sourceProducer)
-        bundle.putString(MODEL_KEY, sourceModel)
+        bundle.putString(MODEL_KEY, appSourceModel)
     }
 
     /** Whether [.getConnection] has already been called.  */
@@ -213,7 +220,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     fun matches(sourceType: SourceType?, checkVersion: Boolean): Boolean {
         return (sourceType != null
                 && sourceType.producer.equals(sourceProducer, ignoreCase = true)
-                && sourceType.model.equals(sourceModel, ignoreCase = true)
+                && sourceType.model.equals(appSourceModel, ignoreCase = true)
                 && (!checkVersion || sourceType.catalogVersion.equals(version, ignoreCase = true)))
     }
 
