@@ -23,7 +23,7 @@ import java.io.IOException
 /**
  *  Manager of a data source.
  * This should start connect to the source, start data collection and
- * stop data location.
+ * stop data collection.
  */
 interface SourceManager<T> : Closeable {
     /** Whether the source manager was already closed.  */
