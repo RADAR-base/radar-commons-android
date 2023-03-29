@@ -97,7 +97,7 @@ class ApplicationStatusManager(
                 ::processRecordsSent,
                 ::processReferenceTime,
                 ::processDeviceInfo,
-                ::processTopicReocrdSent,
+                ::processTopicRecordSent,
                 ::processPluginStatus,
                 ::processError,
             )
@@ -154,7 +154,7 @@ class ApplicationStatusManager(
                 val numberOfRecordsSent = intent.getLongExtra(SERVER_RECORDS_SENT_NUMBER, 0)
                 val topicName = intent.getStringExtra(SERVER_RECORDS_SENT_TOPIC)
                 state.addRecordsSent(numberOfRecordsSent.coerceAtLeast(0))
-                state.recordSentPerTopic(numberOfRecordsSent)
+                state.recordsSentPerTopic(numberOfRecordsSent.coerceAtLeast(0))
                 state.topicInfo(topicName)
             }
             cacheReceiver = register(CACHE_TOPIC) { _, intent ->
@@ -288,18 +288,11 @@ class ApplicationStatusManager(
             recordsCached, recordsSent, recordsCached.toIntCapped()))
     }
 
-    private fun processTopicReocrdSent(){
+    private fun processTopicRecordSent(){
         val time = currentTime
-        val recordsSent = state.recordsSentPerTopic
-        val topic:String? = state.topicName
-        val success:Boolean
-        val status: ServerStatus = state.serverStatus.toServerStatus()
-        if (status  == ServerStatus.CONNECTED){
-            success = true
-        }
-        else{
-            success = false
-        }
+        val recordsSent = state.recordsSentPerTopic.toIntCapped().takeIf { it > 0 }
+        val topic:String = state.topicName
+        val success:Boolean = (recordsSent!=null)
         send(recordsSentTopic,ApplicationTopicRecordsSent(
             time, topic, success, recordsSent
         ))

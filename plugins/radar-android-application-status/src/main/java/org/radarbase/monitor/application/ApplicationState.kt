@@ -39,7 +39,7 @@ class ApplicationState : BaseSourceState() {
     private set
 
     @get:Synchronized
-    var topicName:String? = ""
+    var topicName:String = ""
     private set
 
     @get:Synchronized
@@ -62,12 +62,12 @@ class ApplicationState : BaseSourceState() {
     }
 
     @Synchronized
-    fun recordSentPerTopic(nRecordsTopic:Long){
+    fun recordsSentPerTopic(nRecordsTopic:Long){
         recordsSentPerTopic= nRecordsTopic
     }
 
     @Synchronized
-    fun topicInfo(name:String?){
+    fun topicInfo(name:String){
         topicName = name
     }
 
