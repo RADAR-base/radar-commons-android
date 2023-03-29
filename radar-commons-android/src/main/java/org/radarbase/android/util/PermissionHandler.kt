@@ -66,7 +66,7 @@ open class PermissionHandler(
     }
 
     private fun doRequestPermission() {
-        val externallyGrantedPermissions = needsPermissions.filter { activity.isPermissionGranted(it) }
+        val externallyGrantedPermissions = needsPermissions.filterTo(HashSet()) { activity.isPermissionGranted(it) }
 
         if (externallyGrantedPermissions.isNotEmpty()) {
             broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
@@ -79,13 +79,11 @@ open class PermissionHandler(
             needsPermissions -= externallyGrantedPermissions
         }
 
-        val currentlyNeeded: Set<String> = HashSet(needsPermissions).apply {
-            this -= isRequestingPermissions
-            if (
-                ACCESS_COARSE_LOCATION in this
-                || ACCESS_FINE_LOCATION in this
-            ) {
-                this -= RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT
+        val currentlyNeeded = buildSet(needsPermissions.size) {
+            addAll(needsPermissions)
+            removeAll(isRequestingPermissions)
+            if (contains(ACCESS_COARSE_LOCATION) || contains(ACCESS_FINE_LOCATION)) {
+                remove(RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT)
             }
         }
 
@@ -268,17 +266,16 @@ open class PermissionHandler(
         mHandler.execute {
             needsPermissions.clear()
 
-            needsPermissions += ArrayList<String>(newPermissions.size + 1).apply {
-                this += newPermissions
-                if (ACCESS_FINE_LOCATION in this || ACCESS_COARSE_LOCATION in this) {
-                    this += LifecycleService.LOCATION_SERVICE
+            needsPermissions += buildList(newPermissions.size + 1) {
+                addAll(newPermissions)
+                if (contains(ACCESS_FINE_LOCATION) || contains(ACCESS_COARSE_LOCATION)) {
+                    add(LifecycleService.LOCATION_SERVICE)
                 }
-            }.filterNot { activity.isPermissionGranted(it) }
+            }.filter { it.isNotEmpty() && !activity.isPermissionGranted(it) }
 
             requestPermissions()
         }
     }
-
 
     fun permissionsGranted(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         if (requestCode == REQUEST_ENABLE_PERMISSIONS) {

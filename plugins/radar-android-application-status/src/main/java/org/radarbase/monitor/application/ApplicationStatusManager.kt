@@ -88,6 +88,7 @@ class ApplicationStatusManager(
     private lateinit var sourceStatusReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
 
+
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
         this.processor = OfflineProcessor(service) {
@@ -316,11 +317,12 @@ class ApplicationStatusManager(
 
     override fun onClose() {
         this.processor.close()
-        cacheReceiver.unregister()
-        serverRecordsReceiver.unregister()
-        serverStatusReceiver.unregister()
+
         sourceStatusReceiver.unregister()
         sourceFailedReceiver.unregister()
+        cacheReceiver?.unregister()
+        serverRecordsReceiver?.unregister()
+        serverStatusReceiver?.unregister()
     }
 
     private fun processTimeZone() {
