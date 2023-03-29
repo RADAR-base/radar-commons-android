@@ -82,11 +82,11 @@ class ApplicationStatusManager(
 
     private lateinit var tzOffsetCache: ChangeRunner<Int>
     private lateinit var deviceInfoCache: ChangeRunner<ApplicationInfo>
-    private lateinit var serverStatusReceiver: BroadcastRegistration
-    private lateinit var serverRecordsReceiver: BroadcastRegistration
-    private lateinit var cacheReceiver: BroadcastRegistration
-    private lateinit var sourceStatusReceiver: BroadcastRegistration
-    private lateinit var sourceFailedReceiver: BroadcastRegistration
+    private var serverStatusReceiver: BroadcastRegistration? = null
+    private var serverRecordsReceiver: BroadcastRegistration? = null
+    private var cacheReceiver: BroadcastRegistration? = null
+    private var sourceStatusReceiver: BroadcastRegistration? = null
+    private var sourceFailedReceiver: BroadcastRegistration? = null
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
@@ -97,7 +97,7 @@ class ApplicationStatusManager(
                 ::processRecordsSent,
                 ::processReferenceTime,
                 ::processDeviceInfo,
-                ::processTopicRecordSent,
+                ::processTopicRecordsSent,
                 ::processPluginStatus,
                 ::processError,
             )
@@ -288,7 +288,7 @@ class ApplicationStatusManager(
             recordsCached, recordsSent, recordsCached.toIntCapped()))
     }
 
-    private fun processTopicRecordSent(){
+    private fun processTopicRecordsSent(){
         val time = currentTime
         val recordsSent = state.recordsSentPerTopic.toIntCapped().takeIf { it > 0 }
         val topic:String = state.topicName
