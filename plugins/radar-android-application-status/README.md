@@ -39,3 +39,6 @@ This plugin produces data for the following topics: (types starts with `org.rada
 | `application_server_status` | `ApplicationServerStatus` | Server connection status. |
 | `application_time_zone` | `ApplicationTimeZone` | Application time zone. Data is only sent on updates. |
 | `application_device_info` | `ApplicationDeviceInfo` | Device information. Data is only sent on updates. |
+| `application_topic_records_sent` | `ApplicationTopicRecordsSent` | Number of records sent per topic and their success status. |
+| `application_plugin_status` | `ApplicationPluginStatus` | Status of each plugin. |
+| `application_error` | `ApplicationError` | Error encountered in the application. |
