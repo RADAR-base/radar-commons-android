@@ -85,8 +85,8 @@ class ApplicationStatusManager(
     private var serverStatusReceiver: BroadcastRegistration? = null
     private var serverRecordsReceiver: BroadcastRegistration? = null
     private var cacheReceiver: BroadcastRegistration? = null
-    private var sourceStatusReceiver: BroadcastRegistration? = null
-    private var sourceFailedReceiver: BroadcastRegistration? = null
+    private lateinit var sourceStatusReceiver: BroadcastRegistration
+    private lateinit var sourceFailedReceiver: BroadcastRegistration
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
