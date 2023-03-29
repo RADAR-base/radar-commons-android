@@ -21,7 +21,7 @@ import java.io.Closeable
 import java.io.IOException
 
 /**
- *  Manager of a data source.
+ * Manager of a data source.
  * This should start connect to the source, start data collection and
  * stop data collection.
  */
