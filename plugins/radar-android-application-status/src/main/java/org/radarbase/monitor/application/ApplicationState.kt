@@ -67,8 +67,8 @@ class ApplicationState : BaseSourceState() {
     }
 
     @Synchronized
-    fun topicInfo(name:String?){
-        topicName = name ?: ""
+    fun topicInfo(name:String){
+        topicName = name
     }
 
     @Synchronized

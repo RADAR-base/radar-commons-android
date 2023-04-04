@@ -1,6 +1,5 @@
 <resources>
     <string name="applicationServiceDisplayName">Application</string>
-    <string name="application_status_description">Monitors how much data the app is collecting and
-        server status.
-    </string>
+    <string name="application_status_description">Monitors how much data the app is collecting,
+        server status and status of each plugin.</string>
 </resources>

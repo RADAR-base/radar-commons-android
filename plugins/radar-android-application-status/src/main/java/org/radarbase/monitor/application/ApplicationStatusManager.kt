@@ -153,7 +153,7 @@ class ApplicationStatusManager(
             }
             serverRecordsReceiver = register(SERVER_RECORDS_SENT_TOPIC) { _, intent ->
                 val numberOfRecordsSent = intent.getLongExtra(SERVER_RECORDS_SENT_NUMBER, 0)
-                val topicName = intent.getStringExtra(SERVER_RECORDS_SENT_TOPIC)
+                val topicName = intent.getStringExtra(SERVER_RECORDS_SENT_TOPIC) ?: return@register
                 state.addRecordsSent(numberOfRecordsSent.coerceAtLeast(0))
                 state.recordsSentPerTopic(numberOfRecordsSent.coerceAtLeast(0))
                 state.topicInfo(topicName)
