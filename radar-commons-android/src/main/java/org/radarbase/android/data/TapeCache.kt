@@ -63,9 +63,9 @@ constructor(
     private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
     private val queueFileFactory = config.queueFileType
+    private var queueSize : Long = 0
 
     private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
-
     private val configCache = ChangeRunner(config)
 
     override var config
@@ -223,11 +223,14 @@ constructor(
         }
         try {
             logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
+            queueSize = numberOfRecords +measurementsToAdd.size.toLong()
+            checkStorageStatus(queueSize)
             queue += measurementsToAdd
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
             throw RuntimeException(ex)
         } catch (ex: IllegalStateException) {
+            showFullStorageNotification()
             logger.error("Queue {} is full, not adding records", topic.name)
         } catch (ex: IllegalArgumentException) {
             logger.error("Failed to validate all records; adding individual records instead", ex)
@@ -248,6 +251,23 @@ constructor(
             }
         } finally {
             measurementsToAdd.clear()
+        }
+    }
+
+    private fun showFullStorageNotification() {
+        TODO("Not yet implemented")
+    }
+
+    /**
+     *  Comparing the size of queue with maximumSize.
+     *  Tolerance value is used to avoid the problems
+     *  with comparing floating point numbers for
+     *  equality due to rounding errors
+    */
+    private fun checkStorageStatus(queueSize: Long) {
+        val threshold = maximumSize * 0.75
+        if (queueSize.toDouble() >= threshold - 0.0001 && queueSize.toDouble() <= threshold + 0.0001) {
+
         }
     }
 
