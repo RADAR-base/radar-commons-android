@@ -266,7 +266,8 @@ constructor(
     */
     private fun checkStorageStatus(queueSize: Long) {
         val threshold = maximumSize * 0.75
-        if (queueSize.toDouble() >= threshold - 0.0001 && queueSize.toDouble() <= threshold + 0.0001) {
+        val size = queueSize.toDouble()
+        if (size >= threshold - 0.0001 && size <= threshold + 0.0001) {
 
         }
     }
