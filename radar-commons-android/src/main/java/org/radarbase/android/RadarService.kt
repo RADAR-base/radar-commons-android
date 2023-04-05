@@ -116,8 +116,16 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private val needsPermissions = LinkedHashSet<String>()
 
-    protected open val servicePermissions: List<String>
-        get() = listOf(ACCESS_NETWORK_STATE, INTERNET)
+    protected open val servicePermissions: List<String> = buildList(4) {
+        add(ACCESS_NETWORK_STATE)
+        add(INTERNET)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            add(FOREGROUND_SERVICE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(POST_NOTIFICATIONS)
+        }
+    }
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -683,10 +691,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
-        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
-        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
         val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 

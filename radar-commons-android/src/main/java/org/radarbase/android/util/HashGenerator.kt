@@ -63,17 +63,10 @@ class HashGenerator(
 
     private fun loadKey(): Key {
         val b64Salt = preferences.getString(HASH_KEY, null)
-        return when {
-            b64Salt != null -> SecretKeySpec(Base64.decode(b64Salt, Base64.NO_WRAP), HMAC_SHA256)
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> AndroidKeyStore.getOrCreateSecretKey("$name.$HASH_KEY", HMAC_SHA256, PURPOSE_SIGN)
-            else -> {
-                val byteSalt = ByteArray(16)
-                SecureRandom().nextBytes(byteSalt)
-                preferences.edit()
-                        .putString(HASH_KEY, Base64.encodeToString(byteSalt, Base64.NO_WRAP))
-                        .apply()
-                SecretKeySpec(byteSalt, HMAC_SHA256)
-            }
+        return if (b64Salt != null) {
+            SecretKeySpec(Base64.decode(b64Salt, Base64.NO_WRAP), HMAC_SHA256)
+        } else {
+            AndroidKeyStore.getOrCreateSecretKey("$name.$HASH_KEY", HMAC_SHA256, PURPOSE_SIGN)
         }
     }
 

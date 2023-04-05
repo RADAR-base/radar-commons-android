@@ -52,11 +52,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     init {
         name = service.getString(R.string.phoneUsageServiceDisplayName)
-        this.usageStatsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-            context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-        } else {
-            null
-        }
+        this.usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
 
         usageEventTopic = if (usageStatsManager != null) {
             createCache("android_phone_usage_event", PhoneUsageEvent())

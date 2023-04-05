@@ -16,48 +16,41 @@
 
 package org.radarbase.android.util
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.net.ConnectivityManager
-import android.net.ConnectivityManager.*
+import android.net.ConnectivityManager.NetworkCallback
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.os.Build
-import androidx.annotation.RequiresApi
 import org.slf4j.LoggerFactory
 
 /**
  * Keeps track of whether there is a network connection (e.g., WiFi or Ethernet).
  */
-class NetworkConnectedReceiver(private val context: Context, private val listener: ((NetworkState) -> Unit)? = null) : SpecificReceiver {
+class NetworkConnectedReceiver(context: Context, private val listener: ((NetworkState) -> Unit)? = null) : SpecificReceiver {
     private val connectivityManager: ConnectivityManager? = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
     private var isReceiverRegistered: Boolean = false
-    private var receiver: BroadcastReceiver? = null
-    private val callback: NetworkCallback by lazy {
-        object : NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                state = NetworkState(isConnected = true, hasWifiOrEthernet = state.hasWifiOrEthernet)
-            }
+    private val callback = object : NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            state = NetworkState(isConnected = true, hasWifiOrEthernet = state.hasWifiOrEthernet)
+        }
 
-            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                state = NetworkState(state.isConnected, capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
-            }
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+            state = NetworkState(state.isConnected, capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+        }
 
-            override fun onUnavailable() {
-                // nothing happened
-            }
+        override fun onUnavailable() {
+            // nothing happened
+        }
 
-            override fun onLost(network: Network) {
-                state = NetworkState(isConnected = false, hasWifiOrEthernet = false)
-            }
+        override fun onLost(network: Network) {
+            state = NetworkState(isConnected = false, hasWifiOrEthernet = false)
         }
     }
 
     constructor(context: Context, listener: NetworkConnectedListener) : this(context, listener::onNetworkConnectionChanged)
 
     private val _state = ChangeRunner(NetworkState(isConnected = false, hasWifiOrEthernet = false))
+
     var state: NetworkState
         get() = _state.value
         private set(value) {
@@ -67,41 +60,17 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
     fun hasConnection(wifiOrEthernetOnly: Boolean) = state.hasConnection(wifiOrEthernetOnly)
 
     override fun register() {
-        if (connectivityManager == null) {
+        connectivityManager ?: run {
             logger.warn("Connectivity cannot be checked: System ConnectivityManager is unavailable.")
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            registerCallback(connectivityManager)
-        } else {
-            registerBroadcastReceiver(connectivityManager)
-        }
+        registerCallback(connectivityManager)
     }
 
     override fun notifyListener() {
-        listener?.let { it(state) }
+        listener?.invoke(state)
     }
 
-    @Suppress("DEPRECATION")
-    private fun registerBroadcastReceiver(cm: ConnectivityManager) {
-        val localReceiver = receiver ?: object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent?) {
-                if (intent?.action == CONNECTIVITY_ACTION) {
-                    state = cm.activeNetworkInfo?.let {
-                        val networkType = it.type
-                        NetworkState(it.isConnected, networkType == TYPE_WIFI || networkType == TYPE_ETHERNET)
-                    } ?: NetworkState(isConnected = false, hasWifiOrEthernet = false)
-
-                }
-            }
-        }.also { receiver = it }
-
-        val init = context.registerReceiver(localReceiver, IntentFilter(CONNECTIVITY_ACTION))
-        isReceiverRegistered = true
-        localReceiver.onReceive(context, init)
-    }
-
-    @RequiresApi(Build.VERSION_CODES.N)
     private fun registerCallback(cm: ConnectivityManager) {
         val network = cm.activeNetwork
         val networkInfo = network?.let { cm.getNetworkInfo(it) }
@@ -123,11 +92,7 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
             return
         }
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                connectivityManager?.unregisterNetworkCallback(callback)
-            } else {
-                context.unregisterReceiver(receiver)
-            }
+            connectivityManager?.unregisterNetworkCallback(callback)
         } catch (ex: Exception) {
             logger.debug("Skipping unregistered receiver: {}", ex.toString())
         }
@@ -135,9 +100,8 @@ class NetworkConnectedReceiver(private val context: Context, private val listene
     }
 
     data class NetworkState(val isConnected: Boolean, val hasWifiOrEthernet: Boolean) {
-        fun hasConnection(wifiOrEthernetOnly: Boolean): Boolean {
-            return isConnected && (hasWifiOrEthernet || !wifiOrEthernetOnly)
-        }
+        fun hasConnection(wifiOrEthernetOnly: Boolean): Boolean =
+            isConnected && (hasWifiOrEthernet || !wifiOrEthernetOnly)
     }
 
     interface NetworkConnectedListener {
