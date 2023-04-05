@@ -9,7 +9,7 @@ fun String.takeTrimmedIfNotEmpty(): String? = trim { it <= ' ' }
 
 fun Int.toPendingIntentFlag(mutable: Boolean = false) = this or when {
     mutable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> PendingIntent.FLAG_MUTABLE
-    !mutable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> PendingIntent.FLAG_IMMUTABLE
+    !mutable -> PendingIntent.FLAG_IMMUTABLE
     else -> 0
 }
 

@@ -2,6 +2,7 @@ package org.radarbase.android.util
 
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import androidx.annotation.Keep
 import org.radarbase.android.util.SafeHandler.Companion.getInstance
 import org.slf4j.LoggerFactory
@@ -15,7 +16,11 @@ import java.util.concurrent.SynchronousQueue
  * @constructor consider using [getInstance] instead for shared or reinitializing handlers.
  */
 @Suppress("unused", "MemberVisibilityCanBePrivate")
-class SafeHandler(val name: String, private val priority: Int) {
+class SafeHandler(
+    val name: String,
+    private val priority: Int,
+    private val callback: Handler.Callback? = null,
+) {
     private var handlerThread: HandlerThread? = null
 
     /** Whether the handler has been started. */
@@ -41,7 +46,7 @@ class SafeHandler(val name: String, private val priority: Int) {
 
         handlerThread = HandlerThread(name, priority).apply {
             start()
-            handler = Handler(looper)
+            handler = Handler(looper, callback)
         }
     }
 
@@ -277,11 +282,15 @@ class SafeHandler(val name: String, private val priority: Int) {
          * being moved to another thread.
          */
         @Synchronized
-        fun getInstance(name: String, priority: Int): SafeHandler {
+        fun getInstance(
+            name: String,
+            priority: Int,
+            callback: Handler.Callback? = null
+        ): SafeHandler {
             val handlerRef = map[name]?.get()
             return handlerRef
                 ?: run {
-                    val handler = SafeHandler(name, priority)
+                    val handler = SafeHandler(name, priority, callback)
                     map[name] = WeakReference(handler)
                     handler
                 }

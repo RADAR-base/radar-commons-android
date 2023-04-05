@@ -94,22 +94,16 @@ open class PermissionHandler(
                 requestLocationProvider()
             }
             SYSTEM_ALERT_WINDOW in currentlyNeeded -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    addRequestingPermissions(SYSTEM_ALERT_WINDOW)
-                    requestSystemWindowPermissions()
-                }
+                addRequestingPermissions(SYSTEM_ALERT_WINDOW)
+                requestSystemWindowPermissions()
             }
-            RadarService.PACKAGE_USAGE_STATS_COMPAT in currentlyNeeded -> {
-                addRequestingPermissions(RadarService.PACKAGE_USAGE_STATS_COMPAT)
+            PACKAGE_USAGE_STATS in currentlyNeeded -> {
+                addRequestingPermissions(PACKAGE_USAGE_STATS)
                 requestPackageUsageStats()
             }
-            RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT in currentlyNeeded -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    addRequestingPermissions(RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT)
-                    requestDisableBatteryOptimization()
-                } else {
-                    needsPermissions.remove(RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT)
-                }
+            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS in currentlyNeeded -> {
+                addRequestingPermissions(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                requestDisableBatteryOptimization()
             }
             else -> {
                 addRequestingPermissions(currentlyNeeded)
@@ -172,7 +166,6 @@ open class PermissionHandler(
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.M)
     private fun requestSystemWindowPermissions() {
         // Show alert dialog to the user saying a separate permission is needed
         // Launch the settings activity if the user prefers
@@ -193,7 +186,6 @@ open class PermissionHandler(
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint("BatteryLife")
     private fun requestDisableBatteryOptimization() {
         Intent(
@@ -225,20 +217,18 @@ open class PermissionHandler(
                 resultCode == Activity.RESULT_OK
             )
             USAGE_REQUEST_CODE -> onPermissionRequestResult(
-                RadarService.PACKAGE_USAGE_STATS_COMPAT,
+                PACKAGE_USAGE_STATS,
                 resultCode == Activity.RESULT_OK
             )
             BATTERY_OPT_CODE -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val powerManager =
-                        activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
-                    val granted = resultCode == Activity.RESULT_OK
-                            || powerManager?.isIgnoringBatteryOptimizations(activity.applicationContext.packageName) != false
-                    onPermissionRequestResult(
-                        RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT,
-                        granted
-                    )
-                }
+                val powerManager =
+                    activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
+                val granted = resultCode == Activity.RESULT_OK
+                        || powerManager?.isIgnoringBatteryOptimizations(activity.applicationContext.packageName) != false
+                onPermissionRequestResult(
+                    REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    granted
+                )
             }
             ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE -> onPermissionRequestResult(
                 SYSTEM_ALERT_WINDOW,
@@ -320,16 +310,14 @@ open class PermissionHandler(
                 locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
                         || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
             } ?: true
-            RadarService.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT -> applySystemService<PowerManager>(Context.POWER_SERVICE) { powerManager ->
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                        || powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
+            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -> applySystemService<PowerManager>(Context.POWER_SERVICE) { powerManager ->
+                powerManager.isIgnoringBatteryOptimizations(applicationContext.packageName)
             } ?: true
-            RadarService.PACKAGE_USAGE_STATS_COMPAT -> applySystemService<AppOpsManager>(Context.APP_OPS_SERVICE) { appOps ->
+            PACKAGE_USAGE_STATS -> applySystemService<AppOpsManager>(Context.APP_OPS_SERVICE) { appOps ->
                 @Suppress("DEPRECATION")
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                        || AppOpsManager.MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName)
+                (AppOpsManager.MODE_ALLOWED == appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), packageName))
             } ?: true
-            SYSTEM_ALERT_WINDOW -> Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+            SYSTEM_ALERT_WINDOW -> Settings.canDrawOverlays(this)
             else -> PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, permission)
         }
     }
