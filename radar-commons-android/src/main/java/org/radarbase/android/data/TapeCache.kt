@@ -19,6 +19,7 @@ package org.radarbase.android.data
 import org.radarbase.android.data.serialization.SerializationFactory
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.StorageLevelReceiver
 import org.radarbase.data.AvroRecordData
 import org.radarbase.data.Record
 import org.radarbase.data.RecordData
@@ -59,6 +60,7 @@ constructor(
     private val measurementsToAdd = mutableListOf<Record<K, V>>()
     private val serializer = serialization.createSerializer(topic)
     private val deserializer = serialization.createDeserializer(readTopic)
+    private val storagelevelreceiver = StorageLevelReceiver();
 
     private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
@@ -223,14 +225,14 @@ constructor(
         }
         try {
             logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
-            queueSize = numberOfRecords +measurementsToAdd.size.toLong()
+            queueSize = numberOfRecords + measurementsToAdd.size.toLong()
             checkStorageStatus(queueSize)
             queue += measurementsToAdd
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
             throw RuntimeException(ex)
         } catch (ex: IllegalStateException) {
-            showFullStorageNotification()
+            setLevelFull()
             logger.error("Queue {} is full, not adding records", topic.name)
         } catch (ex: IllegalArgumentException) {
             logger.error("Failed to validate all records; adding individual records instead", ex)
@@ -244,6 +246,7 @@ constructor(
                     }
                 }
             } catch (illEx: IllegalStateException) {
+                setLevelFull()
                 logger.error("Queue {} is full, not adding records", topic.name)
             } catch (ex2: IOException) {
                 logger.error("Failed to add record", ex)
@@ -254,22 +257,26 @@ constructor(
         }
     }
 
-    private fun showFullStorageNotification() {
-        TODO("Not yet implemented")
-    }
-
     /**
      *  Comparing the size of queue with maximumSize.
      *  Tolerance value is used to avoid the problems
      *  with comparing floating point numbers for
      *  equality due to rounding errors
     */
-    private fun checkStorageStatus(queueSize: Long) {
+     fun checkStorageStatus(queueSize: Long) {
         val threshold = maximumSize * 0.75
         val size = queueSize.toDouble()
         if (size >= threshold - 0.0001 && size <= threshold + 0.0001) {
-
+             setLevelPartial()
         }
+    }
+
+    private fun setLevelPartial() {
+        storagelevelreceiver.setLevel(0.75f)
+    }
+
+    private fun setLevelFull() {
+        storagelevelreceiver.setLevel(1.0f)
     }
 
     @Throws(IOException::class)
