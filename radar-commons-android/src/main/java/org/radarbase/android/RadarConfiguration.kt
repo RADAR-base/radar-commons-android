@@ -86,6 +86,8 @@ interface RadarConfiguration {
         const val DATABASE_COMMIT_RATE_KEY = "database_commit_rate"
         const val KAFKA_RECORDS_SEND_LIMIT_KEY = "kafka_records_send_limit"
         const val KAFKA_RECORDS_SIZE_LIMIT_KEY = "kafka_records_size_limit"
+        const val STORAGE_STAGE_FULL = "storage_stage_full"
+        const val STORAGE_STAGE_PARTIAL = "storage_stage_partial"
         const val SENDER_CONNECTION_TIMEOUT_KEY = "sender_connection_timeout"
         const val FIREBASE_FETCH_TIMEOUT_MS_KEY = "firebase_fetch_timeout_ms"
         const val FETCH_TIMEOUT_MS_KEY = "fetch_timeout_ms"

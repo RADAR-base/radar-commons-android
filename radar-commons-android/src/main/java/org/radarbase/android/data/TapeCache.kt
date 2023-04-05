@@ -60,7 +60,7 @@ constructor(
     private val measurementsToAdd = mutableListOf<Record<K, V>>()
     private val serializer = serialization.createSerializer(topic)
     private val deserializer = serialization.createDeserializer(readTopic)
-    private val storagelevelreceiver = StorageLevelReceiver();
+    private val storagelevelreceiver = StorageLevelReceiver(null);
 
     private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>

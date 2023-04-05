@@ -24,6 +24,7 @@ import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.R
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
@@ -34,11 +35,8 @@ import org.radarbase.android.source.SourceProvider.Companion.MODEL_KEY
 import org.radarbase.android.source.SourceProvider.Companion.NEEDS_BLUETOOTH_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PLUGIN_NAME_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
+import org.radarbase.android.util.*
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
-import org.radarbase.android.util.BundleSerialization
-import org.radarbase.android.util.ManagedServiceConnection
-import org.radarbase.android.util.SafeHandler
-import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -90,8 +88,13 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private lateinit var pluginName: String
     private lateinit var sourceModel: String
     private lateinit var sourceProducer: String
+    private lateinit var storageFullBroadcastReceiver: BroadcastRegistration
+    private lateinit var storagePartialBroadcastReceiver: BroadcastRegistration
     private val name = javaClass.simpleName
     private var delayedStart: Set<String>? = null
+    private var storageFullNotification: NotificationHandler.NotificationRegistration? = null
+    private var storagePartialNotification: NotificationHandler.NotificationRegistration? = null
+
 
     val state: T
         get() {
@@ -122,6 +125,29 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         sources = emptyList()
         sourceTypes = emptySet()
         broadcaster = LocalBroadcastManager.getInstance(this)
+
+        broadcaster.run{
+            storageFullBroadcastReceiver = register(STORAGE_STATE_FULL){_,_->
+                storageFullNotification = radarApp.notificationHandler.notify(
+                    STORAGE_FULL_NOTIFICATION,
+                    NotificationHandler.NOTIFICATION_CHANNEL_INFO,
+                    false
+                ){
+                    setContentTitle(getString(R.string.notification_storage_full_title))
+                    setContentText(getString(R.string.notification_storage_full_text))
+                }
+            }
+            storagePartialBroadcastReceiver = register(STORAGE_STATE_PARTIAL){_,_->
+                storagePartialNotification = radarApp.notificationHandler.notify(
+                    STORAGE_PARTIAL_NOTIFICATION,
+                    NotificationHandler.NOTIFICATION_CHANNEL_INFO,
+                    false
+                ){
+                    setContentTitle(getString(R.string.notification_storage_partial_title))
+                    setContentText(getString(R.string.notification_storage_partial_text))
+                }
+            }
+        }
 
         mBinder = createBinder()
 
@@ -473,6 +499,11 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         const val SOURCE_STATUS_CHANGED = PREFIX + "SourceStatusListener.Status"
         const val SOURCE_STATUS_NAME = PREFIX + "SourceManager.getName"
         const val SOURCE_CONNECT_FAILED = PREFIX + "SourceStatusListener.sourceFailedToConnect"
+        const val STORAGE_STATE_FULL = PREFIX + "TapeCache.StorageFull"
+        const val STORAGE_STATE_PARTIAL = PREFIX + "TapeCache.StoragePartial"
+        private const val STORAGE_FULL_NOTIFICATION = 551821
+        private const val STORAGE_PARTIAL_NOTIFICATION = 551820
+
 
         private val logger = LoggerFactory.getLogger(SourceService::class.java)
     }

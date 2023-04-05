@@ -37,4 +37,8 @@
     <string name="disable_battery_optimization_title">Disable battery optimization</string>
     <string name="cannot_connect_device">Cannot connect to device $1%s</string>
     <string name="device_unavailable">UNAVAILABLE</string>
+    <string name="notification_storage_full_title">Stopped sending data to storage.</string>
+    <string name="notification_storage_full_text">Storage is full. Data sending will resume when storage space becomes available..</string>
+    <string name="notification_storage_partial_title">Storage Almost Full.</string>
+    <string name="notification_storage_partial_text">The storage space has reached 75% of its total limit. Once it reaches its limit, data sending will stop.</string>
 </resources>

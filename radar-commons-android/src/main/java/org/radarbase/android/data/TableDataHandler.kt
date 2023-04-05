@@ -24,10 +24,13 @@ import org.radarbase.android.kafka.KafkaDataSubmitter
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
+import org.radarbase.android.source.SourceService.Companion.STORAGE_STATE_FULL
+import org.radarbase.android.source.SourceService.Companion.STORAGE_STATE_PARTIAL
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.send
+import org.radarbase.android.util.StorageLevelReceiver
 import org.radarbase.producer.rest.RestClient
 import org.radarbase.producer.rest.RestSender
 import org.radarbase.topic.AvroTopic
@@ -50,6 +53,7 @@ class TableDataHandler(
 ) : DataHandler<ObservationKey, SpecificRecord> {
     private val tables: ConcurrentMap<String, DataCacheGroup<*, *>> = ConcurrentHashMap()
     private val batteryLevelReceiver: BatteryStageReceiver
+    private val storageLevelReceiver: StorageLevelReceiver
     private val networkConnectedReceiver: NetworkConnectedReceiver
     private val handlerThread: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
     private val broadcaster = LocalBroadcastManager.getInstance(context)
@@ -75,6 +79,21 @@ class TableDataHandler(
     init {
         this.handlerThread.start()
         this.handlerThread.repeat(10_000L, ::broadcastNumberOfRecords)
+
+
+        this.storageLevelReceiver = StorageLevelReceiver(){ state->
+            when(state){
+                StorageLevelReceiver.StorageState.FULL-> {
+                    broadcastStorageFull()
+                }
+                StorageLevelReceiver.StorageState.PARTIAL-> {
+                    broadcastStoragePartial()
+                }
+                else-> {
+                    //do Nothing
+                }
+            }
+        }
 
         this.batteryLevelReceiver = BatteryStageReceiver(context, config.batteryStageLevels) { stage ->
             when (stage) {
@@ -125,6 +144,14 @@ class TableDataHandler(
             logger.info("Submitter is disabled: no kafkaConfig provided in init")
             updateServerStatus(ServerStatusListener.Status.DISABLED)
         }
+    }
+
+    private fun broadcastStorageFull() {
+        broadcaster.send(STORAGE_STATE_FULL)
+    }
+
+    private fun broadcastStoragePartial() {
+        broadcaster.send(STORAGE_STATE_PARTIAL)
     }
 
     private fun broadcastNumberOfRecords() {

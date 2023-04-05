@@ -4,6 +4,7 @@ import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.kafka.SubmitterConfiguration
 import org.radarbase.android.util.StageLevels
+import org.radarbase.android.util.StorageStage
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import java.util.*
 
@@ -18,6 +19,8 @@ data class DataHandlerConfiguration(
         var sendOverDataHighPriority: Boolean = true,
         /** Topics marked as high priority. */
         var highPriorityTopics: Set<String> = emptySet(),
+        /**Weather to show notification based on storage levels. */
+        var storageStage: StorageStage = StorageStage(),
         var restConfig: RestConfiguration = RestConfiguration(),
         var cacheConfig: CacheConfiguration = CacheConfiguration(),
         var submitterConfig: SubmitterConfiguration = SubmitterConfiguration()
@@ -33,6 +36,9 @@ data class DataHandlerConfiguration(
     }
     fun rest(builder: RestConfiguration.() -> Unit) {
         restConfig = restConfig.copy().apply(builder)
+    }
+    fun storage(builder: StorageStage.() -> Unit){
+        storageStage = storageStage.copy().apply(builder)
     }
 
     fun configure(config: SingleRadarConfiguration) {
@@ -52,6 +58,9 @@ data class DataHandlerConfiguration(
             configure(config)
         }
         submitter {
+            configure(config)
+        }
+        storage{
             configure(config)
         }
     }
