@@ -128,6 +128,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
         broadcaster.run{
             storageFullBroadcastReceiver = register(STORAGE_STATE_FULL){_,_->
+                storagePartialNotification?.cancel()
                 storageFullNotification = radarApp.notificationHandler.notify(
                     STORAGE_FULL_NOTIFICATION,
                     NotificationHandler.NOTIFICATION_CHANNEL_INFO,

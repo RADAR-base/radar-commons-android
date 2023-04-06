@@ -4,7 +4,7 @@ import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.config.SingleRadarConfiguration
 
 data class StorageStage(
-    var partial:Float = 075f,
+    var partial:Float = 0.75f,
     var full:Float = 1.0f
 ) {
     fun configure(config: SingleRadarConfiguration) {

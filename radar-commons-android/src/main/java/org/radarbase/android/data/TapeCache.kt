@@ -269,6 +269,13 @@ constructor(
         if (size >= threshold - 0.0001 && size <= threshold + 0.0001) {
              setLevelPartial()
         }
+        else{
+            setLevelAvailable()
+        }
+    }
+
+    private fun setLevelAvailable() {
+        storagelevelreceiver.setLevel(0.0f)
     }
 
     private fun setLevelPartial() {
