@@ -22,6 +22,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import org.radarbase.android.RadarService.Companion.PLUGIN_ERROR
 import org.radarbase.android.RadarService.Companion.PLUGIN_NAME
 import org.radarbase.android.RadarService.Companion.PLUGIN_STATUS_CHANGED
 import org.radarbase.android.data.DataCache
@@ -84,7 +85,7 @@ class ApplicationStatusManager(
     private var serverRecordsReceiver: BroadcastRegistration? = null
     private var cacheReceiver: BroadcastRegistration? = null
     private var pluginStatusReceiver: BroadcastRegistration? = null
-    private var sourceFailedReceiver: BroadcastRegistration? = null
+    private var pluginErrorReceiver: BroadcastRegistration? = null
 
 
     init {
@@ -165,8 +166,8 @@ class ApplicationStatusManager(
                 state.pluginName = intent.getStringExtra(PLUGIN_NAME)
                 state.pluginStatus = SourceStatusListener.Status.values()[intent.getIntExtra(PLUGIN_STATUS_CHANGED, 0)]
             }
-            sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) {_, intent ->
-
+            pluginErrorReceiver = register(PLUGIN_ERROR) {_, intent->
+                state.error = intent.getStringExtra(PLUGIN_ERROR)
             }
         }
 
@@ -307,16 +308,18 @@ class ApplicationStatusManager(
 
     private fun processError(){
         val time = currentTime
+        val plugin = state.error
+        val message = "Can't connect to plugin $plugin"
         send(errorTopic,ApplicationError(
-             time,plugin,code,message
+             time,plugin,message
         ) )
     }
 
     override fun onClose() {
         this.processor.close()
 
-        sourceStatusReceiver.unregister()
-        sourceFailedReceiver.unregister()
+        pluginStatusReceiver?.unregister()
+        pluginErrorReceiver?.unregister()
         cacheReceiver?.unregister()
         serverRecordsReceiver?.unregister()
         serverStatusReceiver?.unregister()

@@ -101,6 +101,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     /** Current status of source. */
     private lateinit var sourceStatus: SourceStatusListener.Status
 
+    private var pluginError: Boolean = false
+    private var pluginErrorName: String? = null
+
     private val needsPermissions = LinkedHashSet<String>()
 
     protected open val servicePermissions: List<String>
@@ -142,6 +145,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                         getString(R.string.cannot_connect_device,
                                 intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
                         Toast.LENGTH_SHORT).show()
+                updatePluginStatusError()
             }
             serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
                 val serverStatusChanged = intent.getIntExtra(SERVER_STATUS_CHANGED, 0)
@@ -570,6 +574,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             if (mConnections.toSet() != oldConnections) {
                 (registeredProviders - oldConnections).forEach {
                     val plugin = it.pluginName
+                    if (pluginError) {
+                        pluginErrorName = plugin
+                    }
                     broadcaster.send(PLUGIN_STATUS_CHANGED) {
                         putExtra(PLUGIN_NAME, plugin)
                         putExtra(PLUGIN_STATUS_CHANGED, sourceStatus.ordinal)
@@ -577,6 +584,14 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
         }
+    }
+
+    private fun updatePluginStatusError() {
+        pluginError = true
+        broadcaster.send(PLUGIN_ERROR) {
+            putExtra(PLUGIN_ERROR, pluginErrorName)
+        }
+        pluginError = false
     }
 
     private fun updateProviders(authState: AppAuthState, config: SingleRadarConfiguration) {
@@ -608,6 +623,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             if (mConnections != previousConnections) {
                (mConnections - previousConnections).forEach {
                    val plugin = it.pluginName
+                   if (pluginError){
+                       pluginErrorName = plugin
+                   }
                    broadcaster.send(PLUGIN_STATUS_CHANGED) {
                        putExtra(PLUGIN_NAME, plugin)
                        putExtra(PLUGIN_STATUS_CHANGED, sourceStatus.ordinal)
@@ -685,6 +703,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         const val PLUGIN_STATUS_CHANGED = "$RADAR_PACKAGE.PLUGIN_STATUS_CHANGED"
         const val PLUGIN_NAME = "$RADAR_PACKAGE.PLUGIN_NAME"
+        const val PLUGIN_ERROR = "$RADAR_PACKAGE.PLUGIN_ERROR"
 
         const val ACTION_BLUETOOTH_NEEDED_CHANGED = "$RADAR_PACKAGE.BLUETOOTH_NEEDED_CHANGED"
         const val BLUETOOTH_NEEDED = 1
