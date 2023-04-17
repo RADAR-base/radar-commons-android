@@ -46,6 +46,7 @@ import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
 import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
+import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_CHANGED
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
@@ -79,6 +80,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
     private lateinit var serverStatusReceiver: BroadcastRegistration
+    private lateinit var sourceStatusReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
     private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
 
@@ -95,6 +97,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     /** Current server status.  */
     private lateinit var serverStatus: ServerStatusListener.Status
+
+    /** Current status of source. */
+    private lateinit var sourceStatus: SourceStatusListener.Status
 
     private val needsPermissions = LinkedHashSet<String>()
 
@@ -150,6 +155,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                         }
                     }
                 }
+            }
+            sourceStatusReceiver = register(SOURCE_STATUS_CHANGED){_, intent->
+                val sourceStatusChanged = intent.getIntExtra(SOURCE_STATUS_CHANGED,0)
+                sourceStatus = SourceStatusListener.Status.values()[sourceStatusChanged]
             }
         }
 
@@ -559,6 +568,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             removeProviders(unregisteredProviders.intersect(oldConnections))
             addProviders(registeredProviders - oldConnections)
             if (mConnections.toSet() != oldConnections) {
+                (registeredProviders - oldConnections).forEach {
+                    val plugin = it.pluginName
+                    broadcaster.send(PLUGIN_STATUS_CHANGED) {
+                        putExtra(PLUGIN_NAME, plugin)
+                        putExtra(PLUGIN_STATUS_CHANGED, sourceStatus.ordinal)
+                } }
                 broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
         }
@@ -591,6 +606,13 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             authConnection.applyBinder { createRegistrar(this, providers) }
 
             if (mConnections != previousConnections) {
+               (mConnections - previousConnections).forEach {
+                   val plugin = it.pluginName
+                   broadcaster.send(PLUGIN_STATUS_CHANGED) {
+                       putExtra(PLUGIN_NAME, plugin)
+                       putExtra(PLUGIN_STATUS_CHANGED, sourceStatus.ordinal)
+                   }
+               }
                 broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
         }
@@ -660,6 +682,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         private const val RADAR_PACKAGE = "org.radarbase.android"
 
         const val ACTION_PROVIDERS_UPDATED = "$RADAR_PACKAGE.ACTION_PROVIDERS_UPDATED"
+
+        const val PLUGIN_STATUS_CHANGED = "$RADAR_PACKAGE.PLUGIN_STATUS_CHANGED"
+        const val PLUGIN_NAME = "$RADAR_PACKAGE.PLUGIN_NAME"
 
         const val ACTION_BLUETOOTH_NEEDED_CHANGED = "$RADAR_PACKAGE.BLUETOOTH_NEEDED_CHANGED"
         const val BLUETOOTH_NEEDED = 1

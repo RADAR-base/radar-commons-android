@@ -22,19 +22,17 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import org.radarbase.android.RadarService.Companion.PLUGIN_NAME
+import org.radarbase.android.RadarService.Companion.PLUGIN_STATUS_CHANGED
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.AbstractSourceManager
-import org.radarbase.android.source.SourceService
 import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
 import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
-import org.radarbase.android.source.SourceService.Companion.SOURCE_SERVICE_CLASS
-import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_CHANGED
-import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_NAME
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.*
 import org.radarbase.monitor.application.ApplicationStatusService.Companion.UPDATE_RATE_DEFAULT
@@ -85,8 +83,8 @@ class ApplicationStatusManager(
     private var serverStatusReceiver: BroadcastRegistration? = null
     private var serverRecordsReceiver: BroadcastRegistration? = null
     private var cacheReceiver: BroadcastRegistration? = null
-    private lateinit var sourceStatusReceiver: BroadcastRegistration
-    private lateinit var sourceFailedReceiver: BroadcastRegistration
+    private var pluginStatusReceiver: BroadcastRegistration? = null
+    private var sourceFailedReceiver: BroadcastRegistration? = null
 
 
     init {
@@ -163,10 +161,9 @@ class ApplicationStatusManager(
                 val records = intent.getLongExtra(CACHE_RECORDS_UNSENT_NUMBER, 0)
                 state.cachedRecords[topic] = records.coerceAtLeast(0)
             }
-            sourceStatusReceiver = register(SOURCE_STATUS_CHANGED){_, intent->
-                val pluginName = intent.getStringExtra(SOURCE_STATUS_NAME)
-                state.sourceStatus = SourceStatusListener.Status.values()[intent.getIntExtra(SOURCE_STATUS_CHANGED,0)]
-                state.getPluginName(pluginName)
+            pluginStatusReceiver = register(PLUGIN_STATUS_CHANGED) {_, intent->
+                state.pluginName = intent.getStringExtra(PLUGIN_NAME)
+                state.pluginStatus = SourceStatusListener.Status.values()[intent.getIntExtra(PLUGIN_STATUS_CHANGED, 0)]
             }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) {_, intent ->
 
@@ -302,9 +299,9 @@ class ApplicationStatusManager(
     private fun processPluginStatus(){
         val time = currentTime
         val plugin =state.pluginName
-        val status = state.sourceStatus.toSourceStatus()
+        val pluginStatus = state.pluginStatus.toPluginStatus()
         send(pluginStatusTopic, ApplicationPluginStatus(
-            time,plugin,status
+            time,plugin,pluginStatus
         ))
     }
 
@@ -402,14 +399,14 @@ class ApplicationStatusManager(
             ServerStatusListener.Status.UPLOADING_FAILED -> ServerStatus.DISCONNECTED
             else -> ServerStatus.UNKNOWN
         }
-        private fun SourceStatusListener.Status?.toSourceStatus(): SourceStatus = when (this) {
-            SourceStatusListener.Status.CONNECTED -> SourceStatus.CONNECTED
-            SourceStatusListener.Status.CONNECTING -> SourceStatus.CONNECTING
-            SourceStatusListener.Status.DISCONNECTING -> SourceStatus.DISCONNECTING
-            SourceStatusListener.Status.READY  -> SourceStatus.READY
-            SourceStatusListener.Status.UNAVAILABLE -> SourceStatus.UNAVAILABLE
-            SourceStatusListener.Status.DISCONNECTED  -> SourceStatus.DISCONNECTED
-            else -> SourceStatus.UNKNOWN
+        private fun SourceStatusListener.Status?.toPluginStatus(): PluginStatus = when (this) {
+            SourceStatusListener.Status.CONNECTED -> PluginStatus.CONNECTED
+            SourceStatusListener.Status.CONNECTING -> PluginStatus.CONNECTING
+            SourceStatusListener.Status.DISCONNECTING -> PluginStatus.DISCONNECTING
+            SourceStatusListener.Status.READY  -> PluginStatus.READY
+            SourceStatusListener.Status.UNAVAILABLE -> PluginStatus.UNAVAILABLE
+            SourceStatusListener.Status.DISCONNECTED  -> PluginStatus.DISCONNECTED
+            else -> PluginStatus.UNKNOWN
         }
     }
 }

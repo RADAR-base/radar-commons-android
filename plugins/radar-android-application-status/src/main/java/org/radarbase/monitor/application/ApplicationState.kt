@@ -27,8 +27,12 @@ class ApplicationState : BaseSourceState() {
         @Synchronized get() = field ?: ServerStatusListener.Status.DISCONNECTED
 
     @set:Synchronized
-    var sourceStatus: SourceStatusListener.Status? = null
+    var pluginStatus: SourceStatusListener.Status? = null
         @Synchronized get() = field ?: SourceStatusListener.Status.DISCONNECTED
+
+    @set:Synchronized
+    var pluginName: String? = null
+        @Synchronized get() = field ?: " "
 
     @get:Synchronized
     var recordsSent = 0L
@@ -40,14 +44,6 @@ class ApplicationState : BaseSourceState() {
 
     @get:Synchronized
     var topicName:String = ""
-    private set
-
-    @get:Synchronized
-    var pluginName:String? = ""
-    private set
-
-    @get:Synchronized
-    var pluginStatus:String? = ""
     private set
 
     @get:Synchronized
@@ -72,13 +68,8 @@ class ApplicationState : BaseSourceState() {
     }
 
     @Synchronized
-    fun getPluginName(name:String?){
-        pluginName = name
-    }
-
-    @Synchronized
     fun getError(error:String?){
-        pluginStatus = error
+
     }
 
 }
