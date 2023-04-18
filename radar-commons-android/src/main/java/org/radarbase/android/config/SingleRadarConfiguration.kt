@@ -72,7 +72,7 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
     /**
      * Get a string indexed by key, or null if it does not exist.
      */
-    fun <T> optString(key: String, consume: (String) -> T): T? = config[key]?.let(consume)
+    inline fun <T> optString(key: String, consume: (String) -> T): T? = config[key]?.let(consume)
 
     /**
      * Get a configured long value. If the configured value is not present or not a valid long,
@@ -82,7 +82,7 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
      * @return configured long value, or defaultValue if no suitable value was found.
      */
     fun getLong(key: String, defaultValue: Long): Long {
-        return optString(key)?.toLongOrNull()
+        return config[key]?.toLongOrNull()
                 ?: defaultValue
     }
 
@@ -109,6 +109,19 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
     fun getFloat(key: String, defaultValue: Float): Float {
         return optString(key)?.toFloatOrNull()
                 ?: defaultValue
+    }
+
+    /**
+     * Get a configured float value. If the configured value is not present or not a valid float,
+     * return a default value.
+     * @param key key of the value
+     * @param defaultValue default value
+     * @return configured float value, or defaultValue if no suitable value was found.
+     */
+    inline fun <T> optDouble(key: String, consume: (Double) -> T): T? {
+        val double = optString(key)?.toDoubleOrNull()
+            ?: return null
+        return consume(double)
     }
 
     fun getBoolean(key: String): Boolean {

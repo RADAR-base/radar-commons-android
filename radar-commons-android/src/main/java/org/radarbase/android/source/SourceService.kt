@@ -74,7 +74,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                     && it.model.equals(sourceModel, ignoreCase = true)
         }
 
-    private val acceptableSources: List<SourceMetadata>
+    val acceptableSources: List<SourceMetadata>
         get() = sources.filter { it.type in acceptableSourceTypes }
 
     private val isAuthorizedForSource: Boolean
@@ -141,7 +141,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     protected abstract val defaultState: T
 
     private val expectedSourceNames: Set<String>
-        get() = HashSet(acceptableSources.mapNotNull { it.expectedSourceName })
+        get() = acceptableSources.mapNotNullTo(HashSet()) { it.expectedSourceName }
 
     open val isBluetoothConnectionRequired: Boolean
         get() = hasBluetoothPermission
@@ -149,6 +149,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     @CallSuper
     override fun onCreate() {
         logger.info("Creating SourceService {}", this)
+        handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
         super.onCreate()
         sources = emptyList()
         sourceTypes = emptySet()
@@ -166,7 +167,6 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             }
         }
         radarConnection.bind()
-        handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
         radarConfig.config.observe(this, ::configure)
         config = radarConfig
@@ -449,26 +449,26 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             }
 
             val matchingSource = acceptableSources
-                    .find { source ->
-                        val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
-                        val pluginMatches = pluginName in source.attributes
-                        val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
-                        when {
-                            pluginMatches -> true
-                            source.matches(id, name) -> true
-                            id != null && physicalId != null && id in physicalId -> true
-                            id != null && physicalId != null -> {
-                                logger.warn("Physical id {} does not match registered id {}", physicalId, id)
-                                false
-                            }
-                            physicalName != null && name != null && name in physicalName -> true
-                            physicalName != null -> {
-                                logger.warn("Physical name {} does not match registered name {}", physicalName, name)
-                                false
-                            }
-                            else -> false
+                .find { source ->
+                    val physicalId = source.attributes["physicalId"]?.takeIf { it.isNotEmpty() }
+                    val pluginMatches = pluginName in source.attributes
+                    val physicalName = source.attributes["physicalName"]?.takeIf { it.isNotEmpty() }
+                    when {
+                        pluginMatches -> true
+                        source.matches(id, name) -> true
+                        id != null && physicalId != null && id in physicalId -> true
+                        id != null && physicalId != null -> {
+                            logger.warn("Physical id {} does not match registered id {}", physicalId, id)
+                            false
                         }
+                        physicalName != null && name != null && name in physicalName -> true
+                        physicalName != null -> {
+                            logger.warn("Physical name {} does not match registered name {}", physicalName, name)
+                            false
+                        }
+                        else -> false
                     }
+                }
 
             if (matchingSource == null) {
                 logger.warn("Cannot find matching source type for producer {} and model {}", sourceProducer, sourceModel)

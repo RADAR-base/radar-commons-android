@@ -42,7 +42,7 @@ class SourceServiceConnection<S : BaseSourceState>(
                 logger.info("AppSource status changed of source {}", sourceName)
                 val statusOrdinal = intent.getIntExtra(SOURCE_STATUS_CHANGED, 0)
                 sourceStatus = SourceStatusListener.Status.values()[statusOrdinal]
-                        .also { logger.info("Updated source status to {}", it) }
+                        .also { logger.info("Updated {} source status to {}", serviceClassName, it) }
                         .also { radarService.sourceStatusUpdated(this@SourceServiceConnection, it) }
             }
         }

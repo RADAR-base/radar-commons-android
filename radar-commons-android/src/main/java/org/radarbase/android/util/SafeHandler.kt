@@ -19,7 +19,6 @@ import java.util.concurrent.SynchronousQueue
 class SafeHandler(
     val name: String,
     private val priority: Int,
-    private val callback: Handler.Callback? = null,
 ) {
     private var handlerThread: HandlerThread? = null
 
@@ -38,6 +37,12 @@ class SafeHandler(
         private set
 
     @Synchronized
+    fun messageHandler(callback: Handler.Callback): Handler {
+        val handlerThread = checkNotNull(handlerThread) { "Only a started SafeHandler can get a message handler" }
+        return Handler(handlerThread.looper, callback)
+    }
+
+    @Synchronized
     fun start() {
         if (isStarted) {
             logger.warn("Tried to start SafeHandler multiple times.")
@@ -46,7 +51,7 @@ class SafeHandler(
 
         handlerThread = HandlerThread(name, priority).apply {
             start()
-            handler = Handler(looper, callback)
+            handler = Handler(looper)
         }
     }
 
@@ -285,12 +290,11 @@ class SafeHandler(
         fun getInstance(
             name: String,
             priority: Int,
-            callback: Handler.Callback? = null
         ): SafeHandler {
             val handlerRef = map[name]?.get()
             return handlerRef
                 ?: run {
-                    val handler = SafeHandler(name, priority, callback)
+                    val handler = SafeHandler(name, priority)
                     map[name] = WeakReference(handler)
                     handler
                 }
