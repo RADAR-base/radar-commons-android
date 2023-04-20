@@ -50,6 +50,10 @@ class ApplicationState : BaseSourceState() {
     var error:String? = null
         @Synchronized get() = field ?: " "
 
+    @get:Synchronized
+    var errorCode = 0
+        private set
+
     val cachedRecords: MutableMap<String, Long> = ConcurrentHashMap()
 
     @Synchronized
@@ -65,5 +69,9 @@ class ApplicationState : BaseSourceState() {
     @Synchronized
     fun topicInfo(name:String){
         topicName = name
+    }
+
+    fun setErrorCode(code:Int){
+        errorCode = code
     }
 }

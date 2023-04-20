@@ -22,6 +22,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import org.radarbase.android.RadarService.Companion.ERROR_CODE
 import org.radarbase.android.RadarService.Companion.PLUGIN_ERROR
 import org.radarbase.android.RadarService.Companion.PLUGIN_NAME
 import org.radarbase.android.RadarService.Companion.PLUGIN_STATUS_CHANGED
@@ -168,6 +169,7 @@ class ApplicationStatusManager(
             }
             pluginErrorReceiver = register(PLUGIN_ERROR) {_, intent->
                 state.error = intent.getStringExtra(PLUGIN_ERROR)
+                state.setErrorCode(intent.getIntExtra(ERROR_CODE,0))
             }
         }
 
@@ -310,8 +312,9 @@ class ApplicationStatusManager(
         val time = currentTime
         val plugin = state.error
         val message = "Can't connect to plugin $plugin"
+        val code = state.errorCode
         send(errorTopic,ApplicationError(
-             time,plugin,message
+             time,plugin,code,message
         ) )
     }
 

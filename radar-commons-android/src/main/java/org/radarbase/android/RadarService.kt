@@ -590,6 +590,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         pluginError = true
         broadcaster.send(PLUGIN_ERROR) {
             putExtra(PLUGIN_ERROR, pluginErrorName)
+            putExtra(ERROR_CODE, PLUGIN_ERROR_CODE)
+
         }
         pluginError = false
     }
@@ -704,6 +706,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         const val PLUGIN_STATUS_CHANGED = "$RADAR_PACKAGE.PLUGIN_STATUS_CHANGED"
         const val PLUGIN_NAME = "$RADAR_PACKAGE.PLUGIN_NAME"
         const val PLUGIN_ERROR = "$RADAR_PACKAGE.PLUGIN_ERROR"
+        const val ERROR_CODE = "$RADAR_PACKAGE.ERROR_CODE"
+        const val PLUGIN_ERROR_CODE = 55
 
         const val ACTION_BLUETOOTH_NEEDED_CHANGED = "$RADAR_PACKAGE.BLUETOOTH_NEEDED_CHANGED"
         const val BLUETOOTH_NEEDED = 1
