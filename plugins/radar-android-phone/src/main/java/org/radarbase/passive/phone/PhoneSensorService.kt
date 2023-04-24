@@ -21,7 +21,6 @@ import android.util.SparseIntArray
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
-import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 /**

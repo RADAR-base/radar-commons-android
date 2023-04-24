@@ -31,6 +31,7 @@ import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothAdapter
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.hasBluetoothPermission
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneBluetoothDevices
@@ -65,14 +66,11 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
             logger.error("Bluetooth is not available.")
             return
         }
+        if (!service.hasBluetoothPermission) {
+            logger.error("Cannot initiate Bluetooth scan without scan permissions")
+            return
+        }
         if (bluetoothAdapter.isEnabled) {
-            val scanPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Manifest.permission.BLUETOOTH_SCAN
-            } else Manifest.permission.BLUETOOTH_ADMIN
-            if (ActivityCompat.checkSelfPermission(service, scanPermission) != PackageManager.PERMISSION_GRANTED) {
-                logger.error("Cannot initiate Bluetooth scan without scan permissions")
-                return
-            }
             val filter = IntentFilter().apply {
                 addAction(BluetoothDevice.ACTION_FOUND)
                 addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)

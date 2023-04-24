@@ -20,15 +20,16 @@ import android.app.Activity
 import org.json.JSONException
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.auth.*
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager
 import org.radarbase.producer.AuthenticationException
 
 /**
  * Authenticates against the RADAR Management Portal.
  */
 class OAuth2LoginManager(
-        private val service: AuthService,
-        private val projectIdClaim: String,
-        private val userIdClaim: String
+    private val service: AuthService,
+    private val projectIdClaim: String,
+    private val userIdClaim: String
 ) : LoginManager, LoginListener {
     private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
 
@@ -55,16 +56,8 @@ class OAuth2LoginManager(
         return true
     }
 
-    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
-        return when {
-            authState.tokenType != LoginManager.AUTH_TYPE_BEARER -> return null
-            disableRefresh -> authState.alter {
-                attributes -= LOGIN_REFRESH_TOKEN
-                isPrivacyPolicyAccepted = false
-            }
-            else -> authState
-        }
-    }
+    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? =
+        authState.takeIf { it.authenticationSource == OAUTH2_SOURCE_TYPE }
 
     override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
 
@@ -89,16 +82,16 @@ class OAuth2LoginManager(
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         val token = authState.token
         if (token == null) {
-            this.service.loginFailed(this,
+            loginFailed(this,
                     IllegalArgumentException("Cannot login using OAuth2 without a token"))
             return
         }
         try {
             processJwt(authState, Jwt.parse(token)).let {
-                this.service.loginSucceeded(this, it)
+                service.loginSucceeded(this, it)
             }
         } catch (ex: JSONException) {
-            this.service.loginFailed(this, ex)
+            loginFailed(this, ex)
         }
 
     }

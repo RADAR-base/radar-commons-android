@@ -46,8 +46,9 @@ class WeatherApiService : SourceService<BaseSourceState>() {
         manager as WeatherApiManager
         manager.setQueryInterval(config.getLong(WEATHER_QUERY_INTERVAL, WEATHER_QUERY_INTERVAL_DEFAULT), TimeUnit.SECONDS)
         manager.setSource(
-                config.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
-                config.optString(WEATHER_API_KEY))
+            config.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
+            config.optString(WEATHER_API_KEY),
+        )
     }
 
     companion object {
