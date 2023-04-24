@@ -30,7 +30,9 @@ interface SourceStatusListener {
         /** A compatible source was found and connected to. Data can now stream in.  */
         CONNECTED,
         /** A source manager is scanning for compatible sources. This status is passed without an argument.  */
-        READY
+        READY,
+        /** The source was disabled via configuration. */
+        DISABLED,
     }
 
     /**

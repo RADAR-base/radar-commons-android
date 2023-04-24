@@ -39,9 +39,9 @@ class OpenSmileAudioService : SourceService<BaseSourceState>() {
         manager as OpensmileAudioManager
         manager.setRecordRate(config.getLong(AUDIO_RECORD_RATE_S, DEFAULT_RECORD_RATE))
         manager.config = OpensmileAudioManager.AudioConfiguration(
-                config.getString(AUDIO_CONFIG_FILE, "ComParE_2016.conf"),
-                config.getLong(AUDIO_DURATION_S, 15L),
-                TimeUnit.SECONDS
+            config.getString(AUDIO_CONFIG_FILE, "ComParE_2016.conf"),
+            config.getLong(AUDIO_DURATION_S, 15L),
+            TimeUnit.SECONDS,
         )
     }
 

@@ -20,6 +20,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import androidx.lifecycle.LiveData
 import org.radarbase.android.auth.AppAuthState
+import org.radarbase.android.config.CombinedRadarConfig
+import org.radarbase.android.config.LocalConfiguration
 import org.radarbase.android.config.SingleRadarConfiguration
 import java.util.*
 
@@ -81,13 +83,11 @@ interface RadarConfiguration {
         const val SOURCE_ID_KEY = "source_id"
         const val SEND_OVER_DATA_HIGH_PRIORITY = "send_over_data_high_priority_only"
         const val TOPICS_HIGH_PRIORITY = "topics_high_priority"
-        const val UI_REFRESH_RATE_KEY = "ui_refresh_rate_millis"
         const val KAFKA_UPLOAD_RATE_KEY = "kafka_upload_rate"
         const val DATABASE_COMMIT_RATE_KEY = "database_commit_rate"
         const val KAFKA_RECORDS_SEND_LIMIT_KEY = "kafka_records_send_limit"
         const val KAFKA_RECORDS_SIZE_LIMIT_KEY = "kafka_records_size_limit"
         const val SENDER_CONNECTION_TIMEOUT_KEY = "sender_connection_timeout"
-        const val FIREBASE_FETCH_TIMEOUT_MS_KEY = "firebase_fetch_timeout_ms"
         const val FETCH_TIMEOUT_MS_KEY = "fetch_timeout_ms"
         const val FETCH_TIMEOUT_MS_DEFAULT = 14_400_000L
         const val START_AT_BOOT = "start_at_boot"

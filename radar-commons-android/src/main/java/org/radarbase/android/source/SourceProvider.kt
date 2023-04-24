@@ -20,12 +20,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.CallSuper
-import androidx.annotation.DrawableRes
 import androidx.annotation.Keep
-import org.radarbase.android.MainActivity
-import org.radarbase.android.RadarApplication.Companion.radarApp
-import org.radarbase.android.RadarApplication.Companion.radarConfig
-import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarService
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceType
@@ -57,8 +52,8 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      */
     abstract val pluginNames: List<String>
 
-    val pluginName: String?
-        get() = pluginNames.firstOrNull()
+    val pluginName: String
+        get() = pluginNames.first()
 
     /**
      * Class of the service.
@@ -83,20 +78,12 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     open val description: String?
         get() = null
 
-    /** Get the RadarConfiguration currently set for the service provider.  */
-    val config: RadarConfiguration
-        get() = radarService.radarConfig
-
     abstract val sourceProducer: String
 
     abstract val sourceModel: String
 
     private val appSourceModel: String
-        get() {
-            val suffix = radarService.radarApp.sourceTypeSuffix
-                ?: return sourceModel
-            return sourceModel + suffix
-        }
+        get() = sourceModel
 
     abstract val version: String
 
@@ -116,10 +103,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     }
 
     /**
-     * Bind the service to the MainActivity. Call this when the [MainActivity.onStart] is
-     * called.
-     * @throws IllegalStateException if [.setRadarService] has not been called or
-     * if the service is already bound.
+     * Bind the service called.
      */
     fun bind() {
         check(!isBound) { "Service is already bound" }
@@ -143,8 +127,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     }
 
     /**
-     * Unbind the service from the MainActivity. Call this when the [MainActivity.onStop] is
-     * called.
+     * Unbind the service.
      */
     fun unbind() {
         check(isBound) { "Service is not bound" }
@@ -174,21 +157,22 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     @CallSuper
     protected fun configure(bundle: Bundle) {
         // Add the default configuration parameters given to the service intents
-        radarService.radarApp.configureProvider(bundle)
         val permissions = permissionsNeeded
-        bundle.putBoolean(NEEDS_BLUETOOTH_KEY, bluetoothPermissionList.any { p ->
-            "BLUETOOTH" in p && p in permissions
-        })
-        bundle.putString(PLUGIN_NAME_KEY, pluginName)
-        bundle.putString(PRODUCER_KEY, sourceProducer)
-        bundle.putString(MODEL_KEY, appSourceModel)
+        bundle.apply {
+            putBoolean(NEEDS_BLUETOOTH_KEY, bluetoothPermissionList.any { p ->
+                "BLUETOOTH" in p && p in permissions
+            })
+            putString(PLUGIN_NAME_KEY, pluginName)
+            putString(PRODUCER_KEY, sourceProducer)
+            putString(MODEL_KEY, appSourceModel)
+        }
     }
 
     /** Whether [.getConnection] has already been called.  */
     val isConnected: Boolean
         get() = _connection != null
 
-    override fun toString(): String = pluginName ?: "null"
+    override fun toString(): String = pluginName
 
     open val mayBeConnectedInBackground: Boolean = true
 
@@ -217,23 +201,21 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      * @param sourceType source type
      * @param checkVersion whether to do a strict version check
      */
-    fun matches(sourceType: SourceType?, checkVersion: Boolean): Boolean {
-        return (sourceType != null
-                && sourceType.producer.equals(sourceProducer, ignoreCase = true)
-                && sourceType.model.equals(appSourceModel, ignoreCase = true)
-                && (!checkVersion || sourceType.catalogVersion.equals(version, ignoreCase = true)))
-    }
+    fun matches(sourceType: SourceType?, checkVersion: Boolean): Boolean =
+        sourceType != null &&
+        sourceType.producer.equals(sourceProducer, ignoreCase = true) &&
+        sourceType.model.equals(appSourceModel, ignoreCase = true) &&
+        (!checkVersion || sourceType.catalogVersion.equals(version, ignoreCase = true))
 
     /**
      * Whether given provider matches any registered source or source type. If no registration is
      * required, this always returns true. A source with matching type is always considered a match.
      * If no source is registered but registration is dynamic, a match is also made.
      */
-    fun canRegisterFor(state: AppAuthState, checkVersion: Boolean): Boolean {
-        return !state.needsRegisteredSources
-                || state.sourceMetadata.any { matches(it.type, checkVersion) }
-                || state.sourceTypes.any { it.hasDynamicRegistration && matches(it, checkVersion) }
-    }
+    fun canRegisterFor(state: AppAuthState, checkVersion: Boolean): Boolean =
+        !state.needsRegisteredSources ||
+        state.sourceMetadata.any { matches(it.type, checkVersion) } ||
+        state.sourceTypes.any { it.hasDynamicRegistration && matches(it, checkVersion) }
 
     override fun hashCode(): Int {
         return javaClass.hashCode()
@@ -243,17 +225,11 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         return other != null && other.javaClass == javaClass
     }
 
-    fun isRegisteredFor(authState: AppAuthState, checkVersion: Boolean): Boolean {
-        return !authState.needsRegisteredSources
-                || authState.sourceMetadata.any { matches(it.type, checkVersion) && authState.isAuthorizedForSource(it.sourceId) }
-    }
-
-    open val actions: List<Action> = emptyList()
-
-    data class Action(
-            val name: String,
-            @DrawableRes val icon: Int? = null,
-            val activate: MainActivity.() -> Unit)
+    fun isRegisteredFor(authState: AppAuthState, checkVersion: Boolean): Boolean =
+        !authState.needsRegisteredSources ||
+        authState.sourceMetadata.any {
+            matches(it.type, checkVersion) && authState.isAuthorizedForSource(it.sourceId)
+        }
 
     companion object {
         const val NEEDS_BLUETOOTH_KEY = "org.radarbase.android.source.SourceProvider.needsBluetooth"

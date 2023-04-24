@@ -21,14 +21,13 @@ import androidx.annotation.Keep
 import okhttp3.Headers
 import org.json.JSONArray
 import org.json.JSONException
+import org.radarbase.android.RadarConfiguration.Companion.BASE_URL_KEY
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
 import org.radarbase.android.util.buildJsonArray
 import org.radarbase.android.util.equalTo
 import org.slf4j.LoggerFactory
 import java.util.*
-import java.util.concurrent.TimeUnit
-import kotlin.collections.HashMap
 
 /** Authentication state of the application.  */
 @Keep
@@ -40,23 +39,16 @@ class AppAuthState private constructor(builder: Builder) {
     val tokenType: Int = builder.tokenType
     val authenticationSource: String? = builder.authenticationSource
     val needsRegisteredSources: Boolean = builder.needsRegisteredSources
-    val expiration: Long = builder.expiration
+    val isValid: Boolean = builder.isValid
     val lastUpdate: Long = builder.lastUpdate
     val attributes: Map<String, String> = HashMap(builder.attributes)
     val headers: List<Pair<String, String>> = ArrayList(builder.headers)
     val sourceMetadata: List<SourceMetadata> = ArrayList(builder.sourceMetadata)
     val sourceTypes: List<SourceType> = ArrayList(builder.sourceTypes)
-    val isPrivacyPolicyAccepted: Boolean = builder.isPrivacyPolicyAccepted
     val okHttpHeaders: Headers = Headers.Builder().apply {
         headers.forEach { (k, v) -> add(k, v) }
     }.build()
-    val baseUrl: String? = attributes[AuthService.BASE_URL_PROPERTY]?.trimEndSlash()
-
-    val isValid: Boolean
-        get() = isPrivacyPolicyAccepted && expiration > System.currentTimeMillis()
-
-    val isInvalidated: Boolean
-        get() = expiration == 0L
+    val baseUrl: String? = attributes[BASE_URL_KEY]?.trimEndSlash()
 
     constructor() : this(Builder())
 
@@ -78,16 +70,10 @@ class AppAuthState private constructor(builder: Builder) {
         }
     }.toString()
 
-    fun isValidFor(time: Long, unit: TimeUnit) = isPrivacyPolicyAccepted
-            && expiration - unit.toMillis(time) > System.currentTimeMillis()
-
     fun isAuthorizedForSource(sourceId: String?): Boolean {
         return !this.needsRegisteredSources
                 || (sourceId != null && attributes[SOURCE_IDS_PROPERTY]?.let { sourceId in it } == true)
     }
-
-    val timeSinceLastUpdate: Long
-            get() = SystemClock.elapsedRealtime() - lastUpdate
 
     fun reset(): AppAuthState {
         return Builder().build()
@@ -99,9 +85,7 @@ class AppAuthState private constructor(builder: Builder) {
             it.userId = userId
             it.token = token
             it.tokenType = tokenType
-            it.expiration = expiration
             it.authenticationSource = authenticationSource
-            it.isPrivacyPolicyAccepted = isPrivacyPolicyAccepted
 
             it.attributes += attributes
             it.sourceMetadata += sourceMetadata
@@ -125,8 +109,7 @@ class AppAuthState private constructor(builder: Builder) {
         var token: String? = null
         var authenticationSource: String? = null
         var tokenType = AUTH_TYPE_UNKNOWN
-        var expiration: Long = 0
-        var isPrivacyPolicyAccepted = false
+        var isValid: Boolean = false
         val sourceTypes: MutableCollection<SourceType> = mutableListOf()
 
         fun parseAttributes(jsonString: String?) {
@@ -139,7 +122,7 @@ class AppAuthState private constructor(builder: Builder) {
         }
 
         fun invalidate() {
-            expiration = 0L
+            isValid = false
         }
 
         fun setHeader(name: String, value: String) {
@@ -186,13 +169,10 @@ class AppAuthState private constructor(builder: Builder) {
                 userId='$userId',
                 token='$token',
                 tokenType=$tokenType,
-                expiration=$expiration,
-                lastUpdate=$lastUpdate,
                 attributes=$attributes,
                 sourceTypes=$sourceTypes,
                 sourceMetadata=$sourceMetadata,
                 parseHeaders=$headers,
-                isPrivacyPolicyAccepted=$isPrivacyPolicyAccepted,
             }
         """.trimIndent()
     }
@@ -205,12 +185,10 @@ class AppAuthState private constructor(builder: Builder) {
         AppAuthState::tokenType,
         AppAuthState::authenticationSource,
         AppAuthState::needsRegisteredSources,
-        AppAuthState::expiration,
         AppAuthState::attributes,
         AppAuthState::headers,
         AppAuthState::sourceMetadata,
         AppAuthState::sourceTypes,
-        AppAuthState::isPrivacyPolicyAccepted,
     )
 
     override fun hashCode(): Int = Objects.hash(projectId, userId, token)

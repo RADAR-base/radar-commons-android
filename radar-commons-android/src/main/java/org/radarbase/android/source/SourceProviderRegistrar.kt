@@ -14,7 +14,6 @@ class SourceProviderRegistrar(
     private val providers: List<SourceProvider<*>>,
     val onUpdate: (unregisteredProviders: List<SourceProvider<*>>, registeredProviders: List<SourceProvider<*>>) -> Unit
 ): LoginListener, Closeable {
-    private val authRegistration: AuthService.LoginListenerRegistration = authServiceBinder.addLoginListener(this)
     private var isClosed: Boolean = false
     private val retry: MutableMap<SourceProvider<*>, Pair<DelayedRetry, SafeHandler.HandlerFuture>> = mutableMapOf()
 
@@ -42,6 +41,12 @@ class SourceProviderRegistrar(
         }
     }
 
+    override fun loginFailed(manager: LoginManager?, ex: Exception?) {
+    }
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+    }
+
     private fun registerProvider(provider: SourceProvider<*>, authState: AppAuthState) {
         if (isClosed) {
             return
@@ -64,11 +69,6 @@ class SourceProviderRegistrar(
         })
     }
 
-    override fun loginFailed(manager: LoginManager?, ex: Exception?) {
-    }
-
-    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
-
     private fun resetRetry() {
         retry.values.forEach { (_, future) ->
             future.cancel()
@@ -77,7 +77,6 @@ class SourceProviderRegistrar(
     }
 
     override fun close() {
-        authServiceBinder.removeLoginListener(authRegistration)
         handler.executeReentrant {
             resetRetry()
             isClosed = true

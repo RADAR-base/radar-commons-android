@@ -24,9 +24,8 @@ import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
-import org.radarbase.android.RadarApplication.Companion.radarApp
-import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.RadarService
 import org.radarbase.android.auth.*
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.data.DataHandler
@@ -81,7 +80,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         get() = !needsRegisteredSources || acceptableSources.isNotEmpty()
 
     private lateinit var authConnection: AuthServiceConnection
-    protected lateinit var config: RadarConfiguration
+    protected var config: RadarConfiguration? = null
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
     private lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
@@ -159,17 +158,19 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
         authConnection = AuthServiceConnection(this, this)
 
-        radarConnection = ManagedServiceConnection(this, radarApp.radarService)
+        radarConnection = ManagedServiceConnection(this, RadarService::class.java)
         radarConnection.onBoundListeners.add { binder ->
             dataHandler = binder.dataHandler
+            config = binder.configuration
+                .also { it.config.observe(this, ::configure) }
             handler.execute {
                 startFuture?.runNow()
             }
         }
+        radarConnection.onUnboundListeners.add {
+            config = null
+        }
         radarConnection.bind()
-
-        radarConfig.config.observe(this, ::configure)
-        config = radarConfig
 
         sourceManager = null
         startFuture = null
@@ -184,34 +185,32 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         authConnection.unbind()
 
         stopRecording()
-
-        radarApp.onSourceServiceDestroy(this)
     }
 
     @CallSuper
     protected open fun configure(config: SingleRadarConfiguration) {
-        sourceManager?.let { configureSourceManager(it, config) }
+        handler.execute {
+            sourceManager?.let { configureSourceManager(it, config) }
+        }
     }
 
     protected open fun configureSourceManager(manager: SourceManager<T>, config: SingleRadarConfiguration) {}
 
     override fun onBind(intent: Intent): SourceServiceBinder<T> {
         super.onBind(intent)
-        doBind(intent, true)
+        doBind(intent)
         return mBinder
     }
 
     @CallSuper
     override fun onRebind(intent: Intent) {
-        doBind(intent, false)
+        doBind(intent)
     }
 
-    private fun doBind(intent: Intent, firstBind: Boolean) {
+    private fun doBind(intent: Intent) {
         logger.debug("Received (re)bind in {}", this)
         val extras = BundleSerialization.getPersistentExtras(intent, this) ?: Bundle()
         onInvocation(extras)
-
-        radarApp.onSourceServiceInvocation(this, extras, firstBind)
     }
 
     override fun onUnbind(intent: Intent): Boolean {
@@ -222,6 +221,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     override fun sourceFailedToConnect(name: String) {
         broadcaster.send(SOURCE_CONNECT_FAILED) {
             putExtra(SOURCE_SERVICE_CLASS, this@SourceService.javaClass.name)
+            putExtra(SOURCE_PLUGIN_NAME, this@SourceService.pluginName)
             putExtra(SOURCE_STATUS_NAME, name)
         }
     }
@@ -229,6 +229,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private fun broadcastSourceStatus(name: String?, status: SourceStatusListener.Status) {
         broadcaster.send(SOURCE_STATUS_CHANGED) {
             putExtra(SOURCE_STATUS_CHANGED, status.ordinal)
+            putExtra(SOURCE_PLUGIN_NAME, this@SourceService.pluginName)
             putExtra(SOURCE_SERVICE_CLASS, this@SourceService.javaClass.name)
             name?.let { putExtra(SOURCE_STATUS_NAME, it) }
         }
@@ -306,7 +307,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 logger.info("Starting recording now for {}", name)
                 val manager = createSourceManager()
                 sourceManager = manager
-                configureSourceManager(manager, radarConfig.latestConfig)
+                configureSourceManager(manager, config?.latestConfig
+                    ?: SingleRadarConfiguration(RadarConfiguration.RemoteConfigStatus.INITIAL, mapOf()))
                 if (state.status == SourceStatusListener.Status.UNAVAILABLE) {
                     logger.info("Status is unavailable. Not starting manager yet.")
                 } else {
@@ -500,6 +502,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         const val CACHE_TOPIC = PREFIX + "DataCache.topic"
         const val CACHE_RECORDS_UNSENT_NUMBER = PREFIX + "DataCache.numberOfRecords.first"
         const val SOURCE_SERVICE_CLASS = PREFIX + "SourceService.getClass"
+        const val SOURCE_PLUGIN_NAME = PREFIX + "SourceService.pluginName"
         const val SOURCE_STATUS_CHANGED = PREFIX + "SourceStatusListener.Status"
         const val SOURCE_STATUS_NAME = PREFIX + "SourceManager.getName"
         const val SOURCE_CONNECT_FAILED = PREFIX + "SourceStatusListener.sourceFailedToConnect"

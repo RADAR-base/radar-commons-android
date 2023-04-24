@@ -21,7 +21,10 @@ import org.radarbase.android.util.equalTo
 import java.util.*
 
 @Suppress("unused")
-class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus, val config: Map<String, String>) {
+class SingleRadarConfiguration(
+    val status: RadarConfiguration.RemoteConfigStatus,
+    val config: Map<String, String>,
+) {
     val keys: Set<String> = config.keys
 
     /**

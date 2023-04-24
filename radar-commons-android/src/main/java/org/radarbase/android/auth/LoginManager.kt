@@ -16,8 +16,8 @@
 
 package org.radarbase.android.auth
 
-import android.app.Activity
 import androidx.annotation.Keep
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.producer.AuthenticationException
 
 /** Manage a single login method.  */
@@ -28,47 +28,6 @@ interface LoginManager {
      * @return non-empty list of source types.
      */
     val sourceTypes: List<String>
-
-    /**
-     * With or without user interaction, refresh the current authentication state. The result will
-     * be passed to a LoginListener.
-     * @return whether the current login manager will attempt to refresh the authentication state.
-     */
-    fun refresh(authState: AppAuthState): Boolean
-
-    /**
-     * Without user interaction, assess whether the current authentication state was valid under the
-     * current login manager. This allows the app to continue if no internet connection is currently
-     * available.
-     * @return true if the authentication state was valid for the current login manager, false
-     * otherwise.
-     */
-    fun isRefreshable(authState: AppAuthState): Boolean
-
-    /**
-     * Start to perform a login attempt. This may be asynchronous. At the end of the
-     * login attempt, call [LoginActivity.loginSucceeded] or
-     * [LoginActivity.loginFailed].
-     *
-     * @param authState current authentication state
-     */
-    fun start(authState: AppAuthState)
-
-    /**
-     * Initialization at the end of [LoginActivity.onCreate].
-     * @param activity the activity that was created
-     * @return whether the current login manager will act on this call
-     */
-    fun onActivityCreate(activity: Activity): Boolean
-
-    /**
-     * Invalidate the authentication state
-     * @param authState current authentication state
-     * @param disableRefresh disable any refresh capability that the current state may have
-     * @return invalidated state, or `null` if the current loginManager cannot invalidate
-     * the token.
-     */
-    fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState?
 
     /**
      * Register a source.
@@ -84,7 +43,7 @@ interface LoginManager {
                        success: (AppAuthState, SourceMetadata) -> Unit,
                        failure: (Exception?) -> Unit): Boolean
 
-    fun onDestroy()
+    fun configure(config: SingleRadarConfiguration)
 
     fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean
 

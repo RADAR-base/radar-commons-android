@@ -2,8 +2,6 @@ package org.radarbase.android.config
 
 import android.content.Context
 import androidx.lifecycle.MutableLiveData
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.BASE_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_DEFAULT
@@ -108,16 +106,11 @@ class CombinedRadarConfig(
     override fun toString(): String = latestConfig.toString()
 
     override fun updateWithAuthState(context: Context, appAuthState: AppAuthState?) {
-        val enableAnalytics = appAuthState?.isPrivacyPolicyAccepted == true
-        logger.debug("Setting Firebase Analytics enabled: {}", enableAnalytics)
-        FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(enableAnalytics)
-
         appAuthState ?: return
 
         val baseUrl = appAuthState.baseUrl
         val projectId = appAuthState.projectId
         val userId = appAuthState.userId
-        val crashlytics = FirebaseCrashlytics.getInstance()
 
         baseUrl?.let {
             put(BASE_URL_KEY, baseUrl)
@@ -126,19 +119,15 @@ class CombinedRadarConfig(
             put(RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY, "$baseUrl/managementportal/")
             put(RadarConfiguration.OAUTH2_TOKEN_URL, "$baseUrl/managementportal/oauth/token")
             put(RadarConfiguration.OAUTH2_AUTHORIZE_URL, "$baseUrl/managementportal/oauth/authorize")
-            crashlytics.setCustomKey(BASE_URL_KEY, baseUrl)
         }
 
         projectId?.let {
             put(PROJECT_ID_KEY, it)
-            crashlytics.setCustomKey(PROJECT_ID_KEY, projectId)
         }
         userId?.let {
             put(USER_ID_KEY, it)
             put(RadarConfiguration.READABLE_USER_ID_KEY, appAuthState.humanReadableUserId ?: it)
             put(RadarConfiguration.EXTERNAL_USER_ID_KEY, appAuthState.externalUserId ?: it)
-            crashlytics.setUserId(userId)
-            crashlytics.setCustomKey(USER_ID_KEY, userId)
         }
 
         persistChanges()

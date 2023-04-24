@@ -214,13 +214,6 @@ class KafkaDataSubmitter(
         ?: mappingFunction(key).also { put(key, it) }
 
     /**
-     * Check the connection status eventually.
-     */
-    fun checkConnection() {
-        connection.check()
-    }
-
-    /**
      * Upload the caches if they would cause the buffer to overflow
      */
     private fun uploadCachesIfNeeded(): Boolean {

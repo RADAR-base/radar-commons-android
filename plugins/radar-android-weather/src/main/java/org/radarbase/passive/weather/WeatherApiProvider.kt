@@ -19,11 +19,13 @@ package org.radarbase.passive.weather
 import android.Manifest.permission.*
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.annotation.Keep
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
 
+@Keep
 open class WeatherApiProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val description: String?
         get() = radarService.getString(R.string.weather_api_description)

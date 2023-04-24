@@ -39,15 +39,15 @@ class LocalConfiguration(context: Context) : LocalConfig {
     }
 
     override fun persistChanges(): Boolean {
-        if (hasChange.compareAndSet(true, false)) {
+        return if (hasChange.compareAndSet(true, false)) {
             val editor = preferences.edit()
             config.forEach { (key, value) ->
                 editor.putString(key, value)
             }
             editor.apply()
-            return true
+            true
         } else {
-            return false
+            false
         }
     }
 

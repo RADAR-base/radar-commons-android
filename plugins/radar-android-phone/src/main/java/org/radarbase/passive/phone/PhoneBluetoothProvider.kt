@@ -16,9 +16,7 @@
 
 package org.radarbase.passive.phone
 
-import android.Manifest.permission.*
 import android.content.pm.PackageManager
-import android.os.Build
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState

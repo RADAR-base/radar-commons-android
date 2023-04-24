@@ -28,7 +28,7 @@ fun LocalBroadcastManager.register(action: String, listener: (Context, Intent) -
 
 fun LocalBroadcastManager.send(action: String, intent: (Intent.() -> Unit)? = null) {
     val broadcast = Intent(action)
-    intent?.let { broadcast.apply(it) }
+    intent?.invoke(broadcast)
     sendBroadcast(broadcast)
 }
 

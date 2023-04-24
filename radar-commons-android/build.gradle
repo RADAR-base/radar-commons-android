@@ -45,11 +45,6 @@ dependencies {
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
     api "androidx.lifecycle:lifecycle-service:2.5.1"
-
-    implementation platform('com.google.firebase:firebase-bom:30.4.1')
-    implementation 'com.google.firebase:firebase-analytics'
-    implementation 'com.google.firebase:firebase-config'
-    implementation 'com.google.firebase:firebase-crashlytics'
     implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.4'
 }
 
