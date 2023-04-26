@@ -16,7 +16,6 @@
 
 package org.radarbase.passive.bittium
 
-import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener

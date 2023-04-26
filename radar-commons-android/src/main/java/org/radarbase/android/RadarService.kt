@@ -49,7 +49,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.HashSet
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
-    private lateinit var notificationHandler: NotificationHandler
     private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
 
@@ -106,6 +105,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             add(POST_NOTIFICATIONS)
         }
     }
+    private lateinit var notificationHandler: NotificationHandler
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -127,6 +127,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         ) {
             emptyMap()
         }
+        serverStatus = ServerStatusListener.Status.DISABLED
+        notificationHandler = NotificationHandler(this)
         binder = createBinder()
         mHandler = SafeHandler.getInstance("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
             start()
@@ -572,7 +574,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         const val ACTION_PROVIDERS_UPDATED = "$RADAR_PACKAGE.ACTION_PROVIDERS_UPDATED"
 
         private const val BLUETOOTH_NOTIFICATION = 521290
-
         private const val BACKGROUND_REQUEST_CODE = 9559
 
         fun Collection<String>.sanitizeIds(): Set<String> = mapNotNullTo(HashSet(), String::takeTrimmedIfNotEmpty)

@@ -2,7 +2,6 @@ package org.radarbase.android.util
 
 import android.os.Handler
 import android.os.HandlerThread
-import android.os.Looper
 import androidx.annotation.Keep
 import org.radarbase.android.util.SafeHandler.Companion.getInstance
 import org.slf4j.LoggerFactory
