@@ -29,6 +29,8 @@ interface LoginManager {
      */
     val sourceTypes: List<String>
 
+    fun fetch(appAuth: AppAuthState): AppAuthState?
+
     /**
      * Register a source.
      * @param authState authentication state

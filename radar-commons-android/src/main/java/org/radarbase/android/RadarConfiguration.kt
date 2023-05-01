@@ -111,6 +111,17 @@ interface RadarConfiguration {
         const val SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true
         const val SEND_BINARY_CONTENT_DEFAULT = true
 
+        @get:Synchronized
+        @set:Synchronized
+        var instance: RadarConfiguration? = null
+
+        fun getInstance(context: Context) = instance
+            ?: CombinedRadarConfig(
+                localConfig = LocalConfiguration(context.applicationContext),
+                remoteConfigs = emptyList(),
+                defaultsFactory = { emptyMap() },
+            ).also { instance = it }
+
         @SuppressLint("ApplySharedPref")
         fun getOrSetUUID(context: Context, key: String): String {
             val prefs = context.getSharedPreferences("global", Context.MODE_PRIVATE)

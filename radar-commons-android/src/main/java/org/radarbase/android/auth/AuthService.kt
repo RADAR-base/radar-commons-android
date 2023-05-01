@@ -1,6 +1,5 @@
 package org.radarbase.android.auth
 
-import android.app.Service
 import android.content.Intent
 import android.content.Intent.*
 import android.os.Binder
@@ -8,6 +7,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.Keep
+import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager
@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory
 import java.net.ConnectException
 
 @Keep
-open class AuthService : Service(), LoginListener {
+open class AuthService : LifecycleService(), LoginListener {
     private lateinit var mainHandler: Handler
     private lateinit var appAuth: AppAuthState
     lateinit var loginManagers: List<LoginManager>
@@ -33,11 +33,18 @@ open class AuthService : Service(), LoginListener {
 
     override fun onCreate() {
         super.onCreate()
+        config = RadarConfiguration.getInstance(this)
         broadcaster = LocalBroadcastManager.getInstance(this)
         mainHandler = Handler(mainLooper)
         appAuth = AppAuthState()
         handler.start()
         loginManagers = createLoginManagers(appAuth)
+
+        config.config.observe(this) { singleConfig ->
+            loginManagers.forEach {
+                it.configure(singleConfig)
+            }
+        }
 
         configRegistration = addLoginListener(object : LoginListener {
             override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
@@ -45,9 +52,11 @@ open class AuthService : Service(), LoginListener {
             }
 
             override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+                config.updateWithAuthState(this@AuthService, authState)
             }
 
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+                config.updateWithAuthState(this@AuthService, authState)
             }
         })
     }
@@ -115,6 +124,7 @@ open class AuthService : Service(), LoginListener {
     }
 
     override fun onDestroy() {
+        super.onDestroy()
         configRegistration?.let { removeLoginListener(it) }
         handler.stop()
     }
@@ -150,7 +160,24 @@ open class AuthService : Service(), LoginListener {
     )
 
     private fun updateState(update: AppAuthState.Builder.() -> Unit) = handler.executeReentrant {
-        appAuth = appAuth.alter(update)
+        val newAppAuth = appAuth.alter(update)
+        if (
+            newAppAuth.userId == appAuth.userId &&
+            newAppAuth.token == appAuth.token &&
+            newAppAuth.baseUrl == appAuth.baseUrl
+        ) {
+            return@executeReentrant
+        }
+        if (newAppAuth.userId != null && newAppAuth.token != null) {
+            var latestAuthState = newAppAuth
+            loginManagers.forEach {
+                val managerAuthState = it.fetch(latestAuthState)
+                if (managerAuthState != null) {
+                    latestAuthState = managerAuthState
+                }
+            }
+            loginSucceeded(null, latestAuthState)
+        }
     }
 
     private fun applyState(function: AppAuthState.() -> Unit) = handler.executeReentrant {
@@ -200,7 +227,8 @@ open class AuthService : Service(), LoginListener {
         }
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(intent: Intent): IBinder? {
+        super.onBind(intent)
         return AuthServiceBinder()
     }
 

@@ -28,6 +28,16 @@ class ManagementPortalLoginManager(state: AppAuthState) : LoginManager {
 
     override val sourceTypes: List<String> = listOf(SOURCE_TYPE)
 
+    override fun fetch(appAuth: AppAuthState): AppAuthState? {
+        val client = client ?: return null
+        appAuth.userId ?: return null
+        appAuth.token ?: return null
+        appAuth.baseUrl ?: return null
+        val newAuthState = client.getSubject(appAuth, GetSubjectParser(appAuth))
+        updateSources(newAuthState)
+        return newAuthState
+    }
+
     override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
         logger.debug("Handling source update")
 
@@ -145,11 +155,11 @@ class ManagementPortalLoginManager(state: AppAuthState) : LoginManager {
 
     private fun updateSources(authState: AppAuthState) {
         authState.sourceMetadata
-                .forEach { sourceMetadata ->
-                    sourceMetadata.sourceId?.let {
-                        sources[it] = sourceMetadata
-                    }
+            .forEach { sourceMetadata ->
+                sourceMetadata.sourceId?.let {
+                    sources[it] = sourceMetadata
                 }
+            }
     }
 
     @Synchronized

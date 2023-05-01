@@ -26,10 +26,15 @@ import org.radarbase.android.util.TimedLong
 import org.radarcns.kafka.ObservationKey
 
 interface IRadarBinder : IBinder {
+
     val serverStatus: ServerStatusListener.Status
 
     val latestNumberOfRecordsSent: TimedLong
 
+    /** List of all possible plugins. */
+    val plugins: List<SourceProvider<*>>
+
+    /** List of all activated plugins. */
     val connections: List<SourceProvider<*>>
 
     val dataHandler: DataHandler<ObservationKey, SpecificRecord>?

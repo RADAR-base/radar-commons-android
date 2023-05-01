@@ -39,6 +39,7 @@ import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.*
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
+import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarcns.kafka.ObservationKey
@@ -91,6 +92,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             if (value == ServerStatusListener.Status.DISCONNECTED) {
                 this.latestNumberOfRecordsSent = TimedLong(-1)
             }
+            broadcaster.send(SERVER_STATUS_CHANGED) {
+                putExtra(SERVER_STATUS_CHANGED, value.name)
+            }
         }
 
     private val needsPermissions = LinkedHashSet<String>()
@@ -121,12 +125,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     override fun onCreate() {
         super.onCreate()
-        configuration = CombinedRadarConfig(
-            LocalConfiguration(this),
-            listOf()
-        ) {
-            emptyMap()
-        }
+        configuration = RadarConfiguration.getInstance(this)
         serverStatus = ServerStatusListener.Status.DISABLED
         notificationHandler = NotificationHandler(this)
         binder = createBinder()
@@ -512,6 +511,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         override val latestNumberOfRecordsSent: TimedLong
             get() = this@RadarService.latestNumberOfRecordsSent
+
+        override val plugins: List<SourceProvider<*>>
+            get() = this@RadarService.plugins
 
         override val connections: List<SourceProvider<*>>
             get() = mConnections
