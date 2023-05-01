@@ -29,8 +29,6 @@ import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.auth.*
-import org.radarbase.android.config.CombinedRadarConfig
-import org.radarbase.android.config.LocalConfiguration
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.data.CacheStore
 import org.radarbase.android.data.DataHandler
@@ -47,7 +45,6 @@ import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.HashSet
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private lateinit var mainHandler: Handler
@@ -93,7 +90,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 this.latestNumberOfRecordsSent = TimedLong(-1)
             }
             broadcaster.send(SERVER_STATUS_CHANGED) {
-                putExtra(SERVER_STATUS_CHANGED, value.name)
+                putExtra(SERVER_STATUS_CHANGED, value.ordinal)
             }
         }
 

@@ -14,20 +14,26 @@ class LocalConfiguration(context: Context) : LocalConfig {
     private val hasChange: AtomicBoolean = AtomicBoolean(false)
     private val preferences: SharedPreferences = context.getSharedPreferences("org.radarbase.android.config.LocalConfiguration", MODE_PRIVATE)
 
-    override val config: ConcurrentMap<String, String> = preferences.all
-            .mapNotNull { (k, v) ->
-                if (v is String) Pair(k, v) else null
+    override val config: ConcurrentMap<String, String> = ConcurrentHashMap<String, String>().apply {
+        preferences.all.forEach { (k, v) ->
+            if (v is String) {
+                put(k, v)
             }
-            .toMap(ConcurrentHashMap())
+        }
+    }
 
     override fun put(key: String, value: Any): String? {
-        require((value is String
-                || value is Long
-                || value is Int
-                || value is Float
-                || value is Boolean)) { ("Cannot put value of type " + value.javaClass
-                + " into RadarConfiguration") }
-        val stringValue = value as? String ?: value.toString()
+        val stringValue: String = if (value is String) {
+            value
+        } else {
+            require(
+                    value is Long ||
+                        value is Int ||
+                        value is Float ||
+                        value is Boolean
+            ) { "Cannot put value of type ${value.javaClass} into RadarConfiguration" }
+            value.toString()
+        }
         val oldValue = config[key]
         if (stringValue.isNotEmpty()) {
             if (oldValue != stringValue) {
@@ -57,7 +63,7 @@ class LocalConfiguration(context: Context) : LocalConfig {
                 config.clear()
                 hasChange.set(true)
             }
-        } else if (config.keys.removeAll(keys)) {
+        } else if (config.keys.removeAll(keys.toHashSet())) {
             hasChange.set(true)
         }
     }
