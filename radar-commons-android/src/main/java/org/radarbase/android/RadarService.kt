@@ -102,9 +102,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             add(FOREGROUND_SERVICE)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            add(POST_NOTIFICATIONS)
-        }
+        // TODO: Uncomment for SDK 33
+        // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        //     add(POST_NOTIFICATIONS)
+        // }
     }
     private lateinit var notificationHandler: NotificationHandler
 
