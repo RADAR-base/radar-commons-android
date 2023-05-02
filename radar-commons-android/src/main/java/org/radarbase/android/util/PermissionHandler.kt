@@ -7,6 +7,7 @@ import android.app.AlertDialog
 import android.app.AppOpsManager
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Context.LOCATION_SERVICE
 import android.content.Intent
 import android.content.pm.PackageManager.PERMISSION_DENIED
 import android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -259,7 +260,7 @@ open class PermissionHandler(
             needsPermissions += buildList(newPermissions.size + 1) {
                 addAll(newPermissions)
                 if (contains(ACCESS_FINE_LOCATION) || contains(ACCESS_COARSE_LOCATION)) {
-                    add(LifecycleService.LOCATION_SERVICE)
+                    add(LOCATION_SERVICE)
                 }
             }.filter { it.isNotEmpty() && !activity.isPermissionGranted(it) }
 
@@ -306,7 +307,7 @@ open class PermissionHandler(
         private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 232619697 and 0xFFFF
 
         fun Context.isPermissionGranted(permission: String): Boolean = when (permission) {
-            LifecycleService.LOCATION_SERVICE -> applySystemService<LocationManager>(Context.LOCATION_SERVICE) { locationManager ->
+            LOCATION_SERVICE -> applySystemService<LocationManager>(Context.LOCATION_SERVICE) { locationManager ->
                 locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
                         || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
             } ?: true
