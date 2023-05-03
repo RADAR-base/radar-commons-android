@@ -108,6 +108,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             add(POST_NOTIFICATIONS)
         }
     }
+    private lateinit var notificationHandler: NotificationHandler
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -124,6 +125,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     override fun onCreate() {
         super.onCreate()
         serverStatus = ServerStatusListener.Status.DISABLED
+        notificationHandler = NotificationHandler(this)
         binder = createBinder()
         mHandler = SafeHandler.getInstance("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
             start()
@@ -186,7 +188,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     .filter { it.needsBluetooth() }
                     .forEach { it.stopRecording() }
 
-                bluetoothNotification = radarApp.notificationHandler.notify(
+                bluetoothNotification = notificationHandler.notify(
                     BLUETOOTH_NOTIFICATION,
                     NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
                     false
@@ -213,7 +215,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     protected open fun createForegroundNotification(): Notification {
         val mainIntent = Intent(this, radarApp.mainActivity)
-        return radarApp.notificationHandler.create(
+        return notificationHandler.create(
             NOTIFICATION_CHANNEL_INFO,
             true
         ) {
