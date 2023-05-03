@@ -74,9 +74,9 @@ class ApplicationStatusManager(
 
     private lateinit var tzOffsetCache: ChangeRunner<Int>
     private lateinit var deviceInfoCache: ChangeRunner<ApplicationInfo>
-    private lateinit var serverStatusReceiver: BroadcastRegistration
-    private lateinit var serverRecordsReceiver: BroadcastRegistration
-    private lateinit var cacheReceiver: BroadcastRegistration
+    private var serverStatusReceiver: BroadcastRegistration? = null
+    private var serverRecordsReceiver: BroadcastRegistration? = null
+    private var cacheReceiver: BroadcastRegistration? = null
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
@@ -266,9 +266,9 @@ class ApplicationStatusManager(
 
     override fun onClose() {
         this.processor.close()
-        cacheReceiver.unregister()
-        serverRecordsReceiver.unregister()
-        serverStatusReceiver.unregister()
+        cacheReceiver?.unregister()
+        serverRecordsReceiver?.unregister()
+        serverStatusReceiver?.unregister()
     }
 
     private fun processTimeZone() {

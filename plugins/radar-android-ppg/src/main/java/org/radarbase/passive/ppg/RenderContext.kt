@@ -129,10 +129,8 @@ internal class RenderContext(context: Context, dimensions: Size) : Closeable {
         val RENDER_CONTEXT_RELEASER: CountedReference<Unit> = CountedReference(
                 creator = {},
                 destroyer = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        logger.info("Releasing RenderScript context")
-                        RenderScript.releaseAllContexts()
-                    }
+                    logger.info("Releasing RenderScript context")
+                    RenderScript.releaseAllContexts()
                 })
     }
 }
