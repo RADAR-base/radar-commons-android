@@ -19,11 +19,19 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
 
     <application android:allowBackup="true">
-        <service android:name=".PhoneSensorService"/>
+        <service android:name=".PhoneSensorService"
+            android:exported="false"
+            android:description="Service that monitors Android hardware sensors." />
         <service android:name=".PhoneLocationService"
-            android:foregroundServiceType="location"/>
-        <service android:name=".PhoneContactsListService"/>
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="Service that monitors current GPS and/or network location." />
+        <service android:name=".PhoneContactsListService"
+            android:exported="false"
+            android:description="Service that monitors contact list size." />
         <service android:name=".PhoneBluetoothService"
-            android:foregroundServiceType="location"/>
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="Service that monitors bluetooth usage." />
     </application>
 </manifest>

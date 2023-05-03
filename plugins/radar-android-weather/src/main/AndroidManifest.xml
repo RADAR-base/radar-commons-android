@@ -8,6 +8,8 @@
 
     <application>
         <service android:name=".WeatherApiService"
-            android:foregroundServiceType="location"/>
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="Sevice which collects weather data based on phone location." />
     </application>
 </manifest>
