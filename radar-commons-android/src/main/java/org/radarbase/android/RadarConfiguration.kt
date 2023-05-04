@@ -111,10 +111,9 @@ interface RadarConfiguration {
         const val SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true
         const val SEND_BINARY_CONTENT_DEFAULT = true
 
-        @get:Synchronized
-        @set:Synchronized
-        var instance: RadarConfiguration? = null
+        private var instance: RadarConfiguration? = null
 
+        @Synchronized
         fun getInstance(context: Context) = instance
             ?: CombinedRadarConfig(
                 localConfig = LocalConfiguration(context.applicationContext),
