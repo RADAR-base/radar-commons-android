@@ -37,6 +37,8 @@ interface IRadarBinder : IBinder {
     /** List of all activated plugins. */
     val connections: List<SourceProvider<*>>
 
+    val permissionsNeeded: List<String>
+
     val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
 
     fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>)

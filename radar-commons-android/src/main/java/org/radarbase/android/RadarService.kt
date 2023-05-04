@@ -513,6 +513,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         override val plugins: List<SourceProvider<*>>
             get() = this@RadarService.plugins
 
+        override val permissionsNeeded: List<String>
+            get() = this@RadarService.servicePermissions
+
         override val connections: List<SourceProvider<*>>
             get() = mConnections
 
