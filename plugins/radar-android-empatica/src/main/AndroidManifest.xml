@@ -20,6 +20,8 @@
     <application android:allowBackup="true">
         <service
             android:name=".E4Service"
-            android:foregroundServiceType="location"/>
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="Service which intercat with Empatica." />
     </application>
 </manifest>
