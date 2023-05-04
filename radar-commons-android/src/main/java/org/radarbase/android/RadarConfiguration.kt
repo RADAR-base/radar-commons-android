@@ -113,13 +113,20 @@ interface RadarConfiguration {
 
         private var instance: RadarConfiguration? = null
 
-        @Synchronized
-        fun getInstance(context: Context) = instance
-            ?: CombinedRadarConfig(
+        @get:Synchronized
+        @set:Synchronized
+        var instanceCreator: (Context) -> RadarConfiguration = { context ->
+            CombinedRadarConfig(
                 localConfig = LocalConfiguration(context.applicationContext),
                 remoteConfigs = emptyList(),
                 defaultsFactory = { emptyMap() },
-            ).also { instance = it }
+            )
+        }
+
+        @Synchronized
+        fun getInstance(context: Context) = instance
+            ?: instanceCreator(context.applicationContext)
+                .also { instance = it }
 
         @SuppressLint("ApplySharedPref")
         fun getOrSetUUID(context: Context, key: String): String {

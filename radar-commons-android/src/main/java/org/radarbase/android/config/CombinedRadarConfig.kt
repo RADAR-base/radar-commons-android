@@ -83,11 +83,11 @@ class CombinedRadarConfig(
     }
 
     private fun readConfig() = SingleRadarConfiguration(status, HashMap<String, String>().apply {
-        this += defaults
+        putAll(defaults)
         remoteConfigs.forEach {
-            this += it.cache
+            putAll(it.cache)
         }
-        this += localConfig.config
+        putAll(localConfig.config)
     })
 
     override fun reset(vararg keys: String) {

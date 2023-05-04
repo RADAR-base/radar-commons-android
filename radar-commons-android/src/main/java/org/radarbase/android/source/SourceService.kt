@@ -80,7 +80,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         get() = !needsRegisteredSources || acceptableSources.isNotEmpty()
 
     private lateinit var authConnection: AuthServiceConnection
-    protected var config: RadarConfiguration? = null
+    protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
     private lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
@@ -150,6 +150,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         logger.info("Creating SourceService {}", this)
         handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
         super.onCreate()
+        config = RadarConfiguration.getInstance(this)
         sources = emptyList()
         sourceTypes = emptySet()
         broadcaster = LocalBroadcastManager.getInstance(this)
@@ -161,16 +162,12 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         radarConnection = ManagedServiceConnection(this, RadarService::class.java)
         radarConnection.onBoundListeners.add { binder ->
             dataHandler = binder.dataHandler
-            config = binder.configuration
-                .also { it.config.observe(this, ::configure) }
             handler.execute {
                 startFuture?.runNow()
             }
         }
-        radarConnection.onUnboundListeners.add {
-            config = null
-        }
         radarConnection.bind()
+        config.config.observe(this, ::configure)
 
         sourceManager = null
         startFuture = null
@@ -307,8 +304,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                 logger.info("Starting recording now for {}", name)
                 val manager = createSourceManager()
                 sourceManager = manager
-                configureSourceManager(manager, config?.latestConfig
-                    ?: SingleRadarConfiguration(RadarConfiguration.RemoteConfigStatus.INITIAL, mapOf()))
+                configureSourceManager(manager, config.latestConfig)
                 if (state.status == SourceStatusListener.Status.UNAVAILABLE) {
                     logger.info("Status is unavailable. Not starting manager yet.")
                 } else {

@@ -539,9 +539,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         override val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
             get() = this@RadarService.dataHandler
 
-        override val configuration: RadarConfiguration
-            get() = this@RadarService.configuration
-
         override fun needsBluetooth(): Boolean = needsBluetooth.value
 
         override fun flushCaches(callback: DataHandler.FlushCallback) {

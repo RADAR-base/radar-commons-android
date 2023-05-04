@@ -39,8 +39,6 @@ interface IRadarBinder : IBinder {
 
     val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
 
-    val configuration: RadarConfiguration
-
     fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>)
 
     fun startScanning()
