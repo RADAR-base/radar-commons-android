@@ -448,6 +448,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             if (mConnections.toSet() != oldConnections) {
                 broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
+        }.also {
+            authServiceBinder.applyState {
+                if (isValid) {
+                    it.loginSucceeded(null, this)
+                }
+            }
         }
     }
 
@@ -575,6 +581,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         private const val BLUETOOTH_NOTIFICATION = 521290
         private const val BACKGROUND_REQUEST_CODE = 9559
+
+        var serviceClass: Class<out RadarService> = RadarService::class.java
 
         fun Collection<String>.sanitizeIds(): Set<String> = mapNotNullTo(HashSet(), String::takeTrimmedIfNotEmpty)
     }

@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory
 open class AuthServiceConnection(
     context: Context,
     private val listener: LoginListener,
-) : ManagedServiceConnection<AuthService.AuthServiceBinder>(context, AuthService.authServiceClass) {
+) : ManagedServiceConnection<AuthService.AuthServiceBinder>(context, AuthService.serviceClass) {
     private lateinit var registration: AuthService.LoginListenerRegistration
 
     init {

@@ -283,6 +283,6 @@ open class AuthService : LifecycleService(), LoginListener {
         const val RETRY_MIN_DELAY = 5L
         const val RETRY_MAX_DELAY = 86400L
 
-        var authServiceClass: Class<out AuthService> = AuthService::class.java
+        var serviceClass: Class<out AuthService> = AuthService::class.java
     }
 }

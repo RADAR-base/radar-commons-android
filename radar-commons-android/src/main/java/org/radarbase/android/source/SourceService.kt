@@ -159,7 +159,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
         authConnection = AuthServiceConnection(this, this)
 
-        radarConnection = ManagedServiceConnection(this, RadarService::class.java)
+        radarConnection = ManagedServiceConnection(this, RadarService.serviceClass)
         radarConnection.onBoundListeners.add { binder ->
             dataHandler = binder.dataHandler
             handler.execute {

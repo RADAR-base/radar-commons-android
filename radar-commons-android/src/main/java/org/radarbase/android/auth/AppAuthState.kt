@@ -86,6 +86,8 @@ class AppAuthState private constructor(builder: Builder) {
             it.token = token
             it.tokenType = tokenType
             it.authenticationSource = authenticationSource
+            it.isValid = isValid
+            it.needsRegisteredSources = needsRegisteredSources
 
             it.attributes += attributes
             it.sourceMetadata += sourceMetadata
@@ -169,9 +171,11 @@ class AppAuthState private constructor(builder: Builder) {
                 userId='$userId',
                 token='$token',
                 tokenType=$tokenType,
+                isValid='$isValid',
                 attributes=$attributes,
                 sourceTypes=$sourceTypes,
                 sourceMetadata=$sourceMetadata,
+                needsRegisteredSources=$needsRegisteredSources,
                 parseHeaders=$headers,
             }
         """.trimIndent()
@@ -183,6 +187,7 @@ class AppAuthState private constructor(builder: Builder) {
         AppAuthState::userId,
         AppAuthState::token,
         AppAuthState::tokenType,
+        AppAuthState::isValid,
         AppAuthState::authenticationSource,
         AppAuthState::needsRegisteredSources,
         AppAuthState::attributes,

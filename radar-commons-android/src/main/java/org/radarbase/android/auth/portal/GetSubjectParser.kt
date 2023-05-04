@@ -34,7 +34,7 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                 sourceMetadata += parseSources(types, sources)
                 userId = parseUserId(jsonObject)
                 projectId = parseProjectId(project)
-                needsRegisteredSources = true
+                needsRegisteredSources = false
                 authenticationSource = SOURCE_TYPE
 
                 jsonObject.opt("attributes")?.let { attrObjects ->
