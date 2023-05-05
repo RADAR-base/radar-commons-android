@@ -81,12 +81,6 @@ class TableDataHandler(
         this.handlerThread.start()
         this.handlerThread.repeat(10_000L, ::broadcastNumberOfRecords)
 
-        for (value in storageStateTable) {
-            val receiver = StorageLevelReceiver(config.storageStage) { state, topic ->
-                storageStateTable[getCache(topic)] = state
-            }
-        }
-
         this.storageLevelReceiver = StorageLevelReceiver(config.storageStage) { state, topic ->
             storageStateTable[getCache(topic)] = state
             when{
