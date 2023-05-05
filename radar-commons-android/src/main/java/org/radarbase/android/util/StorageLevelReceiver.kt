@@ -3,36 +3,41 @@ package org.radarbase.android.util
 /**
  * Keep track of storage levels.
  */
-class StorageLevelReceiver(private val listener: ((StorageState) -> Unit)? = null ) {
+class StorageLevelReceiver( storageStage: StorageStage = StorageStage(0.75f,1.0f),
+    private val listener: ((StorageState, String) -> Unit)? = null ) {
 
     /** Latest storage level in [0.75,1]
-     *  where 0.75 indicates partial, 75% of storage is full
+     *  where 0.75 - 1 indicates partial, more than
+     *  75% storage is full but not completely full,
      *  and 1 indicates complete storage is full
      */
-    private var level: Float = 0.0f
-        private set
+    var level: Float = 0.0f
+        set(value) {
+            field = value
+            updateState()
+        }
+
+    var topic: String = " "
+        set(value) {
+        field = value }
 
     var state: StorageState = StorageState.AVAILABLE
         private set
 
-    fun setLevel(level: Float) {
-        this.level = level
-        setState()
+    private val _storageStage = ChangeRunner(storageStage)
+
+    private fun updateState() {
+       state = when(level){
+           1.0f -> StorageState.FULL
+           in 0.75f .. 1.0f -> StorageState.PARTIAL
+           else -> StorageState.AVAILABLE
+       }
     }
 
-    private fun setState() {
-        when (level) {
-            0.75f -> {
-                state = StorageState.PARTIAL
-            }
-            1.0f -> {
-                state = StorageState.FULL
-            }
-            else -> {
-                state = StorageState.AVAILABLE
-            }
-        }
-        listener?.let { it(state) }
+    var storageStage: StorageStage
+    get() = _storageStage.value.copy()
+    set(value){
+        _storageStage.applyIfChanged(value.copy()) { listener?.let { it(state, topic) } }
     }
 
     enum class StorageState {

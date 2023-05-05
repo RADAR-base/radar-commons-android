@@ -57,6 +57,7 @@ class TableDataHandler(
     private val networkConnectedReceiver: NetworkConnectedReceiver
     private val handlerThread: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
     private val broadcaster = LocalBroadcastManager.getInstance(context)
+    private val storageStateTable: ConcurrentMap<DataCache<*,*>, StorageLevelReceiver.StorageState> = ConcurrentHashMap()
 
     private var config = DataHandlerConfiguration()
 
@@ -80,17 +81,20 @@ class TableDataHandler(
         this.handlerThread.start()
         this.handlerThread.repeat(10_000L, ::broadcastNumberOfRecords)
 
+        for (value in storageStateTable) {
+            val receiver = StorageLevelReceiver(config.storageStage) { state, topic ->
+                storageStateTable[getCache(topic)] = state
+            }
+        }
 
-        this.storageLevelReceiver = StorageLevelReceiver(){ state->
-            when(state){
-                StorageLevelReceiver.StorageState.FULL-> {
+        this.storageLevelReceiver = StorageLevelReceiver(config.storageStage) { state, topic ->
+            storageStateTable[getCache(topic)] = state
+            when{
+                storageStateTable.values.any { it == StorageLevelReceiver.StorageState.FULL } -> {
                     broadcastStorageFull()
                 }
-                StorageLevelReceiver.StorageState.PARTIAL-> {
+                storageStateTable.values.any { it == StorageLevelReceiver.StorageState.PARTIAL } -> {
                     broadcastStoragePartial()
-                }
-                else-> {
-                    //do Nothing
                 }
             }
         }
@@ -400,6 +404,8 @@ class TableDataHandler(
         }
 
         batteryLevelReceiver.stageLevels = config.batteryStageLevels
+
+        storageLevelReceiver.storageStage = config.storageStage
 
         networkConnectedReceiver.notifyListener()
         start()

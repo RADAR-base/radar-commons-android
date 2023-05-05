@@ -60,12 +60,11 @@ constructor(
     private val measurementsToAdd = mutableListOf<Record<K, V>>()
     private val serializer = serialization.createSerializer(topic)
     private val deserializer = serialization.createDeserializer(readTopic)
-    private val storagelevelreceiver = StorageLevelReceiver(null);
+    private val storagelevelreceiver = StorageLevelReceiver();
 
     private var queueFile: QueueFile
     private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
     private val queueFileFactory = config.queueFileType
-    private var queueSize : Long = 0
 
     private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
     private val configCache = ChangeRunner(config)
@@ -225,14 +224,14 @@ constructor(
         }
         try {
             logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
-            queueSize = numberOfRecords + measurementsToAdd.size.toLong()
-            checkStorageStatus(queueSize)
+            val queueSize = numberOfRecords + measurementsToAdd.size.toLong()
+            updateStorageStatus(queueSize, topic.name)
             queue += measurementsToAdd
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
             throw RuntimeException(ex)
         } catch (ex: IllegalStateException) {
-            setLevelFull()
+            updateLevelFull(topic.name)
             logger.error("Queue {} is full, not adding records", topic.name)
         } catch (ex: IllegalArgumentException) {
             logger.error("Failed to validate all records; adding individual records instead", ex)
@@ -246,7 +245,7 @@ constructor(
                     }
                 }
             } catch (illEx: IllegalStateException) {
-                setLevelFull()
+                updateLevelFull(topic.name)
                 logger.error("Queue {} is full, not adding records", topic.name)
             } catch (ex2: IOException) {
                 logger.error("Failed to add record", ex)
@@ -258,32 +257,16 @@ constructor(
     }
 
     /**
-     *  Comparing the size of queue with maximumSize.
-     *  Tolerance value is used to avoid the problems
-     *  with comparing floating point numbers for
-     *  equality due to rounding errors
+     *  Checking the size of queue and updating the storage status accordingly.
     */
-     fun checkStorageStatus(queueSize: Long) {
-        val threshold = maximumSize * 0.75
-        val size = queueSize.toDouble()
-        if (size >= threshold - 0.0001 && size <= threshold + 0.0001) {
-             setLevelPartial()
-        }
-        else{
-            setLevelAvailable()
-        }
-    }
+     fun updateStorageStatus(queueSize: Long,topic: String) {
+        storagelevelreceiver.topic = topic
+        storagelevelreceiver.level = queueSize.toFloat() / maximumSize.toFloat()
+     }
 
-    private fun setLevelAvailable() {
-        storagelevelreceiver.setLevel(0.0f)
-    }
-
-    private fun setLevelPartial() {
-        storagelevelreceiver.setLevel(0.75f)
-    }
-
-    private fun setLevelFull() {
-        storagelevelreceiver.setLevel(1.0f)
+    private fun updateLevelFull(topic: String) {
+        storagelevelreceiver.topic = topic
+        storagelevelreceiver.level = 1.0f
     }
 
     @Throws(IOException::class)

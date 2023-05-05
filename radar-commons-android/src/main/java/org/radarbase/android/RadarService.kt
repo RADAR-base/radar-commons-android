@@ -47,6 +47,7 @@ import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_
 import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
 import org.radarbase.android.util.*
+import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_ALERT
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
 import org.radarcns.kafka.ObservationKey
@@ -79,6 +80,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
     private lateinit var serverStatusReceiver: BroadcastRegistration
+    private lateinit var storageFullBroadcastReceiver: BroadcastRegistration
+    private lateinit var storagePartialBroadcastReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
     private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
 
@@ -109,6 +112,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private lateinit var broadcaster: LocalBroadcastManager
 
     private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
+    private var storageFullNotification: NotificationHandler.NotificationRegistration? = null
+    private var storagePartialNotification: NotificationHandler.NotificationRegistration? = null
+
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
@@ -151,6 +157,27 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     }
                 }
             }
+                storageFullBroadcastReceiver = register(SourceService.STORAGE_STATE_FULL){ _, _->
+                    storagePartialNotification?.cancel()
+                    storageFullNotification = radarApp.notificationHandler.notify(
+                        STORAGE_FULL_NOTIFICATION,
+                        NOTIFICATION_CHANNEL_ALERT,
+                        false
+                    ){
+                        setContentTitle(getString(R.string.notification_storage_full_title))
+                        setContentText(getString(R.string.notification_storage_full_text))
+                    }
+                }
+                storagePartialBroadcastReceiver = register(SourceService.STORAGE_STATE_PARTIAL){ _, _->
+                    storagePartialNotification = radarApp.notificationHandler.notify(
+                        STORAGE_PARTIAL_NOTIFICATION,
+                        NOTIFICATION_CHANNEL_INFO,
+                        false
+                    ){
+                        setContentTitle(getString(R.string.notification_storage_partial_title))
+                        setContentText(getString(R.string.notification_storage_partial_text))
+                    }
+                }
         }
 
         configuration.config.observe(this, ::configure)
@@ -672,6 +699,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         const val EXTRA_GRANT_RESULTS = "$RADAR_PACKAGE.EXTRA_GRANT_RESULTS"
 
         private const val BLUETOOTH_NOTIFICATION = 521290
+        private const val STORAGE_FULL_NOTIFICATION = 551821
+        private const val STORAGE_PARTIAL_NOTIFICATION = 551820
+
 
         val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
             REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
