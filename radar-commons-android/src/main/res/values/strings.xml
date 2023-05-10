@@ -9,7 +9,14 @@
     <string name="retry_oauth_login">Failed to login to authorization service, please retry</string>
     <string name="login_failed">Failed to log in</string>
     <string name="enable_location">
-        <![CDATA[Location information needed to enable Bluetooth Low Energy. Enable location settings in Settings -> Location]]></string>
+        Location information is needed to enable Bluetooth Low Energy and/or location tracking as
+        part of the study.
+    </string>
+    <string name="enable_location_background">
+        Background location is needed to keep passively collecting data while the app is in the background, either for Bluetooth devices or for actual, relative location.
+    </string>
+    <string name="enable_location_instruction">
+        <![CDATA[Location information needed to enable Bluetooth Low Energy and location tracking. Enable location settings in Settings -> Location]]></string>
     <string name="enable_package_usage">Enable usage access to keep track of what kind of applications you use.</string>
     <string name="enable_location_title">Enable location tracking</string>
     <string name="enable_package_usage_title">Enable usage tracking</string>
