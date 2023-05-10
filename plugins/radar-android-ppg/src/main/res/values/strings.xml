@@ -9,4 +9,5 @@
     <string name="ppg_stop">Stop</string>
     <string name="ppg_display_name">PPG</string>
     <string name="startPpgMeasurement">PPG measurement</string>
+    <string name="phone_ppg_description">Service that measure PPG using the camera of a phone.</string>
 </resources>

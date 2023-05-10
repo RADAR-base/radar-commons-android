@@ -140,6 +140,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
                 longitude, accuracy, altitude, speed, bearing, timestamp)
     }
 
+    @Deprecated("This callback will never be invoked on Android Q and above.")
     override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {}
 
     override fun onProviderEnabled(provider: String) {}

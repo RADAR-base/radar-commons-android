@@ -8,6 +8,8 @@
 
     <application>
         <service android:name=".OpenSmileAudioService"
-            android:foregroundServiceType="microphone"/>
+            android:foregroundServiceType="microphone"
+            android:exported="false"
+            android:description="@string/audio_description" />
     </application>
 </manifest>

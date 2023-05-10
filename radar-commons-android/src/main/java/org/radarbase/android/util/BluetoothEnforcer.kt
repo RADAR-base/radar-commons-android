@@ -13,6 +13,7 @@ import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.ENABLE_BLUETOOTH_REQUESTS
 import org.radarbase.android.RadarService
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 class BluetoothEnforcer(
@@ -114,10 +115,14 @@ class BluetoothEnforcer(
                         .putLong(LAST_REQUEST, System.currentTimeMillis())
                         .apply()
 
-                    context.startActivityForResult(Intent().apply {
-                        action = BluetoothAdapter.ACTION_REQUEST_ENABLE
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }, REQUEST_ENABLE_BT)
+                    try {
+                        context.startActivityForResult(Intent().apply {
+                            action = BluetoothAdapter.ACTION_REQUEST_ENABLE
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }, REQUEST_ENABLE_BT)
+                    } catch (ex: SecurityException) {
+                        logger.warn("Cannot request Bluetooth to be enabled - no permission")
+                    }
                 }
                 isRequestingBluetooth = false
             }, 1000L)
@@ -134,5 +139,7 @@ class BluetoothEnforcer(
         const val REQUEST_ENABLE_BT: Int = 6944
         private const val LAST_REQUEST: String = "lastRequest"
         private const val BLUETOOTH_REQUEST_COOLDOWN = "bluetooth_request_cooldown"
+
+        private val logger = LoggerFactory.getLogger(BluetoothEnforcer::class.java)
     }
 }

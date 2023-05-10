@@ -35,6 +35,9 @@ class FarosManager internal constructor(
         private val farosFactory: FarosSdkFactory,
         private val handler: SafeHandler
 ) : AbstractSourceManager<FarosService, FarosState>(service), FarosDeviceListener, FarosSdkListener {
+    private val notificationHandler by lazy {
+        NotificationHandler(this.service)
+    }
     private var doNotify: Boolean = false
     private val accelerationTopic: DataCache<ObservationKey, BittiumFarosAcceleration> = createCache("android_bittium_faros_acceleration", BittiumFarosAcceleration())
     private val ecgTopic: DataCache<ObservationKey, BittiumFarosEcg> = createCache("android_bittium_faros_ecg", BittiumFarosEcg())
@@ -78,7 +81,7 @@ class FarosManager internal constructor(
                         startMeasurements()
                     }
                 }
-                service.radarApp.notificationHandler.manager?.cancel(FAROS_DISCONNECTED_NOTIFICATION_ID)
+                notificationHandler.manager?.cancel(FAROS_DISCONNECTED_NOTIFICATION_ID)
                 SourceStatusListener.Status.CONNECTED
             }
             FarosDeviceListener.CONNECTING -> SourceStatusListener.Status.CONNECTING
@@ -194,10 +197,11 @@ class FarosManager internal constructor(
 
     override fun disconnect() {
         if (!isClosed && doNotify) {
-            service.radarApp.notificationHandler.notify(
-                    id = FAROS_DISCONNECTED_NOTIFICATION_ID,
-                    channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
-                    includeStartIntent = true) {
+            notificationHandler.notify(
+                id = FAROS_DISCONNECTED_NOTIFICATION_ID,
+                channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                includeStartIntent = true,
+            ) {
                 setContentTitle(service.getString(R.string.notification_faros_disconnected_title))
                 setContentText(service.getString(R.string.notification_faros_disconnected_text))
             }

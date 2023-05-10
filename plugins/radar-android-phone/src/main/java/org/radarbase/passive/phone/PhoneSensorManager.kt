@@ -306,8 +306,9 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         private const val REQUEST_CODE_PENDING_INTENT = 482480668
 
         private fun SparseIntArray.contentsEquals(other: SparseIntArray): Boolean {
-            return size() == other.size()
-                    && (0 until size()).all { keyAt(it) == other.keyAt(it) && valueAt(it) == other.valueAt(it) }
+            return size() == other.size() &&
+                    (0 until size())
+                        .all { keyAt(it) == other.keyAt(it) && valueAt(it) == other.valueAt(it) }
         }
 
         private inline fun <T> SparseArray<T>.computeIfAbsent(key: Int, compute: () -> T) = get(key)

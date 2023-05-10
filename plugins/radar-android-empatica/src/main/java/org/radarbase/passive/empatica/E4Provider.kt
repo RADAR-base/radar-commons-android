@@ -21,6 +21,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothPermissionList
 
 open class E4Provider(radarService: RadarService) : SourceProvider<E4State>(radarService) {
     override val serviceClass = E4Service::class.java
@@ -32,19 +33,7 @@ open class E4Provider(radarService: RadarService) : SourceProvider<E4State>(rada
             "org.radarbase.passive.empatica.E4Provider",
             "org.radarcns.empatica.E4ServiceProvider")
 
-    override val permissionsNeeded = buildList {
-        add(ACCESS_COARSE_LOCATION)
-        add(ACCESS_FINE_LOCATION)
-        add(BLUETOOTH)
-        add(BLUETOOTH_ADMIN)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            add(BLUETOOTH_SCAN)
-            add(BLUETOOTH_CONNECT)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            add(ACCESS_BACKGROUND_LOCATION)
-        }
-    }
+    override val permissionsNeeded = bluetoothPermissionList
 
     override val featuresNeeded = listOf(PackageManager.FEATURE_BLUETOOTH, PackageManager.FEATURE_BLUETOOTH_LE)
 

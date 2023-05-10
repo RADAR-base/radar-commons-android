@@ -12,20 +12,21 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.appcompat.content.res.AppCompatResources.getDrawable
+import androidx.core.graphics.drawable.toBitmap
 import org.radarbase.android.R
-import org.radarbase.android.RadarApplication
 import org.slf4j.LoggerFactory
 
 /**
  * Handle notifications and notification channels.
  */
-class NotificationHandler(private val context: Context) {
-    private var isCreated: Boolean = false
-
+class NotificationHandler(
+    private val context: Context
+) {
     val manager : NotificationManager?
         get() = context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager?
 
-    fun onCreate() {
+    init {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             createNotificationChannels()
         }
@@ -34,12 +35,7 @@ class NotificationHandler(private val context: Context) {
     @RequiresApi(api = Build.VERSION_CODES.O)
     private fun createNotificationChannels() {
         manager?.run {
-            synchronized(this) {
-                if (isCreated) {
-                    return
-                }
-                isCreated = true
-            }
+            if (!shouldCreate()) return
             logger.debug("Creating notification channels")
             createNotificationChannel(NOTIFICATION_CHANNEL_INFO,
                     NotificationManager.IMPORTANCE_LOW,
@@ -164,10 +160,13 @@ class NotificationHandler(private val context: Context) {
     }
 
     private fun Notification.Builder.updateNotificationAppSettings(includeIntent: Boolean) {
-        (context.applicationContext as? RadarApplication)?.let { app ->
-            setLargeIcon(app.largeIcon)
-            setSmallIcon(app.smallIcon)
-        }
+        setLargeIcon(
+            getDrawable(context, R.mipmap.ic_launcher)
+                ?.toBitmap()
+        )
+        setSmallIcon(
+            R.drawable.ic_bt_connected
+        )
 
         if (includeIntent) {
             val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -205,6 +204,18 @@ class NotificationHandler(private val context: Context) {
         const val NOTIFICATION_CHANNEL_FINAL_ALERT = "org.radarbase.android.NotificationHandler.FINAL_ALERT"
 
         private const val NOTIFICATION_REQUEST_CODE = 27581
+
+        private val syncObject = Any()
+        private var isCreated = false
+
+        private fun shouldCreate(): Boolean = synchronized(syncObject) {
+            if (!isCreated) {
+                isCreated = true
+                true
+            } else {
+                false
+            }
+        }
     }
 
     data class NotificationRegistration(

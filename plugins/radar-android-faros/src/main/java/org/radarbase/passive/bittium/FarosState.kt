@@ -48,12 +48,10 @@ class FarosState : BaseSourceState() {
         this.acceleration[2] = z
     }
 
-    override fun toString(): String {
-        return "FarosDeviceStatus{" +
-                "batteryLevel=" + batteryLevel +
-                ", heartRate=" + heartRate +
-                ", temperature=" + temperature +
-                ", acceleration=" + Arrays.toString(acceleration) +
-                '}'.toString()
-    }
+    override fun toString(): String = "FarosDeviceStatus{" +
+            "batteryLevel=" + batteryLevel +
+            ", heartRate=" + heartRate +
+            ", temperature=" + temperature +
+            ", acceleration=" + acceleration.contentToString() +
+            '}'
 }

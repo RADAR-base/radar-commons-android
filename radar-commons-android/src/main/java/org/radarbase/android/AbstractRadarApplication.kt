@@ -31,7 +31,7 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
     private lateinit var innerNotificationHandler: NotificationHandler
 
     override val notificationHandler: NotificationHandler
-        get() = innerNotificationHandler.apply { onCreate() }
+        get() = innerNotificationHandler
 
     override lateinit var configuration: RadarConfiguration
 
@@ -51,7 +51,7 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
         // initialize crashlytics
         HandroidLoggerAdapter.DEBUG = BuildConfig.DEBUG
         HandroidLoggerAdapter.APP_NAME = packageName
-        HandroidLoggerAdapter.enableLoggingToCrashlytics()
+        HandroidLoggerAdapter.enableLoggingToFirebaseCrashlytics()
     }
 
     /**
