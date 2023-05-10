@@ -13,19 +13,17 @@ import android.content.pm.PackageManager.PERMISSION_DENIED
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.location.LocationManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
 import org.radarbase.android.RadarService
+import org.radarbase.android.RadarService.Companion.ACCESS_BACKGROUND_LOCATION_COMPAT
 import org.slf4j.LoggerFactory
 
 
@@ -47,7 +45,7 @@ open class PermissionHandler(
 
             val result = if (granted) PERMISSION_GRANTED else PERMISSION_DENIED
             broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
-                putExtra(RadarService.EXTRA_PERMISSIONS, arrayOf(Context.LOCATION_SERVICE))
+                putExtra(RadarService.EXTRA_PERMISSIONS, arrayOf(LOCATION_SERVICE))
                 putExtra(RadarService.EXTRA_GRANT_RESULTS, intArrayOf(result))
             }
 
@@ -90,8 +88,24 @@ open class PermissionHandler(
 
         when {
             currentlyNeeded.isEmpty() -> logger.info("Already requested all permissions.")
-            Context.LOCATION_SERVICE in currentlyNeeded -> {
-                addRequestingPermissions(Context.LOCATION_SERVICE)
+            ACCESS_COARSE_LOCATION in currentlyNeeded || ACCESS_FINE_LOCATION in currentlyNeeded -> {
+                val locationPermissions = buildSet(2) {
+                    if (ACCESS_COARSE_LOCATION in currentlyNeeded) {
+                        add(ACCESS_COARSE_LOCATION)
+                    }
+                    if (ACCESS_FINE_LOCATION in currentlyNeeded) {
+                        add(ACCESS_FINE_LOCATION)
+                    }
+                }
+                addRequestingPermissions(locationPermissions)
+                requestLocationPermissions(locationPermissions)
+            }
+            ACCESS_BACKGROUND_LOCATION_COMPAT in currentlyNeeded -> {
+                addRequestingPermissions(ACCESS_BACKGROUND_LOCATION_COMPAT)
+                requestBackgroundLocationPermissions()
+            }
+            LOCATION_SERVICE in currentlyNeeded -> {
+                addRequestingPermissions(LOCATION_SERVICE)
                 requestLocationProvider()
             }
             SYSTEM_ALERT_WINDOW in currentlyNeeded -> {
@@ -108,16 +122,50 @@ open class PermissionHandler(
             }
             else -> {
                 addRequestingPermissions(currentlyNeeded)
-                try {
-                    ActivityCompat.requestPermissions(
-                        activity,
-                        currentlyNeeded.toTypedArray(),
-                        REQUEST_ENABLE_PERMISSIONS,
-                    )
-                } catch (ex: IllegalStateException) {
-                    logger.warn("Cannot request permission on closing activity")
-                }
+                requestPermissions(currentlyNeeded)
             }
+        }
+    }
+
+    private fun requestBackgroundLocationPermissions() {
+        alertDialog {
+            setTitle(R.string.enable_location_title)
+            setMessage(R.string.enable_location_background)
+            setPositiveButton(android.R.string.ok) { dialog, _ ->
+                dialog.dismiss()
+                requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
+            }
+            setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                dialog.cancel()
+                requestPermissions()
+            }
+        }
+    }
+
+    private fun requestLocationPermissions(locationPermissions: Set<String>) {
+        alertDialog {
+            setTitle(R.string.enable_location_title)
+            setMessage(R.string.enable_location)
+            setPositiveButton(android.R.string.ok) { dialog, _ ->
+                dialog.dismiss()
+                requestPermissions(locationPermissions)
+            }
+            setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                dialog.cancel()
+                requestPermissions()
+            }
+        }
+    }
+
+    private fun requestPermissions(permissions: Set<String>) {
+        try {
+            ActivityCompat.requestPermissions(
+                activity,
+                permissions.toTypedArray(),
+                REQUEST_ENABLE_PERMISSIONS,
+            )
+        } catch (ex: IllegalStateException) {
+            logger.warn("Cannot request permission on closing activity")
         }
     }
 
@@ -146,8 +194,8 @@ open class PermissionHandler(
         try {
             activity.runOnUiThread {
                 AlertDialog.Builder(activity, android.R.style.Theme_Material_Dialog_Alert)
-                        .apply(configure)
-                        .show()
+                    .apply(configure)
+                    .show()
             }
         } catch (ex: IllegalStateException) {
             logger.warn("Cannot show dialog on closing activity")
@@ -157,11 +205,15 @@ open class PermissionHandler(
     private fun requestLocationProvider() {
         alertDialog {
             setTitle(R.string.enable_location_title)
-            setMessage(R.string.enable_location)
+            setMessage(R.string.enable_location_instruction)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
-                dialog.cancel()
+                dialog.dismiss()
                 Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                     .startActivityForResult(LOCATION_REQUEST_CODE)
+            }
+            setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                dialog.cancel()
+                requestPermissions()
             }
             setIcon(android.R.drawable.ic_dialog_alert)
         }
@@ -200,12 +252,16 @@ open class PermissionHandler(
             setTitle(R.string.enable_package_usage_title)
             setMessage(R.string.enable_package_usage)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
-                dialog.cancel()
+                dialog.dismiss()
                 var intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
                 if (intent.resolveActivity(activity.packageManager) == null) {
                     intent = Intent(Settings.ACTION_SETTINGS)
                 }
                 intent.startActivityForResult(USAGE_REQUEST_CODE)
+            }
+            setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                dialog.cancel()
+                requestPermissions()
             }
             setIcon(android.R.drawable.ic_dialog_alert)
         }
@@ -214,7 +270,7 @@ open class PermissionHandler(
     fun onActivityResult(requestCode: Int, resultCode: Int) {
         when (requestCode) {
             LOCATION_REQUEST_CODE -> onPermissionRequestResult(
-                Context.LOCATION_SERVICE,
+                LOCATION_SERVICE,
                 resultCode == Activity.RESULT_OK
             )
             USAGE_REQUEST_CODE -> onPermissionRequestResult(
@@ -307,7 +363,7 @@ open class PermissionHandler(
         private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 232619697 and 0xFFFF
 
         fun Context.isPermissionGranted(permission: String): Boolean = when (permission) {
-            LOCATION_SERVICE -> applySystemService<LocationManager>(Context.LOCATION_SERVICE) { locationManager ->
+            LOCATION_SERVICE -> applySystemService<LocationManager>(LOCATION_SERVICE) { locationManager ->
                 locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
                         || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
             } ?: true
