@@ -9,6 +9,6 @@
     <application android:allowBackup="true">
         <service android:name=".PhoneUsageService"
             android:exported="false"
-            android:description="Service to monitor app usage on an Android device." />
+            android:description="@string/phone_usage_description" />
     </application>
 </manifest>

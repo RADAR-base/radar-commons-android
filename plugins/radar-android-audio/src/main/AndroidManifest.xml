@@ -10,7 +10,6 @@
         <service android:name=".OpenSmileAudioService"
             android:foregroundServiceType="microphone"
             android:exported="false"
-            android:description="Audio Service for the RADAR passive remote monitoring app."
-            />
+            android:description="@string/audio_description" />
     </application>
 </manifest>

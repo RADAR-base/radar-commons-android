@@ -139,13 +139,14 @@ open class PermissionHandler(
                 dialog.cancel()
                 requestPermissions()
             }
+            show()
         }
     }
 
     private fun requestLocationPermissions(locationPermissions: Set<String>) {
+
         alertDialog {
-            setTitle(R.string.enable_location_title)
-            setMessage(R.string.enable_location)
+            setView(R.layout.location_dialog)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.dismiss()
                 requestPermissions(locationPermissions)
