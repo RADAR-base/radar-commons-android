@@ -9,15 +9,15 @@
     <ImageView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:src="@drawable/baseline_location_on_green_700_48dp"
+        android:src="@drawable/baseline_warning_yellow_700_48dp"
         />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
-        android:text="@string/location_bg_dialog_title"
-        android:textAlignment="center"
+        android:layout_gravity="center"
+        android:text="@string/usage_tracking_dialog_title"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -25,7 +25,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
-        android:text="@string/location_bg_dialog_message"
+        android:text="@string/usage_tracking_dialog_message"
         />
 
     <TextView
@@ -33,6 +33,13 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
         android:text="@string/dialog_usage"
+        />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:text="@string/usage_tracking_dialog_help"
         />
 
 </LinearLayout>
