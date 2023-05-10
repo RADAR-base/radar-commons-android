@@ -102,7 +102,6 @@ open class PermissionHandler(
             }
             ACCESS_BACKGROUND_LOCATION_COMPAT in currentlyNeeded -> {
                 addRequestingPermissions(ACCESS_BACKGROUND_LOCATION_COMPAT)
-                requestBackgroundLocationPermissions()
             }
             LOCATION_SERVICE in currentlyNeeded -> {
                 addRequestingPermissions(LOCATION_SERVICE)
@@ -127,25 +126,9 @@ open class PermissionHandler(
         }
     }
 
-    private fun requestBackgroundLocationPermissions() {
-        alertDialog {
-            setTitle(R.string.enable_location_title)
-            setMessage(R.string.enable_location_background)
-            setPositiveButton(android.R.string.ok) { dialog, _ ->
-                dialog.dismiss()
-                requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
-            }
-            setNegativeButton(android.R.string.cancel) { dialog, _ ->
-                dialog.cancel()
-                requestPermissions()
-            }
-        }
-    }
-
     private fun requestLocationPermissions(locationPermissions: Set<String>) {
         alertDialog {
-            setTitle(R.string.enable_location_title)
-            setMessage(R.string.enable_location)
+            setView(R.layout.location_dialog)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.dismiss()
                 requestPermissions(locationPermissions)

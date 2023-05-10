@@ -7,6 +7,6 @@
     <application android:allowBackup="true">
         <service android:name=".PhoneLogService"
             android:exported="false"
-            android:description="Service that collects data of SMS and call logs." />
+            android:description="@string/phone_log_description" />
     </application>
 </manifest>

@@ -22,6 +22,6 @@
             android:name=".E4Service"
             android:foregroundServiceType="location"
             android:exported="false"
-            android:description="Service which intercat with Empatica." />
+            android:description="@string/empatica_e4_explanation" />
     </application>
 </manifest>
