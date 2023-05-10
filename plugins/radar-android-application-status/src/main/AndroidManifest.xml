@@ -4,6 +4,6 @@
     <application>
         <service android:name=".ApplicationStatusService"
             android:exported="false"
-            android:description="Service that sends application statuses about the RADAR pRMT app."/>
+            android:description="@string/application_status_description" />
     </application>
 </manifest>

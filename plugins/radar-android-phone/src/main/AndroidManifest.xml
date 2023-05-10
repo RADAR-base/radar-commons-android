@@ -21,17 +21,17 @@
     <application android:allowBackup="true">
         <service android:name=".PhoneSensorService"
             android:exported="false"
-            android:description="Service that monitors Android hardware sensors." />
+            android:description="@string/phone_sensors_description" />
         <service android:name=".PhoneLocationService"
             android:foregroundServiceType="location"
             android:exported="false"
-            android:description="Service that monitors current GPS and/or network location." />
+            android:description="@string/phone_location_description" />
         <service android:name=".PhoneContactsListService"
             android:exported="false"
-            android:description="Service that monitors contact list size." />
+            android:description="@string/phone_contact_list_description" />
         <service android:name=".PhoneBluetoothService"
             android:foregroundServiceType="location"
             android:exported="false"
-            android:description="Service that monitors bluetooth usage." />
+            android:description="@string/phone_bluetooth_description" />
     </application>
 </manifest>

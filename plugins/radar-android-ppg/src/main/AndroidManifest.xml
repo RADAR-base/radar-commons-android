@@ -10,7 +10,7 @@
         android:supportsRtl="true">
         <service android:name=".PhonePpgService"
             android:exported="false"
-            android:description="Service that measure PPG using the camera of a phone." />
+            android:description="@string/phone_ppg_description" />
 
         <activity android:name=".PhonePpgActivity" />
     </application>
