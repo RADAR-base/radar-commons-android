@@ -43,7 +43,6 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.collections.HashSet
 
 /**
  * A service that manages a SourceManager and a TableDataHandler to send addToPreferences the data of a
@@ -427,7 +426,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         ) ?: onFail(null)
     }
 
-    open fun ensureRegistration(id: String?, name: String?, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
+    open fun ensureRegistration(id: String, name: String?, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
         handler.executeReentrant {
             if (!needsRegisteredSources) {
                 onMapping(SourceMetadata(SourceType(0, sourceProducer, sourceModel, "UNKNOWN", true)).apply {
