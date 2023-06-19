@@ -45,10 +45,16 @@ open class GoogleSleepProvider(radarService: RadarService) : SourceProvider<Base
     override val displayName: String
         get() = radarService.getString(R.string.googleSleepDisplayName)
 
-    override val sourceProducer: String = "ANDROID"
+    override val sourceProducer: String = "GOOGLE"
 
-    override val sourceModel: String = "GOOGLE"
+    override val sourceModel: String = "SLEEP"
 
     override val version: String
         get() = "1.0.0"
+
+    companion object {
+        val ACTIVITY_RECOGNITION_COMPAT = if ( Build.VERSION.SDK_INT >= 29 ) Manifest.permission.ACTIVITY_RECOGNITION
+        else "com.google.android.gms.permission.ACTIVITY_RECOGNITION"
+    }
+
 }

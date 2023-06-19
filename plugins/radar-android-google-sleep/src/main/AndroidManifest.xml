@@ -9,9 +9,5 @@
         <service android:name=".GoogleSleepService"
             android:exported="false"
             android:description="@string/google_sleep_description" />
-        <receiver android:name=".SleepReceiver"
-            android:enabled="true"
-            android:exported="true"
-            tools:ignore="ExportedReceiver" />
     </application>
 </manifest>

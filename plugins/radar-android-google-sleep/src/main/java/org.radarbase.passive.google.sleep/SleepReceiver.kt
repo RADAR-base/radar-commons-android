@@ -25,9 +25,7 @@ import com.google.android.gms.location.SleepSegmentEvent
 class SleepReceiver(private val googleSleepManager: GoogleSleepManager) : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent ?: return
-            when {
-                SleepSegmentEvent.hasEvents(intent) -> googleSleepManager.sendSleepSegmentData(intent)
-                SleepClassifyEvent.hasEvents(intent) -> googleSleepManager.sendSleepClassifyData(intent)
-            }
+            if (SleepSegmentEvent.hasEvents(intent)) googleSleepManager.sendSleepSegmentData(intent)
+            if (SleepClassifyEvent.hasEvents(intent)) googleSleepManager.sendSleepClassifyData(intent)
         }
 }

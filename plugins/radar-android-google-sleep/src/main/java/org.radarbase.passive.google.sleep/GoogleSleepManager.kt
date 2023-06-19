@@ -16,13 +16,11 @@
 
 package org.radarbase.passive.google.sleep
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Process
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognition
@@ -35,6 +33,7 @@ import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.toPendingIntentFlag
+import org.radarbase.passive.google.sleep.GoogleSleepProvider.Companion.ACTIVITY_RECOGNITION_COMPAT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GoogleSleepClassifyEvent
 import org.radarcns.passive.google.GoogleSleepSegmentEvent
@@ -47,11 +46,14 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
 
     private val sleepBroadcastReceiver: BroadcastReceiver
     private val sleepHandler = SafeHandler.getInstance("Google Sleep", Process.THREAD_PRIORITY_BACKGROUND)
-    private lateinit var sleepPendingIntent: PendingIntent
+    private val sleepPendingIntent: PendingIntent
+    private val isPermissionGranted
+    get() = ContextCompat.checkSelfPermission(service,ACTIVITY_RECOGNITION_COMPAT) == PackageManager.PERMISSION_GRANTED
 
     init {
         name = context.getString(R.string.googleSleepDisplayName)
         sleepBroadcastReceiver = SleepReceiver(this)
+        sleepPendingIntent = createSleepPendingIntent()
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -59,7 +61,6 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         sleepHandler.start()
         status = SourceStatusListener.Status.READY
         sleepHandler.execute {
-            createSleepPendingIntent()
             registerForSleepData()
         }
     }
@@ -74,7 +75,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
             val sleepDuration: Double = sleepSegmentEvent.segmentDurationMillis / 1000.0
             val sleepStatus: SleepStatus = sleepSegmentEvent.status.toSleepStatus()
 
-            send(segmentEventTopic, GoogleSleepSegmentEvent(time, time, sleepStartTime,
+            send(segmentEventTopic, GoogleSleepSegmentEvent(sleepStartTime, time, sleepStartTime,
             sleepEndTime, sleepDuration, sleepStatus))
         }
     }
@@ -94,7 +95,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
 
     @SuppressLint("MissingPermission")
     private fun registerForSleepData() {
-        if ( isPermissionGranted() ) {
+        if (isPermissionGranted) {
             status = SourceStatusListener.Status.CONNECTING
 
             ActivityRecognition.getClient(service)
@@ -106,30 +107,32 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
                     logger.info("Successfully subscribed to sleep data")
                 }
                 .addOnFailureListener {exception ->
-                    status = SourceStatusListener.Status.UNAVAILABLE
+                    status = SourceStatusListener.Status.DISCONNECTED
                     logger.error("Exception while subscribing to sleep data: $exception")
                 }
         }
-        else logger.warn("Permission not granted for ACTIVITY_RECOGNITION")
+        else {
+            logger.warn("Permission not granted for ACTIVITY_RECOGNITION")
+            status = SourceStatusListener.Status.DISCONNECTED
+        }
     }
 
-    private fun isPermissionGranted(): Boolean {
-        val permission = if ( Build.VERSION.SDK_INT >= 29 ) Manifest.permission.ACTIVITY_RECOGNITION
-        else "com.google.android.gms.permission.ACTIVITY_RECOGNITION"
-        return ContextCompat.checkSelfPermission(service,permission) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun createSleepPendingIntent() {
+    private fun createSleepPendingIntent(): PendingIntent {
         val intent = Intent(service, SleepReceiver::class.java)
-        sleepPendingIntent = PendingIntent.getBroadcast(service, SLEEP_DATA_REQUEST_CODE, intent,
-            PendingIntent.FLAG_CANCEL_CURRENT.toPendingIntentFlag(true))
         logger.info("Sleep pending intent created")
+        return PendingIntent.getBroadcast(service, SLEEP_DATA_REQUEST_CODE, intent,
+            PendingIntent.FLAG_CANCEL_CURRENT.toPendingIntentFlag(true))
     }
 
     private fun unRegisterFromSleepData() {
         ActivityRecognition.getClient(service)
             .removeSleepSegmentUpdates(sleepPendingIntent)
-            .addOnFailureListener {  }
+            .addOnSuccessListener {
+                logger.info("Successfully unsubscribed to sleep data")
+            }
+            .addOnFailureListener {exception ->
+                logger.error("Exception while unsubscribing to sleep data: $exception")
+            }
     }
 
     override fun onClose() {
