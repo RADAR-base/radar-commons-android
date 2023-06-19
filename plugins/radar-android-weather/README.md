@@ -29,11 +29,12 @@ To enable this plugin add `weather_api` to the `plugins` property of the configu
 
 The following parameters are available:
 
-| Parameter                        | Type    | Default           | Description                                                                                                          |
-|----------------------------------|---------|-------------------|----------------------------------------------------------------------------------------------------------------------|
-| `weather_api_key`                | string  |                   | The API key for the given API source. See below for a description of how a key can be retrieved.                     |
-| `weather_api_source`             | string  | "openweathermap"  | The name of the API where the weather data will be requested from. The only supported API for now is openweathermap. |
-| `weather_query_interval_seconds` | int (s) | 10,800 (=3 hours) | Interval between successive requests to the weather API.                                                             |
+| Parameter                        | Type    | Default           | Description                                                                                                                                                                                |
+|----------------------------------|---------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `weather_api_key`                | string  |                   | The API key for the given API source. See below for a description of how a key can be retrieved.                                                                                           |
+| `weather_api_source`             | string  | "openweathermap"  | The name of the API where the weather data will be requested from. The only supported API for now is openweathermap.                                                                       |
+| `weather_query_interval_seconds` | int (s) | 10,800 (=3 hours) | Interval between successive requests to the weather API.                                                                                                                                   |
+| `weather_random_radius_meters`   | int (m) | 0                 | Offset each location with a different random shift. The random shift has a uniform distribution in a circle with given radius in meters. When the value is 0, the actual location is used. |
 
 The api key for access to the OpenWeatherMap API can be retrieved by [signing up for free](http://openweathermap.org/price#weather). Note that the free plan is subject to a maximum number of calls per minute and has a limited data update frequency.
 

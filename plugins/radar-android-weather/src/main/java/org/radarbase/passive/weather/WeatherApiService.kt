@@ -49,12 +49,17 @@ class WeatherApiService : SourceService<BaseSourceState>() {
             config.getString(WEATHER_API_SOURCE, WEATHER_API_SOURCE_DEFAULT),
             config.optString(WEATHER_API_KEY),
         )
+        config.optDouble(WEATHER_RANDOM_RADIUS) {
+            manager.randomRadius = it
+        }
     }
 
     companion object {
         private const val WEATHER_QUERY_INTERVAL = "weather_query_interval_seconds"
         private const val WEATHER_API_SOURCE = "weather_api_source"
         private const val WEATHER_API_KEY = "weather_api_key"
+        private const val WEATHER_RANDOM_RADIUS = "weather_random_radius_meters"
+
 
         internal val WEATHER_QUERY_INTERVAL_DEFAULT = TimeUnit.HOURS.toSeconds(3)
         internal const val WEATHER_API_SOURCE_DEFAULT = SOURCE_OPENWEATHERMAP

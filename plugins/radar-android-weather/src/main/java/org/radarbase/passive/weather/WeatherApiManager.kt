@@ -28,6 +28,7 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.OfflineProcessor
 import org.radarbase.passive.weather.WeatherApiService.Companion.WEATHER_QUERY_INTERVAL_DEFAULT
+import org.radarbase.util.Locations.withRandomShift
 import org.radarcns.passive.weather.LocalWeather
 import org.radarcns.passive.weather.LocationType
 import org.slf4j.LoggerFactory
@@ -35,6 +36,8 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class WeatherApiManager(service: WeatherApiService, private val client: OkHttpClient) : AbstractSourceManager<WeatherApiService, BaseSourceState>(service) {
+    @Volatile
+    var randomRadius: Double = 0.0
 
     private val processor: OfflineProcessor
     private val weatherTopic = createCache("android_local_weather", LocalWeather())
@@ -91,6 +94,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
         }
 
         val location = this.lastKnownLocation
+            ?.withRandomShift(randomRadius)
         if (location == null) {
             logger.error("Could not retrieve location. No input for Weather API")
             return
