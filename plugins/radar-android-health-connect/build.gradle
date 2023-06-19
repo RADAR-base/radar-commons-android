@@ -1,0 +1,24 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    namespace "org.radarbase.passive.google.healthconnect"
+}
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = 'Google Health Connect integration'
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+dependencies {
+    api project(':radar-commons-android')
+
+    // Add a dependency of Health Connect SDK
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha01")
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
