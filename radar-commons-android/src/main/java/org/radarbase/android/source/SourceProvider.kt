@@ -181,6 +181,14 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      */
     abstract val permissionsNeeded: List<String>
 
+
+    /**
+     * Android permissions that the underlying service can take advantage of.
+     * If they are not granted, the plugin can still run.
+     */
+    open val permissionsRequested: List<String>
+        get() = listOf()
+
     /**
      * Android features (Under PackageManager.FEATURE_) that the provider requires. If the feature
      * is not available, the provider will not be enabled.

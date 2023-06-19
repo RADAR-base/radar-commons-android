@@ -352,7 +352,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         mHandler.executeReentrant {
             val permissionsRequired = buildSet {
                 addAll(servicePermissions)
-                mConnections.forEach { addAll(it.permissionsNeeded) }
+                mConnections.forEach {
+                    addAll(it.permissionsNeeded)
+                    addAll(it.permissionsRequested)
+                }
                 if (ACCESS_FINE_LOCATION in this || ACCESS_COARSE_LOCATION in this) {
                     add(LOCATION_SERVICE)
                 }
