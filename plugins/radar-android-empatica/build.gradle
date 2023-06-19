@@ -14,6 +14,7 @@ description = 'Empatica E4 plugin for RADAR passive remote monitoring app'
 
 repositories {
     flatDir { dirs 'libs' }
+    mavenLocal()
 }
 
 dependencies {
