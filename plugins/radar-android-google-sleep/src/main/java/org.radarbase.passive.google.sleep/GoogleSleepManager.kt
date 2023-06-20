@@ -37,7 +37,7 @@ import org.radarbase.passive.google.sleep.GoogleSleepProvider.Companion.ACTIVITY
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GoogleSleepClassifyEvent
 import org.radarcns.passive.google.GoogleSleepSegmentEvent
-import org.radarcns.passive.google.SleepStatus
+import org.radarcns.passive.google.SleepClassificationStatus
 import org.slf4j.LoggerFactory
 
 class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<GoogleSleepService, BaseSourceState>(context) {
@@ -70,13 +70,11 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         val sleepSegmentEvents: List<SleepSegmentEvent> = SleepSegmentEvent.extractEvents(sleepIntent)
         sleepSegmentEvents.forEach { sleepSegmentEvent ->
             val time = currentTime
-            val sleepStartTime: Double = sleepSegmentEvent.startTimeMillis / 1000.0
-            val sleepEndTime: Double = sleepSegmentEvent.endTimeMillis / 1000.0
-            val sleepDuration: Double = sleepSegmentEvent.segmentDurationMillis / 1000.0
-            val sleepStatus: SleepStatus = sleepSegmentEvent.status.toSleepStatus()
+            val startTime: Double = sleepSegmentEvent.startTimeMillis / 1000.0
+            val endTime: Double = sleepSegmentEvent.endTimeMillis / 1000.0
+            val status: SleepClassificationStatus = sleepSegmentEvent.status.toSleepClassificationStatus()
 
-            send(segmentEventTopic, GoogleSleepSegmentEvent(sleepStartTime, time, sleepStartTime,
-            sleepEndTime, sleepDuration, sleepStatus))
+            send(segmentEventTopic, GoogleSleepSegmentEvent(startTime, time, endTime, status))
         }
     }
 
@@ -85,7 +83,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         val sleepClassifyEvents: List<SleepClassifyEvent> = SleepClassifyEvent.extractEvents(sleepIntent)
         sleepClassifyEvents.forEach {  sleepClassifyEvent ->
             val time = sleepClassifyEvent.timestampMillis / 1000.0
-            val sleepConfidence = sleepClassifyEvent.confidence
+            val sleepConfidence: Float = sleepClassifyEvent.confidence.toFloat() / 100
             val light = sleepClassifyEvent.light
             val motion = sleepClassifyEvent.motion
 
@@ -146,11 +144,11 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
 
         private const val SLEEP_DATA_REQUEST_CODE = 1197424
 
-        private fun Int.toSleepStatus(): SleepStatus = when (this) {
-            0 -> SleepStatus.STATUS_SUCCESSFUL
-            1 -> SleepStatus.STATUS_MISSING_DATA
-            2 -> SleepStatus.STATUS_NOT_DETECTED
-            else -> SleepStatus.UNKNOWN
+        private fun Int.toSleepClassificationStatus(): SleepClassificationStatus = when (this) {
+            0 -> SleepClassificationStatus.SUCCESSFUL
+            1 -> SleepClassificationStatus.MISSING_DATA
+            2 -> SleepClassificationStatus.NOT_DETECTED
+            else -> SleepClassificationStatus.UNKNOWN
         }
     }
 }
