@@ -36,9 +36,7 @@ open class GoogleSleepProvider(radarService: RadarService) : SourceProvider<Base
             "org.radarcns.google.GoogleSleepProvider"
         )
 
-    override val permissionsNeeded = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-        listOf(Manifest.permission.ACTIVITY_RECOGNITION)
-        else listOf("com.google.android.gms.permission.ACTIVITY_RECOGNITION")
+    override val permissionsNeeded = listOf(ACTIVITY_RECOGNITION_COMPAT)
 
     override val serviceClass: Class<GoogleSleepService> = GoogleSleepService::class.java
 

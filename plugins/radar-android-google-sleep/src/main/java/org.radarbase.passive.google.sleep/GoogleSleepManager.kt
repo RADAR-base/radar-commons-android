@@ -107,13 +107,13 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
                     logger.info("Successfully subscribed to sleep data")
                 }
                 .addOnFailureListener {exception ->
-                    status = SourceStatusListener.Status.DISCONNECTED
+                    disconnect()
                     logger.error("Exception while subscribing to sleep data: $exception")
                 }
         }
         else {
             logger.warn("Permission not granted for ACTIVITY_RECOGNITION")
-            status = SourceStatusListener.Status.DISCONNECTED
+            disconnect()
         }
     }
 
