@@ -14,8 +14,10 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.Record
+import androidx.health.connect.client.records.SleepStageRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
@@ -28,11 +30,14 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.auth.SourceMetadata
+import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
+import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.healthconnect.HealthConnectDeletion
 import org.radarcns.passive.google.healthconnect.HealthConnectDevice
 import org.radarcns.passive.google.healthconnect.HealthConnectDeviceType
@@ -129,41 +134,84 @@ class HealthConnectManager(service: HealthConnectService) :
             coroutineScope {
                 launch { processSteps() }
                 launch { processHeartRate() }
+                launch { processSleepStage() }
+                launch { processExerciseSession() }
             }
 
             status = SourceStatusListener.Status.READY
         }
     }
 
-    private suspend fun processHeartRate() = processRecord<HeartRateRecord> { record ->
-        record.samples.map { sample ->
-            healthConnectTypedData<HeartRateRecord> {
-                time = sample.time.toDouble()
-                startTime = record.startTime.toDouble()
-                endTime = record.endTime.toDouble()
-                timeZoneOffset = record.startZoneOffset?.totalSeconds
-                    ?: record.endZoneOffset?.totalSeconds
-                metadata = record.metadata.toHealthConnectMetadata()
-                unit = "bpm"
-                intValue = sample.beatsPerMinute.toInt()
+    private suspend fun processExerciseSession() {
+        processRecord<ExerciseSessionRecord, HealthConnectTypedData>(typedDataCache) { record ->
+            listOf(
+                healthConnectTypedData<ExerciseSessionRecord> {
+                    time = record.startTime.toDouble()
+                    endTime = record.endTime.toDouble()
+                    timeZoneOffset = record.startZoneOffset?.totalSeconds
+                        ?: record.endZoneOffset?.totalSeconds
+                    metadata = record.metadata.toHealthConnectMetadata()
+                    intValue = record.exerciseType
+                    stringValue = record.exerciseType.toExerciseTypeString()
+                }
+            )
+
+        }
+    }
+
+    private suspend fun processHeartRate() {
+        processRecord<HeartRateRecord, HealthConnectTypedData>(typedDataCache) { record ->
+            val recordStartTime = record.startTime.toDouble()
+            val recordEndTime = record.endTime.toDouble()
+            val recordOffset = record.startZoneOffset?.totalSeconds
+                ?: record.endZoneOffset?.totalSeconds
+            val recordMetadata = record.metadata.toHealthConnectMetadata()
+            record.samples.map { sample ->
+                healthConnectTypedData<HeartRateRecord> {
+                    time = sample.time.toDouble()
+                    startTime = recordStartTime
+                    endTime = recordEndTime
+                    timeZoneOffset = recordOffset
+                    metadata = recordMetadata
+                    unit = "bpm"
+                    intValue = sample.beatsPerMinute.toInt()
+                }
             }
         }
     }
 
-    private suspend fun processSteps() = processRecord<StepsRecord> { record ->
-        listOf(
-            healthConnectTypedData<StepsRecord> {
-                time = record.startTime.toDouble()
-                endTime = record.endTime.toDouble()
-                timeZoneOffset = record.startZoneOffset?.totalSeconds
-                    ?: record.endZoneOffset?.totalSeconds
-                metadata = record.metadata.toHealthConnectMetadata()
-                intValue = record.count.toInt()
-            }
-        )
+    private suspend fun processSleepStage() {
+        processRecord<SleepStageRecord, HealthConnectTypedData>(typedDataCache) { record ->
+            listOf(
+                healthConnectTypedData<StepsRecord> {
+                    time = record.startTime.toDouble()
+                    endTime = record.endTime.toDouble()
+                    timeZoneOffset = record.startZoneOffset?.totalSeconds
+                        ?: record.endZoneOffset?.totalSeconds
+                    metadata = record.metadata.toHealthConnectMetadata()
+                    intValue = record.stage
+                    stringValue = record.stage.toSleepStageString()
+                }
+            )
+        }
     }
 
-    private suspend inline fun <reified T: Record> processRecord(convert: (T) -> List<HealthConnectTypedData>) {
+    private suspend fun processSteps() {
+        processRecord<StepsRecord, HealthConnectTypedData>(typedDataCache) { record ->
+            listOf(
+                healthConnectTypedData<StepsRecord> {
+                    time = record.startTime.toDouble()
+                    endTime = record.endTime.toDouble()
+                    timeZoneOffset = record.startZoneOffset?.totalSeconds
+                        ?: record.endZoneOffset?.totalSeconds
+                    metadata = record.metadata.toHealthConnectMetadata()
+                    intValue = record.count.toInt()
+                }
+            )
+        }
+    }
+
+    private suspend inline fun <reified T: Record, V: SpecificRecord> processRecord(cache: DataCache<ObservationKey, V>, convert: (T) -> List<V>) {
         if (T::class !in dataTypes) {
             return
         }
@@ -199,7 +247,7 @@ class HealthConnectManager(service: HealthConnectService) :
                             val record = change.record
                             if (record is T) {
                                 convert(record).forEach {
-                                    send(typedDataCache, it)
+                                    send(cache, it)
                                 }
                             }
                         }
@@ -357,6 +405,82 @@ class HealthConnectManager(service: HealthConnectService) :
                 convert()
                 build()
             }
+        }
+
+        private fun Int.toExerciseTypeString() = when (this) {
+            ExerciseSessionRecord.EXERCISE_TYPE_BADMINTON -> "BADMINTON"
+            ExerciseSessionRecord.EXERCISE_TYPE_BASEBALL -> "BASEBALL"
+            ExerciseSessionRecord.EXERCISE_TYPE_BASKETBALL -> "BASKETBALL"
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING -> "BIKING"
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY -> "BIKING_STATIONARY"
+            ExerciseSessionRecord.EXERCISE_TYPE_BOOT_CAMP -> "BOOT_CAMP"
+            ExerciseSessionRecord.EXERCISE_TYPE_BOXING -> "BOXING"
+            ExerciseSessionRecord.EXERCISE_TYPE_CALISTHENICS -> "CALISTHENICS"
+            ExerciseSessionRecord.EXERCISE_TYPE_CRICKET -> "CRICKET"
+            ExerciseSessionRecord.EXERCISE_TYPE_DANCING -> "DANCING"
+            ExerciseSessionRecord.EXERCISE_TYPE_ELLIPTICAL -> "ELLIPTICAL"
+            ExerciseSessionRecord.EXERCISE_TYPE_EXERCISE_CLASS -> "EXERCISE_CLASS"
+            ExerciseSessionRecord.EXERCISE_TYPE_FENCING -> "FENCING"
+            ExerciseSessionRecord.EXERCISE_TYPE_FOOTBALL_AMERICAN -> "FOOTBALL_AMERICAN"
+            ExerciseSessionRecord.EXERCISE_TYPE_FOOTBALL_AUSTRALIAN -> "FOOTBALL_AUSTRALIAN"
+            ExerciseSessionRecord.EXERCISE_TYPE_FRISBEE_DISC -> "FRISBEE_DISC"
+            ExerciseSessionRecord.EXERCISE_TYPE_GOLF -> "GOLF"
+            ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING -> "GUIDED_BREATHING"
+            ExerciseSessionRecord.EXERCISE_TYPE_GYMNASTICS -> "GYMNASTICS"
+            ExerciseSessionRecord.EXERCISE_TYPE_HANDBALL -> "HANDBALL"
+            ExerciseSessionRecord.EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING -> "HIGH_INTENSITY_INTERVAL_TRAINING"
+            ExerciseSessionRecord.EXERCISE_TYPE_HIKING -> "HIKING"
+            ExerciseSessionRecord.EXERCISE_TYPE_ICE_HOCKEY -> "ICE_HOCKEY"
+            ExerciseSessionRecord.EXERCISE_TYPE_ICE_SKATING -> "ICE_SKATING"
+            ExerciseSessionRecord.EXERCISE_TYPE_MARTIAL_ARTS -> "MARTIAL_ARTS"
+            ExerciseSessionRecord.EXERCISE_TYPE_PADDLING -> "PADDLING"
+            ExerciseSessionRecord.EXERCISE_TYPE_PARAGLIDING -> "PARAGLIDING"
+            ExerciseSessionRecord.EXERCISE_TYPE_PILATES -> "PILATES"
+            ExerciseSessionRecord.EXERCISE_TYPE_RACQUETBALL -> "RACQUETBALL"
+            ExerciseSessionRecord.EXERCISE_TYPE_ROCK_CLIMBING -> "ROCK_CLIMBING"
+            ExerciseSessionRecord.EXERCISE_TYPE_ROLLER_HOCKEY -> "ROLLER_HOCKEY"
+            ExerciseSessionRecord.EXERCISE_TYPE_ROWING -> "ROWING"
+            ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE -> "ROWING_MACHINE"
+            ExerciseSessionRecord.EXERCISE_TYPE_RUGBY -> "RUGBY"
+            ExerciseSessionRecord.EXERCISE_TYPE_RUNNING -> "RUNNING"
+            ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL -> "RUNNING_TREADMILL"
+            ExerciseSessionRecord.EXERCISE_TYPE_SAILING -> "SAILING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SCUBA_DIVING -> "SCUBA_DIVING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SKATING -> "SKATING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SKIING -> "SKIING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SNOWBOARDING -> "SNOWBOARDING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SNOWSHOEING -> "SNOWSHOEING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SOCCER -> "SOCCER"
+            ExerciseSessionRecord.EXERCISE_TYPE_SOFTBALL -> "SOFTBALL"
+            ExerciseSessionRecord.EXERCISE_TYPE_SQUASH -> "SQUASH"
+            ExerciseSessionRecord.EXERCISE_TYPE_STAIR_CLIMBING -> "STAIR_CLIMBING"
+            ExerciseSessionRecord.EXERCISE_TYPE_STAIR_CLIMBING_MACHINE -> "STAIR_CLIMBING_MACHINE"
+            ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING -> "STRENGTH_TRAINING"
+            ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING -> "STRETCHING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SURFING -> "SURFING"
+            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER -> "SWIMMING_OPEN_WATER"
+            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL -> "SWIMMING_POOL"
+            ExerciseSessionRecord.EXERCISE_TYPE_TABLE_TENNIS -> "TABLE_TENNIS"
+            ExerciseSessionRecord.EXERCISE_TYPE_TENNIS -> "TENNIS"
+            ExerciseSessionRecord.EXERCISE_TYPE_VOLLEYBALL -> "VOLLEYBALL"
+            ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> "WALKING"
+            ExerciseSessionRecord.EXERCISE_TYPE_WATER_POLO -> "WATER_POLO"
+            ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING -> "WEIGHTLIFTING"
+            ExerciseSessionRecord.EXERCISE_TYPE_WHEELCHAIR -> "WHEELCHAIR"
+            ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT -> "OTHER_WORKOUT"
+            ExerciseSessionRecord.EXERCISE_TYPE_YOGA -> "YOGA"
+            else -> null
+        }
+
+        private fun Int.toSleepStageString() = when (this) {
+            SleepStageRecord.STAGE_TYPE_AWAKE -> "AWAKE"
+            SleepStageRecord.STAGE_TYPE_SLEEPING -> "SLEEPING"
+            SleepStageRecord.STAGE_TYPE_OUT_OF_BED -> "OUT_OF_BED"
+            SleepStageRecord.STAGE_TYPE_LIGHT -> "LIGHT"
+            SleepStageRecord.STAGE_TYPE_DEEP -> "DEEP"
+            SleepStageRecord.STAGE_TYPE_REM -> "REM"
+            SleepStageRecord.STAGE_TYPE_UNKNOWN -> "UNKNOWN"
+            else -> null
         }
 
         data class LocalDevice(
