@@ -12,6 +12,8 @@ data class CacheConfiguration(
         var maximumSize: Long = 450_000_000,
         /** Type of queue file implementation to use. */
         var queueFileType: QueueFileFactory = QueueFileFactory.DIRECT,
+        /** Number of items that are allowed to be stored in memory. */
+        var maximumInMemorySize: Int = 5000,
 ) {
     fun configure(config: SingleRadarConfiguration) {
         maximumSize = config.getLong(RadarConfiguration.MAX_CACHE_SIZE, maximumSize)

@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Read permissions for ACTIVITY -->
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
@@ -42,6 +43,8 @@
     <uses-permission android:name="READ_OXYGEN_SATURATION"/>
     <uses-permission android:name="READ_RESPIRATORY_RATE"/>
     <uses-permission android:name="READ_RESTING_HEART_RATE"/>
+
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client"/>
 
     <application android:allowBackup="true">
         <service android:name=".HealthConnectService"/>

@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
 
 /**
  * Process events based on a alarm. The events will be processed in a background Thread.
@@ -162,6 +163,8 @@ class OfflineProcessor(
         }
     }
 
+    fun interval(duration: Duration) = interval(duration.inWholeMilliseconds, TimeUnit.MILLISECONDS)
+
     private fun schedule() {
         val runImmediately = Debug.isDebuggerConnected()
         val firstAlarm: Long = if (runImmediately) {
@@ -230,6 +233,8 @@ class OfflineProcessor(
             intervalMillis = unit.toMillis(duration)
             return oldInterval != intervalMillis
         }
+
+        fun interval(duration: Duration) = interval(duration.inWholeMilliseconds, TimeUnit.MILLISECONDS)
 
         fun handler(value: SafeHandler) {
             handlerReference = value.toCountedReference()

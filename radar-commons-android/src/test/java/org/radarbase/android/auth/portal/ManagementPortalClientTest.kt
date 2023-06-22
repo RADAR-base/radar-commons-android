@@ -93,7 +93,7 @@ class ManagementPortalClientTest {
 
             val serverConfig = ServerConfig(server.url("/").toUrl())
 
-            val client = ManagementPortalClient(serverConfig, "pRMT", "")
+            val client = ManagementPortalClient(serverConfig)
             val authState = AppAuthState {
                 userId = "sub-1"
             }

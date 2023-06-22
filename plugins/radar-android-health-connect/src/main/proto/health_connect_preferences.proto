@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option java_package = "org.radarbase.passive.google.healthconnect";
+option java_multiple_files = true;
+
+message HealthConnectDevicePreferences {
+  double time = 1;
+  string id = 2;
+  optional string manufacturer = 3;
+  optional string model = 4;
+  int32 type = 5;
+}
+
+message HealthConnectPreferences {
+  // filter for showing / hiding completed tasks
+  map<string,string> changeTokens = 1;
+  repeated HealthConnectDevicePreferences devices = 2;
+}

@@ -153,7 +153,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             try {
                 dataCache.addMeasurement(key, value)
             } catch (ex: IllegalArgumentException) {
-                logger.error("Cannot send for {} to dataCache {}: {}", state.id, dataCache.topic.name, ex)
+                logger.error("Cannot send for {} to dataCache {}", state.id, dataCache.topic.name, ex)
             }
         } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID to topic {}", dataCache.topic.name)

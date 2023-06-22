@@ -1,3 +1,7 @@
+plugins {
+    id "com.google.protobuf" version "0.9.3"
+}
+
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
@@ -10,6 +14,10 @@ android {
 
 description = 'Google Health Connect integration'
 
+repositories {
+    mavenLocal()
+}
+
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
@@ -17,8 +25,30 @@ description = 'Google Health Connect integration'
 dependencies {
     api project(':radar-commons-android')
 
+    implementation("org.radarbase:radar-schemas-commons:0.8.3-SNAPSHOT")
     // Add a dependency of Health Connect SDK
     implementation("androidx.health.connect:connect-client:1.1.0-alpha01")
+    implementation("androidx.datastore:datastore:1.0.0")
+    implementation  "com.google.protobuf:protobuf-javalite:3.23.3"
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.23.2'
+    }
+
+    // Generates the java Protobuf-lite code for the Protobufs in this project. See
+    // https://github.com/google/protobuf-gradle-plugin#customizing-protobuf-compilation
+    // for more information.
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {
+                    option 'lite'
+                }
+            }
+        }
+    }
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"

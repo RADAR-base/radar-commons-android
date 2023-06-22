@@ -1,24 +1,46 @@
 package org.radarbase.passive.google.healthconnect
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
-import org.radarbase.passive.google.healthconnect.HealthConnectProvider.Companion.toHealthConnectTypes
+import org.radarbase.android.source.UnavailableSourceManager
+import kotlin.time.Duration.Companion.seconds
 
 class HealthConnectService : SourceService<BaseSourceState>() {
     override val defaultState: BaseSourceState
         get() = BaseSourceState()
 
     override fun createSourceManager(): SourceManager<BaseSourceState> =
-        HealthConnectSourceManager(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            HealthConnectManager(this)
+        } else {
+            UnavailableSourceManager("HealthConnect", state)
+        }
 
+    @RequiresApi(Build.VERSION_CODES.O_MR1)
     override fun configureSourceManager(
         manager: SourceManager<BaseSourceState>,
         config: SingleRadarConfiguration
     ) {
-        manager as HealthConnectSourceManager
-        manager.dataTypes = config.getString(HealthConnectProvider.HEALTH_CONNECT_DATA_TYPES, "")
-            .toHealthConnectTypes()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
+            return
+        }
+        with(manager as HealthConnectManager) {
+            config.optString(HEALTH_CONNECT_DATA_TYPES) {
+                dataTypes = it.toHealthConnectTypes()
+                    .toHashSet()
+            }
+            config.optDouble(HEALTH_CONNECT_INTERVAL_SECONDS) {
+                interval = it.seconds
+            }
+        }
+    }
+
+    companion object {
+        const val HEALTH_CONNECT_DATA_TYPES = "health_connect_data_types"
+        const val HEALTH_CONNECT_INTERVAL_SECONDS = "health_connect_interval_seconds"
     }
 }

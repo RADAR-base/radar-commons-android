@@ -79,6 +79,9 @@ constructor(
     private val maximumSize: Long
         get() = config.maximumSize.takeIf { it <= Int.MAX_VALUE } ?: Int.MAX_VALUE.toLong()
 
+    private val maximumInMemorySize: Int
+        get() = config.maximumInMemorySize
+
     init {
         queueFile = try {
             queueFileFactory.generate(Objects.requireNonNull(file), maximumSize)
@@ -187,6 +190,8 @@ constructor(
 
             if (addMeasurementFuture == null) {
                 addMeasurementFuture = handler.delay(config.commitRate, ::doFlush)
+            } else if (measurementsToAdd.size >= maximumInMemorySize) {
+                addMeasurementFuture?.runNow()
             }
         }
     }
