@@ -20,6 +20,7 @@ import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Process
 import androidx.core.content.ContextCompat
@@ -54,6 +55,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         name = context.getString(R.string.googleSleepDisplayName)
         sleepBroadcastReceiver = SleepReceiver(this)
         sleepPendingIntent = createSleepPendingIntent()
+        registerSleepReceiver()
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -65,8 +67,14 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         }
     }
 
+    private fun registerSleepReceiver() {
+        val filter = IntentFilter(ACTION_SLEEP_DATA)
+        service.registerReceiver(sleepBroadcastReceiver, filter)
+        logger.info("registering for the sleep receiver.")
+    }
+
      fun sendSleepClassifyData(sleepIntent: Intent) {
-        logger.info("Sleep segment event data received")
+        logger.info("Sleep classify event data received")
         val sleepSegmentEvents: List<SleepSegmentEvent> = SleepSegmentEvent.extractEvents(sleepIntent)
         sleepSegmentEvents.forEach { sleepSegmentEvent ->
             val time = currentTime
@@ -79,7 +87,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
     }
 
      fun sendSleepSegmentData(sleepIntent: Intent) {
-        logger.info("Sleep classify event data received")
+        logger.info("Sleep segment event data received")
         val sleepClassifyEvents: List<SleepClassifyEvent> = SleepClassifyEvent.extractEvents(sleepIntent)
         sleepClassifyEvents.forEach {  sleepClassifyEvent ->
             val time = sleepClassifyEvent.timestampMillis / 1000.0
@@ -116,10 +124,15 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
     }
 
     private fun createSleepPendingIntent(): PendingIntent {
-        val intent = Intent(service, SleepReceiver::class.java)
+        val intent = Intent(ACTION_SLEEP_DATA)
         logger.info("Sleep pending intent created")
         return PendingIntent.getBroadcast(service, SLEEP_DATA_REQUEST_CODE, intent,
             PendingIntent.FLAG_CANCEL_CURRENT.toPendingIntentFlag(true))
+    }
+
+    private fun unRegisterSleepReceiver() {
+        service.unregisterReceiver(sleepBroadcastReceiver)
+        logger.info("Unregistered from sleep receiver ")
     }
 
     private fun unRegisterFromSleepData() {
@@ -135,13 +148,15 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
 
     override fun onClose() {
         sleepHandler.stop {
-           unRegisterFromSleepData()
+            unRegisterSleepReceiver()
+            unRegisterFromSleepData()
         }
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(GoogleSleepManager::class.java)
 
+        const val ACTION_SLEEP_DATA = "org.radarbase.passive.google.sleep.ACTION_SLEEP_DATA"
         private const val SLEEP_DATA_REQUEST_CODE = 1197424
 
         private fun Int.toSleepClassificationStatus(): SleepClassificationStatus = when (this) {
