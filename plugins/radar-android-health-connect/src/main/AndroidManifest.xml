@@ -1,56 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client" />
     <!-- Read permissions for ACTIVITY -->
-    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
-    <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
-    <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED"/>
-    <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
-    <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED"/>
-    <uses-permission android:name="android.permission.health.READ_STEPS"/>
-    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
-    <uses-permission android:name="android.permission.health.READ_VO2_MAX"/>
-    <uses-permission android:name="android.permission.health.READ_WHEELCHAIR_PUSHES"/>
-    <uses-permission android:name="android.permission.health.READ_POWER"/>
-    <uses-permission android:name="android.permission.health.READ_SPEED"/>
-    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE"/>
-    <uses-permission android:name="android.permission.health.READ_BODY_FAT"/>
-    <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS"/>
-    <uses-permission android:name="android.permission.health.READ_BONE_MASS"/>
-    <uses-permission android:name="android.permission.health.READ_HEIGHT"/>
-    <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS"/>
-    <uses-permission android:name="android.permission.health.READ_WEIGHT"/>
-
-    <!-- Read permissions for CYCLE_TRACKING.-->
-    <uses-permission android:name="READ_CERVICAL_MUCUS"/>
-    <uses-permission android:name="READ_MENSTRUATION"/>
-    <uses-permission android:name="READ_OVULATION_TEST"/>
-    <uses-permission android:name="READ_SEXUAL_ACTIVITY"/>
-
-    <!-- Read permissions for NUTRITION.-->
-    <uses-permission android:name="READ_HYDRATION"/>
-    <uses-permission android:name="READ_NUTRITION"/>
-
-    <!-- Read permissions for SLEEP.-->
-    <uses-permission android:name="READ_SLEEP"/>
-
-    <!-- Read permissions for VITALS.-->
-    <uses-permission android:name="READ_BASAL_BODY_TEMPERATURE"/>
-    <uses-permission android:name="READ_BLOOD_GLUCOSE"/>
-    <uses-permission android:name="READ_BLOOD_PRESSURE"/>
-    <uses-permission android:name="READ_BODY_TEMPERATURE"/>
-    <uses-permission android:name="READ_HEART_RATE"/>
-    <uses-permission android:name="READ_HEART_RATE_VARIABILITY"/>
-    <uses-permission android:name="READ_OXYGEN_SATURATION"/>
-    <uses-permission android:name="READ_RESPIRATORY_RATE"/>
-    <uses-permission android:name="READ_RESTING_HEART_RATE"/>
-
-    <uses-sdk tools:overrideLibrary="androidx.health.connect.client"/>
-
-    <application android:allowBackup="true">
-        <service android:name=".HealthConnectService"/>
-    </application>
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+    <uses-permission android:name="android.permission.health.READ_WHEELCHAIR_PUSHES" />
+    <uses-permission android:name="android.permission.health.READ_POWER" />
+    <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS" />
+    <uses-permission android:name="android.permission.health.READ_BONE_MASS" />
+    <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" /> <!-- Read permissions for CYCLE_TRACKING. -->
+    <uses-permission android:name="READ_CERVICAL_MUCUS" />
+    <uses-permission android:name="READ_MENSTRUATION" />
+    <uses-permission android:name="READ_OVULATION_TEST" />
+    <uses-permission android:name="READ_SEXUAL_ACTIVITY" /> <!-- Read permissions for NUTRITION. -->
+    <uses-permission android:name="READ_HYDRATION" />
+    <uses-permission android:name="READ_NUTRITION" /> <!-- Read permissions for SLEEP. -->
+    <uses-permission android:name="READ_SLEEP" /> <!-- Read permissions for VITALS. -->
+    <uses-permission android:name="READ_BASAL_BODY_TEMPERATURE" />
+    <uses-permission android:name="READ_BLOOD_GLUCOSE" />
+    <uses-permission android:name="READ_BLOOD_PRESSURE" />
+    <uses-permission android:name="READ_BODY_TEMPERATURE" />
+    <uses-permission android:name="READ_HEART_RATE" />
+    <uses-permission android:name="READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="READ_RESTING_HEART_RATE" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
     </queries>
+
+    <application android:allowBackup="true">
+        <activity
+            android:name=".HealthConnectPermissionsRationaleActivity"
+            android:enabled="true"
+            android:exported="false"
+            android:label="@string/title_activity_health_connect_permissions_rationale"
+            android:theme="@style/Theme.RadarCommons"> <!-- Handle intent -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <service android:name=".HealthConnectService" />
+    </application>
+
 </manifest>

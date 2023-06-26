@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="google_health_connect_display">Health Connect</string>
+    <string name="title_activity_health_connect_permissions_rationale">
+        HealthConnectPermissionsRationaleActivity
+    </string>
+    <string name="health_connect_permission_rationale_title">Health Connect permission</string>
+    <string name="health_connect_permission_rationale_text">This app needs to access Health Connect data for participation in the Health study.</string>
 </resources>

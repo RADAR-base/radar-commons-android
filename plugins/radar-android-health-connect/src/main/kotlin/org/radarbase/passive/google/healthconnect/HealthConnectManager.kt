@@ -28,6 +28,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.apache.avro.specific.SpecificRecord
@@ -56,7 +57,7 @@ import kotlin.time.Duration.Companion.hours
 class HealthConnectManager(service: HealthConnectService) :
     AbstractSourceManager<HealthConnectService, BaseSourceState>(service)
 {
-    private lateinit var healthConnectClient: HealthConnectClient
+    private val healthConnectClient: HealthConnectClient
     private val dataStore = service.dataStore
     private val managerJob = SupervisorJob()
     private val managerScope = CoroutineScope(managerJob + Dispatchers.Default)
@@ -66,6 +67,9 @@ class HealthConnectManager(service: HealthConnectService) :
 
     @Volatile
     var dataTypes: Set<KClass<out Record>> = setOf()
+
+    private val changesTokens = ConcurrentHashMap<KClass<out Record>, String>()
+    private val devices = ConcurrentHashMap<LocalDevice, HealthConnectDevice>()
 
     private val processor = OfflineProcessor(service) {
         requestCode = REQUEST_CODE
@@ -83,20 +87,8 @@ class HealthConnectManager(service: HealthConnectService) :
             field = value
         }
 
-    @Volatile
-    private var changesTokens = mapOf<KClass<out Record>, String>()
-
-    private val devices = ConcurrentHashMap<LocalDevice, HealthConnectDevice>()
-
-    @Volatile
-    private var didLoad = false
-
     init {
-        if (HealthConnectClient.getSdkStatus(service) != HealthConnectClient.SDK_AVAILABLE) {
-            status = SourceStatusListener.Status.UNAVAILABLE
-        } else {
-            healthConnectClient = HealthConnectClient.getOrCreate(service)
-        }
+        healthConnectClient = HealthConnectClient.getOrCreate(service)
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -107,23 +99,22 @@ class HealthConnectManager(service: HealthConnectService) :
     override fun didRegister(source: SourceMetadata) {
         super.didRegister(source)
         processor.start()
-        managerScope.launch {
-            dataStore.data
-                .catch { ex -> logger.error("Failed to read data from datastore", ex) }
-                .collect { preferences ->
-                    changesTokens = buildMap {
-                        preferences.changeTokensMap.forEach { (name, token) ->
-                            val cls = healthConnectTypes[name] ?: return@forEach
-                            put(cls, token)
-                        }
-                    }
-                    if (!didLoad) {
-                        preferences.devicesList.forEach {
-                            devices[it.toLocalDevice()] = it.toHealthConnectDevice()
-                        }
-                        didLoad = true
-                    }
+        try {
+            managerScope.launch {
+                val preferences = dataStore.data
+                    .catch { ex -> logger.error("Failed to read data from datastore", ex) }
+                    .first()
+
+                preferences.changeTokensMap.forEach { (name, token) ->
+                    val cls = healthConnectTypes[name] ?: return@forEach
+                    changesTokens[cls] = token
                 }
+                preferences.devicesList.forEach {
+                    devices[it.toLocalDevice()] = it.toHealthConnectDevice()
+                }
+            }
+        } catch (ex: Exception) {
+            logger.error("Failed to load data from dataStore", ex)
         }
     }
 
@@ -275,7 +266,9 @@ class HealthConnectManager(service: HealthConnectService) :
         id = this@toHealthConnectMetadata.id
         dataOrigin = this@toHealthConnectMetadata.dataOrigin.packageName
         lastModified = this@toHealthConnectMetadata.lastModifiedTime.toDouble()
-        recordingMethod = this@toHealthConnectMetadata.recordingMethod.toRecordingMethod()
+        recordingMethod = HealthConnectRecordingMethod.UNKNOWN
+        // TODO: Available from version 1.1.0-alpha01
+        // recordingMethod = this@toHealthConnectMetadata.recordingMethod.toRecordingMethod()
 
         val mDevice = this@toHealthConnectMetadata.device
         if (mDevice != null) {

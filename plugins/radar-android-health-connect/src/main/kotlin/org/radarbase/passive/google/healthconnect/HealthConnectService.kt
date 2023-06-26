@@ -1,7 +1,7 @@
 package org.radarbase.passive.google.healthconnect
 
 import android.os.Build
-import androidx.annotation.RequiresApi
+import androidx.health.connect.client.HealthConnectClient
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
@@ -13,14 +13,19 @@ class HealthConnectService : SourceService<BaseSourceState>() {
     override val defaultState: BaseSourceState
         get() = BaseSourceState()
 
-    override fun createSourceManager(): SourceManager<BaseSourceState> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+    override fun createSourceManager(): SourceManager<BaseSourceState> {
+        // TODO: Available from version 1.1.0-alpha01
+        // HealthConnectClient.getSdkStatus(this) == HealthConnectClient.SDK_AVAILABLE
+        return if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 &&
+            HealthConnectClient.sdkStatus(this) == HealthConnectClient.SDK_AVAILABLE
+        ) {
             HealthConnectManager(this)
         } else {
-            UnavailableSourceManager("HealthConnect", state)
+            UnavailableSourceManager("Health Connect", state)
         }
+    }
 
-    @RequiresApi(Build.VERSION_CODES.O_MR1)
     override fun configureSourceManager(
         manager: SourceManager<BaseSourceState>,
         config: SingleRadarConfiguration
