@@ -55,7 +55,6 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         name = context.getString(R.string.googleSleepDisplayName)
         sleepBroadcastReceiver = SleepReceiver(this)
         sleepPendingIntent = createSleepPendingIntent()
-        registerSleepReceiver()
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -63,6 +62,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         sleepHandler.start()
         status = SourceStatusListener.Status.READY
         sleepHandler.execute {
+            registerSleepReceiver()
             registerForSleepData()
         }
     }
@@ -131,8 +131,12 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
     }
 
     private fun unRegisterSleepReceiver() {
-        service.unregisterReceiver(sleepBroadcastReceiver)
-        logger.info("Unregistered from sleep receiver ")
+        try {
+            service.unregisterReceiver(sleepBroadcastReceiver)
+            logger.info("Unregistered from sleep receiver ")
+        } catch (ex: IllegalStateException) {
+            logger.error("Exception when unregistering from sleep receiver", ex)
+        }
     }
 
     private fun unRegisterFromSleepData() {
@@ -148,8 +152,8 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
 
     override fun onClose() {
         sleepHandler.stop {
-            unRegisterSleepReceiver()
             unRegisterFromSleepData()
+            unRegisterSleepReceiver()
         }
     }
 
