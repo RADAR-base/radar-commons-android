@@ -73,8 +73,8 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         logger.info("registering for the sleep receiver.")
     }
 
-     fun sendSleepClassifyData(sleepIntent: Intent) {
-        logger.info("Sleep classify event data received")
+     fun sendSleepSegmentData(sleepIntent: Intent) {
+        logger.info("Sleep segment event data received")
         val sleepSegmentEvents: List<SleepSegmentEvent> = SleepSegmentEvent.extractEvents(sleepIntent)
         sleepSegmentEvents.forEach { sleepSegmentEvent ->
             val time = currentTime
@@ -86,8 +86,8 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         }
     }
 
-     fun sendSleepSegmentData(sleepIntent: Intent) {
-        logger.info("Sleep segment event data received")
+     fun sendSleepClassifyData(sleepIntent: Intent) {
+        logger.info("Sleep classify event data received")
         val sleepClassifyEvents: List<SleepClassifyEvent> = SleepClassifyEvent.extractEvents(sleepIntent)
         sleepClassifyEvents.forEach {  sleepClassifyEvent ->
             val time = sleepClassifyEvent.timestampMillis / 1000.0
