@@ -533,8 +533,16 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
         mHandler.execute {
             updateProviders(authState, configuration.latestConfig)
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            if (authState.userId == null) {
+                logger.info("Authentication state is no longer valid. Stopping data collection.")
+
+                mConnections.asSequence()
+                    .filter(SourceProvider<*>::isBound)
+                    .forEach(SourceProvider<*>::unbind)
+
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
         }
     }
 

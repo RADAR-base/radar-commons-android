@@ -43,7 +43,6 @@ class StartActivityForPermission(val permission: String, val builder: Context.()
         if (resultCode == Activity.RESULT_OK) setOf(permission) else setOf()
 }
 
-
 object PermissionRequesters {
     @SuppressLint("BatteryLife")
     val ignoreBatteryOptimization = PermissionRequester(
