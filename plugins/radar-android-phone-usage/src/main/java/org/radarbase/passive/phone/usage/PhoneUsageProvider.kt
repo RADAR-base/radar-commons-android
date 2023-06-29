@@ -17,19 +17,19 @@
 package org.radarbase.passive.phone.usage
 
 import android.Manifest.permission.PACKAGE_USAGE_STATS
-import android.app.Activity
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Process.myUid
 import android.provider.Settings
-import androidx.activity.result.contract.ActivityResultContract
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
 import org.radarbase.android.util.PermissionRequester
+import org.radarbase.android.util.StartActivityForPermission
+import org.radarbase.android.util.singleGrantChecker
 
 class PhoneUsageProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
 
@@ -60,52 +60,26 @@ class PhoneUsageProvider(radarService: RadarService) : SourceProvider<BaseSource
     override val requestPermissionResultContract: List<PermissionRequester> = listOf(
         PermissionRequester(
             permissions = setOf(PACKAGE_USAGE_STATS),
-            contract = object : ActivityResultContract<Set<String>, Set<String>>() {
-                override fun createIntent(context: Context, input: Set<String>): Intent {
-                    return Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                        .takeIf { it.resolveActivity(context.packageManager) != null }
-                        ?: Intent(Settings.ACTION_SETTINGS)
-                }
+            contract = StartActivityForPermission(PACKAGE_USAGE_STATS) {
+                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                    .takeIf { it.resolveActivity(packageManager) != null }
+                    ?: Intent(Settings.ACTION_SETTINGS)
+            },
+            grantChecker = singleGrantChecker(PACKAGE_USAGE_STATS) {
+                val appOps = getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
+                    ?: return@singleGrantChecker false
 
-                override fun parseResult(resultCode: Int, intent: Intent?): Set<String> {
-                    return if (resultCode == Activity.RESULT_OK) {
-                        setOf(PACKAGE_USAGE_STATS)
-                    } else {
-                        setOf()
-                    }
-                }
-            }
-        ) { permissions ->
-            if (PACKAGE_USAGE_STATS !in permissions) return@PermissionRequester setOf()
-            val appOps = getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
-                ?: return@PermissionRequester setOf()
-
-            if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                AppOpsManager.MODE_ALLOWED == appOps.unsafeCheckOpNoThrow(
-                    "android:get_usage_stats",
-                    myUid(),
-                    packageName
-                )
-            ) {
-                setOf(PACKAGE_USAGE_STATS)
-            } else {
-                try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    AppOpsManager.MODE_ALLOWED == appOps.unsafeCheckOpNoThrow("android:get_usage_stats", myUid(), packageName)
+                } else {
                     @Suppress("DEPRECATION")
-                    if (AppOpsManager.MODE_ALLOWED == appOps.checkOpNoThrow(
-                            "android:get_usage_stats",
-                            myUid(),
-                            packageName
-                        )
-                    ) {
-                        setOf(PACKAGE_USAGE_STATS)
-                    } else {
-                        setOf()
-                    }
-                } catch (ex: SecurityException) {
-                    setOf()
+                    AppOpsManager.MODE_ALLOWED == appOps.checkOpNoThrow(
+                        "android:get_usage_stats",
+                        myUid(),
+                        packageName
+                    )
                 }
             }
-        },
+        ),
     )
 }

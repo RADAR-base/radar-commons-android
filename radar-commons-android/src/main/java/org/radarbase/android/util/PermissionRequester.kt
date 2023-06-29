@@ -43,6 +43,13 @@ class StartActivityForPermission(val permission: String, val builder: Context.()
         if (resultCode == Activity.RESULT_OK) setOf(permission) else setOf()
 }
 
+fun singleGrantChecker(
+    permission: String,
+    predicate: Context.() -> Boolean
+): Context.(Set<String>) -> Set<String> = { permissions ->
+    if (permission in permissions && predicate()) setOf(permission) else setOf()
+}
+
 object PermissionRequesters {
     @SuppressLint("BatteryLife")
     val ignoreBatteryOptimization = PermissionRequester(
@@ -72,11 +79,4 @@ object PermissionRequesters {
             Settings.canDrawOverlays(this)
         }
     )
-
-    private fun singleGrantChecker(
-        permission: String,
-        predicate: Context.() -> Boolean
-    ): Context.(Set<String>) -> Set<String> = { permissions ->
-        if (permission in permissions && predicate()) setOf(permission) else setOf()
-    }
 }
