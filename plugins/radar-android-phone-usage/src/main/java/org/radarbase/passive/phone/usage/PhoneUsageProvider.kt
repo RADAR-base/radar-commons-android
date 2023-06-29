@@ -69,16 +69,13 @@ class PhoneUsageProvider(radarService: RadarService) : SourceProvider<BaseSource
                 val appOps = getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
                     ?: return@singleGrantChecker false
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    AppOpsManager.MODE_ALLOWED == appOps.unsafeCheckOpNoThrow("android:get_usage_stats", myUid(), packageName)
+                val isAllowedResult = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    appOps.unsafeCheckOpNoThrow("android:get_usage_stats", myUid(), packageName)
                 } else {
                     @Suppress("DEPRECATION")
-                    AppOpsManager.MODE_ALLOWED == appOps.checkOpNoThrow(
-                        "android:get_usage_stats",
-                        myUid(),
-                        packageName
-                    )
+                    appOps.checkOpNoThrow("android:get_usage_stats", myUid(), packageName)
                 }
+                AppOpsManager.MODE_ALLOWED == isAllowedResult
             }
         ),
     )
