@@ -22,6 +22,7 @@ import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.util.PermissionRequester
 
 open class OpenSmileAudioProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val serviceClass: Class<OpenSmileAudioService> = OpenSmileAudioService::class.java
@@ -44,4 +45,8 @@ open class OpenSmileAudioProvider(radarService: RadarService) : SourceProvider<B
     override val sourceProducer: String = "OpenSmile"
     override val sourceModel: String = "Audio"
     override val version: String = BuildConfig.VERSION_NAME
+
+    override val requestPermissionResultContract: List<PermissionRequester> = listOf(
+        PermissionRequester(permissions = setOf(RECORD_AUDIO))
+    )
 }

@@ -22,22 +22,22 @@
     <uses-permission android:name="android.permission.health.READ_HEIGHT" />
     <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" /> <!-- Read permissions for CYCLE_TRACKING. -->
-    <uses-permission android:name="READ_CERVICAL_MUCUS" />
-    <uses-permission android:name="READ_MENSTRUATION" />
-    <uses-permission android:name="READ_OVULATION_TEST" />
-    <uses-permission android:name="READ_SEXUAL_ACTIVITY" /> <!-- Read permissions for NUTRITION. -->
-    <uses-permission android:name="READ_HYDRATION" />
-    <uses-permission android:name="READ_NUTRITION" /> <!-- Read permissions for SLEEP. -->
-    <uses-permission android:name="READ_SLEEP" /> <!-- Read permissions for VITALS. -->
-    <uses-permission android:name="READ_BASAL_BODY_TEMPERATURE" />
-    <uses-permission android:name="READ_BLOOD_GLUCOSE" />
-    <uses-permission android:name="READ_BLOOD_PRESSURE" />
-    <uses-permission android:name="READ_BODY_TEMPERATURE" />
-    <uses-permission android:name="READ_HEART_RATE" />
-    <uses-permission android:name="READ_HEART_RATE_VARIABILITY" />
-    <uses-permission android:name="READ_OXYGEN_SATURATION" />
-    <uses-permission android:name="READ_RESPIRATORY_RATE" />
-    <uses-permission android:name="READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_CERVICAL_MUCUS" />
+    <uses-permission android:name="android.permission.health.READ_MENSTRUATION" />
+    <uses-permission android:name="android.permission.health.READ_OVULATION_TEST" />
+    <uses-permission android:name="android.permission.health.READ_SEXUAL_ACTIVITY" /> <!-- Read permissions for NUTRITION. -->
+    <uses-permission android:name="android.permission.health.READ_HYDRATION" />
+    <uses-permission android:name="android.permission.health.READ_NUTRITION" /> <!-- Read permissions for SLEEP. -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" /> <!-- Read permissions for VITALS. -->
+    <uses-permission android:name="android.permission.health.READ_BASAL_BODY_TEMPERATURE" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
@@ -47,7 +47,7 @@
         <activity
             android:name=".HealthConnectPermissionsRationaleActivity"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/title_activity_health_connect_permissions_rationale"
             android:theme="@style/Theme.RadarCommons"> <!-- Handle intent -->
             <intent-filter>

@@ -25,6 +25,7 @@ import org.radarbase.android.RadarService
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceType
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothPermissionList
+import org.radarbase.android.util.PermissionRequester
 import org.slf4j.LoggerFactory
 
 /**
@@ -189,6 +190,8 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     open val permissionsRequested: List<String>
         get() = listOf()
 
+    open val requestPermissionResultContract: List<PermissionRequester> = listOf()
+
     /**
      * Android features (Under PackageManager.FEATURE_) that the provider requires. If the feature
      * is not available, the provider will not be enabled.
@@ -246,5 +249,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         const val MODEL_KEY = "org.radarbase.android.source.SourceProvider.sourceModel"
 
         private val logger = LoggerFactory.getLogger(SourceProvider::class.java)
+
     }
+
 }

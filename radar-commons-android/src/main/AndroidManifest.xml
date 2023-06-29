@@ -16,11 +16,5 @@
         <intent>
             <action android:name="android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
         </intent>
-        <intent>
-            <action android:name="android.settings.USAGE_ACCESS_SETTINGS" />
-        </intent>
-        <intent>
-            <action android:name="android.settings.SETTINGS" />
-        </intent>
     </queries>
 </manifest>

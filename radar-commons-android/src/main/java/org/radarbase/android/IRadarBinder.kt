@@ -22,6 +22,7 @@ import org.radarbase.android.data.DataHandler
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.SourceProvider
 import org.radarbase.android.source.SourceServiceConnection
+import org.radarbase.android.util.PermissionRequester
 import org.radarbase.android.util.TimedLong
 import org.radarcns.kafka.ObservationKey
 
@@ -40,6 +41,8 @@ interface IRadarBinder : IBinder {
     val permissionsNeeded: List<String>
 
     val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
+
+    val permissionRequesters: List<PermissionRequester>
 
     fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>)
 

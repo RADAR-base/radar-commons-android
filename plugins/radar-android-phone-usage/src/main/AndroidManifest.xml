@@ -9,4 +9,13 @@
     <application android:allowBackup="true">
         <service android:name=".PhoneUsageService"/>
     </application>
+
+    <queries>
+        <intent>
+            <action android:name="android.settings.USAGE_ACCESS_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
+    </queries>
 </manifest>

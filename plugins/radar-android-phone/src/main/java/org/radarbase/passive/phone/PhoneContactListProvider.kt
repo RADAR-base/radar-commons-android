@@ -21,6 +21,7 @@ import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.util.PermissionRequester
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.MODEL
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.PRODUCER
 
@@ -50,4 +51,8 @@ open class PhoneContactListProvider(radarService: RadarService) : SourceProvider
     override val sourceModel: String = MODEL
 
     override val version: String = BuildConfig.VERSION_NAME
+
+    override val requestPermissionResultContract: List<PermissionRequester> = listOf(
+        PermissionRequester(permissions = setOf(Manifest.permission.READ_CONTACTS))
+    )
 }

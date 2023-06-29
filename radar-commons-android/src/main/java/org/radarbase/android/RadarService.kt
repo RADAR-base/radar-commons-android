@@ -102,10 +102,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             add(FOREGROUND_SERVICE)
         }
-        // TODO: Uncomment for SDK 33
-        // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        //     add(POST_NOTIFICATIONS)
-        // }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(POST_NOTIFICATIONS)
+        }
     }
     private lateinit var notificationHandler: NotificationHandler
 
@@ -460,6 +459,36 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
+    val permissionRequesters: List<PermissionRequester> = buildList {
+        add(
+            PermissionRequester(
+                permissions = buildSet {
+                    add(ACCESS_NETWORK_STATE)
+                    add(INTERNET)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        add(FOREGROUND_SERVICE)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        add(POST_NOTIFICATIONS)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        add(BLUETOOTH_CONNECT)
+                        add(BLUETOOTH_SCAN)
+                    } else {
+                        add(BLUETOOTH)
+                        add(BLUETOOTH_ADMIN)
+                    }
+                },
+            ),
+        )
+        add(PermissionRequester(setOf(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            add(PermissionRequester(setOf(ACCESS_BACKGROUND_LOCATION)))
+        }
+        add(PermissionRequesters.ignoreBatteryOptimization)
+        add(PermissionRequesters.systemOverlay)
+    }
+
     private fun updateProviders(authState: AppAuthState, config: SingleRadarConfiguration) {
         dataHandler?.handler {
             logger.info("Setting data submission authentication")
@@ -527,6 +556,14 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         override val connections: List<SourceProvider<*>>
             get() = mConnections
+
+        override val permissionRequesters: List<PermissionRequester>
+            get() = buildList {
+                addAll(this@RadarService.permissionRequesters)
+                mConnections.forEach {
+                    addAll(it.requestPermissionResultContract)
+                }
+            }
 
         override fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>) {
             sourceFilters[connection] = allowedIds.sanitizeIds()

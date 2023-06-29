@@ -13,7 +13,7 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 
 fun Context.isPermissionGranted(permission: String): Boolean = when (permission) {
-    LOCATION_SERVICE -> applySystemService<LocationManager>(Context.LOCATION_SERVICE) { locationManager ->
+    LOCATION_SERVICE -> applySystemService<LocationManager>(LOCATION_SERVICE) { locationManager ->
         locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
                 || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     } ?: true

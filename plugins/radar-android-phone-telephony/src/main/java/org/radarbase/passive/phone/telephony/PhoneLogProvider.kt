@@ -22,6 +22,7 @@ import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.util.PermissionRequester
 
 open class PhoneLogProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val serviceClass: Class<PhoneLogService> = PhoneLogService::class.java
@@ -49,4 +50,8 @@ open class PhoneLogProvider(radarService: RadarService) : SourceProvider<BaseSou
     override val sourceModel: String = "PHONE"
 
     override val version: String = BuildConfig.VERSION_NAME
+
+    override val requestPermissionResultContract: List<PermissionRequester> = listOf(
+        PermissionRequester(permissions = setOf(READ_CALL_LOG, READ_SMS))
+    )
 }

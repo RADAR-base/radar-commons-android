@@ -1,13 +1,11 @@
 package org.radarbase.passive.google.healthconnect
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Base64
 import android.util.Base64.NO_PADDING
 import android.util.Base64.URL_SAFE
 import androidx.annotation.RequiresApi
-import androidx.core.app.ActivityCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.dataStore
 import androidx.health.connect.client.HealthConnectClient
@@ -66,6 +64,9 @@ class HealthConnectManager(service: HealthConnectService) :
     private val deviceCache = createCache("android_health_connect_device", HealthConnectDevice())
 
     @Volatile
+    private var grantedPermissions: Set<String> = setOf()
+
+    @Volatile
     var dataTypes: Set<KClass<out Record>> = setOf()
 
     private val changesTokens = ConcurrentHashMap<KClass<out Record>, String>()
@@ -121,6 +122,8 @@ class HealthConnectManager(service: HealthConnectService) :
     private fun fetchRecords() {
         managerScope.launch {
             status = SourceStatusListener.Status.CONNECTED
+
+            grantedPermissions = healthConnectClient.permissionController.getGrantedPermissions()
 
             coroutineScope {
                 launch { processSteps() }
@@ -207,7 +210,7 @@ class HealthConnectManager(service: HealthConnectService) :
             return
         }
         val permission = HealthPermission.getReadPermission(T::class)
-        if (ActivityCompat.checkSelfPermission(service, permission) != PackageManager.PERMISSION_GRANTED) {
+        if (permission !in grantedPermissions) {
             return
         }
 
