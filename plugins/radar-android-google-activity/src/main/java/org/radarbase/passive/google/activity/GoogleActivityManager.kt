@@ -103,10 +103,16 @@ class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceMana
         val activityTransitionResult: ActivityTransitionResult? = ActivityTransitionResult.extractResult(activityIntent)
         activityTransitionResult?.let {
             it.transitionEvents.forEach { event: ActivityTransitionEvent ->
-                val time = event.elapsedRealTimeNanos.toActivityTime() / 1000.0
-                val activity = event.activityType.toActivityType()
-                val transition = event.transitionType.toTransitionType()
-                send(activityTransitionEventTopic, GoogleActivityTransitionEvent(time, currentTime, activity, transition))
+                // Accepting the events only if the activity happened in last 30 seconds
+                if (((SystemClock.elapsedRealtime() - (event.elapsedRealTimeNanos / 1000000)) / 1000) <= 30) {
+                    val time = event.elapsedRealTimeNanos.toActivityTime() / 1000.0
+                    val activity = event.activityType.toActivityType()
+                    val transition = event.transitionType.toTransitionType()
+                    send(
+                        activityTransitionEventTopic,
+                        GoogleActivityTransitionEvent(time, currentTime, activity, transition)
+                    )
+                }
             }
         }
     }
