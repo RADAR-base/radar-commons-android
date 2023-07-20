@@ -75,30 +75,6 @@ object ActivityTransitionUtil {
 
         transitions +=
             ActivityTransition.Builder()
-                .setActivityType(DetectedActivity.UNKNOWN)
-                .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
-                .build()
-
-        transitions +=
-            ActivityTransition.Builder()
-                .setActivityType(DetectedActivity.UNKNOWN)
-                .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
-                .build()
-
-        transitions +=
-            ActivityTransition.Builder()
-                .setActivityType(DetectedActivity.TILTING)
-                .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
-                .build()
-
-        transitions +=
-            ActivityTransition.Builder()
-                .setActivityType(DetectedActivity.TILTING)
-                .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
-                .build()
-
-        transitions +=
-            ActivityTransition.Builder()
                 .setActivityType(DetectedActivity.WALKING)
                 .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
                 .build()

@@ -167,8 +167,6 @@ class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceMana
         DetectedActivity.ON_BICYCLE -> ActivityType.ON_BICYCLE
         DetectedActivity.ON_FOOT -> ActivityType.ON_FOOT
         DetectedActivity.STILL -> ActivityType.STILL
-        DetectedActivity.UNKNOWN -> ActivityType.UNKNOWN
-        DetectedActivity.TILTING -> ActivityType.TILTING
         DetectedActivity.WALKING -> ActivityType.WALKING
         DetectedActivity.RUNNING -> ActivityType.RUNNING
         else -> ActivityType.UNKNOWN
