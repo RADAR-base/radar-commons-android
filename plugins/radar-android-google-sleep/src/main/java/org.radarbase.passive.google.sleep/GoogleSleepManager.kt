@@ -19,8 +19,10 @@ package org.radarbase.passive.google.sleep
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Process
 import androidx.core.content.ContextCompat
@@ -40,6 +42,7 @@ import org.radarcns.passive.google.GoogleSleepClassifyEvent
 import org.radarcns.passive.google.GoogleSleepSegmentEvent
 import org.radarcns.passive.google.SleepClassificationStatus
 import org.slf4j.LoggerFactory
+import java.lang.Double.*
 
 class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<GoogleSleepService, BaseSourceState>(context) {
     private val segmentEventTopic: DataCache<ObservationKey, GoogleSleepSegmentEvent> = createCache("android_google_sleep_segment_event", GoogleSleepSegmentEvent())
@@ -48,8 +51,11 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
     private val sleepBroadcastReceiver: BroadcastReceiver
     private val sleepHandler = SafeHandler.getInstance("Google Sleep", Process.THREAD_PRIORITY_BACKGROUND)
     private val sleepPendingIntent: PendingIntent
+    private val preferences: SharedPreferences = service.getSharedPreferences(GoogleSleepManager::class.java.name, Context.MODE_PRIVATE)
+    private val lastSleepStartTime: Double
+        get() = longBitsToDouble(preferences.getLong(LAST_SLEEP_START_TIME, -1))
     private val isPermissionGranted
-    get() = ContextCompat.checkSelfPermission(service,ACTIVITY_RECOGNITION_COMPAT) == PackageManager.PERMISSION_GRANTED
+        get() = ContextCompat.checkSelfPermission(service,ACTIVITY_RECOGNITION_COMPAT) == PackageManager.PERMISSION_GRANTED
 
     init {
         name = context.getString(R.string.googleSleepDisplayName)
@@ -82,7 +88,16 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
             val endTime: Double = sleepSegmentEvent.endTimeMillis / 1000.0
             val status: SleepClassificationStatus = sleepSegmentEvent.status.toSleepClassificationStatus()
 
+            if (lastSleepStartTime == startTime) {
+                logger.warn("Sleep Segment data already registered, skipping this event")
+                return@forEach
+            }
             send(segmentEventTopic, GoogleSleepSegmentEvent(startTime, time, endTime, status))
+            sleepHandler.execute {
+                preferences.edit()
+                    .putLong(LAST_SLEEP_START_TIME, doubleToRawLongBits(startTime))
+                    .apply()
+            }
         }
     }
 
@@ -162,6 +177,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
 
         const val ACTION_SLEEP_DATA = "org.radarbase.passive.google.sleep.ACTION_SLEEP_DATA"
         private const val SLEEP_DATA_REQUEST_CODE = 1197424
+        private const val LAST_SLEEP_START_TIME = "last_sleep_start_time"
 
         private fun Int.toSleepClassificationStatus(): SleepClassificationStatus = when (this) {
             0 -> SleepClassificationStatus.SUCCESSFUL
