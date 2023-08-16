@@ -40,7 +40,7 @@ import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.OfflineProcessor
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.register
-import org.radarbase.passive.google.places.GooglePlacesService.Companion.PLACES_API_KEY_DEFAULT
+import org.radarbase.passive.google.places.GooglePlacesService.Companion.GOOGLE_PLACES_API_KEY_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GooglePlacesInfo
 import org.radarcns.passive.google.PlacesType
@@ -113,7 +113,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
 
     fun updateApiKey(apiKey: String) {
         when (apiKey) {
-            PLACES_API_KEY_DEFAULT -> {
+            GOOGLE_PLACES_API_KEY_DEFAULT -> {
                 logger.error("API-key is empty, disconnecting now")
                 disconnect()
             }

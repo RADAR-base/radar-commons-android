@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 class GooglePlacesService: SourceService<GooglePlacesState>() {
-    private val apiKey: ChangeRunner<String> = ChangeRunner(PLACES_API_KEY_DEFAULT)
+    private val apiKey: ChangeRunner<String> = ChangeRunner(GOOGLE_PLACES_API_KEY_DEFAULT)
     private lateinit var placeHandler: SafeHandler
 
     override fun onCreate() {
@@ -40,7 +40,7 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
     override fun configureSourceManager(manager: SourceManager<GooglePlacesState>, config: SingleRadarConfiguration) {
         manager as GooglePlacesManager
 
-        apiKey.applyIfChanged(config.getString(PLACES_API_KEY, PLACES_API_KEY_DEFAULT)) {
+        apiKey.applyIfChanged(config.getString(GOOGLE_PLACES_API_KEY, GOOGLE_PLACES_API_KEY_DEFAULT)) {
            placeHandler.execute {
                    try {
                        Places.initialize(this.applicationContext, it)
@@ -51,11 +51,11 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
                }
            }
 
-        manager.placesFetchInterval(config.getLong(PLACES_FETCH_INTERVAL, PLACES_FETCH_INTERVAL_DEFAULT), TimeUnit.SECONDS)
-        manager.shouldFetchPlaceId(config.getBoolean(FETCH_PLACES_ID_KEY, false))
-        manager.shouldFetchAdditionalInfo(config.getBoolean(FETCH_PLACES_ADDITIONAL_INFO, false))
-        manager.limitByPlacesCount(config.getInt(FETCH_PLACE_COUNT_BOUND, FETCH_PLACE_COUNT_NUMBER_DEFAULT))
-        manager.limitByPlacesLikelihood(config.getFloat(FETCH_PLACE_LIKELIHOOD_BOUND, FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT.toFloat()).toDouble())
+        manager.placesFetchInterval(config.getLong(GOOGLE_PLACES_FETCH_INTERVAL, GOOGLE_PLACES_FETCH_INTERVAL_DEFAULT), TimeUnit.SECONDS)
+        manager.shouldFetchPlaceId(config.getBoolean(FETCH_GOOGLE_PLACES_ID_KEY, false))
+        manager.shouldFetchAdditionalInfo(config.getBoolean(FETCH_GOOGLE_PLACES_ADDITIONAL_INFO, false))
+        manager.limitByPlacesCount(config.getInt(FETCH_GOOGLE_PLACE_COUNT_BOUND, FETCH_GOOGLE_PLACE_COUNT_NUMBER_DEFAULT))
+        manager.limitByPlacesLikelihood(config.getFloat(FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND, GOOGLE_FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT.toFloat()).toDouble())
 
     }
 
@@ -74,16 +74,16 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
     companion object {
         private val logger = LoggerFactory.getLogger(GooglePlacesService::class.java)
 
-        const val PLACES_API_KEY = "places_api_key"
-        const val PLACES_FETCH_INTERVAL = "places_interval_seconds"
-        const val FETCH_PLACES_ID_KEY = "should_fetch_places_id"
-        const val FETCH_PLACES_ADDITIONAL_INFO = "should_fetch_additional_places_info"
-        const val FETCH_PLACE_LIKELIHOOD_BOUND = "fetch_place_likelihoods_bound"
-        const val FETCH_PLACE_COUNT_BOUND = "fetch_place_likelihoods_count"
+        const val GOOGLE_PLACES_API_KEY = "places_api_key"
+        const val GOOGLE_PLACES_FETCH_INTERVAL = "places_interval_seconds"
+        const val FETCH_GOOGLE_PLACES_ID_KEY = "should_fetch_places_id"
+        const val FETCH_GOOGLE_PLACES_ADDITIONAL_INFO = "should_fetch_additional_places_info"
+        const val FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND = "fetch_place_likelihoods_bound"
+        const val FETCH_GOOGLE_PLACE_COUNT_BOUND = "fetch_place_likelihoods_count"
 
-        const val PLACES_FETCH_INTERVAL_DEFAULT = 600L
-        const val PLACES_API_KEY_DEFAULT = ""
-        const val FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT = -1.0
-        const val FETCH_PLACE_COUNT_NUMBER_DEFAULT = -1
+        const val GOOGLE_PLACES_FETCH_INTERVAL_DEFAULT = 600L
+        const val GOOGLE_PLACES_API_KEY_DEFAULT = ""
+        const val GOOGLE_FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT = -1.0
+        const val FETCH_GOOGLE_PLACE_COUNT_NUMBER_DEFAULT = -1
     }
 }
