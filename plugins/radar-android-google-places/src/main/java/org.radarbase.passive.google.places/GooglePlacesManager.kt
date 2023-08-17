@@ -284,7 +284,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         private const val STATE_KEY = "administrative_area_level_1"
         private const val COUNTRY_KEY = "country"
         const val DEVICE_LOCATION_CHANGED = "org.radarbase.passive.google.places.GooglePlacesManager.DEVICE_LOCATION_CHANGED"
-        private fun Place.Type.toPlacesType(): PlacesType = when (this) {
+        private fun Place.Type.toPlacesType(): PlacesType? = when (this) {
             Place.Type.ACCOUNTING -> PlacesType.ACCOUNTING
             Place.Type.ADMINISTRATIVE_AREA_LEVEL_1 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_1
             Place.Type.ADMINISTRATIVE_AREA_LEVEL_2 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_2
@@ -424,7 +424,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             Place.Type.UNIVERSITY -> PlacesType.UNIVERSITY
             Place.Type.VETERINARY_CARE -> PlacesType.VETERINARY_CARE
             Place.Type.ZOO -> PlacesType.ZOO
-            else -> PlacesType.UNKNOWN
+            else -> null
         }
     }
 }
