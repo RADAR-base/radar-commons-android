@@ -20,6 +20,8 @@ import android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
 import android.Manifest.permission.ACCESS_COARSE_LOCATION
 import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -46,11 +48,19 @@ import org.radarcns.passive.google.GooglePlacesInfo
 import org.radarcns.passive.google.PlacesType
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
+import kotlin.math.pow
 
 class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized private var apiKey: String, private val placeHandler: SafeHandler) : AbstractSourceManager<GooglePlacesService, GooglePlacesState>(service) {
     private val placesInfoTopic: DataCache<ObservationKey, GooglePlacesInfo> = createCache("android_google_places_info", GooglePlacesInfo())
 
     private val placesProcessor: OfflineProcessor
+    // Delay in seconds for exponential backoff
+    private val maxDelay: Long = 43200
+    private val baseDelay: Long = 300
+    @get: Synchronized
+    @set: Synchronized
+    private var numOfAttempts: Int = 0
+    private val preferences: SharedPreferences = service.getSharedPreferences(GooglePlacesManager::class.java.name, Context.MODE_PRIVATE)
 
     private val isPermissionGranted: Boolean
         get() = checkLocationPermissions()
@@ -145,6 +155,11 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             if (isPermissionGranted) {
                 currentPlaceRequest = FindCurrentPlaceRequest.newInstance(currentPlaceFields)
                 placesClient?.let { client ->
+                   // resetting the backoff time in SharedPreferences once the plugin works successfully
+                    if (numOfAttempts > 0) {
+                        preferences.edit()
+                            .putInt(NUMBER_OF_ATTEMPTS_KEY, 0).apply()
+                    }
                     client.findCurrentPlace(currentPlaceRequest)
                         .addOnSuccessListener { response: FindCurrentPlaceResponse ->
                             val limitLikelihood = state.limitByPlacesLikelihood
@@ -202,10 +217,12 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                             }
                     }
                     send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, city, state, country, it, placeLikelihood, fromBroadcastRegistration))
+                    logger.info("Google Places data with additional info sent")
                     return
                 }
             }
             send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, null, null, null, placeId, placeLikelihood, fromBroadcastRegistration))
+            logger.info("Google Places data sent ")
         }
     }
 
@@ -232,6 +249,21 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         }
     }
 
+    override fun disconnect() {
+        if (!isClosed) {
+            numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
+            val currentDelay = (baseDelay + 2.0.pow(numOfAttempts)).toLong()
+            placeHandler.delay(currentDelay * 1000) {
+                if (currentDelay < maxDelay) {
+                    numOfAttempts++
+                    preferences
+                        .edit()
+                        .putInt(NUMBER_OF_ATTEMPTS_KEY, numOfAttempts).apply()
+                }
+                    super.disconnect()
+            }
+        }
+    }
 
     fun placesFetchInterval(interval: Long, intervalUnit: TimeUnit) {
         placesProcessor.interval(interval, intervalUnit)
@@ -283,7 +315,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         private const val CITY_KEY = "locality"
         private const val STATE_KEY = "administrative_area_level_1"
         private const val COUNTRY_KEY = "country"
+        private const val NUMBER_OF_ATTEMPTS_KEY = "number_of_attempts_key"
         const val DEVICE_LOCATION_CHANGED = "org.radarbase.passive.google.places.GooglePlacesManager.DEVICE_LOCATION_CHANGED"
+
         private fun Place.Type.toPlacesType(): PlacesType? = when (this) {
             Place.Type.ACCOUNTING -> PlacesType.ACCOUNTING
             Place.Type.ADMINISTRATIVE_AREA_LEVEL_1 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_1
