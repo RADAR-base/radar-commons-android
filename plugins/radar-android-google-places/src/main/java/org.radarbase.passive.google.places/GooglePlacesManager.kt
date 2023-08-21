@@ -68,10 +68,18 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         get() = state.placesClientCreated.get()
     private val fromBroadcastRegistration: Boolean
         get()= state.fromBroadcast.get()
-    private val shouldFetchPlaceId: Boolean
+    var shouldFetchPlaceId: Boolean
         get() = state.shouldFetchPlaceId.get()
-    private val shouldFetchAdditionalInfo: Boolean
+        set(value) = state.shouldFetchPlaceId.set(value)
+    var shouldFetchAdditionalInfo: Boolean
         get() = state.shouldFetchAdditionalInfo.get()
+        set(value) = state.shouldFetchAdditionalInfo.set(value)
+    var limitByPlacesCount: Int
+        get() = state.limitByPlacesCount
+        set(value) { state.limitByPlacesCount = value }
+    var limitByPlacesLikelihood: Double
+        get() = state.limitByPlacesLikelihood
+        set(value) { state.limitByPlacesLikelihood = value }
     private val currentPlaceFields: List<Place.Field>
         get() = if (shouldFetchPlaceId||shouldFetchAdditionalInfo) listOf(Place.Field.TYPES, Place.Field.ID) else listOf(Place.Field.TYPES)
     private val detailsPlaceFields: List<Place.Field> =  listOf(Place.Field.ADDRESS_COMPONENTS)
@@ -162,8 +170,8 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                     }
                     client.findCurrentPlace(currentPlaceRequest)
                         .addOnSuccessListener { response: FindCurrentPlaceResponse ->
-                            val limitLikelihood = state.limitByPlacesLikelihood
-                            val countLikelihood = state.limitByPlacesCount
+                            val limitLikelihood = limitByPlacesLikelihood
+                            val countLikelihood = limitByPlacesCount
                             when {
                                 countLikelihood == -1 && limitLikelihood == -1.0 -> doSend(response.placeLikelihoods)
                                 countLikelihood >= 0 && limitLikelihood == -1.0 -> doSend(response.placeLikelihoods.sortedByDescending { it.likelihood }.take(countLikelihood))
@@ -267,22 +275,6 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
 
     fun placesFetchInterval(interval: Long, intervalUnit: TimeUnit) {
         placesProcessor.interval(interval, intervalUnit)
-    }
-
-    fun shouldFetchPlaceId(needPlaceId: Boolean) {
-        state.shouldFetchPlaceId.set(needPlaceId)
-    }
-
-    fun shouldFetchAdditionalInfo(needAdditionalInfo: Boolean) {
-        state.shouldFetchAdditionalInfo.set(needAdditionalInfo)
-    }
-
-    fun limitByPlacesCount(limitCount: Int) {
-        state.limitByPlacesCount = limitCount
-    }
-
-    fun limitByPlacesLikelihood(limitLikelihood: Double) {
-        state.limitByPlacesLikelihood = limitLikelihood
     }
 
     private fun checkLocationPermissions(): Boolean {

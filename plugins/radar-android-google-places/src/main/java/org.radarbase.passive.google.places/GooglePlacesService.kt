@@ -52,10 +52,10 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
            }
 
         manager.placesFetchInterval(config.getLong(GOOGLE_PLACES_FETCH_INTERVAL, GOOGLE_PLACES_FETCH_INTERVAL_DEFAULT), TimeUnit.SECONDS)
-        manager.shouldFetchPlaceId(config.getBoolean(FETCH_GOOGLE_PLACES_ID_KEY, false))
-        manager.shouldFetchAdditionalInfo(config.getBoolean(FETCH_GOOGLE_PLACES_ADDITIONAL_INFO, false))
-        manager.limitByPlacesCount(config.getInt(FETCH_GOOGLE_PLACE_COUNT_BOUND, FETCH_GOOGLE_PLACE_COUNT_NUMBER_DEFAULT))
-        manager.limitByPlacesLikelihood(config.getFloat(FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND, GOOGLE_FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT.toFloat()).toDouble())
+        manager.shouldFetchPlaceId = config.getBoolean(FETCH_GOOGLE_PLACES_ID_KEY, false)
+        manager.shouldFetchAdditionalInfo = config.getBoolean(FETCH_GOOGLE_PLACES_ADDITIONAL_INFO, false)
+        manager.limitByPlacesCount = config.getInt(FETCH_GOOGLE_PLACE_COUNT_BOUND, FETCH_GOOGLE_PLACE_COUNT_NUMBER_DEFAULT)
+        manager.limitByPlacesLikelihood = config.getFloat(FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND, GOOGLE_FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT.toFloat()).toDouble()
 
     }
 
