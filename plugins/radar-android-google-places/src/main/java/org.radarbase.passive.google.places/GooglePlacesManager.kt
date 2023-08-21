@@ -48,6 +48,7 @@ import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GooglePlacesInfo
 import org.radarcns.passive.google.PlacesType
 import org.slf4j.LoggerFactory
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.pow
 
@@ -269,7 +270,8 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     }
 
     override fun onClose() {
-            numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
+        val closeLatch = CountDownLatch(1)
+        numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
             val currentDelay = (baseDelay + 2.0.pow(numOfAttempts)).toLong()
             placeHandler.delay(currentDelay * 1000) {
                 if (currentDelay < maxDelay) {
@@ -285,7 +287,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 }
                 placesBroadcastReceiver = null
                 placesProcessor.close()
+                closeLatch.countDown()
             }
+        closeLatch.await()
     }
 
     companion object {
