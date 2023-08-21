@@ -110,9 +110,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         placesBroadcastReceiver = LocalBroadcastManager.getInstance(service).register(DEVICE_LOCATION_CHANGED) { _, _ ->
             if (placesClientCreated) {
                 placeHandler.execute {
-                    state.fromBroadcast.compareAndSet(false, true)
+                    state.fromBroadcast.set(true)
                     processPlacesData()
-                    state.fromBroadcast.compareAndSet(true, false)
+                    state.fromBroadcast.set(false)
                 }
             }
         }
@@ -129,12 +129,11 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         }
     }
 
-
     fun updateApiKey(apiKey: String) {
         when (apiKey) {
             GOOGLE_PLACES_API_KEY_DEFAULT -> {
                 logger.error("API-key is empty, disconnecting now")
-                onDisconnect()
+                disconnect()
             }
             else -> {
                 synchronized(this)  {
@@ -153,7 +152,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             Places.initialize(service.applicationContext, apiKey)
         } catch (ex: Exception) {
             logger.error("Exception while initializing places API", ex)
-            onDisconnect()
+            disconnect()
         }
     }
 
@@ -165,7 +164,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 val client = placesClient ?: return@execute
                 currentPlaceRequest = FindCurrentPlaceRequest.newInstance(currentPlaceFields)
                    // resetting the backoff time in SharedPreferences once the plugin works successfully
-                    if (numOfAttempts > 0) {
+                if (numOfAttempts > 0) {
                         preferences.edit()
                             .putInt(NUMBER_OF_ATTEMPTS_KEY, 0).apply()
                     }
@@ -247,26 +246,10 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         when (statusCode) {
             INVALID_API_CODE -> {
                 logger.error("Invalid Api key, disconnecting now")
-                onDisconnect()
+                disconnect()
             }
             LOCATION_UNAVAILABLE_CODE -> logger.warn("Location not enabled yet")
             else -> logger.error("ApiException occurred with status code $statusCode", exception)
-        }
-    }
-
-    private fun onDisconnect() {
-        if (!isClosed) {
-            numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
-            val currentDelay = (baseDelay + 2.0.pow(numOfAttempts)).toLong()
-            placeHandler.delay(currentDelay * 1000) {
-                if (currentDelay < maxDelay) {
-                    numOfAttempts++
-                    preferences
-                        .edit()
-                        .putInt(NUMBER_OF_ATTEMPTS_KEY, numOfAttempts).apply()
-                }
-                    disconnect()
-            }
         }
     }
 
@@ -286,15 +269,23 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     }
 
     override fun onClose() {
-        placeHandler.execute {
-            try {
-                placesBroadcastReceiver?.unregister()
-            } catch (ex: IllegalStateException) {
-                logger.warn("Places receiver already unregistered in broadcast")
+            numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
+            val currentDelay = (baseDelay + 2.0.pow(numOfAttempts)).toLong()
+            placeHandler.delay(currentDelay * 1000) {
+                if (currentDelay < maxDelay) {
+                    numOfAttempts++
+                    preferences
+                        .edit()
+                        .putInt(NUMBER_OF_ATTEMPTS_KEY, numOfAttempts).apply()
+                }
+                try {
+                    placesBroadcastReceiver?.unregister()
+                } catch (ex: IllegalStateException) {
+                    logger.warn("Places receiver already unregistered in broadcast")
+                }
+                placesBroadcastReceiver = null
+                placesProcessor.close()
             }
-            placesBroadcastReceiver = null
-        }
-        placesProcessor.close()
     }
 
     companion object {
