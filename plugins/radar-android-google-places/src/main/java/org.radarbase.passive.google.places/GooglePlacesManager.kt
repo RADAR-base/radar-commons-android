@@ -28,6 +28,7 @@ import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.model.AddressComponent
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.model.PlaceLikelihood
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
@@ -133,7 +134,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         when (apiKey) {
             GOOGLE_PLACES_API_KEY_DEFAULT -> {
                 logger.error("API-key is empty, disconnecting now")
-                disconnect()
+                onDisconnect()
             }
             else -> {
                 synchronized(this)  {
@@ -152,7 +153,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             Places.initialize(service.applicationContext, apiKey)
         } catch (ex: Exception) {
             logger.error("Exception while initializing places API", ex)
-            disconnect()
+            onDisconnect()
         }
     }
 
@@ -161,8 +162,8 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private fun processPlacesData() {
         placeHandler.execute {
             if (isPermissionGranted) {
+                val client = placesClient ?: return@execute
                 currentPlaceRequest = FindCurrentPlaceRequest.newInstance(currentPlaceFields)
-                placesClient?.let { client ->
                    // resetting the backoff time in SharedPreferences once the plugin works successfully
                     if (numOfAttempts > 0) {
                         preferences.edit()
@@ -172,13 +173,18 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                         .addOnSuccessListener { response: FindCurrentPlaceResponse ->
                             val limitLikelihood = limitByPlacesLikelihood
                             val countLikelihood = limitByPlacesCount
-                            when {
-                                countLikelihood == -1 && limitLikelihood == -1.0 -> doSend(response.placeLikelihoods)
-                                countLikelihood >= 0 && limitLikelihood == -1.0 -> doSend(response.placeLikelihoods.sortedByDescending { it.likelihood }.take(countLikelihood))
-                                countLikelihood == -1 && limitLikelihood >= 0.0 -> doSend(response.placeLikelihoods.filter { it.likelihood >= limitLikelihood }.sortedByDescending { it.likelihood })
-                                countLikelihood >= 0 && limitLikelihood >= 0.0 -> doSend(response.placeLikelihoods.filter { it.likelihood >= limitLikelihood }.sortedByDescending { it.likelihood }.take(countLikelihood))
-                                else -> logger.warn("Appropriate value not provided for limiting the places data")
+                            val placeLikelihoods = response.placeLikelihoods.toMutableList()
+                            if (limitLikelihood >= 0.0)  {
+                                placeLikelihoods.removeAll { it.likelihood < limitLikelihood }
                             }
+                            placeLikelihoods.sortByDescending { it.likelihood }
+                            doSend(
+                                if (countLikelihood >= 0) {
+                                    placeLikelihoods.take(countLikelihood)
+                                } else {
+                                    placeLikelihoods
+                                }
+                            )
                         }
                         .addOnFailureListener { ex ->
                             when (ex.javaClass) {
@@ -189,7 +195,6 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                 else -> logger.error("Exception while fetching current place", ex)
                             }
                         }
-                    }
                 } else {
                     logger.warn("Location permissions not granted yet")
                 }
@@ -199,65 +204,57 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private fun doSend(places: List<PlaceLikelihood>) {
         places.forEach { likelihood ->
             val types = likelihood.place.types?.map { it.toPlacesType() }
-            var city: String? = null
-            var state: String? = null
-            var country: String? = null
-
             val placeLikelihood: Double = likelihood.likelihood
             val placeId: String? = if (shouldFetchPlaceId) likelihood.place.id else null
             if (shouldFetchAdditionalInfo) {
                 val id: String? = likelihood.place.id
                 id?.let {
                     detailsPlaceRequest = FetchPlaceRequest.newInstance(it, detailsPlaceFields)
-                    placesClient?.let {   client ->
-                        client.fetchPlace(detailsPlaceRequest)
+
+                    val client = checkNotNull(placesClient) { "Google Places client unexpectedly became null" }
+                    client.fetchPlace(detailsPlaceRequest)
                             .addOnSuccessListener { placeInfo: FetchPlaceResponse ->
-                                city = findComponent(placeInfo, CITY_KEY)
-                                state = findComponent(placeInfo, STATE_KEY)
-                                country = findComponent(placeInfo, COUNTRY_KEY) }
+                                val addressComponents = placeInfo.place.addressComponents?.asList()
+                                val city = findComponent(addressComponents, CITY_KEY)
+                                val state = findComponent(addressComponents, STATE_KEY)
+                                val country = findComponent(addressComponents, COUNTRY_KEY)
+                                send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, city, state, country, it, placeLikelihood, fromBroadcastRegistration))
+                                logger.info("Google Places data with additional info sent")
+                            }
                             .addOnFailureListener { ex ->
                                 when (ex.javaClass) {
                                     ApiException::class.java -> {
                                         val exception = ex as ApiException
                                         handleApiException(exception, exception.statusCode)
                                     }
-                                    else -> logger.error("Exception while fetching place details", ex) }
+                                    else -> {
+                                        send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, null, null, null, placeId, placeLikelihood, fromBroadcastRegistration))
+                                        logger.info("Google Places data sent")
+                                    }
+                                }
                             }
-                    }
-                    send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, city, state, country, it, placeLikelihood, fromBroadcastRegistration))
-                    logger.info("Google Places data with additional info sent")
-                    return
                 }
             }
-            send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, null, null, null, placeId, placeLikelihood, fromBroadcastRegistration))
-            logger.info("Google Places data sent ")
         }
     }
 
-
-
-    private fun findComponent(placeInfo: FetchPlaceResponse, component: String): String? =
-         try {
-             placeInfo.place.addressComponents?.asList()?.first { address ->
+    private fun findComponent(addressComponents: MutableList<AddressComponent>?, component: String): String? =
+             addressComponents?.firstOrNull { address ->
                  address.types.any { it.equals(component) }
              }?.name
-         } catch (ex: NoSuchElementException) {
-            logger.warn("Exception while retrieving data for additional place details ", ex)
-             null
-        }
 
     private fun handleApiException(exception: ApiException, statusCode: Int) {
         when (statusCode) {
             INVALID_API_CODE -> {
                 logger.error("Invalid Api key, disconnecting now")
-                disconnect()
+                onDisconnect()
             }
             LOCATION_UNAVAILABLE_CODE -> logger.warn("Location not enabled yet")
             else -> logger.error("ApiException occurred with status code $statusCode", exception)
         }
     }
 
-    override fun disconnect() {
+    private fun onDisconnect() {
         if (!isClosed) {
             numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
             val currentDelay = (baseDelay + 2.0.pow(numOfAttempts)).toLong()
@@ -268,7 +265,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                         .edit()
                         .putInt(NUMBER_OF_ATTEMPTS_KEY, numOfAttempts).apply()
                 }
-                    super.disconnect()
+                    disconnect()
             }
         }
     }
