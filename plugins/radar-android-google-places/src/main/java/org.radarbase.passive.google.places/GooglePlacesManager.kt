@@ -204,6 +204,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private fun doSend(places: List<PlaceLikelihood>) {
         places.forEach { likelihood ->
             val types = likelihood.place.types?.map { it.toPlacesType() }
+            val type1 = types?.getOrNull(0)
+            val type2 = types?.getOrNull(1)
+            val type3 = types?.getOrNull(2)
             val placeLikelihood: Double = likelihood.likelihood
             val placeId: String? = if (shouldFetchPlaceId) likelihood.place.id else null
             if (shouldFetchAdditionalInfo) {
@@ -218,7 +221,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                 val city = findComponent(addressComponents, CITY_KEY)
                                 val state = findComponent(addressComponents, STATE_KEY)
                                 val country = findComponent(addressComponents, COUNTRY_KEY)
-                                send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, city, state, country, it, placeLikelihood, fromBroadcastRegistration))
+                                send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, type1, type2, type3, city, state, country, it, placeLikelihood, fromBroadcastRegistration))
                                 logger.info("Google Places data with additional info sent")
                             }
                             .addOnFailureListener { ex ->
@@ -228,7 +231,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                         handleApiException(exception, exception.statusCode)
                                     }
                                     else -> {
-                                        send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, types, null, null, null, placeId, placeLikelihood, fromBroadcastRegistration))
+                                        send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, type1, type2, type3, null, null, null, placeId, placeLikelihood, fromBroadcastRegistration))
                                         logger.info("Google Places data sent")
                                     }
                                 }
