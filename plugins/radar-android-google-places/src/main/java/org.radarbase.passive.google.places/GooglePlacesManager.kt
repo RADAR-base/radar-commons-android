@@ -285,13 +285,16 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         state.limitByPlacesLikelihood = limitLikelihood
     }
 
-    private fun checkLocationPermissions(): Boolean =
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+    private fun checkLocationPermissions(): Boolean {
+        val hasPermissions = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             ((ContextCompat.checkSelfPermission(service, ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) || ContextCompat.checkSelfPermission(service, ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
         else {
             ((ContextCompat.checkSelfPermission(service, ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) || ContextCompat.checkSelfPermission(service, ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) &&
                     ContextCompat.checkSelfPermission(service, ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
         }
+        check(hasPermissions) { "Location permission is missing for Google Places" }
+        return hasPermissions
+    }
 
     override fun onClose() {
         placeHandler.execute {
