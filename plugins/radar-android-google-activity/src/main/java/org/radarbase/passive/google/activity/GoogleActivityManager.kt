@@ -26,7 +26,6 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.ActivityTransition
-import com.google.android.gms.location.ActivityTransitionEvent
 import com.google.android.gms.location.ActivityTransitionResult
 import com.google.android.gms.location.DetectedActivity
 import org.radarbase.android.data.DataCache
@@ -100,21 +99,21 @@ class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceMana
 
     fun sendActivityTransitionUpdates(activityIntent: Intent) {
         logger.info("Activity transition event data received")
-        val activityTransitionResult: ActivityTransitionResult? = ActivityTransitionResult.extractResult(activityIntent)
-        activityTransitionResult?.let {
-            it.transitionEvents.forEach { event: ActivityTransitionEvent ->
-                // Accepting the events only if the activity happened in last 30 seconds
-                if (((SystemClock.elapsedRealtime() - (event.elapsedRealTimeNanos / 1000000)) / 1000) <= 30) {
-                    val time = event.elapsedRealTimeNanos.toActivityTime() / 1000.0
-                    val activity = event.activityType.toActivityType()
-                    val transition = event.transitionType.toTransitionType()
-                    send(
-                        activityTransitionEventTopic,
-                        GoogleActivityTransitionEvent(time, currentTime, activity, transition)
-                    )
-                }
+        val activityTransitionResult: ActivityTransitionResult = ActivityTransitionResult.extractResult(activityIntent) ?: return
+
+        // Accepting the events only if the activity happened in last 30 seconds
+        val now = SystemClock.elapsedRealtimeNanos()
+        activityTransitionResult.transitionEvents.asSequence()
+            .filter { now - it.elapsedRealTimeNanos < 30_000_000_000 }
+            .forEach { event ->
+                val time = event.elapsedRealTimeNanos.toActivityTime() / 1000.0
+                val activity = event.activityType.toActivityType()
+                val transition = event.transitionType.toTransitionType()
+                send(
+                    activityTransitionEventTopic,
+                    GoogleActivityTransitionEvent(time, currentTime, activity, transition)
+                )
             }
-        }
     }
 
     private fun createActivityPendingIntent(): PendingIntent {
