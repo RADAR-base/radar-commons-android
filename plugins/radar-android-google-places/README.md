@@ -23,14 +23,14 @@ To enable this plugin, add the provider `google_places` to `plugins` property of
 This plugin takes the following Firebase configuration parameters:
 
 
-| Name                                  | Type          | Default            | Description                                                                                                                     |
-|---------------------------------------|---------------|--------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| `places_api_key`                      | string        | `<empty>`          | Places API key from the Google Cloud Console to work with the Google Places API                                                 |
-| `places_interval_seconds`             | int (seconds) | `600` = 10 minutes | Rate at which to send data for all places topics.                                                                               |
-| `should_fetch_places_id`              | boolean       | `false`            | Whether to send the Place-Id along with current place data.                                                                     |
-| `should_fetch_additional_places_info` | boolean       | `false`            | Whether to send Additional details with the user current place like city, state and country                                     |
-| `fetch_place_likelihoods_count`       | int           | `-1`               | If limited places data is needed from list of places data. Set `-1` to disable it. by default whole list of places and sent     |
-| `fetch_place_likelihoods_bound`       | double        | `-1.0`             | If limited places data is needed from all retrieved places. Set `-1.0` to disable it. By default it sends all retreived places. |
+| Name                                         | Type          | Default            | Description                                                                                                                    |
+|----------------------------------------------|---------------|--------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| `places_api_key`                             | string        | `<empty>`          | Places API key from the Google Cloud Console to work with the Google Places API                                                |
+| `places_interval_seconds`                    | int (seconds) | `600` = 10 minutes | Rate at which to send data for all places topics.                                                                              |
+| `places_should_fetch_places_id`              | boolean       | `false`            | Whether to send the Place-Id along with current place data.                                                                    |
+| `places_should_fetch_additional_places_info` | boolean       | `false`            | Whether to send Additional details with the user current place like city, state and country                                    |
+| `places_fetch_place_likelihoods_count`       | int           | `-1`               | If limited places data is needed from list of places data. Set `-1` to  to send the whole list of likelihoods.                 |
+| `places_fetch_place_likelihoods_bound`       | double        | `-1.0`             | Only select places that have a likelihood higher than the provided likelihood. Set to -1.0 to not limit results by likelihood. |
 
 
 
