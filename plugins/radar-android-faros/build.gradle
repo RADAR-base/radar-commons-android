@@ -9,19 +9,14 @@ android {
 //---------------------------------------------------------------------------//
 
 description = 'Faros plugin for RADAR passive remote monitoring app'
-ext.nexusRepo = 'https://repo.thehyve.nl/content/repositories/' + (version.endsWith('-SNAPSHOT') ? 'snapshots' : 'releases')
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
-repositories {
-    maven { url 'https://repo.thehyve.nl/content/repositories/releases' }
-}
-
 dependencies {
     api project(':radar-commons-android')
-    implementation 'org.radarcns:radar-faros-sdk:0.1.0'
+    implementation 'org.radarbase:radar-faros-sdk:0.2.0-SNAPSHOT'
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"

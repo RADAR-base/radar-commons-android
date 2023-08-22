@@ -16,25 +16,36 @@
 
 package org.radarbase.passive.bittium
 
-import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.util.Strings
-import org.radarcns.bittium.faros.*
+import org.radarbase.bittium.faros.BatteryStatus
+import org.radarbase.bittium.faros.FarosDevice
+import org.radarbase.bittium.faros.FarosDeviceListener
+import org.radarbase.bittium.faros.FarosDeviceState
+import org.radarbase.bittium.faros.FarosSdkFactory
+import org.radarbase.bittium.faros.FarosSdkListener
+import org.radarbase.bittium.faros.FarosSdkManager
+import org.radarbase.bittium.faros.FarosSettings
+import org.radarbase.bittium.faros.Measurement
 import org.radarcns.kafka.ObservationKey
-import org.radarcns.passive.bittium.*
+import org.radarcns.passive.bittium.BittiumFarosAcceleration
+import org.radarcns.passive.bittium.BittiumFarosBatteryLevel
+import org.radarcns.passive.bittium.BittiumFarosEcg
+import org.radarcns.passive.bittium.BittiumFarosInterBeatInterval
+import org.radarcns.passive.bittium.BittiumFarosTemperature
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.regex.Pattern
 
 class FarosManager internal constructor(
-        service: FarosService,
-        private val farosFactory: FarosSdkFactory,
-        private val handler: SafeHandler
-) : AbstractSourceManager<FarosService, FarosState>(service), FarosDeviceListener, FarosSdkListener {
+    service: FarosService,
+    private val farosFactory: FarosSdkFactory,
+    private val handler: SafeHandler,
+) : AbstractSourceManager<FarosService, FarosState>(service),
+    FarosDeviceListener,
+    FarosSdkListener {
     private val notificationHandler by lazy {
         NotificationHandler(this.service)
     }
@@ -45,9 +56,9 @@ class FarosManager internal constructor(
     private val temperatureTopic: DataCache<ObservationKey, BittiumFarosTemperature> = createCache("android_bittium_faros_temperature", BittiumFarosTemperature())
     private val batteryTopic: DataCache<ObservationKey, BittiumFarosBatteryLevel> = createCache("android_bittium_faros_battery_level", BittiumFarosBatteryLevel())
 
-    private lateinit var acceptableIds: Array<Pattern>
+    private lateinit var acceptableIds: List<Regex>
     private lateinit var apiManager: FarosSdkManager
-    private var settings: FarosSettings = farosFactory.defaultSettingsBuilder().build()
+    private var settings: FarosSettings = FarosSettings()
 
     private var faros: FarosDevice? = null
 
@@ -57,22 +68,25 @@ class FarosManager internal constructor(
 
         handler.start()
         handler.execute {
-            this.acceptableIds = Strings.containsPatterns(acceptableIds)
+            this.acceptableIds = acceptableIds.map {
+                it.toRegex(setOf(RegexOption.IGNORE_CASE, RegexOption.LITERAL))
+            }
 
             apiManager = farosFactory.createSdkManager(service)
             try {
-                apiManager.startScanning(this, handler.handler)
+                val rawHandler = checkNotNull(handler.handler) { "Faros handler is null" }
+                apiManager.startScanning(this, rawHandler)
                 status = SourceStatusListener.Status.READY
             } catch (ex: IllegalStateException) {
                 logger.error("Failed to start scanning", ex)
-                close()
+                disconnect()
             }
         }
     }
 
-    override fun onStatusUpdate(status: Int) {
+    override fun onStatusUpdate(status: FarosDeviceState) {
         val radarStatus = when(status) {
-            FarosDeviceListener.IDLE -> {
+            FarosDeviceState.IDLE -> {
                 handler.execute {
                     logger.debug("Faros status is IDLE. Request to start/restart measurements.")
                     applySettings(this.settings)
@@ -84,12 +98,12 @@ class FarosManager internal constructor(
                 notificationHandler.manager?.cancel(FAROS_DISCONNECTED_NOTIFICATION_ID)
                 SourceStatusListener.Status.CONNECTED
             }
-            FarosDeviceListener.CONNECTING -> SourceStatusListener.Status.CONNECTING
-            FarosDeviceListener.DISCONNECTED, FarosDeviceListener.DISCONNECTING -> {
+            FarosDeviceState.CONNECTING -> SourceStatusListener.Status.CONNECTING
+            FarosDeviceState.DISCONNECTED, FarosDeviceState.DISCONNECTING -> {
                 disconnect()
                 SourceStatusListener.Status.DISCONNECTING
             }
-            FarosDeviceListener.MEASURING -> SourceStatusListener.Status.CONNECTED
+            FarosDeviceState.MEASURING -> SourceStatusListener.Status.CONNECTED
             else -> {
                 logger.warn("Faros status {} is unknown", status)
                 return
@@ -101,82 +115,137 @@ class FarosManager internal constructor(
     }
 
     override fun onDeviceScanned(device: FarosDevice) {
-            logger.info("Found Faros device {}", device.name)
-            if (faros != null) {
-                logger.info("Faros device {} already set", device.name)
-                return
-            }
+        val deviceName = device.name
 
-            val attributes: Map<String, String> = mapOf(
-                    Pair("type", when(device.type) {
-                        FarosDevice.FAROS_90  -> "FAROS_90"
-                        FarosDevice.FAROS_180 -> "FAROS_180"
-                        FarosDevice.FAROS_360 -> "FAROS_360"
-                        else -> "unknown"
-                    }))
+        val existingDevice = faros
+        if (existingDevice != null) {
+            logger.info("Faros device {} already set, ignoring {}", existingDevice.name, deviceName)
+            return
+        }
+        logger.info("Found Faros device {}", deviceName)
 
-            if ((acceptableIds.isEmpty() || Strings.findAny(acceptableIds, device.name))) {
-                register(device.name, device.name, attributes) {
-                    if (it != null) {
-                        handler.executeReentrant {
-                            logger.info("Stopping scanning")
-                            apiManager.stopScanning()
-                            name = service.getString(R.string.farosDeviceName, device.name)
+        val attributes: Map<String, String> = mapOf(
+            Pair(
+                "type",
+                when (device.model) {
+                    FarosDevice.Model.Faros90 -> "FAROS_90"
+                    FarosDevice.Model.Faros180 -> "FAROS_180"
+                    FarosDevice.Model.Faros360 -> "FAROS_360"
+                    else -> "unknown"
+                },
+            ),
+        )
 
-                            logger.info("Connecting to device {}", device.name)
-                            device.connect(this, handler.handler)
-                            this.faros = device
-                            status = SourceStatusListener.Status.CONNECTING
-                        }
-                    } else {
-                        logger.warn("Cannot register a Faros device")
-                    }
+        if (
+            acceptableIds.isEmpty() ||
+            deviceName == null ||
+            acceptableIds.any { it.containsMatchIn(deviceName) }
+        ) {
+            register(deviceName, deviceName, attributes) { sourceMetadata ->
+                sourceMetadata ?: run {
+                    logger.warn("Cannot register a Faros device")
+                    return@register
                 }
+
+                handler.executeReentrant {
+                    logger.info("Stopping scanning")
+                    apiManager.stopScanning()
+                    name = service.getString(R.string.farosDeviceName, deviceName)
+
+                    val rawHandler = handler.handler ?: run {
+                        logger.warn("Cannot connect to Faros device: the Manager Handler has stopped")
+                        return@executeReentrant
+                    }
+
+                    logger.info("Connecting to device {}", deviceName)
+                    device.connect(this, rawHandler)
+                    this.faros = device
+                    status = SourceStatusListener.Status.CONNECTING
+                }
+            }
         }
     }
 
-    override fun didReceiveAcceleration(timestamp: Double, x: Float, y: Float, z: Float) {
-        state.setAcceleration(x, y, z)
-        send(accelerationTopic, BittiumFarosAcceleration(timestamp, currentTime, x, y, z))
+    override fun didReceiveMeasurement(measurement: Measurement) {
+        val currentTime = currentTime
+        processAcceleration(currentTime, measurement)
+        processEcg(currentTime, measurement)
+        processTemperature(currentTime, measurement)
+        processInterBeatInterval(currentTime, measurement)
+        processBatteryStatus(currentTime, measurement)
     }
 
-    override fun didReceiveTemperature(timestamp: Double, temperature: Float) {
+    private fun processAcceleration(currentTime: Double, measurement: Measurement) {
+        val lastAcceleration: FloatArray? = measurement.accelerationIterator().fold(null as FloatArray?) { _, sample ->
+            val array = sample.value
+            send(
+                accelerationTopic,
+                BittiumFarosAcceleration(
+                    sample.timestamp,
+                    currentTime,
+                    array[0],
+                    array[1],
+                    array[2],
+                ),
+            )
+            array
+        }
+        if (lastAcceleration != null) {
+            state.setAcceleration(
+                lastAcceleration[0],
+                lastAcceleration[1],
+                lastAcceleration[2]
+            )
+        }
+    }
+
+    private fun processEcg(currentTime: Double, measurement: Measurement) {
+        measurement.ecgIterator().forEach { sample ->
+            val channels = sample.value
+            send(
+                ecgTopic,
+                BittiumFarosEcg(
+                    sample.timestamp,
+                    currentTime,
+                    channels[0],
+                    channels.getOrNull(1),
+                    channels.getOrNull(2),
+                ),
+            )
+        }
+    }
+
+    private fun processTemperature(currentTime: Double, measurement: Measurement) {
+        val temperature = measurement.temperature ?: return
         state.temperature = temperature
-        send(temperatureTopic, BittiumFarosTemperature(timestamp, currentTime, temperature))
+        send(temperatureTopic, BittiumFarosTemperature(measurement.timestamp, currentTime, temperature))
     }
 
-    override fun didReceiveInterBeatInterval(timestamp: Double, interBeatInterval: Float) {
-        state.heartRate = 60 / interBeatInterval
-        send(ibiTopic, BittiumFarosInterBeatInterval(timestamp, currentTime, interBeatInterval))
+    private fun processInterBeatInterval(currentTime: Double, measurement: Measurement) {
+        val ibi = measurement.interBeatInterval ?: return
+        state.heartRate = 60 / ibi
+        send(ibiTopic, BittiumFarosInterBeatInterval(measurement.timestamp, currentTime, ibi))
     }
 
-    override fun didReceiveEcg(timestamp: Double, channels: FloatArray) {
-        val channelOne = channels[0]
-        val channelTwo = if (channels.size > 1) channels[1] else null
-        val channelThree = if (channels.size > 2) channels[2] else null
-
-        send(ecgTopic, BittiumFarosEcg(timestamp, currentTime, channelOne, channelTwo, channelThree))
-    }
-
-    override fun didReceiveBatteryStatus(timestamp: Double, status: Int) {
+    private fun processBatteryStatus(currentTime: Double, measurement: Measurement) {
         // only send approximate battery levels if the battery level interval is disabled.
-        val level = when(status) {
-            FarosDeviceListener.BATTERY_STATUS_CRITICAL -> 0.05f
-            FarosDeviceListener.BATTERY_STATUS_LOW      -> 0.175f
-            FarosDeviceListener.BATTERY_STATUS_MEDIUM   -> 0.5f
-            FarosDeviceListener.BATTERY_STATUS_FULL     -> 0.875f
+        val level = when(val status = measurement.batteryStatus) {
+            BatteryStatus.CRITICAL -> 0.05f
+            BatteryStatus.LOW      -> 0.175f
+            BatteryStatus.MEDIUM   -> 0.5f
+            BatteryStatus.FULL     -> 0.875f
             else -> {
                 logger.warn("Unknown battery status {} passed", status)
                 return
             }
         }
         state.batteryLevel = level
-        send(batteryTopic, BittiumFarosBatteryLevel(timestamp, currentTime, level, false))
+        send(batteryTopic, BittiumFarosBatteryLevel(measurement.timestamp, currentTime, level, false))
     }
 
-    override fun didReceiveBatteryLevel(timestamp: Double, level: Float) {
-        state.batteryLevel = level
-        send(batteryTopic, BittiumFarosBatteryLevel(timestamp, currentTime, level, true))
+    override fun didReceiveBatteryLevel(timestamp: Double, batteryLevel: Float) {
+        state.batteryLevel = batteryLevel
+        send(batteryTopic, BittiumFarosBatteryLevel(timestamp, currentTime, batteryLevel, true))
     }
 
     internal fun applySettings(settings: FarosSettings) {

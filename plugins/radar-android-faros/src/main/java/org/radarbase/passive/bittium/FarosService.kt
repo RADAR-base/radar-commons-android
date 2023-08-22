@@ -21,7 +21,8 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.SafeHandler
-import org.radarcns.bittium.faros.FarosSdkFactory
+import org.radarbase.bittium.faros.FarosSdkFactory
+import org.radarbase.bittium.faros.FarosSettings
 
 /**
  * A service that manages a FarosDeviceManager and a TableDataHandler to send store the data of a
@@ -44,16 +45,18 @@ class FarosService : SourceService<FarosState>() {
 
     override fun configureSourceManager(manager: SourceManager<FarosState>, config: SingleRadarConfiguration) {
         manager as FarosManager
-        manager.applySettings(farosFactory.defaultSettingsBuilder()
-                .accelerometerRate(config.getInt(ACC_RATE, ACC_RATE_DEFAULT))
-                .accelerometerResolution(config.getFloat(ACC_RESOLUTION, ACC_RESOLUTION_DEFAULT))
-                .ecgRate(config.getInt(ECG_RATE, ECG_RATE_DEFAULT))
-                .ecgResolution(config.getFloat(ECG_RESOLUTION, ECG_RESOLUTION_DEFAULT))
-                .ecgChannels(config.getInt(ECG_CHANNELS, ECG_CHANNELS_DEFAULT))
-                .ecgHighPassFilter(config.getFloat(ECG_FILTER_FREQUENCY, ECG_FILTER_FREQUENCY_DEFAULT))
-                .interBeatIntervalEnable(config.getBoolean(IBI_ENABLE, IBI_ENABLE_DEFAULT))
-                .temperatureEnable(config.getBoolean(TEMP_ENABLE, TEMP_ENABLE_DEFAULT))
-                .build())
+        manager.applySettings(
+            FarosSettings(
+                accelerometerRate = config.getInt(ACC_RATE, ACC_RATE_DEFAULT),
+                accelerometerResolution = config.getFloat(ACC_RESOLUTION, ACC_RESOLUTION_DEFAULT),
+                ecgRate = config.getInt(ECG_RATE, ECG_RATE_DEFAULT),
+                ecgResolution = config.getFloat(ECG_RESOLUTION, ECG_RESOLUTION_DEFAULT),
+                ecgNumberOfChannels = config.getInt(ECG_CHANNELS, ECG_CHANNELS_DEFAULT),
+                ecgHighPassFilterFrequency = config.getFloat(ECG_FILTER_FREQUENCY, ECG_FILTER_FREQUENCY_DEFAULT),
+                isInterBeatIntervalEnabled = config.getBoolean(IBI_ENABLE, IBI_ENABLE_DEFAULT),
+                isTemperatureEnabled = config.getBoolean(TEMP_ENABLE, TEMP_ENABLE_DEFAULT),
+            )
+        )
         manager.notifyDisconnect(config.getBoolean(NOTIFY_DISCONNECT, NOTIFY_DISCONNECT_DEFAULT))
     }
 
