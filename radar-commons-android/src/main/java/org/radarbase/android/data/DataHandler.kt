@@ -19,12 +19,11 @@ package org.radarbase.android.data
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.radarbase.android.kafka.ServerStatus
-import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.kafka.TopicSendResult
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.topic.AvroTopic
 
-interface DataHandler<K, V> {
+interface DataHandler<K: Any, V: Any> {
     /** Get all caches.  */
     val caches: List<ReadableDataCache>
 
@@ -40,4 +39,5 @@ interface DataHandler<K, V> {
     fun handler(build: DataHandlerConfiguration.() -> Unit)
     fun getCache(topic: String): DataCache<*, *>
     fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
+    val numberOfRecords: SharedFlow<TableDataHandler.CacheSize>
 }

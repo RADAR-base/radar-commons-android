@@ -219,7 +219,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     override fun onClose() {
         if (phoneUsageProcessor.isStarted) {
-            phoneUsageProcessor.close()
+            phoneUsageProcessor.stop()
             service.unregisterReceiver(phoneStateReceiver)
         }
     }

@@ -4,8 +4,13 @@ import android.os.Binder
 import android.os.Bundle
 import android.os.Parcel
 import androidx.lifecycle.LiveData
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.zip
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatus
+import org.radarbase.android.kafka.TopicSendResult
 import org.radarbase.data.RecordData
 import java.io.IOException
 import java.util.*
@@ -47,19 +52,21 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
         sourceService.stopRecording()
     }
 
-    override val serverStatus: ServerStatus
-        get() = sourceService.dataHandler?.serverStatus ?: ServerStatus.DISCONNECTED
+    override val serverStatus: Flow<ServerStatus>?
+        get() = sourceService.dataHandler?.serverStatus
 
-    override val serverRecordsSent: Map<String, Long>
-        get() = sourceService.dataHandler?.recordsSent ?: mapOf()
+    override val serverRecordsSent: Flow<TopicSendResult>?
+        get() = sourceService.dataHandler?.recordsSent
 
     override fun updateConfiguration(bundle: Bundle) {
         sourceService.onInvocation(bundle)
     }
 
-    override val numberOfRecords: Long?
+    override val numberOfRecords: Flow<Long>?
         get() = sourceService.dataHandler?.let { data ->
-            data.caches.sumOf { it.numberOfRecords }
+            data.caches.map { it.numberOfRecords }
+                .zip()
+                .map { it.sum() }
         }
 
     override fun needsBluetooth(): Boolean = sourceService.isBluetoothConnectionRequired

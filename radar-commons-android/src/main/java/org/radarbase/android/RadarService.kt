@@ -28,9 +28,13 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -54,11 +58,10 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.HashSet
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private var configurationUpdateFuture: SafeHandler.HandlerFuture? = null
-    private val fetchTimeout = ChangeRunner<Long>()
+    private val fetchTimeout = MutableStateFlow<Long>()
     private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
     protected open val showSourceStatus: Boolean = false
@@ -69,18 +72,18 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     open val cacheStore: CacheStore = CacheStore()
 
     private lateinit var mHandler: SafeHandler
-    private var needsBluetooth = ChangeRunner(false)
+    private var needsBluetooth = MutableStateFlow(false)
     protected lateinit var configuration: RadarConfiguration
 
     /** Filters to only listen to certain source IDs or source names.  */
     private val sourceFilters: MutableMap<SourceServiceConnection<*>, Set<String>> = HashMap()
 
     private lateinit var providerLoader: SourceProviderLoader
-    private lateinit var authConnection: AuthServiceConnection
+    private lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
-    private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
+    private val configuredProviders = MutableStateFlow<List<SourceProvider<*>>>()
 
     private val isMakingAuthRequest = AtomicBoolean(false)
 
@@ -95,30 +98,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private var latestNumberOfRecordsSent = TimedLong(0)
 
     /** Current server status.  */
-    override var serverStatus: ServerStatus = ServerStatus.DISABLED
-        set(value) {
-            if (value === field) {
-                return
-            }
-            field = value
-            if (value == ServerStatus.DISCONNECTED) {
-                this.latestNumberOfRecordsSent = TimedLong(-1)
-            }
+    override val serverStatus: MutableStateFlow<ServerStatus> = MutableStateFlow(ServerStatus.DISABLED)
 
-            mHandler.execute {
-                if (value == ServerStatus.UNAUTHORIZED) {
-                    logger.debug("Status unauthorized")
-                    authConnection.applyBinder {
-                        if (isMakingAuthRequest.compareAndSet(false, true)) {
-                            invalidate(null, false)
-                            refresh()
-                        }
-                    }
-                }
-            }
-        }
-
-    private val needsPermissions = LinkedHashSet<String>()
+    private val needsPermissions = mutableSetOf<String>()
 
     protected open val servicePermissions: List<String>
         get() = listOf(ACCESS_NETWORK_STATE, INTERNET)
@@ -143,6 +125,27 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         configuration = radarConfig
         providerLoader = SourceProviderLoader(plugins)
+
+        lifecycleScope.launch {
+            launch(Dispatchers.Default) {
+                serverStatus.collect { value ->
+                    if (value == ServerStatus.DISCONNECTED) {
+                        latestNumberOfRecordsSent = TimedLong(-1)
+                    }
+
+                    if (value == ServerStatus.UNAUTHORIZED) {
+                        logger.debug("Status unauthorized")
+                        authConnection.applyBinder {
+                            if (isMakingAuthRequest.compareAndSet(false, true)) {
+                                invalidate(null, false)
+                                refresh()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         broadcaster.run {
@@ -555,7 +558,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         dataHandler?.handler {
             logger.info("Setting data submission authentication")
             rest {
-                headers = authState.okHttpHeaders
+                headers = authState.ktorHeaders
             }
             submitter {
                 userId = authState.userId
@@ -651,7 +654,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private fun stopActiveScanning() {
         mHandler.execute {
             isScanningEnabled = false
-            mConnections.asSequence()
+            connections.value.asSequence()
                 .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
                 .forEach(SourceProvider<*>::unbind)
         }

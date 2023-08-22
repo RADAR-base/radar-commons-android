@@ -1,15 +1,17 @@
 package org.radarbase.android.data
 
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
 
-class DataCacheGroup<K, V>(
-        val activeDataCache: DataCache<K, V>,
-        val deprecatedCaches: MutableList<ReadableDataCache>
-) : Closeable {
-
+class DataCacheGroup<K: Any, V: Any>(
+    val activeDataCache: DataCache<K, V>,
+    val deprecatedCaches: MutableList<ReadableDataCache>
+) {
     val topicName: String = activeDataCache.topic.name
 
     @Throws(IOException::class)
@@ -27,7 +29,8 @@ class DataCacheGroup<K, V>(
                 logger.warn("Cannot remove old DataCache file " + tapeFile + " for topic " + storedCache.readTopic.name)
             }
             val name = tapeFile.absolutePath
-            val base = name.substring(0, name.length - storedCache.serialization.fileExtension.length)
+            val base =
+                name.substring(0, name.length - storedCache.serialization.fileExtension.length)
             val keySchemaFile = File(base + CacheStore.KEY_SCHEMA_EXTENSION)
             if (!keySchemaFile.delete()) {
                 logger.warn("Cannot remove old key schema file " + keySchemaFile + " for topic " + storedCache.readTopic.name)
@@ -39,13 +42,14 @@ class DataCacheGroup<K, V>(
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
-        activeDataCache.close()
-        deprecatedCaches.forEach(ReadableDataCache::close)
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(DataCacheGroup::class.java)
+    suspend fun stop() {
+        coroutineScope {
+            deprecatedCaches.forEach {
+                launch {
+                    it.stop()
+                }
+            }
+            activeDataCache.stop()
+        }
     }
 }

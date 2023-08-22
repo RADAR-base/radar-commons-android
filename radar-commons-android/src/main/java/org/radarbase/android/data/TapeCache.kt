@@ -16,14 +16,25 @@
 
 package org.radarbase.android.data
 
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable.isActive
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.apache.avro.Schema
 import org.radarbase.android.data.serialization.SerializationFactory
-import org.radarbase.android.util.ChangeRunner
-import org.radarbase.android.util.SafeHandler
 import org.radarbase.data.AvroRecordData
 import org.radarbase.data.Record
 import org.radarbase.data.RecordData
@@ -35,6 +46,7 @@ import java.io.File
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.ExecutionException
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
@@ -44,108 +56,94 @@ import java.util.concurrent.ExecutionException
  *
  * @param K measurement key type
  * @param V measurement value type
- */
-class TapeCache<K: Any, V: Any>
-/**
- * TapeCache to cache measurements with
  * @param topic Kafka Avro topic to write data for.
  * @throws IOException if a BackedObjectQueue cannot be created.
  */
-@Throws(IOException::class)
-constructor(
+class TapeCache<K: Any, V: Any>(
     override val file: File,
     override val topic: AvroTopic<K, V>,
     override val readTopic: AvroTopic<Any, Any>,
-    private val handler: SafeHandler,
     override val serialization: SerializationFactory,
     config: CacheConfiguration,
+    coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : DataCache<K, V> {
 
     private val measurementsToAdd = mutableListOf<Record<K, V>>()
     private val serializer = serialization.createSerializer(topic)
     private val deserializer = serialization.createDeserializer(readTopic)
 
-    private var queueFile: QueueFile
-    private var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
+    private lateinit var queueFile: QueueFile
+    private lateinit var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
     private val queueFileFactory = config.queueFileType
 
-    private var addMeasurementFuture: SafeHandler.HandlerFuture? = null
+    private var addMeasurementFuture: Job? = null
 
-    private val configCache = ChangeRunner(config)
+    private val mutex: Mutex = Mutex()
+    override val numberOfRecords: MutableStateFlow<Long> = MutableStateFlow(0)
+    override val config = MutableStateFlow(config)
 
-    private val mutex: Mutex
-    override val numberOfRecords: MutableStateFlow<Long>
-
-    override var config
-        get() = handler.compute { configCache.value }
-        set(value) = handler.execute {
-            configCache.applyIfChanged(value.copy()) {
-                queueFile.maximumFileSize = it.maximumSize
-            }
-        }
+    private val job = SupervisorJob()
+    private val cacheScope = CoroutineScope(coroutineContext + job + CoroutineName("cache-${topic.name}"))
 
     private val maximumSize: Long
-        get() = config.maximumSize.takeIf { it <= Int.MAX_VALUE } ?: Int.MAX_VALUE.toLong()
+        get() = config.value.maximumSize.takeIf { it <= Int.MAX_VALUE } ?: Int.MAX_VALUE.toLong()
 
     override val readUserIdField: Schema.Field?
         get() = topic.keySchema.takeIf { it.type == Schema.Type.RECORD }
             ?.getField("userId")
 
     init {
-        queueFile = try {
-            queueFileFactory.generate(Objects.requireNonNull(file), maximumSize)
-        } catch (ex: IOException) {
-            logger.error("TapeCache {} was corrupted. Removing old cache.", file, ex)
-            if (file.delete()) {
-                queueFileFactory.generate(file, maximumSize)
-            } else {
-                throw ex
+        cacheScope.launch(Dispatchers.IO) {
+            mutex.withLock {
+                queueFile = try {
+                    queueFileFactory.generate(Objects.requireNonNull(file), maximumSize)
+                } catch (ex: IOException) {
+                    logger.error("TapeCache {} was corrupted. Removing old cache.", file, ex)
+                    if (file.delete()) {
+                        queueFileFactory.generate(file, maximumSize)
+                    } else {
+                        throw ex
+                    }
+                }
+                queue = BackedObjectQueue(queueFile, serializer, deserializer)
+                numberOfRecords.value = queue.size.toLong()
             }
         }
-        queue = BackedObjectQueue(queueFile, serializer, deserializer)
-
-        numberOfRecords = MutableStateFlow(queue.size.toLong())
     }
 
     @Throws(IOException::class)
-    override fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any>? {
+    override suspend fun getUnsentRecords(limit: Int, sizeLimit: Long): RecordData<Any, Any>? {
         logger.debug("Trying to retrieve records from topic {}", topic.name)
-        return try {
-             handler.compute {
+        return withContext(cacheScope.coroutineContext) {
+            mutex.withLock {
                 try {
                     getValidUnsentRecords(limit, sizeLimit)
-                            ?.let { (key, values) ->
-                                AvroRecordData(readTopic, key, values)
-                            }
+                        ?.let { (key, values) ->
+                            AvroRecordData(readTopic, key, values)
+                        }
                 } catch (ex: IOException) {
-                    fixCorruptQueue(ex)
+                    withContext(Dispatchers.IO) {
+                        fixCorruptQueue(ex)
+                    }
                     null
                 } catch (ex: IllegalStateException) {
-                    fixCorruptQueue(ex)
+                    withContext(Dispatchers.IO) {
+                        fixCorruptQueue(ex)
+                    }
                     null
                 }
-            }
-        } catch (ex: InterruptedException) {
-            logger.warn("getUnsentRecords was interrupted, returning an empty list", ex)
-            Thread.currentThread().interrupt()
-            null
-        } catch (ex: ExecutionException) {
-            logger.warn("Failed to retrieve records for topic {}", topic, ex)
-            val cause = ex.cause
-            if (cause is RuntimeException) {
-                throw cause
-            } else {
-                throw IOException("Unknown error occurred", ex)
             }
         }
     }
 
-    private fun getValidUnsentRecords(limit: Int, sizeLimit: Long): Pair<Any, List<Any>>? {
+    private suspend fun getValidUnsentRecords(limit: Int, sizeLimit: Long): Pair<Any, List<Any>>? {
         var currentKey: Any? = null
         lateinit var records: List<Record<Any, Any>?>
 
         while (currentKey == null) {
-            records = queue.peek(limit, sizeLimit)
+            records = withContext(Dispatchers.IO) {
+                queue.peek(limit, sizeLimit)
+            }
 
             if (records.isEmpty()) return null
 
@@ -154,7 +152,9 @@ constructor(
                     ?: records.size
 
             if (nullSize > 0) {
-                queue -= nullSize
+                withContext(Dispatchers.IO) {
+                    queue -= nullSize
+                }
                 records = records.subList(nullSize, records.size)
             }
             currentKey = records.firstOrNull()?.key
@@ -169,50 +169,63 @@ constructor(
     }
 
     @Throws(IOException::class)
-    override fun getRecords(limit: Int): RecordData<Any, Any>? {
+    override suspend fun getRecords(limit: Int): RecordData<Any, Any>? {
         return getUnsentRecords(limit, maximumSize)?.let { records ->
-            AvroRecordData<Any, Any>(records.topic, records.key, records.filterNotNull())
+            AvroRecordData(records.topic, records.key, records.filterNotNull())
         }
     }
 
     @Throws(IOException::class)
-    override fun remove(number: Int) {
-        return handler.execute {
-            val actualRemoveSize = number.coerceAtMost(queue.size)
-            if (actualRemoveSize > 0) {
-                logger.debug("Removing {} records from topic {}", actualRemoveSize, topic.name)
-                queue -= actualRemoveSize
-                numberOfRecords.value = numberOfRecords.value - actualRemoveSize
+    override suspend fun remove(number: Int) {
+        withContext(cacheScope.coroutineContext + Dispatchers.IO) {
+            mutex.withLock {
+                val actualRemoveSize = number.coerceAtMost(queue.size)
+                if (actualRemoveSize > 0) {
+                    logger.debug(
+                        "Removing {} records from topic {}",
+                        actualRemoveSize,
+                        topic.name
+                    )
+                    queue -= actualRemoveSize
+                    numberOfRecords.value = numberOfRecords.value - actualRemoveSize
+                }
             }
         }
     }
 
-    override fun addMeasurement(key: K, value: V) {
+    override suspend fun addMeasurement(key: K, value: V) {
         val record = Record(key, value)
 
         require(serializer.canSerialize(record)) {
             "Cannot send invalid record to topic $topic with {key: $key, value: $value}"
         }
 
-        handler.execute {
+        mutex.withLock {
             measurementsToAdd += record
-
             if (addMeasurementFuture == null) {
-                addMeasurementFuture = handler.delay(config.commitRate, ::doFlush)
+                addMeasurementFuture = cacheScope.launch {
+                    delay(config.value.commitRate)
+                    doFlush()
+                }
             }
         }
     }
 
     @Throws(IOException::class)
-    override fun close() {
+    override suspend fun stop() {
         flush()
         queue.close()
     }
 
-    override fun flush() {
+    override suspend fun flush() {
         try {
-            handler.await {
-                addMeasurementFuture?.runNow()
+            mutex.withLock {
+                val future = addMeasurementFuture
+                if (future != null) {
+                    future.cancelAndJoin()
+                    addMeasurementFuture = null
+                    doFlush()
+                }
             }
         } catch (e: InterruptedException) {
             logger.warn("Did not wait for adding measurements to complete.")
@@ -222,12 +235,19 @@ constructor(
     }
 
     override fun triggerFlush() {
-        handler.execute {
-            addMeasurementFuture?.runNow()
+        cacheScope.launch {
+            mutex.withLock {
+                val future = addMeasurementFuture
+                if (future != null) {
+                    future.cancelAndJoin()
+                    addMeasurementFuture = null
+                    doFlush()
+                }
+            }
         }
     }
 
-    private fun doFlush() {
+    private suspend fun doFlush() {
         addMeasurementFuture = null
 
         if (measurementsToAdd.isEmpty()) {
@@ -235,7 +255,9 @@ constructor(
         }
         try {
             logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
-            queue += measurementsToAdd
+            withContext(Dispatchers.IO) {
+                queue += measurementsToAdd
+            }
             numberOfRecords.value = numberOfRecords.value + measurementsToAdd.size
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)

@@ -17,22 +17,20 @@
 package org.radarbase.android.data
 
 import android.content.Context
-import android.os.Process.THREAD_PRIORITY_BACKGROUND
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.kafka.*
-import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
-import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.android.util.send
-import org.radarbase.producer.rest.RestClient
-import org.radarbase.producer.rest.RestSender
+import org.radarbase.kotlin.coroutines.launchJoin
+import org.radarbase.producer.rest.RestKafkaSender
 import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
@@ -41,7 +39,7 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.TimeUnit
-import kotlin.collections.HashMap
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Stores data in databases and sends it to the server. If kafkaConfig is null, data will only be
@@ -50,22 +48,22 @@ import kotlin.collections.HashMap
 class TableDataHandler(
     private val context: Context,
     private val cacheStore: CacheStore,
+    coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : DataHandler<ObservationKey, SpecificRecord> {
     private val tables: ConcurrentMap<String, DataCacheGroup<*, *>> = ConcurrentHashMap()
     private val batteryLevelReceiver: BatteryStageReceiver
     private val networkConnectedReceiver: NetworkConnectedReceiver = NetworkConnectedReceiver(context)
-    private val handlerThread: SafeHandler = SafeHandler.getInstance("TableDataHandler", THREAD_PRIORITY_BACKGROUND)
-
     private var config = DataHandlerConfiguration()
 
-    @Volatile
-    var latestStatus: ServerStatus = ServerStatus.DISCONNECTED
-
     override var serverStatus = MutableStateFlow(ServerStatus.DISCONNECTED)
+    override val numberOfRecords = MutableSharedFlow<CacheSize>(onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     private val lastNumberOfRecordsSent = TreeMap<String, Long>()
     private var submitter: KafkaDataSubmitter? = null
-    private var sender: RestSender? = null
+    private var sender: RestKafkaSender? = null
+
+    private val job = SupervisorJob()
+    private val handlerScope = CoroutineScope(coroutineContext + job + CoroutineName("Table Data Handler"))
 
     private val isStarted: Boolean
         get() = submitter != null
@@ -76,10 +74,6 @@ class TableDataHandler(
     )
 
     init {
-
-        this.handlerThread.start()
-        this.handlerThread.repeat(10_000L, ::broadcastNumberOfRecords)
-
         this.batteryLevelReceiver = BatteryStageReceiver(context, config.batteryStageLevels) { stage ->
             when (stage) {
                 BatteryStageReceiver.BatteryStage.FULL -> {
@@ -100,7 +94,7 @@ class TableDataHandler(
                 BatteryStageReceiver.BatteryStage.EMPTY -> {
                     if (isStarted) {
                         logger.info("Battery level getting very low, stopping data sending")
-                        stop()
+                        pause()
                     }
                 }
             }
@@ -120,30 +114,16 @@ class TableDataHandler(
     }
 
     suspend fun monitor() {
-        coroutineScope {
-            launch {
-                networkConnectedReceiver.state.collectLatest { state ->
-                    if (isStarted) {
-                        if (!state.hasConnection(config.sendOnlyWithWifi)) {
-                            logger.info("Network was disconnected, stopping data sending")
-                            stop()
-                        }
-                    } else {
-                        // Just try to start: the start method will not do anything if the parameters
-                        // are not right.
-                        start()
-                    }
+        networkConnectedReceiver.state.collectLatest { state ->
+            if (isStarted) {
+                if (!state.hasConnection(config.sendOnlyWithWifi)) {
+                    logger.info("Network was disconnected, stopping data sending")
+                    pause()
                 }
-            }
-        }
-    }
-
-    private fun broadcastNumberOfRecords() {
-        caches.forEach { cache ->
-            val records = cache.numberOfRecords
-            broadcaster.send(CACHE_TOPIC) {
-                putExtra(CACHE_TOPIC, cache.readTopic.name)
-                putExtra(CACHE_RECORDS_UNSENT_NUMBER, records)
+            } else {
+                // Just try to start: the start method will not do anything if the parameters
+                // are not right.
+                start()
             }
         }
     }
@@ -157,14 +137,14 @@ class TableDataHandler(
     fun start() = handlerThread.executeReentrant {
         if (isStarted
             || config.submitterConfig.userId == null
-            || serverStatus === ServerStatus.DISABLED
+            || serverStatus.value === ServerStatus.DISABLED
             || !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi)
             || batteryLevelReceiver.stage == BatteryStageReceiver.BatteryStage.EMPTY
         ) {
             when {
                 config.submitterConfig.userId == null ->
                     logger.info("Submitter has no user ID set. Not starting.")
-                serverStatus === ServerStatus.DISABLED ->
+                serverStatus.value === ServerStatus.DISABLED ->
                     logger.info("Submitter has been disabled earlier. Not starting")
                 !networkConnectedReceiver.hasConnection(config.sendOnlyWithWifi) ->
                     logger.info("No networkconnection available. Not starting")
@@ -201,22 +181,22 @@ class TableDataHandler(
      * Pause sending any data.
      * This waits for any remaining data to be sent.
      */
-    fun stop() = handlerThread.executeReentrant {
+    fun pause() = handlerThread.executeReentrant {
         submitter?.close()
         submitter = null
         sender = null
-        if (serverStatus != ServerStatus.DISABLED) {
-            serverStatus = ServerStatus.READY
+        if (serverStatus.value != ServerStatus.DISABLED) {
+            serverStatus.value = ServerStatus.READY
         }
     }
 
     /** Do not submit any data, only cache it. If it is already disabled, this does nothing.  */
     private fun disableSubmitter() = handlerThread.executeReentrant {
-        if (serverStatus !== ServerStatus.DISABLED) {
+        if (serverStatus.value !== ServerStatus.DISABLED) {
             logger.info("Submitter is disabled")
             serverStatus = ServerStatus.DISABLED
             if (isStarted) {
-                stop()
+                pause()
             }
             networkConnectedReceiver.unregister()
             batteryLevelReceiver.unregister()
@@ -225,7 +205,7 @@ class TableDataHandler(
 
     /** Start submitting data. If it is already submitting data, this does nothing.  */
     private fun enableSubmitter() = handlerThread.executeReentrant {
-        if (serverStatus === ServerStatus.DISABLED) {
+        if (serverStatus.value === ServerStatus.DISABLED) {
             doEnableSubmitter()
             start()
         }
@@ -233,7 +213,7 @@ class TableDataHandler(
 
     private fun doEnableSubmitter() {
         logger.info("Submitter is enabled")
-        serverStatus = ServerStatus.READY
+        serverStatus.value = ServerStatus.READY
         networkConnectedReceiver.register()
         batteryLevelReceiver.register()
     }
@@ -243,18 +223,17 @@ class TableDataHandler(
      * @throws IOException if the tables cannot be flushed
      */
     @Throws(IOException::class)
-    fun close() {
-        handlerThread.stop {
-            if (serverStatus !== ServerStatus.DISABLED) {
-                networkConnectedReceiver.unregister()
-                batteryLevelReceiver.unregister()
-            }
-            this.submitter?.close()
-            this.submitter = null
-            this.sender = null
+    suspend fun stop() {
+        job.cancelAndJoin()
+        if (serverStatus !== ServerStatus.DISABLED) {
+            networkConnectedReceiver.unregister()
+            batteryLevelReceiver.unregister()
         }
+        this.submitter?.close()
+        this.submitter = null
+        this.sender = null
 
-        tables.values.forEach(DataCacheGroup<*, *>::close)
+        tables.values.launchJoin(DataCacheGroup<*, *>::stop)
     }
 
     /**
@@ -265,15 +244,13 @@ class TableDataHandler(
     }
 
     override val caches: List<ReadableDataCache>
-        get() {
-            val caches = ArrayList<ReadableDataCache>(tables.size)
+        get() = buildList(tables.size) {
             tables.values.forEach {
-                caches += it.activeDataCache
-                caches += it.deprecatedCaches
+                add(it.activeDataCache)
+                addAll(it.deprecatedCaches)
             }
-            return caches
         }
-
+z
     override val activeCaches: List<DataCacheGroup<*, *>>
         get() = handlerThread.compute {
             if (submitter == null) {
@@ -284,10 +261,6 @@ class TableDataHandler(
                 tables.values.filter { it.topicName in config.highPriorityTopics }
             }
         }
-
-    var statusListener: ServerStatusListener? = null
-        get() = handlerThread.compute { field }
-        set(value) = handlerThread.execute { field = value }
 
     override fun updateRecordsSent(topicName: String, numberOfRecords: Long) {
         handlerThread.execute {
@@ -387,4 +360,9 @@ class TableDataHandler(
     companion object {
         private val logger = LoggerFactory.getLogger(TableDataHandler::class.java)
     }
+
+    data class CacheSize(
+        val topicName: String,
+        val numberOfRecords: Long,
+    )
 }

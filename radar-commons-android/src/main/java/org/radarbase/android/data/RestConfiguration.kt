@@ -1,15 +1,21 @@
 package org.radarbase.android.data
 
-import okhttp3.Headers
+import io.ktor.http.*
 import org.radarbase.android.RadarConfiguration
-import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.config.SingleRadarConfiguration
+import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.config.ServerConfig
-import org.radarbase.producer.rest.SchemaRetriever
+import org.radarbase.kotlin.coroutines.CacheConfig
+import org.radarbase.producer.io.timeout
+import org.radarbase.producer.io.unsafeSsl
+import org.radarbase.producer.schema.SchemaRetriever
+import org.radarbase.producer.schema.SchemaRetriever.Companion.schemaRetriever
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 
 data class RestConfiguration(
     /** Request headers. */
-    var headers: Headers = Headers.headersOf(),
+    var headers: Headers = headersOf(),
     /** Kafka server configuration. If null, no rest sender will be configured. */
     var kafkaConfig: ServerConfig? = null,
     /** Schema registry retriever. */
@@ -28,11 +34,15 @@ data class RestConfiguration(
             ?.toServerConfig(unsafeConnection)
 
         schemaRetriever = config.optString(RadarConfiguration.SCHEMA_REGISTRY_URL_KEY) { url ->
-            SchemaRetriever(
-                url.toServerConfig(unsafeConnection),
-                30,
-                7200L
-            )
+            schemaRetriever(url) {
+                schemaTimeout = CacheConfig(refreshDuration = 2.hours, retryDuration = 30.seconds)
+                httpClient {
+                    if (unsafeConnection) {
+                        unsafeSsl()
+                    }
+                    timeout(10.seconds)
+                }
+            }
         }
         hasBinaryContent = config.getBoolean(RadarConfiguration.SEND_BINARY_CONTENT, RadarConfiguration.SEND_BINARY_CONTENT_DEFAULT)
         useCompression = config.getBoolean(RadarConfiguration.SEND_WITH_COMPRESSION, false)

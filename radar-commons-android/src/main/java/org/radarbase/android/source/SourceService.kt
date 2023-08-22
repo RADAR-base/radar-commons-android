@@ -23,11 +23,10 @@ import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.MutableLiveData
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.newSingleThreadContext
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import org.apache.avro.specific.SpecificRecord
-import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
@@ -41,16 +40,15 @@ import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.radarbase.android.util.BundleSerialization
 import org.radarbase.android.util.ManagedServiceConnection
+import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.android.util.send
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.collections.HashSet
 
-/**
+    /**
  * A service that manages a SourceManager and a TableDataHandler to send addToPreferences the data of a
  * wearable device, phone or API and send it to a Kafka REST proxy.
  *
@@ -73,12 +71,11 @@ abstract class SourceService<T : BaseSourceState> :
     private var hasBluetoothPermission: Boolean = false
     var sources: List<SourceMetadata> = emptyList()
     var sourceTypes: Set<SourceType> = emptySet()
+    var sourceConnectFailed: MutableSharedFlow<SourceConnectFailed> = MutableSharedFlow()
 
     val status: MutableLiveData<SourceStatusListener.Status> by lazy {
         MutableLiveData(SourceStatusListener.Status.DISCONNECTED)
     }
-
-    private val dispatcher = Dispatchers.Default.limitedParallelism(1)
 
     private val acceptableSourceTypes: Set<SourceType>
         get() = sourceTypes.filterTo(HashSet()) {
@@ -92,12 +89,11 @@ abstract class SourceService<T : BaseSourceState> :
     private val isAuthorizedForSource: Boolean
         get() = !needsRegisteredSources || acceptableSources.isNotEmpty()
 
-    private lateinit var authConnection: AuthServiceConnection
+    private lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
     private lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
-    private lateinit var broadcaster: LocalBroadcastManager
     private var needsRegisteredSources: Boolean = true
     private lateinit var pluginName: String
     private lateinit var sourceModel: String
@@ -164,21 +160,24 @@ abstract class SourceService<T : BaseSourceState> :
         super.onCreate()
         sources = emptyList()
         sourceTypes = emptySet()
-        broadcaster = LocalBroadcastManager.getInstance(this)
 
         mBinder = createBinder()
 
-        authConnection = AuthServiceConnection(this, this)
+        authConnection = serviceConnection(radarApp.authService)
+        radarConnection = serviceConnection(radarApp.radarService)
 
-        radarConnection = ManagedServiceConnection<IRadarBinder>(this, radarApp.radarService).apply {
-            onBoundListeners.add { binder ->
-                dataHandler = binder.dataHandler
-                handler.execute {
-                    startFuture?.runNow()
-                }
+        lifecycleScope.launch {
+            launch {
+                radarConnection.state
+                    .collect { bindState ->
+                        if (bindState !is ManagedServiceConnection.BoundService) return@collect
+
+                        dataHandler = bindState.binder.dataHandler
+                        startFuture?.runNow()
+                    }
             }
+            radarConnection.bind()
         }
-        radarConnection.bind()
         handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
         radarConfig.config.observe(this, ::configure)
@@ -233,10 +232,11 @@ abstract class SourceService<T : BaseSourceState> :
     }
 
     override fun sourceFailedToConnect(name: String) {
-        broadcaster.send(SOURCE_CONNECT_FAILED) {
-            putExtra(SOURCE_SERVICE_CLASS, this@SourceService.javaClass.name)
-            putExtra(SOURCE_STATUS_NAME, name)
-        }
+        sourceConnectFailed.tryEmit(
+            SourceConnectFailed(
+            this@SourceService.javaClass,
+            name,
+        )
     }
 
     private fun broadcastSourceStatus(status: SourceStatusListener.Status) {
@@ -397,8 +397,10 @@ abstract class SourceService<T : BaseSourceState> :
         pluginName = requireNotNull(bundle.getString(PLUGIN_NAME_KEY)) { "Missing source producer" }
         sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
         sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
-        if (!authConnection.isBound) {
-            authConnection.bind()
+        lifecycleScope.launch {
+            if (authConnection.state.value !is ManagedServiceConnection.BoundService) {
+                authConnection.bind()
+            }
         }
     }
 
@@ -512,10 +514,14 @@ abstract class SourceService<T : BaseSourceState> :
         const val SERVER_RECORDS_SENT_NUMBER = PREFIX + "ServerStatusListener.lastNumberOfRecordsSent"
         const val CACHE_TOPIC = PREFIX + "DataCache.topic"
         const val CACHE_RECORDS_UNSENT_NUMBER = PREFIX + "DataCache.numberOfRecords.first"
-        const val SOURCE_SERVICE_CLASS = PREFIX + "SourceService.getClass"
         const val SOURCE_STATUS_NAME = PREFIX + "SourceManager.getName"
         const val SOURCE_CONNECT_FAILED = PREFIX + "SourceStatusListener.sourceFailedToConnect"
 
         private val logger = LoggerFactory.getLogger(SourceService::class.java)
     }
+
+    data class SourceConnectFailed(
+        val serviceClass: Class<in SourceService<*>>,
+        val sourceName: String,
+    )
 }

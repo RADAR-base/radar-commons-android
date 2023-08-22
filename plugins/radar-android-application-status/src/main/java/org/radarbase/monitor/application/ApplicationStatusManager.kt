@@ -264,7 +264,7 @@ class ApplicationStatusManager(
     }
 
     override fun onClose() {
-        this.processor.close()
+        this.processor.stop()
         cacheReceiver.unregister()
         serverRecordsReceiver.unregister()
         serverStatusReceiver.unregister()
@@ -309,7 +309,7 @@ class ApplicationStatusManager(
             }
         } else { // disable timezone processor
             this.tzProcessor?.let {
-                it.close()
+                it.stop()
                 this.tzProcessor = null
             }
         }

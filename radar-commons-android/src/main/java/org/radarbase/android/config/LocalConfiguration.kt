@@ -3,6 +3,8 @@ package org.radarbase.android.config
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -39,16 +41,18 @@ class LocalConfiguration(context: Context) : LocalConfig {
         return oldValue
     }
 
-    override fun persistChanges(): Boolean {
-        if (hasChange.compareAndSet(true, false)) {
-            val editor = preferences.edit()
-            config.forEach { (key, value) ->
-                editor.putString(key, value)
+    override suspend fun persistChanges(): Boolean {
+        return if (hasChange.compareAndSet(true, false)) {
+            withContext(Dispatchers.IO) {
+                val editor = preferences.edit()
+                config.forEach { (key, value) ->
+                    editor.putString(key, value)
+                }
+                editor.commit()
             }
-            editor.apply()
-            return true
+            true
         } else {
-            return false
+            false
         }
     }
 
@@ -58,7 +62,7 @@ class LocalConfiguration(context: Context) : LocalConfig {
                 config.clear()
                 hasChange.set(true)
             }
-        } else if (config.keys.removeAll(keys)) {
+        } else if (config.keys.removeAll(keys.toHashSet())) {
             hasChange.set(true)
         }
     }

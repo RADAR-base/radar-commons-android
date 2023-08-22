@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface ServerStatusListener {
 
-    var serverStatus: StateFlow<ServerStatus>
+    val serverStatus: StateFlow<ServerStatus>
 
-    var recordsSent: SharedFlow<TopicSendReceipt>
+    val recordsSent: SharedFlow<TopicSendReceipt>
 }

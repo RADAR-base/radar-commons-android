@@ -31,34 +31,36 @@ description = 'Kafka backend for processing device data.'
 
 dependencies {
     api(project(':avro-android'))
-    api ('org.radarbase:radar-commons:0.16.0-SNAPSHOT') {
+    api ('org.radarbase:radar-commons:1.0.2-SNAPSHOT') {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarbase:radar-schemas-commons:0.8.2') {
+    api ('org.radarbase:radar-commons-kotlin:1.0.2-SNAPSHOT')
+    implementation('org.radarbase:radar-app-config-core:0.5.0-SNAPSHOT')
+    api ('org.radarbase:radar-schemas-commons:0.8.4') {
         exclude group: 'org.apache.avro', module: 'avro'
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
     }
-    api("org.slf4j:slf4j-api:2.0.6")
-    api("androidx.appcompat:appcompat:1.5.1")
+    api("org.slf4j:slf4j-api:2.0.7")
+    api("androidx.appcompat:appcompat:1.6.1")
 
-    implementation("org.radarbase:managementportal-client:0.9.0-SNAPSHOT")
+    implementation("org.radarbase:managementportal-client:2.0.1-SNAPSHOT")
 
-    def lifecycleVersion = "2.5.1"
-    implementation("androidx.lifecycle:lifecycle-service:$lifecycleVersion")
+    def lifecycleVersion = "2.6.1"
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
 
-    implementation "com.squareup.okhttp3:okhttp:4.10.0"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
-    api "androidx.lifecycle:lifecycle-service:2.5.1"
-    implementation "androidx.lifecycle:lifecycle-livedata:2.5.1"
+    api "androidx.lifecycle:lifecycle-service:2.6.1"
+    implementation "androidx.lifecycle:lifecycle-livedata:2.6.1"
 
     implementation platform('com.google.firebase:firebase-bom:30.5.0')
     implementation 'com.google.firebase:firebase-config'
     implementation 'com.google.firebase:firebase-core'
     implementation 'com.google.firebase:firebase-crashlytics'
-    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.0'
+    implementation 'com.gitlab.mvysny.slf4j:slf4j-handroid:2.0.4'
 
     implementation("io.ktor:ktor-client-content-negotiation")
     implementation("io.ktor:ktor-serialization-kotlinx-json")

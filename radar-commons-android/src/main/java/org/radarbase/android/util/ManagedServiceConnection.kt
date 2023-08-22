@@ -27,26 +27,24 @@ open class ManagedServiceConnection<T: IBinder>(
 
     var bindFlags = BIND_AUTO_CREATE
 
-    suspend fun bind(): BoundService<T> {
-        return coroutineScope {
-            val service = suspendCoroutine { continuation ->
-                val connection: ServiceConnection = object : ServiceConnection {
-                    override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                        continuation.resume(BoundService(name, checkNotNull(binderCls.cast(service)), this))
-                    }
-
-                    override fun onServiceDisconnected(name: ComponentName?) {
-                        _state.value = unbound
-                    }
+    suspend fun bind(): BoundService<T> = coroutineScope {
+        val service = suspendCoroutine { continuation ->
+            val connection: ServiceConnection = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                    continuation.resume(BoundService(name, checkNotNull(binderCls.cast(service)), this))
                 }
 
-                if (!context.bindService(Intent(context, cls), connection, bindFlags)) {
-                    throw IllegalStateException("Cannot bind to service $cls")
+                override fun onServiceDisconnected(name: ComponentName?) {
+                    _state.value = unbound
                 }
             }
-            _state.value = service
-            service
+
+            if (!context.bindService(Intent(context, cls), connection, bindFlags)) {
+                throw IllegalStateException("Cannot bind to service $cls")
+            }
         }
+        _state.value = service
+        service
     }
 
     open suspend fun applyBinder(callback: suspend T.() -> Unit) {
@@ -85,5 +83,13 @@ open class ManagedServiceConnection<T: IBinder>(
 
     companion object {
         private val logger = LoggerFactory.getLogger(ManagedServiceConnection::class.java)
+
+        inline fun <reified T: IBinder> Context.serviceConnection(
+            serviceClass: Class<out Service>,
+        ): ManagedServiceConnection<T> = ManagedServiceConnection(
+            this,
+            serviceClass,
+            T::class.java,
+        )
     }
 }

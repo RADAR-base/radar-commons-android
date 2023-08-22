@@ -18,8 +18,10 @@ package org.radarbase.android.source
 
 import android.os.Bundle
 import androidx.lifecycle.LiveData
+import kotlinx.coroutines.flow.Flow
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatus
+import org.radarbase.android.kafka.TopicSendResult
 import org.radarbase.data.RecordData
 import java.io.IOException
 
@@ -29,9 +31,9 @@ interface SourceBinder<T : BaseSourceState> {
     /** Get the current source name, or null if unknown.  */
     val sourceName: String?
     /** Get the current server status  */
-    val serverStatus: ServerStatus
+    val serverStatus: Flow<ServerStatus>?
     /** Get the last number of records sent  */
-    val serverRecordsSent: Map<String, Long>
+    val serverRecordsSent: Flow<TopicSendResult>?
 
     /** Manual attributes set by the user that will be added to a registered source. */
     var manualAttributes: Map<String, String>
@@ -57,7 +59,7 @@ interface SourceBinder<T : BaseSourceState> {
     fun updateConfiguration(bundle: Bundle)
 
     /** Number of records in cache unsent  */
-    val numberOfRecords: Long?
+    val numberOfRecords: Flow<Long>?
 
     fun needsBluetooth(): Boolean
 
