@@ -30,17 +30,13 @@ class HealthConnectService : SourceService<BaseSourceState>() {
         manager: SourceManager<BaseSourceState>,
         config: SingleRadarConfiguration
     ) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
-            return
+        val manager = manager as? HealthConnectManager ?: return
+        config.optString(HEALTH_CONNECT_DATA_TYPES) {
+            manager.dataTypes = it.toHealthConnectTypes()
+                .toHashSet()
         }
-        with(manager as HealthConnectManager) {
-            config.optString(HEALTH_CONNECT_DATA_TYPES) {
-                dataTypes = it.toHealthConnectTypes()
-                    .toHashSet()
-            }
-            config.optDouble(HEALTH_CONNECT_INTERVAL_SECONDS) {
-                interval = it.seconds
-            }
+        config.optDouble(HEALTH_CONNECT_INTERVAL_SECONDS) {
+            manager.interval = it.seconds
         }
     }
 
