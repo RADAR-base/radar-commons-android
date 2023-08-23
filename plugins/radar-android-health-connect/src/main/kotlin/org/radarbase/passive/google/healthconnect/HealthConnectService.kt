@@ -30,7 +30,7 @@ class HealthConnectService : SourceService<BaseSourceState>() {
         manager: SourceManager<BaseSourceState>,
         config: SingleRadarConfiguration
     ) {
-        val manager = manager as? HealthConnectManager ?: return
+        if (manager !is HealthConnectManager) return
         config.optString(HEALTH_CONNECT_DATA_TYPES) {
             manager.dataTypes = it.toHealthConnectTypes()
                 .toHashSet()
