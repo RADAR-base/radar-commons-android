@@ -44,7 +44,7 @@ repositories {
 dependencies {
     api project(':radar-commons-android')
 
-    implementation("org.radarbase:radar-schemas-commons:0.8.3-SNAPSHOT") {
+    implementation("org.radarbase:radar-schemas-commons:0.8.5-connect-SNAPSHOT") {
         exclude group: 'org.apache.avro', module: 'avro'
     }
     // Add a dependency of Health Connect SDK
