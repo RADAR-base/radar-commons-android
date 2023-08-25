@@ -24,6 +24,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Process
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -32,6 +33,7 @@ import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.StageLevels
+import org.radarbase.android.util.send
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_REDUCED_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_NETWORK_INTERVAL_DEFAULT
@@ -55,6 +57,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private val intervals = ChangeRunner(LocationPollingIntervals())
     private var isStarted: Boolean = false
     private var referenceId: Int = 0
+    private lateinit var broadcaster: LocalBroadcastManager
     @Volatile
     var isAbsoluteLocation: Boolean = false
 
@@ -101,6 +104,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         handler.start()
 
         status = SourceStatusListener.Status.READY
+        broadcaster = LocalBroadcastManager.getInstance(this)
 
         handler.execute {
             isStarted = true
@@ -136,6 +140,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
                 altitude?.normalize(), accuracy?.normalize(), speed?.normalize(), bearing?.normalize())
         send(locationTopic, value)
 
+        broadcaster.send(DEVICE_LOCATION_CHANGED)
         logger.info("Location: {} {} {} {} {} {} {} {} {}", provider, eventTimestamp, latitude,
                 longitude, accuracy, altitude, speed, bearing, timestamp)
     }
