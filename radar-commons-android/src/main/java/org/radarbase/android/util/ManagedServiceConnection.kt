@@ -9,9 +9,14 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import org.slf4j.LoggerFactory
 
-open class ManagedServiceConnection<T: IBinder>(val context: Context, private val cls: Class<out Service>) {
+open class ManagedServiceConnection<T: IBinder>(
+    val context: Context,
+    private val cls: Class<out Service>,
+) {
     @Volatile
     var isBound = false
+        private set
+
     @Volatile
     var binder: T? = null
     val onBoundListeners: MutableList<(T) -> Unit> = mutableListOf()
@@ -44,6 +49,12 @@ open class ManagedServiceConnection<T: IBinder>(val context: Context, private va
                 logger.debug("Bound service {}", cls.simpleName)
             } else {
                 logger.warn("Failed to bind to {}", cls.simpleName)
+                // Avoid inconsistent state
+                try {
+                    context.unbindService(connection)
+                } catch (ex: IllegalStateException) {
+                    logger.warn("Cannot unbind connection that was not properly bound.")
+                }
             }
         }
     }

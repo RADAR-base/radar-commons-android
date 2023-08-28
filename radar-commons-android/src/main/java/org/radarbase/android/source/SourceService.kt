@@ -64,7 +64,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private lateinit var mBinder: SourceServiceBinder<T>
     private var hasBluetoothPermission: Boolean = false
     var sources: List<SourceMetadata> = emptyList()
-    var sourceTypes: Set<SourceType> = emptySet()
+    private var sourceTypes: Set<SourceType> = emptySet()
 
     private val acceptableSourceTypes: Set<SourceType>
         get() = sourceTypes.filterTo(HashSet()) {
@@ -72,7 +72,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                     && it.model.equals(sourceModel, ignoreCase = true)
         }
 
-    val acceptableSources: List<SourceMetadata>
+    private val acceptableSources: List<SourceMetadata>
         get() = sources.filter { it.type in acceptableSourceTypes }
 
     private val isAuthorizedForSource: Boolean
@@ -159,7 +159,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         authConnection = AuthServiceConnection(this, this)
 
         radarConnection = ManagedServiceConnection(this, RadarService.serviceClass)
-        radarConnection.onBoundListeners.add { binder ->
+        radarConnection.onBoundListeners += { binder ->
             dataHandler = binder.dataHandler
             handler.execute {
                 startFuture?.runNow()

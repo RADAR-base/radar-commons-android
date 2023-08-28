@@ -205,7 +205,10 @@ class HealthConnectManager(service: HealthConnectService) :
         }
     }
 
-    private suspend inline fun <reified T: Record, V: SpecificRecord> processRecord(cache: DataCache<ObservationKey, V>, convert: (T) -> List<V>) {
+    private suspend inline fun <reified T: Record, V: SpecificRecord> processRecord(
+        cache: DataCache<ObservationKey, V>,
+        convert: (T) -> List<V>,
+    ) {
         if (T::class !in dataTypes) {
             return
         }
