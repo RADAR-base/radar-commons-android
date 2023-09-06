@@ -31,8 +31,9 @@ object DefaultPermissionRequestContract : ActivityResultContract<Set<String>, Se
     }
     override fun parseResult(resultCode: Int, intent: Intent?): Set<String> {
         return subcontract.parseResult(resultCode, intent)
-            .entries
-            .mapNotNullTo(HashSet()) { (permission, granted) -> permission.takeIf { granted } }
+            .asSequence()
+            .filter { (_, granted) -> granted }
+            .mapTo(HashSet()) { (permission, _) -> permission }
     }
 }
 

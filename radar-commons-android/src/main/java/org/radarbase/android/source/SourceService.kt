@@ -453,8 +453,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                     when {
                         pluginMatches -> true
                         source.matches(id, name) -> true
-                        id != null && physicalId != null && id in physicalId -> true
-                        id != null && physicalId != null -> {
+                        physicalId != null && id in physicalId -> true
+                        physicalId != null -> {
                             logger.warn("Physical id {} does not match registered id {}", physicalId, id)
                             false
                         }
