@@ -16,25 +16,42 @@
 
 package org.radarbase.passive.google.places
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Process
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.libraries.places.api.Places
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
+import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.android.util.send
+import org.radarbase.passive.google.places.GooglePlacesManager.Companion.NUMBER_OF_ATTEMPTS_KEY
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.pow
 
 class GooglePlacesService: SourceService<GooglePlacesState>() {
     private val apiKey: ChangeRunner<String> = ChangeRunner(GOOGLE_PLACES_API_KEY_DEFAULT)
+    lateinit var preferences: SharedPreferences
+    val broadcaster = LocalBroadcastManager.getInstance(this)
     private lateinit var placeHandler: SafeHandler
+
+    val internalError = AtomicBoolean(false)
+    private val baseDelay: Long = 300
+    @get: Synchronized
+    @set: Synchronized
+    var numOfAttempts: Int = -1
 
     override fun onCreate() {
         super.onCreate()
         placeHandler = SafeHandler.getInstance("Google-Places-Handler", Process.THREAD_PRIORITY_BACKGROUND).apply {
             start()
         }
+        preferences = getSharedPreferences(GooglePlacesService::class.java.name, Context.MODE_PRIVATE)
     }
 
     override fun configureSourceManager(manager: SourceManager<GooglePlacesState>, config: SingleRadarConfiguration) {
@@ -56,7 +73,31 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
         manager.shouldFetchAdditionalInfo = config.getBoolean(FETCH_GOOGLE_PLACES_ADDITIONAL_INFO, false)
         manager.limitByPlacesCount = config.getInt(FETCH_GOOGLE_PLACE_COUNT_BOUND, FETCH_GOOGLE_PLACE_COUNT_NUMBER_DEFAULT)
         manager.limitByPlacesLikelihood = config.getFloat(FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND, GOOGLE_FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT.toFloat()).toDouble()
+    }
 
+    override fun sourceStatusUpdated(
+        manager: SourceManager<*>,
+        status: SourceStatusListener.Status
+    ) {
+        if (status == SourceStatusListener.Status.DISCONNECTED && internalError.get()) {
+            numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
+            val currentDelay = (baseDelay + 2.0.pow(numOfAttempts)).toLong()
+            logger.info("Disconnecting {} now, will reconnect after {} seconds", manager.name, currentDelay)
+            placeHandler.delay(currentDelay * 1000) {
+                internalError.set(false)
+                val currentManager = sourceManager
+                (currentManager as? GooglePlacesManager)?.reScan()
+                if (currentManager == null) {
+                    broadcaster.send(SOURCE_STATUS_CHANGED) {
+                        putExtra(SOURCE_STATUS_CHANGED, SourceStatusListener.Status.DISCONNECTED.ordinal)
+                        putExtra(SOURCE_SERVICE_CLASS, this@GooglePlacesService.javaClass.name)
+                    }
+                }
+                stopRecording()
+            }
+        } else {
+            super.sourceStatusUpdated(manager, status)
+        }
     }
 
     override val defaultState: GooglePlacesState

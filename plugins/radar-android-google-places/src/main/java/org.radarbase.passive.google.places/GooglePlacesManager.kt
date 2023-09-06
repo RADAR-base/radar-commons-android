@@ -20,12 +20,9 @@ import android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
 import android.Manifest.permission.ACCESS_COARSE_LOCATION
 import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.annotation.SuppressLint
-import android.content.Context
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AddressComponent
@@ -48,7 +45,6 @@ import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GooglePlacesInfo
 import org.radarcns.passive.google.PlacesType
 import org.slf4j.LoggerFactory
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.pow
 
@@ -59,10 +55,6 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     // Delay in seconds for exponential backoff
     private val maxDelay: Long = 43200
     private val baseDelay: Long = 300
-    @get: Synchronized
-    @set: Synchronized
-    private var numOfAttempts: Int = 0
-    private val preferences: SharedPreferences = service.getSharedPreferences(GooglePlacesManager::class.java.name, Context.MODE_PRIVATE)
 
     private val isPermissionGranted: Boolean
         get() = checkLocationPermissions()
@@ -104,11 +96,15 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     }
 
     override fun start(acceptableIds: Set<String>) {
+        if (service.internalError.get()) {
+            status = SourceStatusListener.Status.UNAVAILABLE
+            return
+        }
         register()
         status = SourceStatusListener.Status.READY
         placesProcessor.start()
         placeHandler.execute { if (!placesClientCreated) createPlacesClient() }
-        placesBroadcastReceiver = LocalBroadcastManager.getInstance(service).register(DEVICE_LOCATION_CHANGED) { _, _ ->
+        service.broadcaster.register(DEVICE_LOCATION_CHANGED) { _, _ ->
             if (placesClientCreated) {
                 placeHandler.execute {
                     state.fromBroadcast.set(true)
@@ -123,7 +119,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private fun createPlacesClient() {
         try {
             placesClient = Places.createClient(service)
-            state.placesClientCreated.compareAndSet(false, true)
+            state.placesClientCreated.set(true)
             status = SourceStatusListener.Status.CONNECTED
         } catch (ex: IllegalStateException) {
             logger.error("Places client has not been initialized yet.")
@@ -134,6 +130,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         when (apiKey) {
             GOOGLE_PLACES_API_KEY_DEFAULT -> {
                 logger.error("API-key is empty, disconnecting now")
+                service.internalError.set(true)
                 disconnect()
             }
             else -> {
@@ -153,6 +150,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             Places.initialize(service.applicationContext, apiKey)
         } catch (ex: Exception) {
             logger.error("Exception while initializing places API", ex)
+            service.internalError.set(true)
             disconnect()
         }
     }
@@ -165,8 +163,8 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 val client = placesClient ?: return@execute
                 currentPlaceRequest = FindCurrentPlaceRequest.newInstance(currentPlaceFields)
                    // resetting the backoff time in SharedPreferences once the plugin works successfully
-                if (numOfAttempts > 0) {
-                        preferences.edit()
+                if (service.numOfAttempts > 0) {
+                        service.preferences.edit()
                             .putInt(NUMBER_OF_ATTEMPTS_KEY, 0).apply()
                     }
                     client.findCurrentPlace(currentPlaceRequest)
@@ -251,6 +249,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         when (statusCode) {
             INVALID_API_CODE -> {
                 logger.error("Invalid Api key, disconnecting now")
+                service.internalError.set(true)
                 disconnect()
             }
             LOCATION_UNAVAILABLE_CODE -> logger.warn("Location not enabled yet")
@@ -260,6 +259,10 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
 
     fun placesFetchInterval(interval: Long, intervalUnit: TimeUnit) {
         placesProcessor.interval(interval, intervalUnit)
+    }
+
+    fun reScan() {
+        status = SourceStatusListener.Status.DISCONNECTED
     }
 
     private fun checkLocationPermissions(): Boolean {
@@ -274,15 +277,13 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     }
 
     override fun onClose() {
-        val closeLatch = CountDownLatch(1)
-        numOfAttempts = preferences.getInt(NUMBER_OF_ATTEMPTS_KEY, 0)
-            val currentDelay = (baseDelay + 2.0.pow(numOfAttempts)).toLong()
-            placeHandler.delay(currentDelay * 1000) {
+            val currentDelay = (baseDelay + 2.0.pow(service.numOfAttempts)).toLong()
+            placeHandler.execute {
                 if (currentDelay < maxDelay) {
-                    numOfAttempts++
-                    preferences
+                    service.numOfAttempts++
+                    service.preferences
                         .edit()
-                        .putInt(NUMBER_OF_ATTEMPTS_KEY, numOfAttempts).apply()
+                        .putInt(NUMBER_OF_ATTEMPTS_KEY, service.numOfAttempts).apply()
                 }
                 try {
                     placesBroadcastReceiver?.unregister()
@@ -291,9 +292,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 }
                 placesBroadcastReceiver = null
                 placesProcessor.close()
-                closeLatch.countDown()
             }
-        closeLatch.await()
     }
 
     companion object {
@@ -306,7 +305,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         private const val CITY_KEY = "locality"
         private const val STATE_KEY = "administrative_area_level_1"
         private const val COUNTRY_KEY = "country"
-        private const val NUMBER_OF_ATTEMPTS_KEY = "number_of_attempts_key"
+        const val NUMBER_OF_ATTEMPTS_KEY = "number_of_attempts_key"
         const val DEVICE_LOCATION_CHANGED = "org.radarbase.passive.google.places.GooglePlacesManager.DEVICE_LOCATION_CHANGED"
 
         private fun Place.Type.toPlacesType(): PlacesType? = when (this) {
