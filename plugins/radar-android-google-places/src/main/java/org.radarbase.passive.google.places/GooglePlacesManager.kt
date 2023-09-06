@@ -202,12 +202,21 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private fun doSend(places: List<PlaceLikelihood>) {
         places.forEach { likelihood ->
             val types = likelihood.place.types?.map { it.toPlacesType() }
-            val type1 = types?.getOrNull(0)
-            val type2 = types?.getOrNull(1)
-            val type3 = types?.getOrNull(2)
-            val type4 = types?.getOrNull(3)
-            val placeLikelihood: Double = likelihood.likelihood
             val placeId: String? = if (shouldFetchPlaceId) likelihood.place.id else null
+            val placesInfoBuilder = GooglePlacesInfo.Builder().apply {
+                time = currentTime
+                timeReceived = currentTime
+                type1 = types?.getOrNull(0)
+                type2 = types?.getOrNull(1)
+                type3 = types?.getOrNull(2)
+                type4 = types?.getOrNull(3)
+                this.likelihood = likelihood.likelihood
+                fromBroadcast = fromBroadcastRegistration
+                city = null
+                state = null
+                country = null
+                this.placeId = placeId
+            }
             if (shouldFetchAdditionalInfo) {
                 val id: String? = likelihood.place.id
                 id?.let {
@@ -220,7 +229,11 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                 val city = findComponent(addressComponents, CITY_KEY)
                                 val state = findComponent(addressComponents, STATE_KEY)
                                 val country = findComponent(addressComponents, COUNTRY_KEY)
-                                send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, type1, type2, type3, type4, city, state, country, it, placeLikelihood, fromBroadcastRegistration))
+                                send(placesInfoTopic, placesInfoBuilder.apply {
+                                    this.city = city
+                                    this.state = state
+                                    this.country = country
+                                    this.placeId = it }.build())
                                 logger.info("Google Places data with additional info sent")
                             }
                             .addOnFailureListener { ex ->
@@ -230,12 +243,14 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                         handleApiException(exception, exception.statusCode)
                                     }
                                     else -> {
-                                        send(placesInfoTopic, GooglePlacesInfo(currentTime, currentTime, type1, type2, type3, type4, null, null, null, placeId, placeLikelihood, fromBroadcastRegistration))
+                                        send(placesInfoTopic, placesInfoBuilder.apply { this.placeId = it }.build())
                                         logger.info("Google Places data sent")
                                     }
                                 }
                             }
                 }
+            } else {
+                    send(placesInfoTopic, placesInfoBuilder.build())
             }
         }
     }
