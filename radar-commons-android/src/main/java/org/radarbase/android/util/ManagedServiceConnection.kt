@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 open class ManagedServiceConnection<T: IBinder>(
     val context: Context,
     private val cls: Class<out Service>,
+    private val useStartCommand: Boolean = false,
 ) {
     @Volatile
     var isBound = false
@@ -39,6 +40,15 @@ open class ManagedServiceConnection<T: IBinder>(
     }
 
     fun bind(): Boolean {
+        val intent = Intent(context, cls)
+        if (useStartCommand) {
+            try {
+                context.startService(intent)
+            } catch (ex: IllegalStateException) {
+                isBound = false
+                return false
+            }
+        }
         return try {
             context.bindService(Intent(context, cls), connection, bindFlags)
         } catch (ex: IllegalStateException) {
