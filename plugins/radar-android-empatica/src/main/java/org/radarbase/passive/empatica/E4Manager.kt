@@ -31,9 +31,14 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
-import org.radarcns.passive.empatica.*
+import org.radarcns.passive.empatica.EmpaticaE4Acceleration
+import org.radarcns.passive.empatica.EmpaticaE4BatteryLevel
+import org.radarcns.passive.empatica.EmpaticaE4BloodVolumePulse
+import org.radarcns.passive.empatica.EmpaticaE4ElectroDermalActivity
+import org.radarcns.passive.empatica.EmpaticaE4InterBeatInterval
+import org.radarcns.passive.empatica.EmpaticaE4SensorStatus
+import org.radarcns.passive.empatica.EmpaticaE4Temperature
 import org.slf4j.LoggerFactory
-import java.lang.Exception
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Manages scanning for an Empatica E4 wearable and connecting to it  */
@@ -154,12 +159,14 @@ class E4Manager(
         logger.info("{}: Bluetooth address: {}", System.identityHashCode(this), address)
         if (allowed) {
             register(
-                    name = deviceName,
-                    physicalId = empaDevice.hardwareId,
-                    attributes = mapOf(
-                            Pair("sdk", "empalink-2.2.aar"),
-                            Pair("macAddress", address),
-                            Pair("serialNumber", empaDevice.serialNumber))) {
+                name = deviceName,
+                physicalId = empaDevice.hardwareId,
+                attributes = mapOf(
+                    Pair("sdk", "empalink-2.2.aar"),
+                    Pair("macAddress", address),
+                    Pair("serialNumber", empaDevice.serialNumber),
+                ),
+            ) {
                 if (it == null) {
                     logger.info("Device {} with ID {} is not listed in acceptable device IDs", deviceName, address)
                     service.sourceFailedToConnect(deviceName)
