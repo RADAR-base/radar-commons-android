@@ -43,7 +43,7 @@ import androidx.health.connect.client.records.WheelchairPushesRecord
 import java.util.*
 import kotlin.reflect.KClass
 
-internal fun String.toHealthConnectTypes(): List<KClass<out Record>> = split(" ,+")
+internal fun String.toHealthConnectTypes(): List<KClass<out Record>> = split(' ', ',', '+')
     .mapNotNull { healthConnectTypes[it.trim()] }
 
 internal val healthConnectTypes = TreeMap<String, KClass<out Record>>(java.lang.String.CASE_INSENSITIVE_ORDER).apply {

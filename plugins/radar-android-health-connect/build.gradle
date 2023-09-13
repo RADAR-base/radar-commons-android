@@ -82,4 +82,5 @@ protobuf {
     }
 }
 
+apply from: "$rootDir/gradle/test.gradle"
 apply from: "$rootDir/gradle/publishing.gradle"
