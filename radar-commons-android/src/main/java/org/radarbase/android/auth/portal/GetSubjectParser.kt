@@ -14,7 +14,6 @@ import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.android.util.toStringMap
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import kotlin.collections.ArrayList
 
 class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
@@ -69,7 +68,8 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
         @Throws(JSONException::class)
         internal fun parseSourceTypes(project: JSONObject): List<SourceType> {
-            val sourceTypes = project.getJSONArray("sourceTypes")
+            val sourceTypes = project.optJSONArray("sourceTypes")
+                ?: return emptyList()
 
             return sourceTypes
                 .asJSONObjectSequence()
