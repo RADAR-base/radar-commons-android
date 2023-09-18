@@ -2,6 +2,7 @@ package org.radarbase.passive.google.healthconnect
 
 import android.content.Context
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BasalBodyTemperatureRecord
@@ -43,6 +44,7 @@ import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.WheelchairPushesRecord
+import java.time.Instant
 import java.util.*
 import kotlin.reflect.KClass
 
@@ -100,3 +102,9 @@ internal val healthConnectNames: Map<KClass<out Record>, String> = healthConnect
     Map.Entry<String, KClass<out Record>>::value,
     Map.Entry<String, KClass<out Record>>::key,
 )
+
+@RequiresApi(Build.VERSION_CODES.O)
+internal fun Instant.toDouble(): Double {
+    val floatingNano = nano.toBigDecimal().setScale(7) / 1_000_000_000.toBigDecimal()
+    return (epochSecond.toBigDecimal() + floatingNano).toDouble()
+}

@@ -45,7 +45,6 @@ import org.radarcns.passive.google.healthconnect.HealthConnectMetadata
 import org.radarcns.passive.google.healthconnect.HealthConnectRecordingMethod
 import org.radarcns.passive.google.healthconnect.HealthConnectTypedData
 import org.slf4j.LoggerFactory
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ThreadLocalRandom
 import kotlin.reflect.KClass
@@ -359,8 +358,6 @@ class HealthConnectManager(service: HealthConnectService) :
                 .apply(updater)
                 .build()
         }
-
-        private fun Instant.toDouble(): Double = epochSecond + nano / 1_000_000_000.0
 
         private fun HealthConnectDevice.toHealthConnectDevicePreferences() = HealthConnectDevicePreferences.newBuilder().run {
             this.id = this@toHealthConnectDevicePreferences.id
