@@ -27,6 +27,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.apache.avro.specific.SpecificRecord
@@ -99,7 +100,6 @@ class HealthConnectManager(service: HealthConnectService) :
 
     override fun didRegister(source: SourceMetadata) {
         super.didRegister(source)
-        processor.start()
         try {
             managerScope.launch {
                 val preferences = dataStore.data
@@ -112,6 +112,12 @@ class HealthConnectManager(service: HealthConnectService) :
                 }
                 preferences.devicesList.forEach {
                     devices[it.toLocalDevice()] = it.toHealthConnectDevice()
+                }
+                if (isActive) {
+                    processor.start {
+                        // start processing immediately
+                        processor.trigger()
+                    }
                 }
             }
         } catch (ex: Exception) {
