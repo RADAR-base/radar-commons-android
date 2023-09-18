@@ -203,7 +203,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         places.forEach { likelihood ->
             val types = likelihood.place.types?.map { it.toPlacesType() }
             val placeId: String? = if (shouldFetchPlaceId) likelihood.place.id else null
-            val placesInfoBuilder = GooglePlacesInfo.Builder().apply {
+            val placesInfoBuilder = GooglePlacesInfo.newBuilder().apply {
                 time = currentTime
                 timeReceived = currentTime
                 type1 = types?.getOrNull(0)
