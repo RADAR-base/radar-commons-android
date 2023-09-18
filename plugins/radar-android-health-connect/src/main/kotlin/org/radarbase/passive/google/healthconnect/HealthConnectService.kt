@@ -1,7 +1,6 @@
 package org.radarbase.passive.google.healthconnect
 
 import android.os.Build
-import androidx.health.connect.client.HealthConnectClient
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceManager
@@ -14,12 +13,7 @@ class HealthConnectService : SourceService<BaseSourceState>() {
         get() = BaseSourceState()
 
     override fun createSourceManager(): SourceManager<BaseSourceState> {
-        // TODO: Available from version 1.1.0-alpha01
-        // HealthConnectClient.getSdkStatus(this) == HealthConnectClient.SDK_AVAILABLE
-        return if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 &&
-            HealthConnectClient.sdkStatus(this) == HealthConnectClient.SDK_AVAILABLE
-        ) {
+        return if (isHealthConnectAvailable()) {
             HealthConnectManager(this)
         } else {
             UnavailableSourceManager("Health Connect", state)
@@ -30,7 +24,10 @@ class HealthConnectService : SourceService<BaseSourceState>() {
         manager: SourceManager<BaseSourceState>,
         config: SingleRadarConfiguration
     ) {
-        if (manager !is HealthConnectManager) return
+        if (
+            manager !is HealthConnectManager ||
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1
+        ) return
         config.optString(HEALTH_CONNECT_DATA_TYPES) {
             manager.dataTypes = it.toHealthConnectTypes()
                 .toHashSet()

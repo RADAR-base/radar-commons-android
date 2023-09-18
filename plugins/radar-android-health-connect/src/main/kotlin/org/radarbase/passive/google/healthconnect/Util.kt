@@ -1,5 +1,8 @@
 package org.radarbase.passive.google.healthconnect
 
+import android.content.Context
+import android.os.Build
+import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BasalBodyTemperatureRecord
 import androidx.health.connect.client.records.BasalMetabolicRateRecord
@@ -42,6 +45,11 @@ import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.WheelchairPushesRecord
 import java.util.*
 import kotlin.reflect.KClass
+
+// TODO: Available from version 1.1.0-alpha01
+// HealthConnectClient.getSdkStatus(this) == HealthConnectClient.SDK_AVAILABLE
+internal fun Context.isHealthConnectAvailable(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 &&
+            HealthConnectClient.sdkStatus(this) == HealthConnectClient.SDK_AVAILABLE
 
 internal fun String.toHealthConnectTypes(): List<KClass<out Record>> = split(' ', ',', '+')
     .mapNotNull { healthConnectTypes[it.trim()] }

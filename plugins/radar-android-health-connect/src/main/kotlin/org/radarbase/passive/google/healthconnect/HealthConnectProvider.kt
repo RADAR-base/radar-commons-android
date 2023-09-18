@@ -24,16 +24,27 @@ class HealthConnectProvider(radarService: RadarService) : SourceProvider<BaseSou
     // Health Connect can function with not all permissions granted.
     override val permissionsRequested: List<String>
         get() {
+            if (!radarService.isHealthConnectAvailable()) {
+                return emptyList()
+            }
+
             val configuredTypes = radarService.configuration.config.value
                 ?.optString(HEALTH_CONNECT_DATA_TYPES)
-                ?: return listOf()
+                ?: return emptyList()
 
             return configuredTypes
                 .toHealthConnectTypes()
                 .map { HealthPermission.getReadPermission(it) }
         }
 
-    override val requestPermissionResultContract: List<PermissionRequester> = listOf(createPermissionResultContract())
+    override val requestPermissionResultContract: List<PermissionRequester>
+        get() {
+            if (!radarService.isHealthConnectAvailable()) {
+                return emptyList()
+            }
+
+            return listOf(createPermissionResultContract())
+        }
 
     private fun createPermissionResultContract(): PermissionRequester = PermissionRequester(
         permissions = healthConnectNames.keys
