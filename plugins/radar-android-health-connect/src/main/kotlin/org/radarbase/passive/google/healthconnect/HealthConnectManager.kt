@@ -360,12 +360,16 @@ class HealthConnectManager(service: HealthConnectService) :
                 .build()
         }
 
-        private fun HealthConnectDevice.toHealthConnectDevicePreferences() = HealthConnectDevicePreferences.newBuilder().run {
-            this.id = this@toHealthConnectDevicePreferences.id
-            this.manufacturer = this@toHealthConnectDevicePreferences.manufacturer
-            this.model = this@toHealthConnectDevicePreferences.model
-            this.type = this@toHealthConnectDevicePreferences.type.ordinal
-            build()
+        private fun HealthConnectDevice.toHealthConnectDevicePreferences() = HealthConnectDevicePreferences.newBuilder().let {
+            it.id = id
+            if (manufacturer != null) {
+                it.manufacturer = manufacturer
+            }
+            if (model != null) {
+                it.model = model
+            }
+            it.type = type.ordinal
+            it.build()
         }
 
         private fun HealthConnectDevicePreferences.toLocalDevice() = LocalDevice(
