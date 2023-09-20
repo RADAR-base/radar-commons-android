@@ -260,6 +260,7 @@ class HealthConnectManager(service: HealthConnectService) :
             } while (response.hasMore)
 
             if (token != originalToken) {
+                changesTokens[T::class] = token
                 val key = healthConnectNames[T::class]
                 if (key != null) {
                     dataStore.update {
