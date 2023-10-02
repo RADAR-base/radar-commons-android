@@ -46,6 +46,7 @@ import org.radarcns.passive.google.GooglePlacesInfo
 import org.radarcns.passive.google.PlacesType
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized private var apiKey: String, private val placeHandler: SafeHandler) : AbstractSourceManager<GooglePlacesService, GooglePlacesState>(service) {
@@ -81,6 +82,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private var placesBroadcastReceiver: BroadcastRegistration? = null
     private var placesClient: PlacesClient? = null
         @Synchronized get() = if (placesClientCreated) field else null
+    private var isRecentlySent: AtomicBoolean = AtomicBoolean(false)
 
     private lateinit var currentPlaceRequest:FindCurrentPlaceRequest
     private lateinit var detailsPlaceRequest:FetchPlaceRequest
@@ -217,7 +219,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 country = null
                 this.placeId = placeId
             }
-            if (shouldFetchAdditionalInfo) {
+            if (shouldFetchAdditionalInfo && !isRecentlySent.get()) {
                 val id: String? = likelihood.place.id
                 id?.let {
                     detailsPlaceRequest = FetchPlaceRequest.newInstance(it, detailsPlaceFields)
@@ -234,6 +236,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                     this.state = state
                                     this.country = country
                                     this.placeId = it }.build())
+                                updateRecentlySent()
                                 logger.info("Google Places data with additional info sent")
                             }
                             .addOnFailureListener { ex ->
@@ -252,6 +255,16 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             } else {
                     send(placesInfoTopic, placesInfoBuilder.build())
             }
+        }
+    }
+
+    /**
+     * The [FindCurrentPlaceRequest] fetches a list of places. When [shouldFetchAdditionalInfo] is true, it makes extra [FetchPlaceRequest] calls for each place in CurrentPlaceResponse. To reduce network overhead, additional data is fetched only if at least 600 seconds have passed since the last request.
+     */
+    private fun updateRecentlySent() {
+        isRecentlySent.set(true)
+        placeHandler.delay(300_000) {
+            isRecentlySent.set(false)
         }
     }
 
