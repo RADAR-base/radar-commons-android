@@ -73,6 +73,7 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
         manager.shouldFetchAdditionalInfo = config.getBoolean(FETCH_GOOGLE_PLACES_ADDITIONAL_INFO, false)
         manager.limitByPlacesCount = config.getInt(FETCH_GOOGLE_PLACE_COUNT_BOUND, FETCH_GOOGLE_PLACE_COUNT_NUMBER_DEFAULT)
         manager.limitByPlacesLikelihood = config.getFloat(FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND, GOOGLE_FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT.toFloat()).toDouble()
+        manager.additionalFetchDelay = config.getLong(ADDITIONAL_FETCH_NETWORK_DELAY, ADDITIONAL_FETCH_NETWORK_DELAY_DEFAULT)
     }
 
     override fun sourceStatusUpdated(
@@ -121,10 +122,12 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
         const val FETCH_GOOGLE_PLACES_ADDITIONAL_INFO = "should_fetch_additional_places_info"
         const val FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND = "fetch_place_likelihoods_bound"
         const val FETCH_GOOGLE_PLACE_COUNT_BOUND = "fetch_place_likelihoods_count"
+        const val ADDITIONAL_FETCH_NETWORK_DELAY = "additional_fetch_network_delay"
 
         const val GOOGLE_PLACES_FETCH_INTERVAL_DEFAULT = 600L
         const val GOOGLE_PLACES_API_KEY_DEFAULT = ""
         const val GOOGLE_FETCH_PLACE_LIKELIHOOD_BOUND_DEFAULT = -1.0
         const val FETCH_GOOGLE_PLACE_COUNT_NUMBER_DEFAULT = -1
+        const val ADDITIONAL_FETCH_NETWORK_DELAY_DEFAULT = 0L
     }
 }

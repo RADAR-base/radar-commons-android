@@ -34,4 +34,7 @@ class GooglePlacesState : BaseSourceState() {
     @set: Synchronized
     var limitByPlacesCount: Int = -1
 
+    var additionalFetchDelay: Long = 0L
+        @Synchronized set
+
 }

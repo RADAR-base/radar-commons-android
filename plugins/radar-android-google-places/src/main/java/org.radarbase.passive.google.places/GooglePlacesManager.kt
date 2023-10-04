@@ -75,6 +75,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     var limitByPlacesLikelihood: Double
         get() = state.limitByPlacesLikelihood
         set(value) { state.limitByPlacesLikelihood = value }
+    var additionalFetchDelay: Long
+        get() = state.additionalFetchDelay
+        set(value) { state.additionalFetchDelay = value }
     private val currentPlaceFields: List<Place.Field>
         get() = if (shouldFetchPlaceId||shouldFetchAdditionalInfo) listOf(Place.Field.TYPES, Place.Field.ID) else listOf(Place.Field.TYPES)
     private val detailsPlaceFields: List<Place.Field> =  listOf(Place.Field.ADDRESS_COMPONENTS)
@@ -259,11 +262,11 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     }
 
     /**
-     * The [FindCurrentPlaceRequest] fetches a list of places. When [shouldFetchAdditionalInfo] is true, it makes extra [FetchPlaceRequest] calls for each place in CurrentPlaceResponse. To reduce network overhead, additional data is fetched only if at least 600 seconds have passed since the last request.
+     * The [FindCurrentPlaceRequest] fetches a list of places. When [shouldFetchAdditionalInfo] is true, it makes extra [FetchPlaceRequest] calls for each place in CurrentPlaceResponse. To reduce network overhead, additional data is fetched only if at least additionalFetchDelay (ms) have passed since the last request.
      */
     private fun updateRecentlySent() {
         isRecentlySent.set(true)
-        placeHandler.delay(300_000) {
+        placeHandler.delay(additionalFetchDelay) {
             isRecentlySent.set(false)
         }
     }
