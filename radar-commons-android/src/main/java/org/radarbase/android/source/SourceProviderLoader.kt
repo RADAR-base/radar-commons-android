@@ -45,9 +45,9 @@ class SourceProviderLoader(private var plugins: List<SourceProvider<*>>) {
     private fun loadProvidersFromNames(pluginString: String): List<SourceProvider<*>> {
         return Scanner(pluginString)
             .asSequence()
-            .mapNotNull { pluginName ->
-                plugins.find { pluginName in it.pluginNames }
-                        .also { if (it == null) logger.warn("Plugin {} not found", pluginName) }
+            .flatMap { pluginName ->
+                plugins.filter { pluginName in it.pluginNames }
+                        .also { if (it.isEmpty()) logger.warn("Plugin {} not found", pluginName) }
             }
             .distinct()
             .toList()
