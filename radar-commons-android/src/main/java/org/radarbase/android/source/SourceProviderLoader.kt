@@ -29,10 +29,7 @@ class SourceProviderLoader(private var plugins: List<SourceProvider<*>>) {
      */
     @Synchronized
     fun loadProvidersFromNames(config: SingleRadarConfiguration): List<SourceProvider<*>> {
-        val pluginString = listOf(
-                config.getString(RadarConfiguration.DEVICE_SERVICES_TO_CONNECT, ""),
-                config.getString(RadarConfiguration.PLUGINS, ""))
-                .joinToString(separator = " ")
+        val pluginString = config.getString(RadarConfiguration.PLUGINS, "")
 
         return pluginCache.applyIfChanged(pluginString) { providers ->
             logger.info("Loading plugins {}", providers.map { it.pluginNames.firstOrNull() ?: it })
