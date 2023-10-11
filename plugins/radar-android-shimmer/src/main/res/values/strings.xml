@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="emptyText">—</string>
+
+    <string name="shimmerDisplayName">Shimmer</string>
+    <string name="shimmer_action_label">Pair %1$s</string>
+
+    <string name="shimmer_bluetooth_not_enabled">Bluetooth is not enabled.</string>
+    <string name="shimmer_scanning_bluetooth_devices">Scanning bluetooth devices</string>
+    <string name="select_shimmer_device">Select a Shimmer device you want to use</string>
+    <string name="shimmer_bluetooth_devices">Bluetooth devices</string>
+    <string name="shimmer_no_devices_found">No devices found</string>
+    <string name="scan">Scan</string>
+    <string name="device_status">Device status</string>
+    <string name="done">Done</string>
+    <string name="shimmer_dialog_connecting">Connecting</string>
+    <string name="shimmer_dialog_message">Connecting to shimmer device status:</string>
+    <string name="shimmer_connection_status">Shimmer connection status</string>
+    <string name="shimmer_skip_pairing">Skip pairing</string>
+</resources>

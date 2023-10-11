@@ -1,0 +1,51 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    namespace 'nl.thehyve.prmt.shimmer'
+
+    buildFeatures {
+        viewBinding true
+    }
+}
+
+repositories {
+    maven {
+        url = uri("https://maven.pkg.github.com/ShimmerEngineering/Shimmer-Java-Android-API")
+        credentials {
+            username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+            password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
+        }
+    }
+}
+
+dependencies {
+    implementation("org.radarbase:radar-schemas-commons:0.8.3-SNAPSHOT") {
+        exclude group: "org.apache.avro", module: "avro"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-core"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-databind"
+    }
+
+    implementation('com.shimmerresearch:shimmerdriver:0.9.143_alpha') {
+                // excluding org.json which is provided by Android
+        exclude group: 'com.google.guava'
+        exclude group: 'io.netty'
+        exclude group: 'com.google.protobuf'
+        exclude group: 'org.apache.commons.math'
+        exclude group: 'io.grpc', module: 'grpc-all'
+    }
+    implementation('com.shimmerresearch:shimmerandroidinstrumentdriver:3.0.74_beta') {}
+
+    implementation "com.google.guava:guava:31.1-android"
+
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.8.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1'
+    implementation("androidx.fragment:fragment-ktx:1.5.6")
+
+    api "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    api "org.radarbase:radar-commons-android:$radarCommonsVersion"
+    api project(":schemas")
+}
