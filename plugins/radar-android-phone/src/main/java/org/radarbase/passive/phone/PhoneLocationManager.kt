@@ -34,6 +34,7 @@ import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.android.util.StageLevels
 import org.radarbase.android.util.send
+import org.radarbase.passive.google.places.GooglePlacesManager.Companion.DEVICE_LOCATION_CHANGED
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_REDUCED_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_NETWORK_INTERVAL_DEFAULT
@@ -104,7 +105,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         handler.start()
 
         status = SourceStatusListener.Status.READY
-        broadcaster = LocalBroadcastManager.getInstance(this)
+        broadcaster = LocalBroadcastManager.getInstance(service)
 
         handler.execute {
             isStarted = true
