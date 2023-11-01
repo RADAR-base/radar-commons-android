@@ -43,6 +43,8 @@ open class GoogleSleepProvider(radarService: RadarService) : SourceProvider<Base
     override val displayName: String
         get() = radarService.getString(R.string.googleSleepDisplayName)
 
+    override fun imageResource(state: BaseSourceState?): Int = R.drawable.google_sleep_icon
+
     override val sourceProducer: String = "GOOGLE"
 
     override val sourceModel: String = "SLEEP"

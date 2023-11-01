@@ -110,6 +110,12 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     }
 
     /**
+     * This drawable image resource is intended to be displayed alongside each plugin in [SourceRowView].
+     * Use -1 to display default battery labels. For consistency, consider using "?attr/colorPrimary" as the default background.
+     */
+    open fun imageResource(state: T?): Int = -1
+
+    /**
      * Bind the service to the MainActivity. Call this when the [MainActivity.onStart] is
      * called.
      * @throws IllegalStateException if [.setRadarService] has not been called or

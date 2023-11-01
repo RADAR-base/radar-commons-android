@@ -43,6 +43,8 @@ class GoogleActivityProvider(radarService: RadarService) : SourceProvider<BaseSo
     override val displayName: String
         get() = radarService.getString(R.string.google_activity_display_name)
 
+    override fun imageResource(state: BaseSourceState?): Int = R.drawable.google_activity_icon
+
     override val sourceProducer: String = "GOOGLE"
 
     override val sourceModel: String = "ACTIVITY"
