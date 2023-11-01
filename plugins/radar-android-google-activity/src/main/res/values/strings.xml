@@ -1,0 +1,8 @@
+<resources>
+    <string name="google_activity_description">The user activity data is tracked via Google Activity
+        Recognition API. The API  automatically detects activities by periodically reading short
+        bursts of sensor data and processing them using machine learning models. This API provides
+        the activity and transition of it.
+    </string>
+    <string name="google_activity_display_name">Google Activity</string>
+</resources>
