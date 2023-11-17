@@ -102,6 +102,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
 
             bluetoothBroadcastReceiver = object : BroadcastReceiver() {
                 private var numberOfDevices: Int = 0
+                private val allPairedDevices: MutableSet<BluetoothDevice> = mutableSetOf()
 
                 val hasConnectPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
                         || ActivityCompat.checkSelfPermission(service, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
@@ -128,9 +129,12 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                                 timeReceived = currentTime
                             }
 
-                            if (numberOfDevices == 1) {
-                                val pairedDevices: Set<BluetoothDevice> = if (hasConnectPermission) bluetoothAdapter.bondedDevices else emptySet()
-                                pairedDevices.forEach {  bd ->
+                            val pairedDevices: Set<BluetoothDevice> = if (hasConnectPermission) bluetoothAdapter.bondedDevices else emptySet()
+
+                            if (pairedDevices.any { !allPairedDevices.contains(it) }) {
+                                allPairedDevices.addAll(pairedDevices)
+
+                                pairedDevices.forEach { bd ->
                                     val mac = bd.address
                                     val hash = hashGenerator.createHashByteBuffer(mac)
                                     send(bluetoothScannedTopic, scannedTopicBuilder.apply {
