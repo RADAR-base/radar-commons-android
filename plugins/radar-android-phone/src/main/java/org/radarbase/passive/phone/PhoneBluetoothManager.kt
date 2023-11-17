@@ -122,7 +122,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             } ?: return
 
                             val macAddress = device.address
-                            val macAddressHash: ByteBuffer = hashGenerator.createHashByteBuffer(macAddress)
+                            val macAddressHash: ByteBuffer = hashGenerator.createHashByteBuffer(macAddress + "$hashSaltReference")
 
                             val scannedTopicBuilder = PhoneBluetoothDeviceScanned.newBuilder().apply {
                                 time = currentTime
