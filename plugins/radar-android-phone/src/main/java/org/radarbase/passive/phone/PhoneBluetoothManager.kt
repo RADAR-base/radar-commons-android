@@ -37,6 +37,7 @@ import org.radarbase.android.util.BluetoothStateReceiver.Companion.hasBluetoothP
 import org.radarbase.android.util.HashGenerator
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
+import org.radarcns.passive.phone.PairedState
 import org.radarcns.passive.phone.PhoneBluetoothDeviceScanned
 import org.radarcns.passive.phone.PhoneBluetoothDevices
 import org.slf4j.LoggerFactory
@@ -48,6 +49,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     private val processor: OfflineProcessor
     private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache("android_phone_bluetooth_devices", PhoneBluetoothDevices())
     private val bluetoothScannedTopic: DataCache<ObservationKey, PhoneBluetoothDeviceScanned> = createCache("android_phone_bluetooth_device_scanned", PhoneBluetoothDeviceScanned())
+    private val allPairedDevices: MutableSet<BluetoothDevice> = mutableSetOf()
 
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
     private val hashGenerator: HashGenerator = HashGenerator(service, "bluetooth_devices")
@@ -102,7 +104,6 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
 
             bluetoothBroadcastReceiver = object : BroadcastReceiver() {
                 private var numberOfDevices: Int = 0
-                private val allPairedDevices: MutableSet<BluetoothDevice> = mutableSetOf()
 
                 val hasConnectPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
                         || ActivityCompat.checkSelfPermission(service, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
@@ -130,24 +131,24 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             }
 
                             val pairedDevices: Set<BluetoothDevice> = if (hasConnectPermission) bluetoothAdapter.bondedDevices else emptySet()
+                            val newPairedDevices = pairedDevices.subtract(allPairedDevices)
+                            allPairedDevices.addAll(newPairedDevices)
+                            allPairedDevices.removeAll(allPairedDevices.subtract(pairedDevices)) // removing devices which are previously paired but unpaired now
 
-                            if (pairedDevices.any { !allPairedDevices.contains(it) }) {
-                                allPairedDevices.addAll(pairedDevices)
+                            newPairedDevices.forEach { bd ->
+                                val mac = bd.address
+                                val hash = hashGenerator.createHashByteBuffer(mac + "$hashSaltReference")
 
-                                pairedDevices.forEach { bd ->
-                                    val mac = bd.address
-                                    val hash = hashGenerator.createHashByteBuffer(mac)
-                                    send(bluetoothScannedTopic, scannedTopicBuilder.apply {
+                                send(bluetoothScannedTopic, scannedTopicBuilder.apply {
                                         this.macAddressHash = hash
-                                        this.isPaired = true
+                                        this.pairedState = bd.bondState.toPairedState()
                                         this.hashSaltReference = hashSaltReference
                                     }.build())
                                 }
-                            }
 
                             send(bluetoothScannedTopic, scannedTopicBuilder.apply {
                                 this.macAddressHash = macAddressHash
-                                this.isPaired = false
+                                this.pairedState = device.bondState.toPairedState()
                                 this.hashSaltReference = hashSaltReference
                             }.build())
 
@@ -200,5 +201,12 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
         private const val SCAN_DEVICES_REQUEST_CODE = 3248902
         private const val ACTION_SCAN_DEVICES = "org.radarbase.passive.phone.PhoneBluetoothManager.ACTION_SCAN_DEVICES"
         private const val HASH_SALT_REFERENCE = "hash_salt_reference"
+
+        private fun Int.toPairedState(): PairedState? = when(this) {
+            10 -> PairedState.NOT_PAIRED
+            11 -> PairedState.PAIRING
+            12 -> PairedState.PAIRED
+            else -> null
+        }
     }
 }
