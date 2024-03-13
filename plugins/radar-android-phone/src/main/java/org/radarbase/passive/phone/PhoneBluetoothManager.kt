@@ -202,11 +202,11 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
         private const val ACTION_SCAN_DEVICES = "org.radarbase.passive.phone.PhoneBluetoothManager.ACTION_SCAN_DEVICES"
         private const val HASH_SALT_REFERENCE = "hash_salt_reference"
 
-        private fun Int.toPairedState(): PairedState? = when(this) {
+        private fun Int.toPairedState(): PairedState = when(this) {
             10 -> PairedState.NOT_PAIRED
             11 -> PairedState.PAIRING
             12 -> PairedState.PAIRED
-            else -> null
+            else -> PairedState.UNKNOWN
         }
     }
 }
