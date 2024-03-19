@@ -49,7 +49,6 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     private val processor: OfflineProcessor
     private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache("android_phone_bluetooth_devices", PhoneBluetoothDevices())
     private val bluetoothScannedTopic: DataCache<ObservationKey, PhoneBluetoothDeviceScanned> = createCache("android_phone_bluetooth_device_scanned", PhoneBluetoothDeviceScanned())
-    private val allPairedDevices: MutableSet<BluetoothDevice> = mutableSetOf()
 
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
     private val hashGenerator: HashGenerator = HashGenerator(service, "bluetooth_devices")
@@ -131,11 +130,8 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             }
 
                             val pairedDevices: Set<BluetoothDevice> = if (hasConnectPermission) bluetoothAdapter.bondedDevices else emptySet()
-                            val newPairedDevices = pairedDevices.subtract(allPairedDevices)
-                            allPairedDevices.addAll(newPairedDevices)
-                            allPairedDevices.removeAll(allPairedDevices.subtract(pairedDevices)) // removing devices which are previously paired but unpaired now
 
-                            newPairedDevices.forEach { bd ->
+                            pairedDevices.forEach { bd ->
                                 val mac = bd.address
                                 val hash = hashGenerator.createHashByteBuffer(mac + "$hashSaltReference")
 
