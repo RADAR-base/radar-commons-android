@@ -134,7 +134,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
         try {
             service.unregisterReceiver(sleepBroadcastReceiver)
             logger.info("Unregistered from sleep receiver ")
-        } catch (ex: IllegalStateException) {
+        } catch (ex: IllegalArgumentException) {
             logger.error("Exception when unregistering from sleep receiver", ex)
         }
     }
