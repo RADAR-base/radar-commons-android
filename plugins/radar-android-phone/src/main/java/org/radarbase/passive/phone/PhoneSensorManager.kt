@@ -246,7 +246,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     private fun processBatteryStatus() {
         // Get last broadcast battery change intent
         val intent = service.registerReceiver(null,
-                IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
 
         val level = intent.getIntExtra(EXTRA_LEVEL, -1)
         val scale = intent.getIntExtra(EXTRA_SCALE, -1)
