@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  */
 class PolarService : SourceService<PolarState>() {
     private lateinit var handler: SafeHandler
-    private lateinit var context: Context
+//    private lateinit var context: Context
     override val defaultState: PolarState
         get() = PolarState()
 
@@ -26,7 +26,7 @@ class PolarService : SourceService<PolarState>() {
         handler = SafeHandler.getInstance("Polar", Process.THREAD_PRIORITY_FOREGROUND)
     }
 
-    override fun createSourceManager() = PolarManager(this, context, handler)
+    override fun createSourceManager() = PolarManager(this, applicationContext)
 
     override fun configureSourceManager(manager: SourceManager<PolarState>, config: SingleRadarConfiguration) {
         manager as PolarManager
