@@ -51,7 +51,7 @@ class PhoneSensorManager(
 //    private var applicationContext: Context // No longer storing it as a class property
 
     companion object {
-        private const val TAG = "POLAR"
+        private const val TAG = "POLAR-PHONE"
 
     }
     init {
@@ -72,9 +72,9 @@ class PhoneSensorManager(
             status = SourceStatusListener.Status.CONNECTED
         }
 
-//        logger.info("Hello world")
         send(lightTopic, PhoneLight(20.00, 20.00, 3.14f))
 
+        Log.d(TAG, "Connecting to Polar $deviceId")
         api = defaultImplementation(
             applicationContext,
             setOf(
