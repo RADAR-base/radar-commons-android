@@ -35,8 +35,9 @@ class PhoneSensorService : SourceService<PhoneState>() {
     override val defaultState: PhoneState
         get() = PhoneState()
 
+//    private val phoneSensorManager = PhoneSensorManager(applicationContext, this)
 //    override fun createSourceManager() = PhoneSensorManager(this, context)
-    override fun createSourceManager() = PhoneSensorManager(this)
+    override fun createSourceManager() = PhoneSensorManager(this, applicationContext)
 
 
     override fun configureSourceManager(manager: SourceManager<PhoneState>, config: SingleRadarConfiguration) {
