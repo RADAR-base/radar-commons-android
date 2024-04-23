@@ -33,9 +33,13 @@ dependencies {
         exclude group: 'org.json', module: 'json'
         exclude group: 'org.apache.avro', module: 'avro'
     }
-    api ('org.radarbase:radar-schemas-commons:0.8.2') {
+
+    api ('org.radarbase:radar-schemas-commons:0.8.800') {
         exclude group: 'org.apache.avro', module: 'avro'
     }
+//    api ('org.radarbase:radar-schemas-commons:0.8.2') {
+//        exclude group: 'org.apache.avro', module: 'avro'
+//    }
     api(project(':avro-android'))
     api("org.slf4j:slf4j-api:2.0.7")
     api("androidx.appcompat:appcompat:1.6.1")
