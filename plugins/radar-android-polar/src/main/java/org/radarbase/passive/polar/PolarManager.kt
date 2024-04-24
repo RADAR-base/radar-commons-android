@@ -3,41 +3,27 @@ package org.radarbase.passive.polar
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Context.POWER_SERVICE
-import android.content.Intent
-import android.content.IntentFilter
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
-import android.hardware.SensorManager
-import android.os.BatteryManager.*
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
-import android.os.SystemClock
 import android.util.Log
-import android.util.SparseArray
-import android.util.SparseIntArray
-import org.radarbase.android.data.DataCache
-import org.radarbase.android.source.AbstractSourceManager
-import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.util.OfflineProcessor
-import org.radarbase.android.util.SafeHandler
-import org.radarcns.kafka.ObservationKey
-import org.radarcns.passive.phone.*
-import org.radarcns.passive.polar.*
-import org.slf4j.LoggerFactory
-import java.util.*
-import java.util.concurrent.TimeUnit
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl.defaultImplementation
-import com.polar.sdk.api.errors.PolarInvalidArgument
 import com.polar.sdk.api.model.*
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
-import io.reactivex.rxjava3.core.Flowable
 import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.disposables.Disposable
-import io.reactivex.rxjava3.core.Observable
+import org.radarbase.android.data.DataCache
+import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.SafeHandler
+import org.radarcns.kafka.ObservationKey
+import org.radarcns.passive.polar.PolarHeartRate
 import java.util.*
+
 class PolarManager(
     polarService: PolarService,
     private val applicationContext: Context
@@ -46,7 +32,7 @@ class PolarManager(
 
 //    private val heartRateTopic: DataCache<ObservationKey, PhoneStepCount> = createCache("android_phone_step_count", PhoneStepCount())
 
-//    private val lightTopic: DataCache<ObservationKey, PhoneLight> = createCache("android_phone_light", PhoneLight())
+    //    private val lightTopic: DataCache<ObservationKey, PhoneLight> = createCache("android_phone_light", PhoneLight())
 //    private val accelerationTopic: DataCache<ObservationKey, PolarAcceleration> = createCache("android_polar_acceleration", PolarAcceleration())
 //    private val batteryLevelTopic: DataCache<ObservationKey, PolarBatteryLevel> = createCache("android_polar_battery_level", PolarBatteryLevel())
 //    private val ecgTopic: DataCache<ObservationKey, PolarEcg> = createCache("android_polar_ecg", PolarEcg())
@@ -60,7 +46,9 @@ class PolarManager(
     private var wakeLock: PowerManager.WakeLock? = null
 
     private lateinit var api: PolarBleApi
-    private var deviceId: String = "Not yet found"
+    private var deviceId: String? = null
+    private var isDeviceConnected: Boolean = false
+
 
     private var autoConnectDisposable: Disposable? = null
     private var hrDisposable: Disposable? = null
@@ -76,6 +64,8 @@ class PolarManager(
         private const val TAG = "POLAR"
 
     }
+
+
     init {
         var noDeviceYet = "searching.."
         name = service.getString(R.string.polarServiceDisplayName, noDeviceYet)
@@ -104,9 +94,10 @@ class PolarManager(
                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_H10_EXERCISE_RECORDING,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP,
-                PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO)
+                PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO
+            )
         )
-        api.setApiLogger { str: String -> Log.d("POLAR SDK", str) }
+        api.setApiLogger { str: String -> Log.d("P-SDK", str) }
         api.setApiCallback(object : PolarBleApiCallback() {
             override fun blePowerStateChanged(powered: Boolean) {
                 Log.d(TAG, "BluetoothStateChanged $powered")
@@ -114,11 +105,11 @@ class PolarManager(
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
-                var deviceId = polarDeviceInfo.deviceId
+                deviceId = polarDeviceInfo.deviceId
+                name = service.getString(R.string.polarServiceDisplayName, deviceId)
                 if (deviceId != null) {
-                    name = service.getString(R.string.polarServiceDisplayName, deviceId)
+                    isDeviceConnected = true
                 }
-
             }
 
             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
@@ -127,23 +118,30 @@ class PolarManager(
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device disconnected ${polarDeviceInfo.deviceId}")
+                isDeviceConnected = false
+
             }
 
             override fun bleSdkFeatureReady(identifier: String, feature: PolarBleApi.PolarBleSdkFeature) {
-                Log.d(TAG, "Feature ready $feature")
 
-                when (feature) {
-                    PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
-                        streamHR()
-//                        streamEcg()
-                        streamAcc()
-//                        streamGyro()
-//                        streamMag()
-//                        streamPpg()
-                        streamPpi()
+                if (isDeviceConnected) {
+                    Log.d(TAG, "Feature ready $feature for $deviceId")
+
+                    when (feature) {
+                        PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
+                            streamHR()
+                            streamAcc()
+                            streamPpi()
+                        }
+
+                        else -> {
+                            Log.d(TAG, "No feature was ready")
+                        }
                     }
-                    else -> {}
+                } else {
+                    Log.d(TAG, "No device was connected")
                 }
+
             }
 
             override fun disInformationReceived(identifier: String, uuid: UUID, value: String) {
@@ -154,7 +152,7 @@ class PolarManager(
 
             override fun batteryLevelReceived(identifier: String, level: Int) {
 //                Log.d(TAG, "Battery level $identifier $level%")
-                Log.d(TAG, "Battery level $level%" + getTime() + getDeviceTime())
+                Log.d(TAG, "Battery level $level%" + getTime() + getTime())
 //                send(batteryLevelTopic, PolarBatteryLevel(getTime(), getDeviceTime(), )
 
 
@@ -189,27 +187,63 @@ class PolarManager(
                 )
         } catch (e: Exception) {
             Log.e(TAG, "Could not find polar device")
-        }}
+        }
+    }
 
-//            val isDisposed = scanDisposable?.isDisposed ?: true
-//            if (isDisposed) {
-//                scanDisposable = api.searchForDevice()
-//                    .observeOn(AndroidSchedulers.mainThread())
-//                    .subscribe(
-//                        { polarDeviceInfo: PolarDeviceInfo ->
-//                            var deviceId = polarDeviceInfo.deviceId
-//                            Log.d(TAG, "polar device found id: $deviceId")
-//                        })
-//                if (deviceId != null) {
-//                    api.connectToDevice(deviceId)
-//                } else {
-//                    Log.e(TAG, "No polar device found")
-//                }
-//            }
-//        } catch (a: PolarInvalidArgument) {
-//                // Handle PolarInvalidArgument exception if needed
-//                a.printStackTrace()
-//        }
+    fun getTime(): Double {
+        return (System.currentTimeMillis() / 1000).toDouble()
+    }
+
+    fun streamHR() {
+        Log.d(TAG, "log Famke start streamHR for ${deviceId}")
+        val isDisposed = hrDisposable?.isDisposed ?: true
+        if (isDisposed) {
+            Log.d(TAG, "log Famke start streamHR isDisposed is ${isDisposed}")
+            hrDisposable = deviceId?.let {
+                api.startHrStreaming(it)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .doOnSubscribe { Log.d(TAG, "Subscribed to HrStreaming for ${deviceId}") }
+                    .subscribe(
+                        { hrData: PolarHrData ->
+                            for (sample in hrData.samples) {
+                                Log.d(
+                                    TAG,
+                                    "HeartRate data for ${deviceId}: HR ${sample.hr} RR ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}"
+                                )
+                                Log.d(TAG, "time: ${System.currentTimeMillis() / 1000}")
+                                Log.d(TAG, "time: ${getTime()}")
+// Log.d(TAG, "deviceTime: ${getDeviceTime()}")
+                                //                            send(heartRateTopic, PhoneStepCount(getTime(), getTime(), sample.hr))
+
+                                send(
+                                    heartRateTopic,
+                                    PolarHeartRate(
+                                        getTime(),
+                                        getTime(),
+                                        sample.hr,
+                                        sample.rrsMs,
+                                        sample.rrAvailable,
+                                        sample.contactStatus,
+                                        sample.contactStatusSupported
+                                    )
+                                )
+
+                            }
+                        },
+                        { error: Throwable ->
+                            Log.e(TAG, "HR stream failed for ${deviceId}. Reason $error")
+                            hrDisposable = null
+                        },
+                        { Log.d(TAG, "HR stream complete") }
+                    )
+            }
+        } else {
+            // NOTE stops streaming if it is "running"
+            hrDisposable?.dispose()
+            Log.d(TAG, "HR stream disposed")
+            hrDisposable = null
+        }
+    }
 
     /**
      * Class 'PhoneSensorManager' is not abstract and does not implement abstract member
@@ -227,54 +261,19 @@ class PolarManager(
         // no action
     }
 
-    fun getDeviceTime(): Single<Double> {
-        return api.getLocalTime(deviceId)
-            .observeOn(AndroidSchedulers.mainThread())
-            .map { calendar ->
-                val time = calendar.timeInMillis.toDouble()
-                Log.d(TAG, "$time read from the device")
-                time // Return the time value
-            }
-    }
+//    fun getDeviceTime(): Single<Double> {
+//        return deviceId?.let {
+//            api.getLocalTime(it)
+//                .observeOn(AndroidSchedulers.mainThread())
+//                .map { calendar ->
+//                    val time = calendar.timeInMillis.toDouble()
+//                    Log.d(TAG, "$time read from the device")
+//                    time // Return the time value
+//                }
+//        }
+//    }
 
-    fun getTime(): Double {
-        return (System.currentTimeMillis() / 1000).toDouble()
-    }
 
-    fun streamHR() {
-        Log.d(TAG, "log Famke start streamHR")
-        val isDisposed = hrDisposable?.isDisposed ?: true
-        if (isDisposed) {
-            Log.d(TAG, "log Famke start streamHR isDisposed is ${isDisposed}")
-            hrDisposable = api.startHrStreaming(deviceId)
-                .observeOn(AndroidSchedulers.mainThread())
-                .doOnSubscribe { Log.d(TAG, "Subscribed to HrStreaming") }
-                .subscribe(
-                    { hrData: PolarHrData ->
-                        for (sample in hrData.samples) {
-                            Log.d(TAG, "HeartRate data: HR ${sample.hr} RR ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
-                            Log.d(TAG, "time: ${System.currentTimeMillis() / 1000}")
-                            Log.d(TAG, "time: ${getTime()}")
-                            Log.d(TAG, "deviceTime: ${getDeviceTime()}")
-//                            send(heartRateTopic, PhoneStepCount(getTime(), getTime(), sample.hr))
-
-                            send(heartRateTopic, PolarHeartRate(getTime(), getTime(), sample.hr, sample.rrsMs, sample.rrAvailable, sample.contactStatus, sample.contactStatusSupported))
-
-                        }
-                    },
-                    { error: Throwable ->
-                        Log.e(TAG, "HR stream failed. Reason $error")
-                        hrDisposable = null
-                    },
-                    { Log.d(TAG, "HR stream complete") }
-                )
-        } else {
-            // NOTE stops streaming if it is "running"
-            hrDisposable?.dispose()
-            Log.d(TAG, "HR stream disposed")
-            hrDisposable = null
-        }
-    }
 
 //    fun streamEcg() {
 //        val isDisposed = ecgDisposable?.isDisposed ?: true
@@ -343,21 +342,23 @@ class PolarManager(
 //                    api.startAccStreaming(deviceId, settings)
 //                }
 
-            accDisposable = api.startAccStreaming(deviceId, sensorSetting)
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    { polarAccelerometerData: PolarAccelerometerData ->
-                        for (data in polarAccelerometerData.samples) {
-                            Log.d(TAG, "ACC    x: ${data.x} y: ${data.y} z: ${data.z} timeStamp: ${data.timeStamp}")
+            accDisposable = deviceId?.let {
+                api.startAccStreaming(it, sensorSetting)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                        { polarAccelerometerData: PolarAccelerometerData ->
+                            for (data in polarAccelerometerData.samples) {
+                                Log.d(TAG, "ACC    x: ${data.x} y: ${data.y} z: ${data.z} timeStamp: ${data.timeStamp}")
+                            }
+                        },
+                        { error: Throwable ->
+                            Log.e(TAG, "ACC stream failed. Reason $error")
+                        },
+                        {
+                            Log.d(TAG, "ACC stream complete")
                         }
-                    },
-                    { error: Throwable ->
-                        Log.e(TAG, "ACC stream failed. Reason $error")
-                    },
-                    {
-                        Log.d(TAG, "ACC stream complete")
-                    }
-                )
+                    )
+            }
         } else {
             // NOTE dispose will stop streaming if it is "running"
             accDisposable?.dispose()
@@ -420,19 +421,24 @@ class PolarManager(
     fun streamPpi() {
         val isDisposed = ppiDisposable?.isDisposed ?: true
         if (isDisposed) {
-            ppiDisposable = api.startPpiStreaming(deviceId)
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    { ppiData: PolarPpiData ->
-                        for (sample in ppiData.samples) {
-                            Log.d(TAG, "PPI    ppi: ${sample.ppi} blocker: ${sample.blockerBit} errorEstimate: ${sample.errorEstimate}")
-                        }
-                    },
-                    { error: Throwable ->
-                        Log.e(TAG, "PPI stream failed. Reason $error")
-                    },
-                    { Log.d(TAG, "PPI stream complete") }
-                )
+            ppiDisposable = deviceId?.let {
+                api.startPpiStreaming(it)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                        { ppiData: PolarPpiData ->
+                            for (sample in ppiData.samples) {
+                                Log.d(
+                                    TAG,
+                                    "PPI    ppi: ${sample.ppi} blocker: ${sample.blockerBit} errorEstimate: ${sample.errorEstimate}"
+                                )
+                            }
+                        },
+                        { error: Throwable ->
+                            Log.e(TAG, "PPI stream failed. Reason $error")
+                        },
+                        { Log.d(TAG, "PPI stream complete") }
+                    )
+            }
         } else {
             // NOTE dispose will stop streaming if it is "running"
             ppiDisposable?.dispose()

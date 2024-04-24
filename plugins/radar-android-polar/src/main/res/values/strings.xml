@@ -1,4 +1,4 @@
 <resources>
-    <string name="polarServiceDisplayName">Polar</string>
+    <string name="polarServiceDisplayName">Polar %s</string>
     <string name="polarSensorsDescription">Polar sensors like acceleration and step counts.</string>
 </resources>
