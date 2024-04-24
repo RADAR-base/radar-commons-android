@@ -21,20 +21,19 @@ import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.kafka.ObservationKey
-import org.radarcns.passive.polar.PolarHeartRate
+import org.radarcns.passive.polar.*
 import java.util.*
 
 class PolarManager(
     polarService: PolarService,
     private val applicationContext: Context
-) : AbstractSourceManager<PolarService, PolarState>(polarService),
-    SensorEventListener {
+) : AbstractSourceManager<PolarService, PolarState>(polarService) {
+
 
 //    private val heartRateTopic: DataCache<ObservationKey, PhoneStepCount> = createCache("android_phone_step_count", PhoneStepCount())
 
-    //    private val lightTopic: DataCache<ObservationKey, PhoneLight> = createCache("android_phone_light", PhoneLight())
 //    private val accelerationTopic: DataCache<ObservationKey, PolarAcceleration> = createCache("android_polar_acceleration", PolarAcceleration())
-//    private val batteryLevelTopic: DataCache<ObservationKey, PolarBatteryLevel> = createCache("android_polar_battery_level", PolarBatteryLevel())
+    private val batteryLevelTopic: DataCache<ObservationKey, PolarBatteryLevel> = createCache("android_polar_battery_level", PolarBatteryLevel())
 //    private val ecgTopic: DataCache<ObservationKey, PolarEcg> = createCache("android_polar_ecg", PolarEcg())
 //    private val gyroscopeTopic: DataCache<ObservationKey, PolarGyroscope> = createCache("android_polar_gyroscope", PolarGyroscope())
     private val heartRateTopic: DataCache<ObservationKey, PolarHeartRate> = createCache("android_polar_heart_rate", PolarHeartRate())
@@ -48,7 +47,6 @@ class PolarManager(
     private lateinit var api: PolarBleApi
     private var deviceId: String? = null
     private var isDeviceConnected: Boolean = false
-
 
     private var autoConnectDisposable: Disposable? = null
     private var hrDisposable: Disposable? = null
@@ -65,7 +63,6 @@ class PolarManager(
 
     }
 
-
     init {
         var noDeviceYet = "searching.."
         name = service.getString(R.string.polarServiceDisplayName, noDeviceYet)
@@ -73,7 +70,6 @@ class PolarManager(
 
     @SuppressLint("WakelockTimeout")
     override fun start(acceptableIds: Set<String>) {
-
         register()
         mHandler.start()
         mHandler.execute {
@@ -84,7 +80,6 @@ class PolarManager(
             status = SourceStatusListener.Status.CONNECTED
         }
 
-        Log.d(TAG, "Trying to connect to Polar $deviceId")
         api = defaultImplementation(
             applicationContext,
             setOf(
@@ -141,7 +136,6 @@ class PolarManager(
                 } else {
                     Log.d(TAG, "No device was connected")
                 }
-
             }
 
             override fun disInformationReceived(identifier: String, uuid: UUID, value: String) {
@@ -151,29 +145,27 @@ class PolarManager(
             }
 
             override fun batteryLevelReceived(identifier: String, level: Int) {
-//                Log.d(TAG, "Battery level $identifier $level%")
-                Log.d(TAG, "Battery level $level%" + getTime() + getTime())
-//                send(batteryLevelTopic, PolarBatteryLevel(getTime(), getDeviceTime(), )
-
-
+                var batteryLevel = (level/100).toFloat()
+                Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + getTime())
+                send(batteryLevelTopic, PolarBatteryLevel(getTime(), getTime(), batteryLevel))
             }
 
-            override fun hrNotificationReceived(identifier: String, data: PolarHrData.PolarHrSample) {
-                //deprecated
-
-            }
-
-            override fun polarFtpFeatureReady(identifier: String) {
-                //deprecated
-            }
-
-            override fun streamingFeaturesReady(identifier: String, features: Set<PolarBleApi.PolarDeviceDataType>) {
-                //deprecated
-            }
-
-            override fun hrFeatureReady(identifier: String) {
-                //deprecated
-            }
+//            override fun hrNotificationReceived(identifier: String, data: PolarHrData.PolarHrSample) {
+//                //deprecated
+//
+//            }
+//
+//            override fun polarFtpFeatureReady(identifier: String) {
+//                //deprecated
+//            }
+//
+//            override fun streamingFeaturesReady(identifier: String, features: Set<PolarBleApi.PolarDeviceDataType>) {
+//                //deprecated
+//            }
+//
+//            override fun hrFeatureReady(identifier: String) {
+//                //deprecated
+//            }
         })
 
         try {
@@ -206,15 +198,7 @@ class PolarManager(
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
-                                Log.d(
-                                    TAG,
-                                    "HeartRate data for ${deviceId}: HR ${sample.hr} RR ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}"
-                                )
-                                Log.d(TAG, "time: ${System.currentTimeMillis() / 1000}")
-                                Log.d(TAG, "time: ${getTime()}")
-// Log.d(TAG, "deviceTime: ${getDeviceTime()}")
-                                //                            send(heartRateTopic, PhoneStepCount(getTime(), getTime(), sample.hr))
-
+                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} RR ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
@@ -234,7 +218,7 @@ class PolarManager(
                             Log.e(TAG, "HR stream failed for ${deviceId}. Reason $error")
                             hrDisposable = null
                         },
-                        { Log.d(TAG, "HR stream complete") }
+                        { Log.d(TAG, "HR stream for ${deviceId} complete") }
                     )
             }
         } else {
@@ -243,22 +227,6 @@ class PolarManager(
             Log.d(TAG, "HR stream disposed")
             hrDisposable = null
         }
-    }
-
-    /**
-     * Class 'PhoneSensorManager' is not abstract and does not implement abstract member
-     * onSensorChanged(p0: SensorEvent!): Unit defined in android.hardware.SensorEventListener
-     */
-    override fun onSensorChanged(event: SensorEvent) {
-        // no action
-    }
-
-    /**
-     * Class 'PhoneSensorManager' is not abstract and does not implement abstract member
-     * public abstract fun onAccuracyChanged(p0: Sensor!, p1: Int): Unit defined in android.hardware.SensorEventListener
-     */
-    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
-        // no action
     }
 
 //    fun getDeviceTime(): Single<Double> {
