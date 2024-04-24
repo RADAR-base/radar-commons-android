@@ -60,8 +60,9 @@ class PolarManager(
     private var wakeLock: PowerManager.WakeLock? = null
 
     private lateinit var api: PolarBleApi
-    private var deviceId: String = "D6B33A2A"
+    private var deviceId: String = "Not yet found"
 
+    private var autoConnectDisposable: Disposable? = null
     private var hrDisposable: Disposable? = null
     private var ecgDisposable: Disposable? = null
     private var accDisposable: Disposable? = null
@@ -76,8 +77,8 @@ class PolarManager(
 
     }
     init {
-        name = service.getString(R.string.polarServiceDisplayName)
-
+        var noDeviceYet = "searching.."
+        name = service.getString(R.string.polarServiceDisplayName, noDeviceYet)
     }
 
     @SuppressLint("WakelockTimeout")
@@ -113,6 +114,11 @@ class PolarManager(
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
+                var deviceId = polarDeviceInfo.deviceId
+                if (deviceId != null) {
+                    name = service.getString(R.string.polarServiceDisplayName, deviceId)
+                }
+
             }
 
             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
@@ -173,12 +179,37 @@ class PolarManager(
         })
 
         try {
-            api.connectToDevice(deviceId)
-        } catch (a: PolarInvalidArgument) {
-            a.printStackTrace()
-        }
+            if (autoConnectDisposable != null) {
+                autoConnectDisposable?.dispose()
+            }
+            autoConnectDisposable = api.autoConnectToDevice(-60, "180D", null)
+                .subscribe(
+                    { Log.d(TAG, "auto connect search complete") },
+                    { throwable: Throwable -> Log.e(TAG, "" + throwable.toString()) }
+                )
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not find polar device")
+        }}
 
-    }
+//            val isDisposed = scanDisposable?.isDisposed ?: true
+//            if (isDisposed) {
+//                scanDisposable = api.searchForDevice()
+//                    .observeOn(AndroidSchedulers.mainThread())
+//                    .subscribe(
+//                        { polarDeviceInfo: PolarDeviceInfo ->
+//                            var deviceId = polarDeviceInfo.deviceId
+//                            Log.d(TAG, "polar device found id: $deviceId")
+//                        })
+//                if (deviceId != null) {
+//                    api.connectToDevice(deviceId)
+//                } else {
+//                    Log.e(TAG, "No polar device found")
+//                }
+//            }
+//        } catch (a: PolarInvalidArgument) {
+//                // Handle PolarInvalidArgument exception if needed
+//                a.printStackTrace()
+//        }
 
     /**
      * Class 'PhoneSensorManager' is not abstract and does not implement abstract member
@@ -195,6 +226,7 @@ class PolarManager(
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
         // no action
     }
+
     fun getDeviceTime(): Single<Double> {
         return api.getLocalTime(deviceId)
             .observeOn(AndroidSchedulers.mainThread())
