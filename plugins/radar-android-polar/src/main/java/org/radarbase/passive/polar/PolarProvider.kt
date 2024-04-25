@@ -18,7 +18,7 @@ open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState
         get() = radarService.getString(R.string.polarSensorsDescription)
 
     override val displayName: String
-        get() = radarService.getString(R.string.polarServiceDisplayName)
+        get() = radarService.getString(R.string.polarDisplayName)
 
     override val permissionsNeeded: List<String> = emptyList()
 
@@ -29,7 +29,7 @@ open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState
     override val version: String = BuildConfig.VERSION_NAME
 
     companion object {
-        const val PRODUCER = "ANDROID" //should become "POLAR"
-        const val MODEL = "PHONE" //should become "VANTAGEV3" or "H10"
+        const val PRODUCER = "Polar"
+        const val MODEL = "Generic"
     }
 }
