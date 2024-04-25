@@ -64,20 +64,22 @@ class PolarManager(
     }
 
     init {
-        var noDeviceYet = "searching.."
-        name = service.getString(R.string.polarServiceDisplayName, noDeviceYet)
+        status = SourceStatusListener.Status.DISCONNECTED // red icon
+        name = service.getString(R.string.polarDisplayName)
     }
 
     @SuppressLint("WakelockTimeout")
     override fun start(acceptableIds: Set<String>) {
+        status = SourceStatusListener.Status.READY // blue loading
         register()
         mHandler.start()
         mHandler.execute {
+
             wakeLock = (service.getSystemService(POWER_SERVICE) as PowerManager?)?.let { pm ->
                 pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "org.radarcns.polar:PolarManager")
                     .also { it.acquire() }
             }
-            status = SourceStatusListener.Status.CONNECTED
+//            status = SourceStatusListener.Status.CONNECTED
         }
 
         api = defaultImplementation(
@@ -96,14 +98,21 @@ class PolarManager(
         api.setApiCallback(object : PolarBleApiCallback() {
             override fun blePowerStateChanged(powered: Boolean) {
                 Log.d(TAG, "BluetoothStateChanged $powered")
+                if (powered == false) {
+                    status = SourceStatusListener.Status.DISCONNECTED // red circle
+                } else {
+                    status = SourceStatusListener.Status.CONNECTING // green dots
+                }
             }
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
                 deviceId = polarDeviceInfo.deviceId
-                name = service.getString(R.string.polarServiceDisplayName, deviceId)
+                name = service.getString(R.string.polarDeviceName, deviceId)
+
                 if (deviceId != null) {
                     isDeviceConnected = true
+                    status = SourceStatusListener.Status.CONNECTED // green circle
                 }
             }
 
@@ -114,6 +123,7 @@ class PolarManager(
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device disconnected ${polarDeviceInfo.deviceId}")
                 isDeviceConnected = false
+                status = SourceStatusListener.Status.DISCONNECTED // red circle
 
             }
 
@@ -146,6 +156,7 @@ class PolarManager(
 
             override fun batteryLevelReceived(identifier: String, level: Int) {
                 var batteryLevel = (level/100).toFloat()
+                state.batteryLevel = batteryLevel
                 Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + getTime())
                 send(batteryLevelTopic, PolarBatteryLevel(getTime(), getTime(), batteryLevel))
             }
