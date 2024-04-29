@@ -70,18 +70,26 @@ class PolarManager(
 
     @SuppressLint("WakelockTimeout")
     override fun start(acceptableIds: Set<String>) {
+
+//        disconnectToPolarSDK()
         status = SourceStatusListener.Status.READY // blue loading
+        Log.d(TAG, "RB Device name is currently $deviceId")
+
+        disconnectToPolarSDK(deviceId)
+        connectToPolarSDK()
+
         register()
         mHandler.start()
         mHandler.execute {
-
             wakeLock = (service.getSystemService(POWER_SERVICE) as PowerManager?)?.let { pm ->
                 pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "org.radarcns.polar:PolarManager")
                     .also { it.acquire() }
             }
-//            status = SourceStatusListener.Status.CONNECTED
         }
 
+    }
+
+    fun connectToPolarSDK() {
         api = defaultImplementation(
             applicationContext,
             setOf(
@@ -101,12 +109,13 @@ class PolarManager(
                 if (powered == false) {
                     status = SourceStatusListener.Status.DISCONNECTED // red circle
                 } else {
-                    status = SourceStatusListener.Status.CONNECTING // green dots
+                    status = SourceStatusListener.Status.READY // blue loading
                 }
             }
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
+                Log.d(TAG, "RB Does it come here again?")
                 deviceId = polarDeviceInfo.deviceId
                 name = service.getString(R.string.polarDeviceName, deviceId)
 
@@ -117,6 +126,7 @@ class PolarManager(
             }
 
             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
+                status = SourceStatusListener.Status.CONNECTING // green dots
                 Log.d(TAG, "Device connecting ${polarDeviceInfo.deviceId}")
             }
 
@@ -161,22 +171,6 @@ class PolarManager(
                 send(batteryLevelTopic, PolarBatteryLevel(getTime(), getTime(), batteryLevel))
             }
 
-//            override fun hrNotificationReceived(identifier: String, data: PolarHrData.PolarHrSample) {
-//                //deprecated
-//
-//            }
-//
-//            override fun polarFtpFeatureReady(identifier: String) {
-//                //deprecated
-//            }
-//
-//            override fun streamingFeaturesReady(identifier: String, features: Set<PolarBleApi.PolarDeviceDataType>) {
-//                //deprecated
-//            }
-//
-//            override fun hrFeatureReady(identifier: String) {
-//                //deprecated
-//            }
         })
 
         try {
@@ -190,6 +184,21 @@ class PolarManager(
                 )
         } catch (e: Exception) {
             Log.e(TAG, "Could not find polar device")
+        }
+    }
+
+    override fun disconnect() {
+        api.disconnectFromDevice(deviceId!!)
+        api.shutDown()
+    }
+
+
+    fun disconnectToPolarSDK(deviceId: String?) {
+        try {
+            api.disconnectFromDevice(deviceId!!)
+            api.shutDown()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error occurred during shutdown: ${e.message}")
         }
     }
 
