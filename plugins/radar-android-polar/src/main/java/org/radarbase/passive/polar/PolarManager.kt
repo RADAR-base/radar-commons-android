@@ -256,7 +256,7 @@ class PolarManager(
             val isDisposed = ecgDisposable?.isDisposed ?: true
             if (isDisposed) {
                 val settingMap = mapOf(
-                    PolarSensorSetting.SettingType.SAMPLE_RATE to 103,
+                    PolarSensorSetting.SettingType.SAMPLE_RATE to 130,
                     PolarSensorSetting.SettingType.RESOLUTION to 14
                 )
                 val ecgSettings = PolarSensorSetting(settingMap)
