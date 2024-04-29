@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 buildscript {
-    ext.kotlin_version = '1.8.21'
-    ext.dokka_version = '1.8.10'
+    ext.kotlin_version = '1.9.22'
+    ext.dokka_version = '1.9.10'
     repositories {
         google()
         mavenCentral()
@@ -90,19 +90,21 @@ subprojects {
 
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
         kotlinOptions {
-            jvmTarget = '11'
+            jvmTarget = '17'
             apiVersion = '1.8'
             languageVersion = '1.8'
         }
     }
 }
 
+// Configuration for the gradle-versions plugin https://github.com/ben-manes/gradle-versions-plugin
 def isNonStable = { String version ->
     def stableKeyword = ["RELEASE", "FINAL", "GA"].any { version.toUpperCase().contains(it) }
     def regex = /^[0-9,.v-]+(-r)?$/
     return !stableKeyword && !(version ==~ regex)
 }
 
+// Configuration for the gradle-versions plugin https://github.com/ben-manes/gradle-versions-plugin
 tasks.named("dependencyUpdates").configure {
     rejectVersionIf {
         isNonStable(it.candidate.version)
