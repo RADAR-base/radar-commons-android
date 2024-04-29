@@ -8,18 +8,18 @@ android {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-description = 'Plugin for RADAR passive remote monitoring app for measuring PPG using a phone camera'
+description = "Plugin for RADAR passive remote monitoring app for measuring PPG using a phone camera"
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
 dependencies {
-    api project(':radar-commons-android')
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'com.google.android.material:material:1.8.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    api project(":radar-commons-android")
+    implementation "androidx.appcompat:appcompat:$appcompat_version"
+    implementation "androidx.legacy:legacy-support-v4:$legacy_support_version"
+    implementation "com.google.android.material:material:$material_version"
+    implementation "androidx.constraintlayout:constraintlayout:$constraintlayout_version"
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"

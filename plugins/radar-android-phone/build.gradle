@@ -8,16 +8,16 @@ android {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-description = 'Basic phone sensor plugin for RADAR passive remote monitoring app'
+description = "Basic phone sensor plugin for RADAR passive remote monitoring app"
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
 dependencies {
-    api project(':radar-commons-android')
-    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
-    implementation project(path: ':radar-android-google-places')
+    api project(":radar-commons-android")
+    api project(path: ":radar-android-google-places")
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:$localbroadcastmanager_version"
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"
