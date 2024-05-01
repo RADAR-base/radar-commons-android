@@ -296,7 +296,7 @@ class PolarManager(
                                 send(
                                     accelerationTopic,
                                     PolarAcceleration(
-                                        epoch2000NanosTo1970Seconds(data.timeStamp),
+                                        getTime(),
                                         getTime(),
                                         data.x,
                                         data.y,
