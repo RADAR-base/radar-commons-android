@@ -157,7 +157,7 @@ class PolarManager(
             }
 
             override fun batteryLevelReceived(identifier: String, level: Int) {
-                var batteryLevel = (level/100).toFloat()
+                var batteryLevel = level.toFloat() / 100.0f
                 state.batteryLevel = batteryLevel
                 Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + getTimeSec())
                 send(batteryLevelTopic, PolarBatteryLevel(getTimeSec(), getTimeSec(), batteryLevel))
