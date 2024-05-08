@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 buildscript {
-    ext.kotlin_version = '1.8.21'
-    ext.dokka_version = '1.8.10'
     repositories {
         google()
         mavenCentral()
     }
+
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.0.1'
+        classpath "com.android.tools.build:gradle:$gradle_android_version"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath 'com.github.bjoernq:unmockplugin:0.7.9'
-        classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:0.9.18"
+        classpath "com.github.bjoernq:unmockplugin:$unmock_plugin_version"
+        classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:$dokka_android_gradle_plugin_version"
         classpath("org.jetbrains.dokka:dokka-gradle-plugin:$dokka_version")
     }
 }
 
 plugins {
-    id("io.github.gradle-nexus.publish-plugin") version "1.3.0"
-    id("com.github.ben-manes.versions") version "0.46.0"
+    id("io.github.gradle-nexus.publish-plugin") version "$publish_plugin_version"
+    id("com.github.ben-manes.versions") version "$versions_plugin_version"
 }
 
 allprojects {
@@ -41,7 +40,7 @@ allprojects {
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = "1.2.4"
+    version = "$project_version"
     group = 'org.radarbase'
 
     ext.versionCode = 52
@@ -90,19 +89,21 @@ subprojects {
 
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
         kotlinOptions {
-            jvmTarget = '11'
+            jvmTarget = "$java_version"
             apiVersion = '1.8'
             languageVersion = '1.8'
         }
     }
 }
 
+// Configuration for the gradle-versions plugin https://github.com/ben-manes/gradle-versions-plugin
 def isNonStable = { String version ->
     def stableKeyword = ["RELEASE", "FINAL", "GA"].any { version.toUpperCase().contains(it) }
     def regex = /^[0-9,.v-]+(-r)?$/
     return !stableKeyword && !(version ==~ regex)
 }
 
+// Configuration for the gradle-versions plugin https://github.com/ben-manes/gradle-versions-plugin
 tasks.named("dependencyUpdates").configure {
     rejectVersionIf {
         isNonStable(it.candidate.version)
@@ -119,5 +120,5 @@ nexusPublishing {
 }
 
 wrapper {
-    gradleVersion '8.1.1'
+    gradleVersion "$gradle_version"
 }

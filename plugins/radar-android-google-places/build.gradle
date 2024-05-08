@@ -1,25 +1,21 @@
 apply from: "$rootDir/gradle/android.gradle"
 
 android {
-    namespace "org.radarbase.passive.ppg"
+    namespace "org.radarbase.passive.google.places"
 }
 
 //---------------------------------------------------------------------------//
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-description = "Plugin for RADAR passive remote monitoring app for measuring PPG using a phone camera"
+description = "Google places plugin for RADAR passive remote monitoring app."
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
-
 dependencies {
     api project(":radar-commons-android")
-    implementation "androidx.appcompat:appcompat:$appcompat_version"
-    implementation "androidx.legacy:legacy-support-v4:$legacy_support_version"
-    implementation "com.google.android.material:material:$material_version"
-    implementation "androidx.constraintlayout:constraintlayout:$constraintlayout_version"
+    implementation "com.google.android.libraries.places:places:$places_version"
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"

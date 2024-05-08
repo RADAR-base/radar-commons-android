@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - master
+      - dev
 
 jobs:
   security:
@@ -32,6 +33,8 @@ jobs:
         run: >
           snyk test
           --all-sub-projects
-          --configuration-matching='^releaseRuntimeClasspath$'
+          --configuration-matching="^runtimeClasspath$"
+          --fail-on=upgradable
           --org=radar-base
-          --policy-path=$PWD/.snyk
+          --policy-path=.snyk
+          --severity-threshold=high

@@ -18,11 +18,11 @@ package org.radarbase.android
 
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.firebase.analytics.FirebaseAnalytics
 import org.radarbase.android.RadarApplication.Companion.radarApp
@@ -166,11 +166,7 @@ abstract class MainActivity : AppCompatActivity() {
         val radarServiceCls = radarApp.radarService
         try {
             val intent = Intent(this, radarServiceCls)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            ContextCompat.startForegroundService(this, intent)
         } catch (ex: IllegalStateException) {
             logger.error("Failed to start RadarService: activity is in background.", ex)
         }

@@ -45,7 +45,7 @@ open class PermissionHandler(
 
             val result = if (granted) PERMISSION_GRANTED else PERMISSION_DENIED
             broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
-                putExtra(RadarService.EXTRA_PERMISSIONS, arrayOf(LOCATION_SERVICE))
+                putExtra(RadarService.EXTRA_PERMISSIONS, arrayOf(permission))
                 putExtra(RadarService.EXTRA_GRANT_RESULTS, intArrayOf(result))
             }
 
