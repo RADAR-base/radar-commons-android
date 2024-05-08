@@ -12,6 +12,8 @@ import com.polar.sdk.api.PolarBleApiDefaultImpl.defaultImplementation
 import com.polar.sdk.api.model.*
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.Disposable
+import io.reactivex.rxjava3.core.Flowable
+import io.reactivex.rxjava3.core.Single
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -45,6 +47,8 @@ class PolarManager(
     private var ecgDisposable: Disposable? = null
     private var accDisposable: Disposable? = null
     private var ppiDisposable: Disposable? = null
+    private var timeDisposable: Disposable? = null
+
     companion object {
         private const val TAG = "POLAR"
 
@@ -127,15 +131,16 @@ class PolarManager(
                 if (isDeviceConnected) {
                     Log.d(TAG, "Feature ready $feature for $deviceId")
 
+                    if (feature == PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP) {
+                        setDeviceTime(deviceId)
+                    }
 
                     when (feature) {
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
                             streamHR()
                             streamEcg()
                             streamAcc()
-//                            streamPpi()
                         }
-
                         else -> {
                             Log.d(TAG, "No feature was ready")
                         }
@@ -154,8 +159,8 @@ class PolarManager(
             override fun batteryLevelReceived(identifier: String, level: Int) {
                 var batteryLevel = (level/100).toFloat()
                 state.batteryLevel = batteryLevel
-                Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + getTime())
-                send(batteryLevelTopic, PolarBatteryLevel(getTime(), getTime(), batteryLevel))
+                Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + getTimeSec())
+                send(batteryLevelTopic, PolarBatteryLevel(getTimeSec(), getTimeSec(), batteryLevel))
             }
 
         })
@@ -174,12 +179,6 @@ class PolarManager(
         }
     }
 
-    override fun disconnect() {
-        super.disconnect()
-        api.disconnectFromDevice(deviceId!!)
-        api.shutDown()
-    }
-
     fun disconnectToPolarSDK(deviceId: String?) {
         try {
             api.disconnectFromDevice(deviceId!!)
@@ -189,23 +188,32 @@ class PolarManager(
         }
     }
 
-    fun getTime(): Double {
+    fun setDeviceTime(deviceId: String?) {
+        deviceId?.let { id ->
+            val calendar = Calendar.getInstance(TimeZone.getTimeZone("GMT"))
+            calendar.time = Date()
+            api.setLocalTime(id, calendar)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    {
+                        val timeSetString = "time ${calendar.time} set to device"
+                        Log.d(TAG, timeSetString)
+                    },
+                    { error: Throwable -> Log.e(TAG, "set time failed: $error") }
+                )
+        } ?: run {
+            Log.e(TAG, "Device ID is null. Cannot set device time.")
+        }
+    }
+
+    fun getTimeSec(): Double {
         return (System.currentTimeMillis() / 1000).toDouble()
     }
 
-    // Since in Polar sensors (H10, H9, VeritySense and OH1) the epoch time is chosen to be 2000-01-01T00:00:00Z, this function will convert
-    // this to the traditional Unix epoch of 1970-01-01T00:00:00Z
-    fun epoch2000NanosTo1970Seconds(epochNanos: Long): Double {
-        val epochSeconds = epochNanos / 1_000_000_000.0 // Convert nanoseconds to seconds
-        val epochStart = LocalDateTime.of(2000, 1, 1, 0, 0, 0).toEpochSecond(ZoneOffset.UTC)
-        return epochSeconds + epochStart
-    }
-
     fun streamHR() {
-        Log.d(TAG, "log Famke start streamHR for ${deviceId}")
+        Log.d(TAG, "start streamHR for ${deviceId}")
         val isDisposed = hrDisposable?.isDisposed ?: true
         if (isDisposed) {
-            Log.d(TAG, "log Famke start streamHR isDisposed is ${isDisposed}")
             hrDisposable = deviceId?.let {
                 api.startHrStreaming(it)
                     .observeOn(AndroidSchedulers.mainThread())
@@ -213,12 +221,12 @@ class PolarManager(
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
-                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTime()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
+                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTimeSec()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
-                                        getTime(),
-                                        getTime(),
+                                        getTimeSec(),
+                                        getTimeSec(),
                                         sample.hr,
                                         sample.rrsMs,
                                         sample.rrAvailable,
@@ -245,6 +253,7 @@ class PolarManager(
     }
 
     fun streamEcg() {
+        Log.d(TAG, "start streamECG for ${deviceId}")
         val isDisposed = ecgDisposable?.isDisposed ?: true
         if (isDisposed) {
             val settingMap = mapOf(
@@ -257,12 +266,12 @@ class PolarManager(
                     .subscribe(
                         { polarEcgData: PolarEcgData ->
                             for (data in polarEcgData.samples) {
-                                Log.d(TAG, "ECG yV: ${data.voltage} timeStamp: ${data.timeStamp} currentTime: ${epoch2000NanosTo1970Seconds(data.timeStamp)}")
+                                Log.d(TAG, "ECG yV: ${data.voltage} timeStamp: ${data.timeStamp} time: ${PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)}")
                                 send(
                                     ecgTopic,
                                     PolarEcg(
-                                        epoch2000NanosTo1970Seconds(data.timeStamp),
-                                        getTime(),
+                                        PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                        getTimeSec(),
                                         data.voltage
                                     )
                                 )
@@ -293,12 +302,12 @@ class PolarManager(
                     .subscribe(
                         { polarAccelerometerData: PolarAccelerometerData ->
                             for (data in polarAccelerometerData.samples) {
-                                Log.d(TAG, "ACC    x: ${data.x} y: ${data.y} z: ${data.z} timeStamp: ${data.timeStamp} time: ${getTime()}")
+                                Log.d(TAG, "ACC    x: ${data.x} y: ${data.y} z: ${data.z} timeStamp: ${data.timeStamp} getTimeSec: ${getTimeSec()}")
                                 send(
                                     accelerationTopic,
                                     PolarAcceleration(
-                                        getTime(),
-                                        getTime(),
+                                        PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                        getTimeSec(),
                                         data.x,
                                         data.y,
                                         data.z
@@ -333,8 +342,8 @@ class PolarManager(
                                 send(
                                     ppIntervalTopic,
                                     PolarPpInterval(
-                                        getTime(),
-                                        getTime(),
+                                        getTimeSec(),
+                                        getTimeSec(),
                                         sample.blockerBit,
                                         sample.errorEstimate,
                                         sample.hr,
