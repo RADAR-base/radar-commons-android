@@ -128,23 +128,10 @@ open class PermissionHandler(
     }
 
     private fun requestBackgroundLocationPermissions() {
-        alertDialog {
-            setTitle(R.string.enable_location_title)
-            setMessage(R.string.enable_location_background)
-            setPositiveButton(android.R.string.ok) { dialog, _ ->
-                dialog.dismiss()
-                requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
-            }
-            setNegativeButton(android.R.string.cancel) { dialog, _ ->
-                dialog.cancel()
-                requestPermissions()
-            }
-            show()
-        }
+        requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
     }
 
     private fun requestLocationPermissions(locationPermissions: Set<String>) {
-
         alertDialog {
             setView(R.layout.location_dialog)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
@@ -205,8 +192,7 @@ open class PermissionHandler(
 
     private fun requestLocationProvider() {
         alertDialog {
-            setTitle(R.string.enable_location_title)
-            setMessage(R.string.enable_location_instruction)
+            setView(R.layout.location_dialog)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.dismiss()
                 Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
@@ -216,17 +202,26 @@ open class PermissionHandler(
                 dialog.cancel()
                 requestPermissions()
             }
-            setIcon(android.R.drawable.ic_dialog_alert)
         }
     }
 
     private fun requestSystemWindowPermissions() {
         // Show alert dialog to the user saying a separate permission is needed
         // Launch the settings activity if the user prefers
-        Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:" + activity.packageName)
-        ).startActivityForResult(ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
+        alertDialog {
+            setView(R.layout.system_window_dialog)
+            setPositiveButton(android.R.string.ok) { dialog, _ ->
+                dialog.dismiss()
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + activity.packageName)
+                ).startActivityForResult(ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
+            }
+            setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                dialog.cancel()
+                requestPermissions()
+            }
+        }
     }
 
     private fun Intent.startActivityForResult(code: Int) {
@@ -242,16 +237,25 @@ open class PermissionHandler(
 
     @SuppressLint("BatteryLife")
     private fun requestDisableBatteryOptimization() {
-        Intent(
-            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-            Uri.parse("package:" + activity.packageName)
-        ).startActivityForResult(BATTERY_OPT_CODE)
+        alertDialog {
+            setView(R.layout.disable_battery_optimization_dialog)
+            setPositiveButton(android.R.string.ok) { dialog, _ ->
+                dialog.dismiss()
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + activity.packageName)
+                ).startActivityForResult(BATTERY_OPT_CODE)
+            }
+            setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                dialog.cancel()
+                requestPermissions()
+            }
+        }
     }
 
     private fun requestPackageUsageStats() {
         alertDialog {
-            setTitle(R.string.enable_package_usage_title)
-            setMessage(R.string.enable_package_usage)
+            setView(R.layout.usage_tracking_dialog)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.dismiss()
                 var intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
@@ -264,7 +268,6 @@ open class PermissionHandler(
                 dialog.cancel()
                 requestPermissions()
             }
-            setIcon(android.R.drawable.ic_dialog_alert)
         }
     }
 
