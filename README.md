@@ -97,6 +97,35 @@ To only build plugins that are of interest to you, add a `gradle.skip` file in a
 
 If you want to contribute a feature or fix browse our [issues](https://github.com/RADAR-base/radar-commons-android/issues), and please make a pull request.
 
+## Publishing Schemas to Maven Local
+
+While the plugin is in development phase schemas are not published centrally. To access the java generated file from avro schemas first publish them to maven local.
+To publish schemas locally to Maven, please follow these steps:
+
+1. Change your working directory to java-sdk in RADAR-Schemas.
+
+2. Run the following commands in your terminal:
+```shell
+./gradlew build 
+./gradlew publishToMavenLocal
+```
+
+3. In your build.gradle file, add the following to your repositories block:
+```gradle
+repositories {
+    mavenLocal()
+}
+```
+
+4. In the same build.gradle file, add the following to your dependencies block, replacing `$radarSchemasVersion` with its corresponding value:
+```gradle
+dependencies {
+    implementation "org.radarbase:radar-schemas-commons:$radarSchemasVersion"
+}
+```
+
+You can find the version value in the metadata of your local Maven repository. It should end in `SNAPSHOT`.
+
 ## Licensing
 
 Code made in the RADAR-base platform is licensed under the Apache License 2.0, as listed in see the LICENSE file in this directory. Plugins that have additional licensing requirements list them in their README.
