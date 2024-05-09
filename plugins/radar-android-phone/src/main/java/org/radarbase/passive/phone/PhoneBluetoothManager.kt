@@ -180,7 +180,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
         bluetoothBroadcastReceiver?.let {
             try {
                 service.unregisterReceiver(it)
-            } catch (ex: IllegalStateException) {
+            } catch (ex: IllegalArgumentException) {
                 logger.warn("Bluetooth receiver already unregistered in broadcast")
             }
             bluetoothBroadcastReceiver = null

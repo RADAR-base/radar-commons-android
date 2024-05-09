@@ -62,7 +62,7 @@ class BatteryLevelReceiver(
     override fun unregister() {
         try {
             context.unregisterReceiver(receiver)
-        } catch (ex: IllegalStateException) {
+        } catch (ex: IllegalArgumentException) {
             logger.warn(
                 "Cannot unregister BatteryLevelReceiver. It probably was incompletely registered: {}",
                 ex.message,
