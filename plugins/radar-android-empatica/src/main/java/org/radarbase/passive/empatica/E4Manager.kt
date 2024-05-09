@@ -56,6 +56,7 @@ class E4Manager(
     private val interBeatIntervalTopic = createCache("android_empatica_e4_inter_beat_interval", EmpaticaE4InterBeatInterval())
     private val temperatureTopic = createCache("android_empatica_e4_temperature", EmpaticaE4Temperature())
     private val sensorStatusTopic = createCache("android_empatica_e4_sensor_status", EmpaticaE4SensorStatus())
+    private val tagTopic = createCache("android_empatica_e4_tag", EmpaticaE4Tag())
 
     private val isScanning = AtomicBoolean(false)
     private var hasBeenConnecting = false
@@ -272,7 +273,8 @@ class E4Manager(
     }
 
     override fun didReceiveTag(timestamp: Double) {
-
+        val value =  EmpaticaE4Tag(timestamp, currentTime)
+        send(tagTopic, value)
     }
 
     override fun didReceiveGSR(gsr: Float, timestamp: Double) {
