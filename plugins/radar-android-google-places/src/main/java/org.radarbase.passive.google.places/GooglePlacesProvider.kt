@@ -21,6 +21,7 @@ import android.os.Build
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.source.SourceStatusListener
 
 class GooglePlacesProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val description: String
@@ -41,6 +42,13 @@ class GooglePlacesProvider(radarService: RadarService) : SourceProvider<BaseSour
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
+    }
+
+    override fun imageResource(pluginStatus: SourceStatusListener.Status): Int {
+        iconResourceMap[ICON_PLUGIN_CONNECTED] = R.drawable.places_plugin_icon_connected
+        iconResourceMap[ICON_PLUGIN_DISCONNECTED] = R.drawable.places_plugin_icon_disconnected
+        iconResourceMap[ICON_PLUGIN_IDLE] = R.drawable.places_plugin_icon_idle
+        return super.imageResource(pluginStatus)
     }
 
     override val serviceClass: Class<GooglePlacesService> = GooglePlacesService::class.java

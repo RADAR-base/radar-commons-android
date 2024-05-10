@@ -21,6 +21,7 @@ import android.os.Build
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.source.SourceStatusListener
 
 open class GoogleSleepProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
 
@@ -39,6 +40,13 @@ open class GoogleSleepProvider(radarService: RadarService) : SourceProvider<Base
     override val permissionsNeeded = listOf(ACTIVITY_RECOGNITION_COMPAT)
 
     override val serviceClass: Class<GoogleSleepService> = GoogleSleepService::class.java
+
+    override fun imageResource(pluginStatus: SourceStatusListener.Status): Int {
+        iconResourceMap[ICON_PLUGIN_CONNECTED] = R.drawable.sleep_plugin_icon_connected
+        iconResourceMap[ICON_PLUGIN_DISCONNECTED] = R.drawable.sleep_plugin_icon_disconnected
+        iconResourceMap[ICON_PLUGIN_IDLE] = R.drawable.sleep_plugin_icon_idle
+        return super.imageResource(pluginStatus)
+    }
 
     override val displayName: String
         get() = radarService.getString(R.string.googleSleepDisplayName)

@@ -21,6 +21,7 @@ import android.os.Build
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.source.SourceStatusListener
 
 class GoogleActivityProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
 
@@ -39,6 +40,13 @@ class GoogleActivityProvider(radarService: RadarService) : SourceProvider<BaseSo
     override val serviceClass: Class<GoogleActivityService> = GoogleActivityService::class.java
 
     override val permissionsNeeded: List<String> = listOf(ACTIVITY_RECOGNITION_COMPAT)
+
+    override fun imageResource(pluginStatus: SourceStatusListener.Status): Int {
+        iconResourceMap[ICON_PLUGIN_CONNECTED] = R.drawable.activity_plugin_icon_connected
+        iconResourceMap[ICON_PLUGIN_DISCONNECTED] = R.drawable.activity_plugin_icon_disconnected
+        iconResourceMap[ICON_PLUGIN_IDLE] = R.drawable.activity_plugin_icon_idle
+        return super.imageResource(pluginStatus)
+    }
 
     override val displayName: String
         get() = radarService.getString(R.string.google_activity_display_name)

@@ -163,6 +163,21 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     }
 
     /**
+     * This drawable image resource is intended to be displayed alongside each plugin in [SourceRowView].
+     * Use -1 to display default battery labels. For consistency, consider using
+     * "?attr/colorPrimary" as the default background for connected state, "@color/tint_plugin_inactive"
+     * for disconnected state and "@color/tint_plugin_idle" for idle state.
+     */
+    open fun imageResource(pluginStatus: SourceStatusListener.Status): Int {
+        if (iconResourceMap.isEmpty()) return -1
+        return when (pluginStatus) {
+            SourceStatusListener.Status.CONNECTED -> iconResourceMap[ICON_PLUGIN_CONNECTED]
+            SourceStatusListener.Status.UNAVAILABLE, SourceStatusListener.Status.DISCONNECTED -> iconResourceMap[ICON_PLUGIN_DISCONNECTED]
+            SourceStatusListener.Status.CONNECTING, SourceStatusListener.Status.READY, SourceStatusListener.Status.DISCONNECTING -> iconResourceMap[ICON_PLUGIN_DISCONNECTED]
+        } ?: -1
+    }
+
+    /**
      * Configure the service from the set RadarConfiguration.
      */
     @CallSuper
@@ -203,6 +218,13 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
      * Whether the source name should be checked with given filters before a connection is allowed
      */
     open val isFilterable: Boolean = false
+
+    /**
+     * A map whose values consist of resource IDs of images for different statuses of plugins.
+     * If the map is empty, a general icon for the plugin will be displayed for all plugin states.
+     * If not, an icon corresponding to each source state will be displayed.
+     */
+    protected val iconResourceMap: MutableMap<String, Int> = mutableMapOf()
 
     /**
      * Match source type.
@@ -253,6 +275,9 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         const val PLUGIN_NAME_KEY = "org.radarbase.android.source.SourceProvider.pluginName"
         const val PRODUCER_KEY = "org.radarbase.android.source.SourceProvider.sourceProducer"
         const val MODEL_KEY = "org.radarbase.android.source.SourceProvider.sourceModel"
+        const val ICON_PLUGIN_CONNECTED = "org.radarbase.android.source.SourceProvider.icon_connected"
+        const val ICON_PLUGIN_DISCONNECTED = "org.radarbase.android.source.SourceProvider.icon_disconnected"
+        const val ICON_PLUGIN_IDLE = "org.radarbase.android.source.SourceProvider.icon_idle"
 
         private val logger = LoggerFactory.getLogger(SourceProvider::class.java)
     }
