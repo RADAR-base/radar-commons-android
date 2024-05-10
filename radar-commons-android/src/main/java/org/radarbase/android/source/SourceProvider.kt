@@ -173,7 +173,7 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         return when (pluginStatus) {
             SourceStatusListener.Status.CONNECTED -> iconResourceMap[ICON_PLUGIN_CONNECTED]
             SourceStatusListener.Status.UNAVAILABLE, SourceStatusListener.Status.DISCONNECTED -> iconResourceMap[ICON_PLUGIN_DISCONNECTED]
-            SourceStatusListener.Status.CONNECTING, SourceStatusListener.Status.READY, SourceStatusListener.Status.DISCONNECTING -> iconResourceMap[ICON_PLUGIN_DISCONNECTED]
+            SourceStatusListener.Status.CONNECTING, SourceStatusListener.Status.READY, SourceStatusListener.Status.DISCONNECTING -> iconResourceMap[ICON_PLUGIN_IDLE]
         } ?: -1
     }
 
