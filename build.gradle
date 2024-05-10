@@ -40,7 +40,7 @@ allprojects {
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = "1.2.4"
+    version = "$project_version"
     group = 'org.radarbase'
 
     ext.versionCode = 52
