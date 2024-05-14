@@ -195,7 +195,7 @@ class OfflineProcessor(
                 alarmManager.cancel(pendingIntent)
                 try {
                     context.unregisterReceiver(receiver)
-                } catch (ex: IllegalStateException) {
+                } catch (ex: IllegalArgumentException) {
                     logger.warn(
                         "Cannot unregister OfflineProcessor {}, it was most likely not completely started: {}",
                         config.requestName,
