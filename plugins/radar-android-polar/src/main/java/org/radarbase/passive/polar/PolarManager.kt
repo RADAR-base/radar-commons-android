@@ -106,7 +106,8 @@ class PolarManager(
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
                 Log.d(TAG, "RB Does it come here again?")
                 deviceId = polarDeviceInfo.deviceId
-                name = service.getString(R.string.polarDeviceName, deviceId)
+                name = polarDeviceInfo.name
+//                name = service.getString(R.string.polarDeviceName, deviceId)
 
                 if (deviceId != null) {
                     isDeviceConnected = true
