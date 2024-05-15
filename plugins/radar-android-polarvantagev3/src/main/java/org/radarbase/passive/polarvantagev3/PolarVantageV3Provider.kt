@@ -1,4 +1,4 @@
-package org.radarbase.passive.polar
+package org.radarbase.passive.polarvantagev3
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -7,7 +7,7 @@ import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
 
-open class PolarVantageV3Provider(radarService: RadarService) : SourceProvider<PolarState>(radarService) {
+open class PolarVantageV3Provider(radarService: RadarService) : SourceProvider<PolarVantageV3State>(radarService) {
     override val serviceClass: Class<PolarVantageV3Service> = PolarVantageV3Service::class.java
 
     override val pluginNames = listOf(

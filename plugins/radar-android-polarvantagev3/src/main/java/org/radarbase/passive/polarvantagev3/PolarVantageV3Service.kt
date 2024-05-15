@@ -1,4 +1,4 @@
-package org.radarbase.passive.polar
+package org.radarbase.passive.polarvantagev3
 
 import android.os.Process
 import org.radarbase.android.config.SingleRadarConfiguration
@@ -10,11 +10,11 @@ import org.radarbase.android.util.SafeHandler
  * A service that manages the Polar manager and a TableDataHandler to send store the data of
  * the phone sensors and send it to a Kafka REST proxy.
  */
-class PolarVantageV3Service : SourceService<PolarState>() {
+class PolarVantageV3Service : SourceService<PolarVantageV3State>() {
     private lateinit var handler: SafeHandler
 //    private lateinit var context: Context
-    override val defaultState: PolarState
-        get() = PolarState()
+    override val defaultState: PolarVantageV3State
+        get() = PolarVantageV3State()
 
     override fun onCreate() {
         super.onCreate()
@@ -23,8 +23,8 @@ class PolarVantageV3Service : SourceService<PolarState>() {
 
     override fun createSourceManager() = PolarVantageV3Manager(this, applicationContext)
 
-    override fun configureSourceManager(manager: SourceManager<PolarState>, config: SingleRadarConfiguration) {
-        manager as PolarManager
+    override fun configureSourceManager(manager: SourceManager<PolarVantageV3State>, config: SingleRadarConfiguration) {
+        manager as PolarVantageV3Manager
     }
 }
 
