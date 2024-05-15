@@ -1,4 +1,4 @@
-package org.radarbase.passive.polar
+package org.radarbase.passive.polarvantagev3
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -20,7 +20,7 @@ import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.kafka.ObservationKey
-import org.radarcns.passive.polar.*
+import org.radarcns.passive.polar.* // schemas
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.*
@@ -28,7 +28,7 @@ import java.util.*
 class PolarVantageV3Manager(
     polarService: PolarVantageV3Service,
     private val applicationContext: Context
-) : AbstractSourceManager<PolarVantageV3Service, PolarState>(polarService) {
+) : AbstractSourceManager<PolarVantageV3Service, PolarVantageV3State>(polarService) {
 
     private val accelerationTopic: DataCache<ObservationKey, PolarAcceleration> = createCache("android_polar_acceleration", PolarAcceleration())
     private val batteryLevelTopic: DataCache<ObservationKey, PolarBatteryLevel> = createCache("android_polar_battery_level", PolarBatteryLevel())
@@ -107,7 +107,7 @@ class PolarVantageV3Manager(
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
                 Log.d(TAG, "RB Does it come here again?")
                 deviceId = polarDeviceInfo.deviceId
-                name = service.getString(R.string.polarDeviceName, deviceId)
+                name = polarDeviceInfo.name
 
                 if (deviceId != null) {
                     isDeviceConnected = true
@@ -140,10 +140,7 @@ class PolarVantageV3Manager(
                     when (feature) {
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
                             Log.d(TAG, "Start recording now")
-                            Thread.sleep(10_000L)
                             streamHR()
-                            streamEcg()
-                            streamAcc()
                         }
                         else -> {
                             Log.d(TAG, "No feature was ready")
@@ -164,7 +161,7 @@ class PolarVantageV3Manager(
                 var batteryLevel = level.toFloat() / 100.0f
                 state.batteryLevel = batteryLevel
                 Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + getTimeSec())
-                send(batteryLevelTopic, PolarBatteryLevel(getTimeSec(), getTimeSec(), batteryLevel))
+                send(batteryLevelTopic, PolarBatteryLevel(name, getTimeSec(), getTimeSec(), batteryLevel))
             }
 
         })
@@ -176,20 +173,6 @@ class PolarVantageV3Manager(
         }
 
     }
-
-//        try {
-//            if (autoConnectDisposable != null) {
-//                autoConnectDisposable?.dispose()
-//            }
-//            autoConnectDisposable = api.autoConnectToDevice(-60, "180D", null)
-//                .subscribe(
-//                    { Log.d(TAG, "auto connect search complete") },
-//                    { throwable: Throwable -> Log.e(TAG, "" + throwable.toString()) }
-//                )
-//        } catch (e: Exception) {
-//            Log.e(TAG, "Could not find polar device")
-//        }
-//    }
 
     fun disconnectToPolarSDK(deviceId: String?) {
         try {
@@ -237,6 +220,7 @@ class PolarVantageV3Manager(
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
+                                        name,
                                         getTimeSec(),
                                         getTimeSec(),
                                         sample.hr,
@@ -278,11 +262,12 @@ class PolarVantageV3Manager(
                     .subscribe(
                         { polarEcgData: PolarEcgData ->
                             for (data in polarEcgData.samples) {
-                                Log.d(TAG, "ECG yV: ${data.voltage} timeStamp: ${data.timeStamp} time: ${PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)}")
+                                Log.d(TAG, "ECG yV: ${data.voltage} timeStamp: ${data.timeStamp} time: ${PolarVantageV3Utils.convertEpochPolarToUnixEpoch(data.timeStamp)}")
                                 send(
                                     ecgTopic,
                                     PolarEcg(
-                                        PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                        name,
+                                        PolarVantageV3Utils.convertEpochPolarToUnixEpoch(data.timeStamp),
                                         getTimeSec(),
                                         data.voltage
                                     )
@@ -318,7 +303,8 @@ class PolarVantageV3Manager(
                                 send(
                                     accelerationTopic,
                                     PolarAcceleration(
-                                        PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                        name,
+                                        PolarVantageV3Utils.convertEpochPolarToUnixEpoch(data.timeStamp),
                                         getTimeSec(),
                                         data.x,
                                         data.y,
@@ -354,6 +340,7 @@ class PolarVantageV3Manager(
                                 send(
                                     ppIntervalTopic,
                                     PolarPpInterval(
+                                        name,
                                         getTimeSec(),
                                         getTimeSec(),
                                         sample.blockerBit,

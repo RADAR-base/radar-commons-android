@@ -107,7 +107,6 @@ class PolarManager(
                 Log.d(TAG, "RB Does it come here again?")
                 deviceId = polarDeviceInfo.deviceId
                 name = polarDeviceInfo.name
-//                name = service.getString(R.string.polarDeviceName, deviceId)
 
                 if (deviceId != null) {
                     isDeviceConnected = true
@@ -161,7 +160,7 @@ class PolarManager(
                 var batteryLevel = level.toFloat() / 100.0f
                 state.batteryLevel = batteryLevel
                 Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + getTimeSec())
-                send(batteryLevelTopic, PolarBatteryLevel(getTimeSec(), getTimeSec(), batteryLevel))
+                send(batteryLevelTopic, PolarBatteryLevel(name, getTimeSec(), getTimeSec(), batteryLevel))
             }
 
         })
@@ -226,6 +225,7 @@ class PolarManager(
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
+                                        name,
                                         getTimeSec(),
                                         getTimeSec(),
                                         sample.hr,
@@ -271,6 +271,7 @@ class PolarManager(
                                 send(
                                     ecgTopic,
                                     PolarEcg(
+                                        name,
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
                                         getTimeSec(),
                                         data.voltage
@@ -307,6 +308,7 @@ class PolarManager(
                                 send(
                                     accelerationTopic,
                                     PolarAcceleration(
+                                        name,
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
                                         getTimeSec(),
                                         data.x,
@@ -343,6 +345,7 @@ class PolarManager(
                                 send(
                                     ppIntervalTopic,
                                     PolarPpInterval(
+                                        name,
                                         getTimeSec(),
                                         getTimeSec(),
                                         sample.blockerBit,
