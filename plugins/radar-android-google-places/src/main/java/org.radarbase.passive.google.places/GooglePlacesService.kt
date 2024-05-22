@@ -21,6 +21,7 @@ import android.content.SharedPreferences
 import android.os.Process
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.net.PlacesClient
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -38,9 +39,12 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
     private val apiKey: ChangeRunner<String> = ChangeRunner(GOOGLE_PLACES_API_KEY_DEFAULT)
     lateinit var preferences: SharedPreferences
     private var _broadcaster: LocalBroadcastManager? = null
+    val placesClientCreated = AtomicBoolean(false)
     val broadcaster: LocalBroadcastManager?
         get() = _broadcaster
     private lateinit var placeHandler: SafeHandler
+    var placesClient: PlacesClient? = null
+        @Synchronized get() = if (placesClientCreated.get()) field else null
 
     val internalError = AtomicBoolean(false)
     private val baseDelay: Long = 300
@@ -103,6 +107,18 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
             super.sourceStatusUpdated(manager, status)
         }
     }
+
+    @Synchronized
+    fun createPlacesClient() {
+        try {
+            placesClient = Places.createClient(this)
+            placesClientCreated.set(true)
+        } catch (ex: IllegalStateException) {
+            placesClientCreated.set(false)
+            logger.error("Places client has not been initialized yet.")
+        }
+    }
+
 
     override val defaultState: GooglePlacesState
         get() = GooglePlacesState()

@@ -43,7 +43,6 @@ import org.radarbase.android.util.register
 import org.radarbase.passive.google.places.GooglePlacesService.Companion.GOOGLE_PLACES_API_KEY_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GooglePlacesInfo
-import org.radarcns.passive.google.PlacesType
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -60,7 +59,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private val isPermissionGranted: Boolean
         get() = checkLocationPermissions()
     private val placesClientCreated: Boolean
-        get() = state.placesClientCreated.get()
+        get() = service.placesClientCreated.get()
+    private val placesClient: PlacesClient?
+        get() = service.placesClient
     private val fromBroadcastRegistration: Boolean
         get()= state.fromBroadcast.get()
     var shouldFetchPlaceId: Boolean
@@ -83,8 +84,6 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private val detailsPlaceFields: List<Place.Field> =  listOf(Place.Field.ADDRESS_COMPONENTS)
 
     private var placesBroadcastReceiver: BroadcastRegistration? = null
-    private var placesClient: PlacesClient? = null
-        @Synchronized get() = if (placesClientCreated) field else null
     private var isRecentlySent: AtomicBoolean = AtomicBoolean(false)
 
     private lateinit var currentPlaceRequest:FindCurrentPlaceRequest
@@ -108,7 +107,10 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         register()
         status = SourceStatusListener.Status.READY
         placesProcessor.start()
-        placeHandler.execute { if (!placesClientCreated) createPlacesClient() }
+        placeHandler.execute { if (!placesClientCreated) {
+            service.createPlacesClient()
+        } }
+        updateConnected()
         placesBroadcastReceiver = service.broadcaster?.register(DEVICE_LOCATION_CHANGED) { _, _ ->
             if (placesClientCreated) {
                 placeHandler.execute {
@@ -117,17 +119,6 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                     state.fromBroadcast.set(false)
                 }
             }
-        }
-    }
-
-    @Synchronized
-    private fun createPlacesClient() {
-        try {
-            placesClient = Places.createClient(service)
-            state.placesClientCreated.set(true)
-            status = SourceStatusListener.Status.CONNECTED
-        } catch (ex: IllegalStateException) {
-            logger.error("Places client has not been initialized yet.")
         }
     }
 
@@ -144,12 +135,18 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 }
                 if (!Places.isInitialized()) {
                     initializePlacesClient()
-                    if (!placesClientCreated) createPlacesClient()
+                    if (!placesClientCreated) {
+                        service.createPlacesClient()
+                        updateConnected()
+                    }
                 }
             }
         }
     }
 
+    private fun updateConnected() {
+            status = SourceStatusListener.Status.CONNECTED
+    }
     private fun initializePlacesClient() {
         try {
             Places.initialize(service.applicationContext, apiKey)
@@ -211,10 +208,13 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             val placesInfoBuilder = GooglePlacesInfo.newBuilder().apply {
                 time = currentTime
                 timeReceived = currentTime
-                placeType1 = types?.get(0)
-                placeType2 = types?.get(1)
-                placeType3 = types?.get(2)
-                placeType4 = types?.get(3)
+                if (types != null) {
+                    val size = types.size
+                    if (size >= 1) placeType1 = types[0]
+                    if (size >= 2) placeType2 = types[1]
+                    if (size >= 3) placeType3 = types[2]
+                    if (size >= 4) placeType4 = types[3]
+                }
                 this.likelihood = likelihood.likelihood
                 fromBroadcast = fromBroadcastRegistration
                 city = null
@@ -322,7 +322,8 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                     logger.warn("Places receiver already unregistered in broadcast")
                 }
                 placesBroadcastReceiver = null
-                Places.deinitialize()
+// Not using Places.deinitialize for now as it may prevent PlacesClient from being created during a plugin reload. Additionally, multiple calls to Places.initialize do not impact memory or CPU.
+//                Places.deinitialize()
                 placesProcessor.close()
             }
     }
