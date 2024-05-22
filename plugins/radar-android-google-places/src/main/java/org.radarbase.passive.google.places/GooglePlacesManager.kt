@@ -109,7 +109,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         status = SourceStatusListener.Status.READY
         placesProcessor.start()
         placeHandler.execute { if (!placesClientCreated) createPlacesClient() }
-        service.broadcaster.register(DEVICE_LOCATION_CHANGED) { _, _ ->
+        placesBroadcastReceiver = service.broadcaster?.register(DEVICE_LOCATION_CHANGED) { _, _ ->
             if (placesClientCreated) {
                 placeHandler.execute {
                     state.fromBroadcast.set(true)
@@ -322,6 +322,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                     logger.warn("Places receiver already unregistered in broadcast")
                 }
                 placesBroadcastReceiver = null
+                Places.deinitialize()
                 placesProcessor.close()
             }
     }
