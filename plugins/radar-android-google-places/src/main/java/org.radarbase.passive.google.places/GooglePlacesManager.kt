@@ -109,6 +109,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         placesProcessor.start()
         placeHandler.execute { if (!placesClientCreated) {
             service.createPlacesClient()
+        }
+        if (!placesClientCreated && !Places.isInitialized()) {
+            updateApiKey(apiKey)
         } }
         updateConnected()
         placesBroadcastReceiver = service.broadcaster?.register(DEVICE_LOCATION_CHANGED) { _, _ ->
@@ -145,11 +148,15 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     }
 
     private fun updateConnected() {
+        if (Places.isInitialized()) {
             status = SourceStatusListener.Status.CONNECTED
+        }
     }
+
     private fun initializePlacesClient() {
         try {
             Places.initialize(service.applicationContext, apiKey)
+            updateConnected()
         } catch (ex: Exception) {
             logger.error("Exception while initializing places API", ex)
             service.internalError.set(true)

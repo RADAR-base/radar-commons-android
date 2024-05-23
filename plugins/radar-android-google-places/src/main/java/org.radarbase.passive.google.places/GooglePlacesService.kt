@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 class GooglePlacesService: SourceService<GooglePlacesState>() {
-    private val apiKey: ChangeRunner<String> = ChangeRunner(GOOGLE_PLACES_API_KEY_DEFAULT)
+    private val apiKey: ChangeRunner<String> = ChangeRunner()
     lateinit var preferences: SharedPreferences
     private var _broadcaster: LocalBroadcastManager? = null
     val placesClientCreated = AtomicBoolean(false)
@@ -123,7 +123,7 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
     override val defaultState: GooglePlacesState
         get() = GooglePlacesState()
 
-    override fun createSourceManager(): GooglePlacesManager = GooglePlacesManager(this, apiKey.lastResult, placeHandler)
+    override fun createSourceManager(): GooglePlacesManager = GooglePlacesManager(this, GOOGLE_PLACES_API_KEY_DEFAULT, placeHandler)
 
     override val isBluetoothConnectionRequired: Boolean = false
 
