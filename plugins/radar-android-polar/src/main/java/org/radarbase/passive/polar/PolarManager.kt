@@ -78,7 +78,10 @@ class PolarManager(
         }
 
     }
+
     fun connectToPolarSDK() {
+
+        Log.d(TAG, "Connecting to Polar API")
         api = defaultImplementation(
             applicationContext,
             setOf(
@@ -138,8 +141,8 @@ class PolarManager(
                     when (feature) {
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
                             streamHR()
-                            streamEcg()
-                            streamAcc()
+//                            streamEcg()
+//                            streamAcc()
                         }
                         else -> {
                             Log.d(TAG, "No feature was ready")
@@ -172,12 +175,15 @@ class PolarManager(
             autoConnectDisposable = api.autoConnectToDevice(-60, "180D", null)
                 .subscribe(
                     { Log.d(TAG, "auto connect search complete") },
-                    { throwable: Throwable -> Log.e(TAG, "" + throwable.toString()) }
+                    { throwable: Throwable ->
+                        Log.e(TAG, "" + throwable.toString())
+                    }
                 )
         } catch (e: Exception) {
             Log.e(TAG, "Could not find polar device")
         }
     }
+
 
     fun disconnectToPolarSDK(deviceId: String?) {
         try {
@@ -210,6 +216,10 @@ class PolarManager(
         return (System.currentTimeMillis() / 1000).toDouble()
     }
 
+    fun getTimeNano(): Long {
+        return (System.currentTimeMillis() * 1_000_000L)
+    }
+
     fun streamHR() {
         Log.d(TAG, "start streamHR for ${deviceId}")
         val isDisposed = hrDisposable?.isDisposed ?: true
@@ -221,12 +231,12 @@ class PolarManager(
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
-                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTimeSec()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
+                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTimeNano()} ${getTimeSec()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
                                         name,
-                                        getTimeSec(),
+                                        getTimeNano(),
                                         getTimeSec(),
                                         sample.hr,
                                         sample.rrsMs,

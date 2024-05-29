@@ -205,6 +205,10 @@ class PolarVantageV3Manager(
         return (System.currentTimeMillis() / 1000).toDouble()
     }
 
+    fun getTimeNano(): Long {
+        return (System.currentTimeMillis() * 1_000_000L)
+    }
+
     fun streamHR() {
         Log.d(TAG, "start streamHR for ${deviceId}")
         val isDisposed = hrDisposable?.isDisposed ?: true
@@ -216,12 +220,12 @@ class PolarVantageV3Manager(
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
-                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTimeSec()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
+                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTimeNano()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
                                         name,
-                                        getTimeSec(),
+                                        getTimeNano(),
                                         getTimeSec(),
                                         sample.hr,
                                         sample.rrsMs,
