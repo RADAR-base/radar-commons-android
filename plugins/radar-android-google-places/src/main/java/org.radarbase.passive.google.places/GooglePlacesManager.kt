@@ -216,11 +216,10 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 time = currentTime
                 timeReceived = currentTime
                 if (types != null) {
-                    val size = types.size
-                    if (size >= 1) placeType1 = types[0]
-                    if (size >= 2) placeType2 = types[1]
-                    if (size >= 3) placeType3 = types[2]
-                    if (size >= 4) placeType4 = types[3]
+                    placeType1 = types.getOrNull(0)
+                    placeType2 = types.getOrNull(1)
+                    placeType3 = types.getOrNull(2)
+                    placeType4 = types.getOrNull(3)
                 }
                 this.likelihood = likelihood.likelihood
                 fromBroadcast = fromBroadcastRegistration

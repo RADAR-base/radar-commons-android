@@ -38,10 +38,9 @@ import kotlin.math.pow
 class GooglePlacesService: SourceService<GooglePlacesState>() {
     private val apiKey: ChangeRunner<String> = ChangeRunner()
     lateinit var preferences: SharedPreferences
-    private var _broadcaster: LocalBroadcastManager? = null
     val placesClientCreated = AtomicBoolean(false)
-    val broadcaster: LocalBroadcastManager?
-        get() = _broadcaster
+    var broadcaster: LocalBroadcastManager? = null
+        private set
     private lateinit var placeHandler: SafeHandler
     var placesClient: PlacesClient? = null
         @Synchronized get() = if (placesClientCreated.get()) field else null
@@ -58,7 +57,7 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
             start()
         }
         preferences = getSharedPreferences(GooglePlacesService::class.java.name, Context.MODE_PRIVATE)
-        _broadcaster = LocalBroadcastManager.getInstance(this)
+        broadcaster = LocalBroadcastManager.getInstance(this)
     }
 
     override fun configureSourceManager(manager: SourceManager<GooglePlacesState>, config: SingleRadarConfiguration) {
