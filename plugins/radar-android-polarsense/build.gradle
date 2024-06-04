@@ -1,0 +1,34 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    namespace "org.radarbase.passive.polarsense"
+}
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = "Polar plugin for RADAR passive remote monitoring app"
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+repositories {
+    maven { url "https://jitpack.io" }
+}
+
+dependencies {
+    api project(":radar-commons-android")
+
+    implementation "com.github.polarofficial:polar-ble-sdk:5.5.0"
+    implementation "io.reactivex.rxjava3:rxjava:3.1.6"
+    implementation "io.reactivex.rxjava3:rxandroid:3.0.2"
+
+    implementation group: 'org.joda', name: 'joda-convert', version: '2.0.1', classifier: 'classic'
+    implementation 'joda-time:joda-time:2.9.4'
+
+    testImplementation 'junit:junit:4.13'
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"

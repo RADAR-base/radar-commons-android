@@ -1,0 +1,5 @@
+<resources>
+    <string name="polarDisplayName">Polar Sense</string>
+    <string name="polarDeviceName">Polar Sense %1$s</string>
+    <string name="polarSensorsDescription">Polar sensors like acceleration and step counts.</string>
+</resources>
