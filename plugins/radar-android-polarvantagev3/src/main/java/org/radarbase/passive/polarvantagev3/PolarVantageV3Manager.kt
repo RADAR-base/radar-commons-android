@@ -24,6 +24,9 @@ import org.radarcns.passive.polar.* // schemas
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.*
+import com.polar.androidcommunications.api.*
+import com.polar.sdk.api.PolarBleApiDefaultImpl
+import com.polar.sdk.api.PolarH10OfflineExerciseApi
 
 class PolarVantageV3Manager(
     polarService: PolarVantageV3Service,
@@ -34,7 +37,7 @@ class PolarVantageV3Manager(
     private val batteryLevelTopic: DataCache<ObservationKey, PolarBatteryLevel> = createCache("android_polar_battery_level", PolarBatteryLevel())
     private val ecgTopic: DataCache<ObservationKey, PolarEcg> = createCache("android_polar_ecg", PolarEcg())
     private val heartRateTopic: DataCache<ObservationKey, PolarHeartRate> = createCache("android_polar_heart_rate", PolarHeartRate())
-    private val ppIntervalTopic: DataCache<ObservationKey, PolarPpInterval> = createCache("android_polar_pp_interval", PolarPpInterval())
+    private val ppIntervalTopic: DataCache<ObservationKey, PolarPpInterval> = createCache("android_polar_pulse_to_pulse_interval", PolarPpInterval())
 
     private val mHandler = SafeHandler.getInstance("Polar sensors", THREAD_PRIORITY_BACKGROUND)
     private var wakeLock: PowerManager.WakeLock? = null
@@ -136,11 +139,13 @@ class PolarVantageV3Manager(
                         setDeviceTime(deviceId)
                     }
 
+//                    PPI online stream or offline recording is not supported in SDK MODE
 
                     when (feature) {
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
                             Log.d(TAG, "Start recording now")
                             streamHR()
+//                            streamPpi()
                         }
                         else -> {
                             Log.d(TAG, "No feature was ready")
@@ -289,6 +294,7 @@ class PolarVantageV3Manager(
             ecgDisposable?.dispose()
         }
     }
+
     fun streamAcc() {
         val isDisposed = accDisposable?.isDisposed ?: true
         if (isDisposed) {
@@ -330,6 +336,39 @@ class PolarVantageV3Manager(
             accDisposable?.dispose()
         }
     }
+
+//    fun streamPpg() {
+//        val isDisposed = ppgDisposable?.isDisposed ?: true
+//        if (isDisposed) {
+//            val settingMap = mapOf(
+//                PolarSensorSetting.SettingType.SAMPLE_RATE to 13, //
+//                PolarSensorSetting.SettingType.RESOLUTION to 22, //
+//                PolarSensorSetting.SettingType.CHANNELS to 24 //
+//            )
+//            val ppgSettings = PolarSensorSetting(settingMap)
+//            deviceId?.let { deviceId ->
+//                ppgDisposable = api.startPpgStreaming(deviceId, ppgSettings)
+//                    .subscribe(
+//                        { polarPpgData: PolarPpgData ->
+//                            if (polarPpgData.type == PolarPpgData.PpgDataType.PPG3_AMBIENT1) {
+//                                for (data in polarPpgData.samples) {
+//                                    Log.d(TAG, "PPG    ppg0: ${data.channelSamples[0]} ppg1: ${data.channelSamples[1]} ppg2: ${data.channelSamples[2]} ambient: ${data.channelSamples[3]} timeStamp: ${data.timeStamp}")
+//                                }
+//                            }
+//                        },
+//                        { error: Throwable ->
+//                            Log.e(TAG, "PPG stream failed. Reason $error")
+//                        },
+//                        {
+//                            Log.d(TAG, "PPG stream complete")
+//                        }
+//                    )
+//            }
+//        } else {
+//            // NOTE dispose will stop streaming if it is "running"
+//            ppgDisposable?.dispose()
+//        }
+//    }
 
     fun streamPpi() {
         val isDisposed = ppiDisposable?.isDisposed ?: true

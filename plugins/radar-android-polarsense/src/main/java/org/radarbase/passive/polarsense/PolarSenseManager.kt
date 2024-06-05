@@ -30,7 +30,8 @@ class PolarSenseManager(
     private val batteryLevelTopic: DataCache<ObservationKey, PolarBatteryLevel> = createCache("android_polar_battery_level", PolarBatteryLevel())
     private val ecgTopic: DataCache<ObservationKey, PolarEcg> = createCache("android_polar_ecg", PolarEcg())
     private val heartRateTopic: DataCache<ObservationKey, PolarHeartRate> = createCache("android_polar_heart_rate", PolarHeartRate())
-    private val ppIntervalTopic: DataCache<ObservationKey, PolarPpInterval> = createCache("android_polar_pp_interval", PolarPpInterval())
+    private val ppIntervalTopic: DataCache<ObservationKey, PolarPpInterval> = createCache("android_polar_pulse_to_pulse_interval", PolarPpInterval())
+    private val ppgTopic: DataCache<ObservationKey, PolarPpg> = createCache("android_polar_ppg", PolarPpg())
 
     private val mHandler = SafeHandler.getInstance("Polar sensors", THREAD_PRIORITY_BACKGROUND)
     private var wakeLock: PowerManager.WakeLock? = null
@@ -45,6 +46,7 @@ class PolarSenseManager(
     private var accDisposable: Disposable? = null
     private var ppiDisposable: Disposable? = null
     private var timeDisposable: Disposable? = null
+    private var ppgDisposable: Disposable? = null
 
     companion object {
         private const val TAG = "POLAR-Sense"
@@ -138,6 +140,7 @@ class PolarSenseManager(
                             Log.d(TAG, "Start recording now")
                             streamHR()
                             streamPpi()
+                            streamPpg()
                         }
                         else -> {
                             Log.d(TAG, "No feature was ready")
@@ -249,30 +252,36 @@ class PolarSenseManager(
         }
     }
 
-    fun streamEcg() {
-        Log.d(TAG, "start streamECG for ${deviceId}")
-        val isDisposed = ecgDisposable?.isDisposed ?: true
+    fun streamPpg() {
+        Log.d(TAG, "start streamPpg for ${deviceId}")
+        val isDisposed = ppgDisposable?.isDisposed ?: true
         if (isDisposed) {
             val settingMap = mapOf(
-                PolarSensorSetting.SettingType.SAMPLE_RATE to 130,
-                PolarSensorSetting.SettingType.RESOLUTION to 14
+                PolarSensorSetting.SettingType.SAMPLE_RATE to 55,
+                PolarSensorSetting.SettingType.RESOLUTION to 22,
+                PolarSensorSetting.SettingType.CHANNELS to 4
             )
-            val ecgSettings = PolarSensorSetting(settingMap)
+            val ppgSettings = PolarSensorSetting(settingMap)
             deviceId?.let { deviceId ->
-                ecgDisposable = api.startEcgStreaming(deviceId, ecgSettings)
+                ppgDisposable = api.startPpgStreaming(deviceId, ppgSettings)
                     .subscribe(
-                        { polarEcgData: PolarEcgData ->
-                            for (data in polarEcgData.samples) {
-                                Log.d(TAG, "ECG yV: ${data.voltage} timeStamp: ${data.timeStamp} time: ${PolarSenseUtils.convertEpochPolarToUnixEpoch(data.timeStamp)}")
-                                send(
-                                    ecgTopic,
-                                    PolarEcg(
-                                        name,
-                                        PolarSenseUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
-                                        getTimeSec(),
-                                        data.voltage
+                        { polarPpgData: PolarPpgData ->
+                            if (polarPpgData.type == PolarPpgData.PpgDataType.PPG3_AMBIENT1) {
+                                for (data in polarPpgData.samples) {
+                                    Log.d(TAG, "PPG    ppg0: ${data.channelSamples[0]} ppg1: ${data.channelSamples[1]} ppg2: ${data.channelSamples[2]} ambient: ${data.channelSamples[3]} timeStamp: ${data.timeStamp}")
+                                    send(
+                                        ppgTopic,
+                                        PolarPpg(
+                                            name,
+                                            PolarSenseUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                            getTimeSec(),
+                                            data.channelSamples[0],
+                                            data.channelSamples[1],
+                                            data.channelSamples[2],
+                                            data.channelSamples[3]
+                                        )
                                     )
-                                )
+                                }
                             }
                         },
                         { error: Throwable ->
@@ -286,6 +295,7 @@ class PolarSenseManager(
             ecgDisposable?.dispose()
         }
     }
+
     fun streamAcc() {
         val isDisposed = accDisposable?.isDisposed ?: true
         if (isDisposed) {
