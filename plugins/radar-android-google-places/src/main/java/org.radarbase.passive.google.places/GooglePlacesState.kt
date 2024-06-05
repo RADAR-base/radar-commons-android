@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class GooglePlacesState : BaseSourceState() {
 
-    val placesClientCreated = AtomicBoolean(false)
     val fromBroadcast = AtomicBoolean(false)
     val shouldFetchPlaceId = AtomicBoolean(false)
     val shouldFetchAdditionalInfo = AtomicBoolean(false)
