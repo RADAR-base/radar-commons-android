@@ -1,0 +1,21 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    namespace "org.radarbase.passive.phone.audio.input"
+}
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = ""
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+
+dependencies {
+    api project(":radar-commons-android")
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
