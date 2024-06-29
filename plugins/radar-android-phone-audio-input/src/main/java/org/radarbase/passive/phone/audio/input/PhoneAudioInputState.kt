@@ -1,4 +1,6 @@
 package org.radarbase.passive.phone.audio.input
 
-class PhoneAudioInputState {
+import org.radarbase.android.source.BaseSourceState
+
+class PhoneAudioInputState: BaseSourceState() {
 }
