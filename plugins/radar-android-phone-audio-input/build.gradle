@@ -8,7 +8,7 @@ android {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-description = ""
+description = "Plugin for recording uncompressed high-quality audio."
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="phone_audio_input_description">A plugin for recording uncompressed high-quality audio, utilizing low-level classes to directly interact with hardware, with capabilities for playback and audio input device selection.</string>
-    <string name="phone_audio_input_display_name">Phone Audio Input\n</string>
+    <string name="phone_audio_input_description">Plugin for recording uncompressed high-quality audio, utilizing low-level classes to directly interact with hardware, with capabilities for playback and audio input device selection.</string>
+    <string name="phone_audio_input_display_name">Phone Audio Input</string>
 </resources>
