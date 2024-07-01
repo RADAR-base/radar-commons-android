@@ -10,9 +10,9 @@ import java.util.concurrent.atomic.AtomicInteger
 class PhoneAudioInputState: BaseSourceState() {
 
     var audioSource: AtomicInteger = AtomicInteger(MediaRecorder.AudioSource.MIC)
-    var currentSampleRate: AtomicInteger = AtomicInteger(PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE_DEFAULT)
-    var currentChannel: AtomicInteger = AtomicInteger(AudioFormat.CHANNEL_IN_MONO)
+    var sampleRate: AtomicInteger = AtomicInteger(PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE_DEFAULT)
+    var channel: AtomicInteger = AtomicInteger(AudioFormat.CHANNEL_IN_MONO)
     var audioFormat: AtomicInteger = AtomicInteger(AudioFormat.ENCODING_PCM_16BIT)
-    var recorderBufferSize: AtomicInteger = AtomicInteger(PHONE_AUDIO_INPUT_RECORDER_BUFFER_SIZE_DEFAULT)
+    var bufferSize: AtomicInteger = AtomicInteger(PHONE_AUDIO_INPUT_RECORDER_BUFFER_SIZE_DEFAULT)
 
 }

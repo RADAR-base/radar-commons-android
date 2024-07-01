@@ -12,25 +12,21 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
 
     private var audioRecord: AudioRecord? = null
 
-    @get: Synchronized
-    @set: Synchronized
-    var sampleRates: Array<Int> = arrayOf(44100, 22050, 16000, 11025, 8000)
-
     var audioSource: Int
         get() = state.audioSource.get()
         set(value) { state.audioSource.set(value) }
-    var currentSampleRate: Int
-        get() = state.currentSampleRate.get()
-        set(value) { state.currentSampleRate.set(value) }
-    var currentChannel: Int
-        get() = state.currentChannel.get()
-        set(value) { state.currentChannel.set(value) }
-    var currentAudioFormat: Int
+    var sampleRate: Int
+        get() = state.sampleRate.get()
+        set(value) { state.sampleRate.set(value) }
+    var channel: Int
+        get() = state.channel.get()
+        set(value) { state.channel.set(value) }
+    var audioFormat: Int
         get() = state.audioFormat.get()
         set(value) { state.audioFormat.set(value) }
-    var recorderBufferSize: Int
-        get() = state.recorderBufferSize.get()
-        set(value) { state.recorderBufferSize.set(value) }
+    var bufferSize: Int
+        get() = state.bufferSize.get()
+        set(value) { state.bufferSize.set(value) }
 
     init {
         name = service.getString(R.string.phone_audio_input_display_name)
@@ -47,20 +43,19 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         status = SourceStatusListener.Status.CONNECTING
         var i = 0
         try {
-            do {
-                recorderBufferSize = AudioRecord.getMinBufferSize(
-                    currentSampleRate,
-                    currentChannel,
-                    currentAudioFormat
+
+                bufferSize = AudioRecord.getMinBufferSize(
+                    sampleRate,
+                    channel,
+                    audioFormat
                 )
                 audioRecord = AudioRecord(
                     audioSource,
-                    currentSampleRate,
-                    currentChannel,
-                    currentAudioFormat,
-                    recorderBufferSize
+                    sampleRate,
+                    channel,
+                    audioFormat,
+                    bufferSize
                 )
-            } while ((++i < sampleRates.size) && (audioRecord?.state != AudioRecord.STATE_INITIALIZED))
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
                 status = SourceStatusListener.Status.DISCONNECTED
             } else if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
