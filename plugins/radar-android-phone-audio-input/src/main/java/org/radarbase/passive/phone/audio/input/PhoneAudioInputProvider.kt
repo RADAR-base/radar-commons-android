@@ -28,7 +28,7 @@ class PhoneAudioInputProvider(radarService: RadarService): SourceProvider<PhoneA
     override val version: String
         get() = BuildConfig.VERSION_NAME
     override val permissionsNeeded: List<String>
-        get() = listOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE)
+        get() = listOf(Manifest.permission.RECORD_AUDIO)
 
     override val actions: List<Action>
         get() = super.actions
