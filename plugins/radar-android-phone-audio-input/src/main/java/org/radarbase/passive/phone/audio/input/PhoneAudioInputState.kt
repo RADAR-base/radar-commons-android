@@ -1,5 +1,6 @@
 package org.radarbase.passive.phone.audio.input
 
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.MediaRecorder
 import org.radarbase.android.source.BaseSourceState
@@ -14,5 +15,23 @@ class PhoneAudioInputState: BaseSourceState() {
     var channel: AtomicInteger = AtomicInteger(AudioFormat.CHANNEL_IN_MONO)
     var audioFormat: AtomicInteger = AtomicInteger(AudioFormat.ENCODING_PCM_16BIT)
     var bufferSize: AtomicInteger = AtomicInteger(PHONE_AUDIO_INPUT_RECORDER_BUFFER_SIZE_DEFAULT)
+
+
+    interface AudioRecordManager {
+        fun startRecording()
+        fun stopRecording()
+    }
+
+    interface AudioPlayerManager {
+        fun startPlayback()
+        fun stopPlayback()
+        fun pausePlayback()
+        fun resumePlayback()
+    }
+
+    interface InputAudioDeviceManager {
+        fun getConnectedDevices(): List<AudioDeviceInfo>
+        fun setDefaultInputDevice(device: AudioDeviceInfo)
+    }
 
 }
