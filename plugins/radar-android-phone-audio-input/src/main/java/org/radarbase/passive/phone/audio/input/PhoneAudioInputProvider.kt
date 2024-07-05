@@ -1,6 +1,7 @@
 package org.radarbase.passive.phone.audio.input
 
 import android.Manifest
+import android.content.Intent
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
@@ -31,5 +32,7 @@ class PhoneAudioInputProvider(radarService: RadarService): SourceProvider<PhoneA
         get() = listOf(Manifest.permission.RECORD_AUDIO)
 
     override val actions: List<Action>
-        get() = super.actions
+        get() = listOf(Action(radarService.getString(R.string.startRecordingActivity)){
+            startActivity(Intent(this, PhoneAudioInputActivity::class.java))
+        })
 }

@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioRecord.STATE_INITIALIZED
-import android.os.Environment
 import android.os.Process
 import androidx.core.content.ContextCompat
 import org.radarbase.android.source.AbstractSourceManager
@@ -94,7 +93,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         randomAccessWriter?.apply {
             seek(4)
             writeInt(Integer.reverseBytes(36 + payloadSize))
-            seek(40) // Write size to Subchunk2Size field
+            seek(40)
             writeInt(Integer.reverseBytes(payloadSize))
             close()
         }
@@ -119,9 +118,9 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
                     audioRecord = AudioRecord(
                         audioSource, sampleRate, channel, audioFormat, bufferSize
                     )
-                    if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                    if (audioRecord?.state != STATE_INITIALIZED) {
                         disconnect()
-                    } else if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
+                    } else if (audioRecord?.state == STATE_INITIALIZED) {
                         logger.info("Successfully initialized AudioRecord")
                         status = SourceStatusListener.Status.CONNECTED
                     }
