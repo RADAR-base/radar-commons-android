@@ -3,12 +3,17 @@ package org.radarbase.passive.phone.audio.input
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.MediaRecorder
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE_DEFAULT
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_RECORDER_BUFFER_SIZE_DEFAULT
 import java.util.concurrent.atomic.AtomicInteger
 
 class PhoneAudioInputState: BaseSourceState() {
+
+    var audioRecordManager: AudioRecordManager? = null
+    val isRecording: MutableLiveData<Boolean> = MutableLiveData(false)
 
     var audioSource: AtomicInteger = AtomicInteger(MediaRecorder.AudioSource.MIC)
     var sampleRate: AtomicInteger = AtomicInteger(PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE_DEFAULT)
