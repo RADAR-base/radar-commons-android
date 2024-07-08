@@ -1,6 +1,8 @@
 package org.radarbase.passive.phone.audio.input
 
 import android.Manifest
+import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -10,6 +12,8 @@ import androidx.core.content.ContextCompat
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.LAST_RECORDED_AUDIO_FILE
+import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
 import org.radarbase.passive.phone.audio.input.utils.InputRecordInfo
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -24,11 +28,12 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
 
     private var audioRecord: AudioRecord? = null
     private var randomAccessWriter: RandomAccessFile? = null
-    private var bufferedOutputStream: BufferedOutputStream? = null
+//    private var bufferedOutputStream: BufferedOutputStream? = null
     private var buffer: ByteArray = byteArrayOf()
     private val audioRecordingHandler = SafeHandler.getInstance("PHONE-AUDIO-INPUT", Process.THREAD_PRIORITY_BACKGROUND)
     private val recordProcessingHandler: SafeHandler = SafeHandler.getInstance("AUDIO-RECORD-PROCESSING", Process.THREAD_PRIORITY_AUDIO)
     private val pluginStatusInfo: InputRecordInfo = InputRecordInfo()
+    private val preferences: SharedPreferences = service.getSharedPreferences(PHONE_AUDIO_INPUT_SHARED_PREFS, Context.MODE_PRIVATE)
 
     var audioSource: Int
         get() = state.audioSource.get()
@@ -142,7 +147,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     }
 
     private fun clearAudioDirectory() {
-        audioRecordingHandler.execute {
             audioDir?.let { audioDir ->
                 audioDir.parentFile
                     ?.list { _, name -> name.startsWith("phone_audio_input") && name.endsWith(".wav") }
@@ -158,14 +162,13 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
                         logger.debug("Deleted audio file: {}", it)
                     }
             }
-        }
     }
 
     private fun startAudioRecording() {
         audioRecordingHandler.execute {
             setupRecording()
             if ((audioRecord?.state == STATE_INITIALIZED) && (recordingFile != null)) {
-                bufferedOutputStream = BufferedOutputStream(FileOutputStream(randomAccessWriter!!.fd))
+//                bufferedOutputStream = BufferedOutputStream(FileOutputStream(randomAccessWriter!!.fd))
                 audioRecord?.startRecording()
                 state.isRecording.postValue(true)
                 audioRecord?.read(buffer, 0, buffer.size)
@@ -180,19 +183,23 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     }
 
     private fun setupRecording() {
-            setRecordingPath()
-            writeFileHeaders()
+//        clearAudioDirectory()
+        setRecordingPath()
+        writeFileHeaders()
     }
 
     private fun setRecordingPath() {
         recordingFile = File(audioDir, "phone_audio_input"+System.currentTimeMillis()+".wav")
+        preferences.edit()
+            .putString(LAST_RECORDED_AUDIO_FILE, recordingFile!!.absolutePath)
+            .apply()
         randomAccessWriter = RandomAccessFile(recordingFile, "rw")
         pluginStatusInfo.recordingPathSet = true
     }
 
     private fun writeFileHeaders() {
 
-        randomAccessWriter?.use {
+        randomAccessWriter?.also {
             it.setLength(0) // Set file length to 0, to prevent unexpected behavior in case the file already existed
             // RIFF header
             it.writeBytes("RIFF")
@@ -223,9 +230,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
             audioRecordingHandler.execute {
                 audioRecord?.let {
                     val dataRead = it.read(buffer, 0, buffer.size)
-                    bufferedOutputStream?.use { bos->
-                        bos.write(buffer, 0, dataRead)
-                    }
+                    randomAccessWriter?.write(buffer)
                     payloadSize += dataRead
                     logger.debug("onPeriodicNotification: Recording Audio")
                 }
@@ -238,7 +243,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         audioRecordingHandler.execute {
             audioRecord?.stop()
             state.isRecording.postValue(false)
-            bufferedOutputStream?.close()
+//            bufferedOutputStream?.close()
             randomAccessWriter?.use {
                 it.seek(4)
                 it.writeInt(Integer.reverseBytes(36 + payloadSize))
@@ -251,6 +256,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     override fun onClose() {
         audioRecordingHandler.stop{
             audioRecord?.release()
+            clearAudioDirectory()
         }
         recordProcessingHandler.stop()
     }

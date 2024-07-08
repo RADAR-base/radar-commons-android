@@ -32,6 +32,8 @@ class PhoneAudioInputService: SourceService<PhoneAudioInputState>() {
         const val PHONE_AUDIO_INPUT_CURRENT_AUDIO_FORMAT = PHONE_AUDIO_INPUT_PREFIX + "current-audio-format"
         const val PHONE_AUDIO_INPUT_CURRENT_CHANNEL = PHONE_AUDIO_INPUT_PREFIX + "current-channel"
         const val PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE = PHONE_AUDIO_INPUT_PREFIX + "current-sample-rate"
+        const val LAST_RECORDED_AUDIO_FILE = PHONE_AUDIO_INPUT_PREFIX + "last-recorded-audio-file"
+        const val PHONE_AUDIO_INPUT_SHARED_PREFS = PHONE_AUDIO_INPUT_PREFIX + "shared-prefs"
 
         const val PHONE_AUDIO_INPUT_AUDIO_SOURCE_DEFAULT = MediaRecorder.AudioSource.MIC
         const val PHONE_AUDIO_INPUT_RECORDER_BUFFER_SIZE_DEFAULT = -1

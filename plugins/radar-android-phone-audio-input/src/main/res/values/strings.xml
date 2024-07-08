@@ -6,4 +6,5 @@
     <string name="unable_to_record_toast">Cannot process request, the plugin status is not CONNECTED. Please try reconnecting the plugin.</string>
     <string name="start_recording">Start Recording</string>
     <string name="stop_recording">Stop Recording</string>
+    <string name="audio_playback_title">Audio Playback</string>
 </resources>
