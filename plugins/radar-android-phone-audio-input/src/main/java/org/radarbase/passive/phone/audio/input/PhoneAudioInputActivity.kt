@@ -7,6 +7,7 @@ import android.content.ServiceConnection
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.IBinder
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -35,14 +36,26 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         get() = recorderProvider?.connection?.sourceState
     private var preferences: SharedPreferences? = null
 
+    private val fileNameObserver: Observer<String> = Observer {
+        binding.tvCurrentAudioFile.text = it
+    }
+
     private val isRecordingObserver: Observer<Boolean> = Observer { isRecording->
         if (isRecording) {
-            logger.info("Switching to Start Recording mode")
+            logger.info("Switching to Stop Recording mode")
             binding.btnStartStopRec.text = getString(R.string.stop_recording)
+            val currentFileName = state?.currentRecordingFileName ?: return@Observer
+            binding.tvCurrentFileHead.visibility = View.VISIBLE
+            binding.tvCurrentAudioFile.visibility = View.VISIBLE
+            currentFileName.observe(this@PhoneAudioInputActivity, fileNameObserver)
+//            binding.tvCurrentAudioFile.text = currentFile
 //            binding.btnStartStopRec.setBackgroundColor(getColor(R.color.color_btn_stop_record))
         } else {
-            logger.info("Switching to Stop Recording mode")
+            logger.info("Switching to Start Recording mode")
             binding.btnStartStopRec.text = getString(R.string.start_recording)
+            state?.currentRecordingFileName?.removeObserver(fileNameObserver)
+            binding.tvCurrentFileHead.visibility = View.INVISIBLE
+            binding.tvCurrentAudioFile.visibility = View.INVISIBLE
 //            binding.btnStartStopRec.setBackgroundColor(getColor(R.color.color_btn_start_record))
         }
     }
@@ -80,6 +93,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         bindService(Intent(this, radarApp.radarService), radarServiceConnection, 0)
+//        binding.button.setOnClickListener {
+//            state?.audioRecordManager?.clear()
+//        }
     }
 
     override fun onResume() {
@@ -106,7 +122,10 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private fun startAudioPlaybackFragment() {
         logger.info("Starting audio playback fragment")
-
+        if (lastRecordedAudioFile == null) {
+            logger.error("Last recorded audio file lost!! Not Starting playback fragment")
+            return
+        }
         try {
             val fragment = PhoneAudioInputPlaybackFragment.newInstance(this, lastRecordedAudioFile!!)
             createPlaybackFragmentLayout(R.id.phone_audio_playback_fragment, fragment)

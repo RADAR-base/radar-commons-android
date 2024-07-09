@@ -25,11 +25,11 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
         val args: Bundle = checkNotNull(arguments) { "Cannot Start Playback without the recorded file location" }
         audioFileName = args.getString(AUDIO_FILE_NAME)
 
-        mediaPlayer = MediaPlayer()
-        mediaPlayer?.apply {
-            setDataSource(audioFileName)
-            prepare()
-        }
+//        mediaPlayer = MediaPlayer()
+//        mediaPlayer?.apply {
+//            setDataSource(audioFileName)
+//            prepare()
+//        }
     }
 
     override fun onCreateView(

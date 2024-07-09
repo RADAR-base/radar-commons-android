@@ -14,6 +14,7 @@ class PhoneAudioInputState: BaseSourceState() {
 
     var audioRecordManager: AudioRecordManager? = null
     val isRecording: MutableLiveData<Boolean> = MutableLiveData(false)
+    val currentRecordingFileName: MutableLiveData<String> = MutableLiveData<String>("")
 
     var audioSource: AtomicInteger = AtomicInteger(MediaRecorder.AudioSource.MIC)
     var sampleRate: AtomicInteger = AtomicInteger(PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE_DEFAULT)
@@ -25,6 +26,7 @@ class PhoneAudioInputState: BaseSourceState() {
     interface AudioRecordManager {
         fun startRecording()
         fun stopRecording()
+        fun clear()
     }
 
     interface AudioPlayerManager {

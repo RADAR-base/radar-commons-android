@@ -28,7 +28,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
 
     private var audioRecord: AudioRecord? = null
     private var randomAccessWriter: RandomAccessFile? = null
-//    private var bufferedOutputStream: BufferedOutputStream? = null
+    private var bufferedOutputStream: BufferedOutputStream? = null
     private var buffer: ByteArray = byteArrayOf()
     private val audioRecordingHandler = SafeHandler.getInstance("PHONE-AUDIO-INPUT", Process.THREAD_PRIORITY_BACKGROUND)
     private val recordProcessingHandler: SafeHandler = SafeHandler.getInstance("AUDIO-RECORD-PROCESSING", Process.THREAD_PRIORITY_AUDIO)
@@ -79,7 +79,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
             audioDir = File(internalDirs, "org.radarbase.passive.phone.audio.input")
             val dirCreated = audioDir.mkdirs()
             val directoryExists = audioDir.exists()
-            logger.info("Dir Created: $dirCreated.Exists: $directoryExists")
+            logger.debug("Directory for saving audio file, created: {}, exists: {}", dirCreated, directoryExists)
             clearAudioDirectory()
             SourceStatusListener.Status.READY
         } else {
@@ -146,6 +146,10 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         stopAudioRecording()
     }
 
+    override fun clear() {
+        clearAudioDirectory()
+    }
+
     private fun clearAudioDirectory() {
             audioDir?.let { audioDir ->
                 audioDir.parentFile
@@ -168,9 +172,10 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         audioRecordingHandler.execute {
             setupRecording()
             if ((audioRecord?.state == STATE_INITIALIZED) && (recordingFile != null)) {
-//                bufferedOutputStream = BufferedOutputStream(FileOutputStream(randomAccessWriter!!.fd))
+                bufferedOutputStream = BufferedOutputStream(FileOutputStream(randomAccessWriter!!.fd))
                 audioRecord?.startRecording()
                 state.isRecording.postValue(true)
+                state.currentRecordingFileName.postValue(recordingFile?.name)
                 audioRecord?.read(buffer, 0, buffer.size)
                 logger.trace("Started recording")
                 audioRecord?.setRecordPositionUpdateListener(updateListener)
@@ -227,13 +232,18 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         }
 
         override fun onPeriodicNotification(recorder: AudioRecord?) {
-            audioRecordingHandler.execute {
-                audioRecord?.let {
-                    val dataRead = it.read(buffer, 0, buffer.size)
-                    randomAccessWriter?.write(buffer)
-                    payloadSize += dataRead
-                    logger.debug("onPeriodicNotification: Recording Audio")
+            if (state.isRecording.value == true) {
+                audioRecordingHandler.execute {
+                    audioRecord?.let {
+                        val dataRead = it.read(buffer, 0, buffer.size)
+                        bufferedOutputStream?.write(buffer, 0, dataRead)
+                        bufferedOutputStream?.flush()
+                        payloadSize += dataRead
+                        logger.debug("onPeriodicNotification: Recording Audio")
+                    }
                 }
+            } else {
+                logger.warn("Callback: onPeriodicNotification after recording stopped.")
             }
         }
     }
@@ -241,9 +251,9 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     private fun stopAudioRecording() {
         logger.warn("Stopping Recording: Saving data")
         audioRecordingHandler.execute {
-            audioRecord?.stop()
             state.isRecording.postValue(false)
-//            bufferedOutputStream?.close()
+            audioRecord?.stop()
+            bufferedOutputStream?.close()
             randomAccessWriter?.use {
                 it.seek(4)
                 it.writeInt(Integer.reverseBytes(36 + payloadSize))
