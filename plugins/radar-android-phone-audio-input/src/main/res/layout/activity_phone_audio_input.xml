@@ -26,10 +26,10 @@
       android:id="@+id/tv_current_audio_file"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginTop="52dp"
-      android:textStyle="bold"
-      android:textColor="?attr/colorPrimary"
       android:layout_marginStart="20dp"
+      android:layout_marginTop="52dp"
+      android:textColor="?attr/colorPrimary"
+      android:textStyle="bold"
       app:layout_constraintHorizontal_bias="0.498"
       app:layout_constraintStart_toEndOf="@+id/tv_current_file_head"
       app:layout_constraintTop_toTopOf="parent" />
@@ -39,22 +39,40 @@
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:layout_marginStart="12dp"
-      android:textStyle="bold"
+      android:text="@string/saving_data_to"
       android:textColor="?attr/colorPrimary"
-      app:layout_constraintTop_toTopOf="@+id/tv_current_audio_file"
+      android:textStyle="bold"
       app:layout_constraintBottom_toBottomOf="@+id/tv_current_audio_file"
       app:layout_constraintStart_toStartOf="parent"
-      android:text="@string/saving_data_to"
+      app:layout_constraintTop_toTopOf="@+id/tv_current_audio_file"
       tools:layout_editor_absoluteX="33dp"
       tools:layout_editor_absoluteY="52dp" />
 
-  <EditText
-      android:id="@+id/editTextTime"
+
+  <TextView
+      android:id="@+id/textView"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:ems="10"
-      android:inputType="time"
-      tools:layout_editor_absoluteX="82dp"
-      tools:layout_editor_absoluteY="573dp" />
+      android:layout_marginStart="10dp"
+      android:layout_marginEnd="10dp"
+      android:text="TextView"
+      app:layout_constraintBottom_toBottomOf="parent"
+      app:layout_constraintEnd_toEndOf="parent"
+      app:layout_constraintHorizontal_bias="0.5"
+      app:layout_constraintStart_toStartOf="parent"
+      app:layout_constraintTop_toTopOf="parent"
+      app:layout_constraintVertical_bias="0.5" />
+
+  <TextView
+      android:id="@+id/textView2"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="TextView"
+      app:layout_constraintBottom_toTopOf="@+id/textView"
+      app:layout_constraintEnd_toEndOf="parent"
+      app:layout_constraintHorizontal_bias="0.5"
+      app:layout_constraintStart_toStartOf="parent"
+      app:layout_constraintTop_toTopOf="parent"
+      app:layout_constraintVertical_bias="0.5" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

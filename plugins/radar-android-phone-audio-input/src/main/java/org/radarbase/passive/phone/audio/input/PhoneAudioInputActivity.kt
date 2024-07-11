@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.SharedPreferences
+import android.media.AudioDeviceInfo
 import android.os.Bundle
 import android.os.IBinder
+import android.provider.MediaStore.Audio
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -23,6 +25,7 @@ import org.radarbase.android.util.Boast
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.LAST_RECORDED_AUDIO_FILE
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
 import org.radarbase.passive.phone.audio.input.databinding.ActivityPhoneAudioInputBinding
+import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -58,6 +61,10 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             binding.tvCurrentAudioFile.visibility = View.INVISIBLE
 //            binding.btnStartStopRec.setBackgroundColor(getColor(R.color.color_btn_start_record))
         }
+    }
+
+    private val currentMicrophoneObserver: Observer<AudioDeviceInfo> = Observer { microphone ->
+        binding.textView2.text = microphone.productName
     }
 
     private val radarServiceConnection = object : ServiceConnection{
@@ -100,6 +107,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        val connectedMicrophones: List<AudioDeviceInfo> = AudioDeviceUtils.getConnectedMicrophones(this, binding.textView)
+        state?.connectedMicrophones?.postValue(connectedMicrophones)
+        state?.finalizedMicrophone?.observe(this, currentMicrophoneObserver)
         binding.btnStartStopRec.setOnClickListener {
             if (state != null && state?.status == SourceStatusListener.Status.CONNECTED) {
                 if (binding.btnStartStopRec.text == getString(R.string.start_recording)) {
@@ -145,6 +155,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        state?.finalizedMicrophone?.removeObserver(currentMicrophoneObserver)
         super.onPause()
     }
 

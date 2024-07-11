@@ -4,6 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+import android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+import android.media.AudioDeviceInfo.TYPE_USB_DEVICE
+import android.media.AudioDeviceInfo.TYPE_USB_HEADSET
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioRecord.STATE_INITIALIZED
@@ -139,6 +143,26 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     }
 
     override fun startRecording() {
+        state.connectedMicrophones ?: return
+        val connectedMicrophones = state.connectedMicrophones.value
+        if (connectedMicrophones?.size == 0) {
+            logger.warn("No connected microphone")
+        }
+        logger.info("PhoneAudioInputManager: Connected microphones: {}", connectedMicrophones)
+        state.finalizedMicrophone.value = if (connectedMicrophones!!.any { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }) {
+            val finalizedMic = connectedMicrophones.firstOrNull { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }
+            logger.info("Setting the default audio input device {}", finalizedMic)
+            finalizedMic
+        }
+        else if (connectedMicrophones.any { it.type == TYPE_BLUETOOTH_A2DP || it.type == TYPE_BLUETOOTH_SCO}) {
+            val finalizedMic = connectedMicrophones.firstOrNull { it.type == TYPE_BLUETOOTH_SCO || it.type == TYPE_BLUETOOTH_A2DP }
+            logger.info("Setting the default audio input device {}", finalizedMic)
+            finalizedMic
+        }
+        else {
+            connectedMicrophones.firstOrNull()
+        }
+        audioRecord?.preferredDevice = state.finalizedMicrophone.value
         startAudioRecording()
     }
 
