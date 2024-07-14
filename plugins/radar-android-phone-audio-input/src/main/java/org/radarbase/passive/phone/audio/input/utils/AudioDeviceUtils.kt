@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 
 object AudioDeviceUtils {
 
-    fun getConnectedMicrophones(context: Context, textView: TextView): List<AudioDeviceInfo> {
+    fun getConnectedMicrophones(context: Context): List<AudioDeviceInfo> {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
         val microphones: MutableList<AudioDeviceInfo> = ArrayList()
@@ -28,7 +28,7 @@ object AudioDeviceUtils {
                 logger.info("Devices found: $device")
             }
 
-            textView.text = microphones.joinToString(", ") { it.productName.toString() + " (" + it.type.toLogFriendlyType() +").\n" }
+//            textView.text = microphones.joinToString(", ") { it.productName.toString() + " (" + it.type.toLogFriendlyType() +").\n" }
             microphones.forEach {
                 logger.info("Name: ${it.productName}, type: ${it.type.  toLogFriendlyType()}, encodings: ${it.encodings.joinToString(", ") { encoding -> AudioTypeFormatUtil.toLogFriendlyEncoding(encoding) }}, SampleRates: ${it.sampleRates.joinToString(", ") { srs-> srs.toString() }} channels: ${it.channelCounts.joinToString (", "){ channels -> channels.toString() }} Id: ${it.id}")
             }

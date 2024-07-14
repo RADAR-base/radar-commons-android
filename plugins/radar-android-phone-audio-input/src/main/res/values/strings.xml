@@ -7,5 +7,7 @@
     <string name="start_recording">Start Recording</string>
     <string name="stop_recording">Stop Recording</string>
     <string name="audio_playback_title">Audio Playback</string>
+    <string name="audio_recording_title">Audio Recording</string>
     <string name="saving_data_to">Saving data to……</string>
+    <string name="input_device">Input Device</string>
 </resources>

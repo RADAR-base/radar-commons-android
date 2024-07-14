@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
 import android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
 import android.media.AudioDeviceInfo.TYPE_USB_DEVICE
@@ -11,6 +12,8 @@ import android.media.AudioDeviceInfo.TYPE_USB_HEADSET
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioRecord.STATE_INITIALIZED
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import androidx.core.content.ContextCompat
 import org.radarbase.android.source.AbstractSourceManager
@@ -36,6 +39,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     private var buffer: ByteArray = byteArrayOf()
     private val audioRecordingHandler = SafeHandler.getInstance("PHONE-AUDIO-INPUT", Process.THREAD_PRIORITY_BACKGROUND)
     private val recordProcessingHandler: SafeHandler = SafeHandler.getInstance("AUDIO-RECORD-PROCESSING", Process.THREAD_PRIORITY_AUDIO)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val pluginStatusInfo: InputRecordInfo = InputRecordInfo()
     private val preferences: SharedPreferences = service.getSharedPreferences(PHONE_AUDIO_INPUT_SHARED_PREFS, Context.MODE_PRIVATE)
 
@@ -125,6 +129,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
                             logger.info("Successfully initialized AudioRecord")
                             status = SourceStatusListener.Status.CONNECTED
                             pluginStatusInfo.recorderCreated = true
+                            mainHandler.post(::observeMicrophones)
                         }
                     } catch (ex: IllegalArgumentException) {
                         logger.error("Invalid parameters passed to AudioRecord constructor. ", ex)
@@ -143,26 +148,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     }
 
     override fun startRecording() {
-        state.connectedMicrophones ?: return
-        val connectedMicrophones = state.connectedMicrophones.value
-        if (connectedMicrophones?.size == 0) {
-            logger.warn("No connected microphone")
-        }
-        logger.info("PhoneAudioInputManager: Connected microphones: {}", connectedMicrophones)
-        state.finalizedMicrophone.value = if (connectedMicrophones!!.any { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }) {
-            val finalizedMic = connectedMicrophones.firstOrNull { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }
-            logger.info("Setting the default audio input device {}", finalizedMic)
-            finalizedMic
-        }
-        else if (connectedMicrophones.any { it.type == TYPE_BLUETOOTH_A2DP || it.type == TYPE_BLUETOOTH_SCO}) {
-            val finalizedMic = connectedMicrophones.firstOrNull { it.type == TYPE_BLUETOOTH_SCO || it.type == TYPE_BLUETOOTH_A2DP }
-            logger.info("Setting the default audio input device {}", finalizedMic)
-            finalizedMic
-        }
-        else {
-            connectedMicrophones.firstOrNull()
-        }
-        audioRecord?.preferredDevice = state.finalizedMicrophone.value
         startAudioRecording()
     }
 
@@ -172,6 +157,56 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
 
     override fun clear() {
         clearAudioDirectory()
+    }
+
+    override fun setPreferredMicrophone(microphone: AudioDeviceInfo) {
+        state.microphonePrioritized = true
+        audioRecord?.preferredDevice = microphone
+        state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+    }
+
+    private fun observeMicrophones() {
+        state.connectedMicrophones.observe(service) { connectedMicrophones ->
+            if (connectedMicrophones?.size == 0) {
+                logger.warn("No connected microphone")
+            }
+            if (state.microphonePrioritized && state.finalizedMicrophone.value !in connectedMicrophones) {
+                state.microphonePrioritized = false
+                logger.info("Microphone prioritize?: false")
+            }
+            logger.info("PhoneAudioInputManager: Connected microphones: {}", connectedMicrophones)
+            if (!state.microphonePrioritized) {
+                logger.info("Running device selection logic")
+                runDeviceSelectionLogic(connectedMicrophones)
+            } else {
+                audioRecord?.preferredDevice = state.finalizedMicrophone.value
+                state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+            }
+            logger.info(
+                "Preferred audio input device: {}",
+                audioRecord?.preferredDevice?.productName
+            )
+            logger.info("Selected audio input device: {}", audioRecord?.routedDevice?.productName)
+        }
+    }
+
+    private fun runDeviceSelectionLogic(connectedMicrophones: List<AudioDeviceInfo>) {
+        val finalizedMicrophone  =
+            if (connectedMicrophones.any { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }) {
+                val finalizedMic =
+                    connectedMicrophones.firstOrNull { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }
+                logger.info("Setting the default audio input device {}", finalizedMic)
+                finalizedMic
+            } else if (connectedMicrophones.any { it.type == TYPE_BLUETOOTH_A2DP || it.type == TYPE_BLUETOOTH_SCO }) {
+                val finalizedMic =
+                    connectedMicrophones.firstOrNull { it.type == TYPE_BLUETOOTH_SCO || it.type == TYPE_BLUETOOTH_A2DP }
+                logger.info("Setting the default audio input device {}", finalizedMic)
+                finalizedMic
+            } else {
+                connectedMicrophones.firstOrNull()
+            }
+        audioRecord?.preferredDevice = finalizedMicrophone
+        state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
     }
 
     private fun clearAudioDirectory() {
@@ -197,10 +232,20 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
             setupRecording()
             if ((audioRecord?.state == STATE_INITIALIZED) && (recordingFile != null)) {
                 bufferedOutputStream = BufferedOutputStream(FileOutputStream(randomAccessWriter!!.fd))
+                if (!state.microphonePrioritized) {
+                    state.connectedMicrophones.value?.let {
+                        runDeviceSelectionLogic(it)
+                    }
+                } else {
+                    audioRecord?.preferredDevice = state.finalizedMicrophone.value
+                    state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+                }
                 audioRecord?.startRecording()
                 state.isRecording.postValue(true)
-                state.currentRecordingFileName.postValue(recordingFile?.name)
+//                state.currentRecordingFileName.postValue(recordingFile?.name)
                 audioRecord?.read(buffer, 0, buffer.size)
+                state.finalizedMicrophone.postValue(audioRecord?.routedDevice)
+                logger.info("Finalized routed device: {}", state.finalizedMicrophone.value?.productName)
                 logger.trace("Started recording")
                 audioRecord?.setRecordPositionUpdateListener(updateListener)
                 audioRecord?.setPositionNotificationPeriod(framePeriod)
@@ -291,6 +336,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         audioRecordingHandler.stop{
             audioRecord?.release()
             clearAudioDirectory()
+
         }
         recordProcessingHandler.stop()
     }

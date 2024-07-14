@@ -27,6 +27,7 @@ dependencies {
     implementation "androidx.constraintlayout:constraintlayout:$constraintlayout_version"
     implementation "androidx.legacy:legacy-support-v4:$legacy_support_version"
     implementation 'androidx.fragment:fragment-ktx:1.8.1'
+    implementation "com.google.android.material:material:$material_version"
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"
