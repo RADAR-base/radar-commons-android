@@ -103,6 +103,12 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         state.audioRecordManager = this
     }
 
+    private val setPreferredDeviceAndUpdate: (AudioDeviceInfo) -> Unit = {microphone ->
+        audioRecord?.preferredDevice = microphone
+        state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+    }
+
+
     private fun createRecorder() {
         audioRecordingHandler.execute {
             if (ContextCompat.checkSelfPermission(service, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -160,9 +166,9 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     }
 
     override fun setPreferredMicrophone(microphone: AudioDeviceInfo) {
+        logger.warn("Setting prioritized microphone: true")
         state.microphonePrioritized = true
-        audioRecord?.preferredDevice = microphone
-        state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+        microphone.let(setPreferredDeviceAndUpdate)
     }
 
     private fun observeMicrophones() {
@@ -179,8 +185,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
                 logger.info("Running device selection logic")
                 runDeviceSelectionLogic(connectedMicrophones)
             } else {
-                audioRecord?.preferredDevice = state.finalizedMicrophone.value
-                state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+                state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
             }
             logger.info(
                 "Preferred audio input device: {}",
@@ -205,8 +210,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
             } else {
                 connectedMicrophones.firstOrNull()
             }
-        audioRecord?.preferredDevice = finalizedMicrophone
-        state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+        finalizedMicrophone?.let(setPreferredDeviceAndUpdate)
     }
 
     private fun clearAudioDirectory() {
@@ -237,8 +241,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
                         runDeviceSelectionLogic(it)
                     }
                 } else {
-                    audioRecord?.preferredDevice = state.finalizedMicrophone.value
-                    state.finalizedMicrophone.postValue(audioRecord?.preferredDevice)
+                    state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
                 }
                 audioRecord?.startRecording()
                 state.isRecording.postValue(true)

@@ -8,14 +8,12 @@ import android.content.SharedPreferences
 import android.media.AudioDeviceInfo
 import android.os.Bundle
 import android.os.IBinder
-import android.provider.MediaStore.Audio
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Adapter
 import android.widget.AdapterView
 import android.widget.AdapterView.OnItemSelectedListener
 import android.widget.ArrayAdapter
-import android.widget.AutoCompleteTextView
 import android.widget.FrameLayout
 import android.widget.Spinner
 import android.widget.Toast
@@ -32,6 +30,7 @@ import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
 import org.radarbase.passive.phone.audio.input.databinding.ActivityPhoneAudioInputBinding
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
+import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil.toLogFriendlyType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -40,6 +39,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private lateinit var binding: ActivityPhoneAudioInputBinding
     private lateinit var spinner: Spinner
     private var adapter: ArrayAdapter<String>? = null
+    private var isUserInitiatedSection: Boolean = false
 
     private var lastRecordedAudioFile: String? = null
 
@@ -49,36 +49,40 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private var preferences: SharedPreferences? = null
     private val microphones: MutableList<AudioDeviceInfo> = mutableListOf()
 
-    private val fileNameObserver: Observer<String> = Observer {
-//        binding.tvCurrentAudioFile.text = it
-    }
 
     private val isRecordingObserver: Observer<Boolean> = Observer { isRecording->
         if (isRecording) {
             logger.info("Switching to Stop Recording mode")
             binding.btnStartStopRec.text = getString(R.string.stop_recording)
-//            val currentFileName = state?.currentRecordingFileName ?: return@Observer
-//            binding.tvCurrentFileHead.visibility = View.VISIBLE
-//            binding.tvCurrentAudioFile.visibility = View.VISIBLE
-//            currentFileName.observe(this@PhoneAudioInputActivity, fileNameObserver)
-//            binding.tvCurrentAudioFile.text = currentFile
-//            binding.btnStartStopRec.setBackgroundColor(getColor(R.color.color_btn_stop_record))
         } else {
             logger.info("Switching to Start Recording mode")
             binding.btnStartStopRec.text = getString(R.string.start_recording)
-//            state?.currentRecordingFileName?.removeObserver(fileNameObserver)
-//            binding.tvCurrentFileHead.visibility = View.INVISIBLE
-//            binding.tvCurrentAudioFile.visibility = View.INVISIBLE
-//            binding.btnStartStopRec.setBackgroundColor(getColor(R.color.color_btn_start_record))
         }
     }
 
     private val currentMicrophoneObserver: Observer<AudioDeviceInfo> = Observer { microphone: AudioDeviceInfo? ->
-        microphone?.let {
-//            binding.textView2.visibility = View.VISIBLE
-//            binding.textView2.text = microphone.productName
-        } ?: run {
-//            binding.textView2.visibility = View.INVISIBLE
+        microphone?.productName?.toString()?.let { productName ->
+            adapter?.apply {
+                val deviceName = getPosition(productName)
+                spinner.setSelection(deviceName)
+            }
+        }
+    }
+
+    private fun getAudioDeviceByPosition(position: Int): AudioDeviceInfo? =
+        (state?.connectedMicrophones?.value)?.get(position)
+
+    private val setPreferredMicrophone: (String, Int) -> Unit = { deviceName: String, pos: Int ->
+        val currentMicrophones = state?.connectedMicrophones?.value
+
+        (pos.let(::getAudioDeviceByPosition)?.productName == deviceName).run {
+            currentMicrophones ?: return@run
+            if (this) state?.audioRecordManager?.setPreferredMicrophone(currentMicrophones[pos])
+
+            Boast.makeText(
+                this@PhoneAudioInputActivity,
+                getString(R.string.input_audio_device, currentMicrophones[pos]), Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -92,7 +96,8 @@ class PhoneAudioInputActivity : AppCompatActivity() {
                 }
             }
             if (state == null) {
-                Boast.makeText(this@PhoneAudioInputActivity, R.string.unable_to_record_toast, Toast.LENGTH_SHORT).show(true)
+                Boast.makeText(this@PhoneAudioInputActivity,
+                    R.string.unable_to_record_toast, Toast.LENGTH_SHORT).show(true)
                 return
             }
             state?.isRecording?.observe(this@PhoneAudioInputActivity, isRecordingObserver)
@@ -101,14 +106,13 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             if (state == null) {
                 logger.info("Cannot set the microphone state is null")
             }
-
             state?.finalizedMicrophone?.observe(this@PhoneAudioInputActivity, currentMicrophoneObserver)
-
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             recorderProvider = null
             state?.isRecording?.removeObserver(isRecordingObserver)
+            state?.finalizedMicrophone?.removeObserver(currentMicrophoneObserver)
         }
     }
 
@@ -123,19 +127,19 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     }
 
     private fun createDropDown() {
+        spinner.setOnTouchListener { v, event ->
+            isUserInitiatedSection = true
+            if (event.action == MotionEvent.ACTION_UP) {
+                v.performClick()
+            }
+            false
+        }
         spinner.onItemSelectedListener = object: OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: AdapterView<*>?,
-                view: View?,
-                position: Int,
-                id: Long,
-            ) {
-                val selectedMicrophone = parent?.getItemAtPosition(position).toString()
-                val microphoneExists = preferMicrophone(selectedMicrophone, position)
-                microphoneExists?.let {
-                    state?.audioRecordManager?.setPreferredMicrophone(it)
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (isUserInitiatedSection) {
+                    parent?.getItemAtPosition(position).toString().apply { setPreferredMicrophone(this, position) }
+                    isUserInitiatedSection = false
                 }
-                Toast.makeText(this@PhoneAudioInputActivity, parent?.getItemAtPosition(position).toString(), Toast.LENGTH_SHORT).show()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
@@ -143,28 +147,22 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             }
         }
         logger.warn("Creating dropDown: microphones: ${microphones.map { it.productName.toString() }}")
-        adapter = ArrayAdapter<String>(this, R.layout.dropdown_item, microphones.map { it.productName.toString() } )
-        adapter!!.setDropDownViewResource(R.layout.dropdown_item)
-        spinner.adapter = adapter
-        binding.refreshButton.setOnClickListener{
-            logger.warn("Refresh Input Devices 2")
-            refreshInputDevices()
-        }
+        createAdapter()
     }
 
-    private fun preferMicrophone(microphoneName: String, position: Int): AudioDeviceInfo? {
-        val currentMicrophones = state?.connectedMicrophones?.value
-        ((currentMicrophones as ArrayList)[position].productName == microphoneName).also {  doesExists ->
-            return if (doesExists)currentMicrophones[position] else null
-        }
+    private fun createAdapter() {
+        adapter = ArrayAdapter<String>(this, R.layout.dropdown_item, microphones.map { "${it.productName} (${it.type.toLogFriendlyType()})" } )
+        adapter!!.setDropDownViewResource(R.layout.dropdown_item)
+        spinner.adapter = adapter
     }
 
     override fun onStart() {
         super.onStart()
         bindService(Intent(this, radarApp.radarService), radarServiceConnection, 0)
-//        binding.button.setOnClickListener {
-//            state?.audioRecordManager?.clear()
-//        }
+        binding.refreshButton.setOnClickListener{
+            logger.warn("Refresh Input Devices 2")
+            refreshInputDevices()
+        }
     }
 
     override fun onResume() {
@@ -190,22 +188,23 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     }
 
     private fun refreshInputDevices() {
+        state ?: return
         val connectedMicrophones: List<AudioDeviceInfo> = AudioDeviceUtils.getConnectedMicrophones(this@PhoneAudioInputActivity)
-        state?.connectedMicrophones?.postValue(connectedMicrophones)
-        microphones.clear()
-        microphones.addAll(connectedMicrophones)
-        adapter = ArrayAdapter<String>(this, R.layout.dropdown_item, microphones.map { it.productName.toString() } )
-        adapter!!.setDropDownViewResource(R.layout.dropdown_item)
-        spinner.adapter = adapter
-        logger.info("Modifying dropdown: microphones: ${microphones.map { it.productName.toString() }}")
-        if (state?.microphonePrioritized!! && state?.finalizedMicrophone?.value !in connectedMicrophones) {
-            state?.microphonePrioritized = false
-            logger.info("Activity: statMicrophone prioritize?: false")
-        }
-        if (state!!.microphonePrioritized) {
-            val microphone = adapter?.getPosition(state!!.finalizedMicrophone.value?.productName.toString())
-            microphone ?: return
-            spinner.setSelection(microphone)
+        state?.let { state ->
+            logger.info("Modifying dropdown: microphones: ${microphones.map { it.productName.toString() }}")
+            if (state.microphonePrioritized && state.finalizedMicrophone.value !in connectedMicrophones) {
+                state.microphonePrioritized = false
+                logger.info("Activity: state Microphone prioritize?: false")
+            }
+            state.connectedMicrophones.postValue(connectedMicrophones)
+            microphones.clear()
+            microphones.addAll(connectedMicrophones)
+            createAdapter()
+            if (state.microphonePrioritized) {
+                val microphone = adapter?.getPosition(state.finalizedMicrophone.value?.productName.toString())
+                microphone ?: return
+                spinner.setSelection(microphone)
+            }
         }
     }
 
@@ -238,13 +237,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         }
     }
 
-    override fun onPause() {
-        state?.finalizedMicrophone?.removeObserver(currentMicrophoneObserver)
-        super.onPause()
-    }
-
     override fun onStop() {
         super.onStop()
+        state?.microphonePrioritized = false
         unbindService(radarServiceConnection)
     }
 

@@ -10,4 +10,5 @@
     <string name="audio_recording_title">Audio Recording</string>
     <string name="saving_data_to">Saving data to……</string>
     <string name="input_device">Input Device</string>
+    <string name="input_audio_device">Input Audio Device: %1$s</string>
 </resources>
