@@ -31,10 +31,8 @@ import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
 import org.radarbase.passive.phone.audio.input.databinding.ActivityPhoneAudioInputBinding
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
-import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil.toLogFriendlyType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.util.Timer
 
 class PhoneAudioInputActivity : AppCompatActivity() {
 
@@ -52,15 +50,44 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private var preferences: SharedPreferences? = null
     private val microphones: MutableList<AudioDeviceInfo> = mutableListOf()
 
+    private val radarServiceConnection = object : ServiceConnection{
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val radarService = service as IRadarBinder
+            recorderProvider = null
+            for (provider in radarService.connections) {
+                if (provider is PhoneAudioInputProvider) {
+                    recorderProvider = provider
+                }
+            }
+            if (state == null) {
+                logger.info("Cannot set the microphone state is null")
+                Boast.makeText(this@PhoneAudioInputActivity,
+                    R.string.unable_to_record_toast, Toast.LENGTH_SHORT).show(true)
+                return
+            }
+            state?.let {
+                it.isRecording.observe(this@PhoneAudioInputActivity, isRecordingObserver)
+                it.finalizedMicrophone.observe(this@PhoneAudioInputActivity, currentMicrophoneObserver)
+            }
+            logger.warn("Refresh Input Devices 1")
+            refreshInputDevices()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            state?.let {
+                it.isRecording.removeObserver(isRecordingObserver)
+                it.finalizedMicrophone.removeObserver(currentMicrophoneObserver)
+            }
+            recorderProvider = null
+        }
+    }
 
     private val isRecordingObserver: Observer<Boolean> = Observer { isRecording->
         if (isRecording) {
             logger.info("Switching to Stop Recording mode")
-//            binding.btnStartStopRec.text = getString(R.string.stop_recording)
             timerViewModel?.startTimer()
         } else {
             logger.info("Switching to Start Recording mode")
-//            binding.btnStartStopRec.text = getString(R.string.start_recording)
             timerViewModel?.stopTimer()
         }
     }
@@ -80,47 +107,13 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private fun getAudioDeviceByPosition(position: Int): AudioDeviceInfo? =
         (state?.connectedMicrophones?.value)?.get(position)
 
-    private val setPreferredMicrophone: (String, Int) -> Unit = { deviceName: String, pos: Int ->
-        val currentMicrophones = state?.connectedMicrophones?.value
-
-        (pos.let(::getAudioDeviceByPosition)?.productName == deviceName).run {
-            currentMicrophones ?: return@run
-            if (this) state?.audioRecordManager?.setPreferredMicrophone(currentMicrophones[pos])
-
-            Boast.makeText(
-                this@PhoneAudioInputActivity,
-                getString(R.string.input_audio_device, currentMicrophones[pos]), Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private val radarServiceConnection = object : ServiceConnection{
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val radarService = service as IRadarBinder
-            recorderProvider = null
-            for (provider in radarService.connections) {
-                if (provider is PhoneAudioInputProvider) {
-                    recorderProvider = provider
-                }
-            }
-            if (state == null) {
-                Boast.makeText(this@PhoneAudioInputActivity,
-                    R.string.unable_to_record_toast, Toast.LENGTH_SHORT).show(true)
-                return
-            }
-            state?.isRecording?.observe(this@PhoneAudioInputActivity, isRecordingObserver)
-            logger.warn("Refresh Input Devices 1")
-            refreshInputDevices()
-            if (state == null) {
-                logger.info("Cannot set the microphone state is null")
-            }
-            state?.finalizedMicrophone?.observe(this@PhoneAudioInputActivity, currentMicrophoneObserver)
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            recorderProvider = null
-            state?.isRecording?.removeObserver(isRecordingObserver)
-            state?.finalizedMicrophone?.removeObserver(currentMicrophoneObserver)
+    private val setPreferredMicrophone: String.(Int) -> Unit = {  pos: Int ->
+        pos.let(::getAudioDeviceByPosition)?.also {
+            if (it.productName != this) return@also
+        }?.run {
+            state?.audioRecordManager?.setPreferredMicrophone(this)
+            Boast.makeText(this@PhoneAudioInputActivity, getString(R.string.input_audio_device,
+                productName), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -148,7 +141,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         spinner.onItemSelectedListener = object: OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (isUserInitiatedSection) {
-                    parent?.getItemAtPosition(position).toString().apply { setPreferredMicrophone(this, position) }
+                    parent?.getItemAtPosition(position).toString().apply { setPreferredMicrophone(position) }
                     isUserInitiatedSection = false
                 }
             }
@@ -157,9 +150,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
                 // No Action
             }
         }
-        refreshInputDevices()
+//        refreshInputDevices()
         logger.warn("Creating dropDown: microphones: ${microphones.map { it.productName.toString() }}")
-//        createAdapter()
+        createAdapter()
     }
 
     private fun createAdapter() {
@@ -179,7 +172,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkStateElseShowToast(work: PhoneAudioInputState.() -> Unit) {
+    private fun workOnStateElseShowToast(work: PhoneAudioInputState.() -> Unit) {
         if (state != null && state?.status == SourceStatusListener.Status.CONNECTED) {
             state?.apply(work) ?: return
         } else {
@@ -200,7 +193,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.btnStartRec.setOnClickListener {
-            checkStateElseShowToast {
+            workOnStateElseShowToast {
                 onRecordingViewUpdate()
                 logger.warn("Starting Recording")
                 logger.warn("Refresh Input Devices: 3")
@@ -210,32 +203,13 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         }
 
         binding.btnStopRec.setOnClickListener {
-            checkStateElseShowToast {
+            workOnStateElseShowToast {
                 notRecordingViewUpdate()
                 logger.warn("Stopping Recording")
                 audioRecordManager?.stopRecording()
                 disableRecordingAndEnablePlayback()
             }
         }
-
-     /*   binding.btnStartStopRec.setOnClickListener {
-            if (state != null && state?.status == SourceStatusListener.Status.CONNECTED) {
-                if (binding.btnStartStopRec.text == getString(R.string.start_recording)) {
-                    logger.warn("Starting Recording")
-                    val pluginState = state ?: return@setOnClickListener
-                    logger.warn("Refresh Input Devices: 3")
-                    refreshInputDevices()
-                    pluginState.audioRecordManager?.startRecording()
-                } else if (binding.btnStartStopRec.text == getString(R.string.stop_recording)) {
-                    logger.warn("Stopping Recording")
-                    state?.audioRecordManager?.stopRecording()
-                    disableRecordingAndEnablePlayback()
-                }
-            } else {
-                Boast.makeText(this, R.string.unable_to_record_toast, Toast.LENGTH_SHORT).show(true)
-            }
-        }
-*/
     }
 
     private fun refreshInputDevices() {

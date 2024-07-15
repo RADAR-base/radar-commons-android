@@ -12,6 +12,8 @@ import android.media.AudioDeviceInfo.TYPE_USB_HEADSET
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioRecord.STATE_INITIALIZED
+import android.os.Environment
+import android.os.Environment.DIRECTORY_DOCUMENTS
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -24,18 +26,15 @@ import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.
 import org.radarbase.passive.phone.audio.input.utils.InputRecordInfo
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.io.BufferedOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.RandomAccessFile
-import java.lang.Short.reverseBytes
 
 class PhoneAudioInputManager(service: PhoneAudioInputService) :
     AbstractSourceManager<PhoneAudioInputService, PhoneAudioInputState>(service), PhoneAudioInputState.AudioRecordManager {
 
     private var audioRecord: AudioRecord? = null
     private var randomAccessWriter: RandomAccessFile? = null
-    private var bufferedOutputStream: BufferedOutputStream? = null
+//    private var bufferedOutputStream: BufferedOutputStream? = null
     private var buffer: ByteArray = byteArrayOf()
     private val audioRecordingHandler = SafeHandler.getInstance("PHONE-AUDIO-INPUT", Process.THREAD_PRIORITY_BACKGROUND)
     private val recordProcessingHandler: SafeHandler = SafeHandler.getInstance("AUDIO-RECORD-PROCESSING", Process.THREAD_PRIORITY_AUDIO)
@@ -62,9 +61,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         get() = state.bufferSize.get()
         set(value) { state.bufferSize.set(value) }
 
-    /** The interval(ms) in which the recorded samples are output to the file */
-    private val TIMER_INTERVAL = 120
-
     /**
      * The framePeriod is calculated as the number of samples in `TIMER_INTERVAL` milliseconds.
      * It represents how many samples correspond to the given interval.
@@ -75,6 +71,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     private val audioDir: File?
     private var recordingFile: File? = null
     private var payloadSize: Int = 0
+    @Volatile
+    private var currentlyRecording: Boolean = false
 
     init {
         name = service.getString(R.string.phone_audio_input_display_name)
@@ -84,7 +82,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
 
         val internalDirs = service.filesDir
         status = if (internalDirs != null) {
-            audioDir = File(internalDirs, "org.radarbase.passive.phone.audio.input")
+            audioDir = File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DOCUMENTS), "org.radarbase.passive.audio.input")
+//            audioDir = File(internalDirs, "org.radarbase.passive.phone.audio.input")
             val dirCreated = audioDir.mkdirs()
             val directoryExists = audioDir.exists()
             logger.debug("Directory for saving audio file, created: {}, exists: {}", dirCreated, directoryExists)
@@ -99,6 +98,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     override fun start(acceptableIds: Set<String>) {
         register()
         audioRecordingHandler.start()
+        recordProcessingHandler.start()
         createRecorder()
         state.audioRecordManager = this
     }
@@ -113,7 +113,9 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         audioRecordingHandler.execute {
             if (ContextCompat.checkSelfPermission(service, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 status = SourceStatusListener.Status.CONNECTING
+                // If using default values: framePeriod = 16000 * 0.12 = 1920 samples.
                 framePeriod = sampleRate * TIMER_INTERVAL / 1000
+                // For default values: bufferSize = 1920 * 16 * 1 * 2 / 8 = 7680 bytes.
                 bufferSize = framePeriod * bitsPerSample * numChannels * 2 / 8
                 logger.info("Calculated buffer size: $bufferSize (bytes), and frame period: $framePeriod")
 
@@ -173,27 +175,48 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
 
     private fun observeMicrophones() {
         state.connectedMicrophones.observe(service) { connectedMicrophones ->
-            if (connectedMicrophones?.size == 0) {
-                logger.warn("No connected microphone")
+            audioRecordingHandler.execute {
+                if (connectedMicrophones?.size == 0) {
+                    logger.warn("No connected microphone")
+                }
+                if (state.microphonePrioritized && state.finalizedMicrophone.value !in connectedMicrophones) {
+                    state.microphonePrioritized = false
+                    logger.info("Microphone prioritize?: false")
+                }
+                logger.info("PhoneAudioInputManager: Connected microphones: {}", connectedMicrophones.map { it.productName })
+                if (!state.microphonePrioritized) {
+                    logger.info("Running device selection logic")
+                    runDeviceSelectionLogic(connectedMicrophones)
+                } else {
+                    state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
+                }
+                logger.info("Preferred audio input device: {}", audioRecord?.preferredDevice?.productName)
+                logger.info("Selected audio input device: {}", audioRecord?.routedDevice?.productName)
             }
-            if (state.microphonePrioritized && state.finalizedMicrophone.value !in connectedMicrophones) {
-                state.microphonePrioritized = false
-                logger.info("Microphone prioritize?: false")
-            }
-            logger.info("PhoneAudioInputManager: Connected microphones: {}", connectedMicrophones)
-            if (!state.microphonePrioritized) {
-                logger.info("Running device selection logic")
-                runDeviceSelectionLogic(connectedMicrophones)
-            } else {
-                state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
-            }
-            logger.info(
-                "Preferred audio input device: {}",
-                audioRecord?.preferredDevice?.productName
-            )
-            logger.info("Selected audio input device: {}", audioRecord?.routedDevice?.productName)
         }
     }
+
+    private val deviceSelectionLogic: ((List<AudioDeviceInfo>) -> Unit) = { connectedMicrophones ->
+        val finalizedMicrophone  =
+            if (connectedMicrophones.any { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }) {
+                val finalizedMic =
+                    connectedMicrophones.firstOrNull { it.type == TYPE_USB_DEVICE || it.type == TYPE_USB_HEADSET }
+                logger.info("Setting the default audio input device {}", finalizedMic)
+                finalizedMic
+            } else if (connectedMicrophones.any { it.type == TYPE_BLUETOOTH_A2DP || it.type == TYPE_BLUETOOTH_SCO }) {
+                val finalizedMic =
+                    connectedMicrophones.firstOrNull { it.type == TYPE_BLUETOOTH_SCO || it.type == TYPE_BLUETOOTH_A2DP }
+                logger.info("Setting the default audio input device {}", finalizedMic)
+                finalizedMic
+            } else {
+                connectedMicrophones.firstOrNull()
+            }
+        finalizedMicrophone?.let(setPreferredDeviceAndUpdate)
+    }
+
+//    private fun List<AudioDeviceInfo>.preferByDeviceType(types: IntArray): AudioDeviceInfo? {
+
+//    }
 
     private fun runDeviceSelectionLogic(connectedMicrophones: List<AudioDeviceInfo>) {
         val finalizedMicrophone  =
@@ -235,7 +258,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         audioRecordingHandler.execute {
             setupRecording()
             if ((audioRecord?.state == STATE_INITIALIZED) && (recordingFile != null)) {
-                bufferedOutputStream = BufferedOutputStream(FileOutputStream(randomAccessWriter!!.fd))
                 if (!state.microphonePrioritized) {
                     state.connectedMicrophones.value?.let {
                         runDeviceSelectionLogic(it)
@@ -246,9 +268,12 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
                 audioRecord?.startRecording()
                 state.isRecording.postValue(true)
 //                state.currentRecordingFileName.postValue(recordingFile?.name)
-                audioRecord?.read(buffer, 0, buffer.size)
-                state.finalizedMicrophone.postValue(audioRecord?.routedDevice)
-                logger.info("Finalized routed device: {}", state.finalizedMicrophone.value?.productName)
+                recordProcessingHandler.execute{
+                    audioRecord?.read(buffer, 0, buffer.size)
+                    currentlyRecording = true
+                    state.finalizedMicrophone.postValue(audioRecord?.routedDevice)
+                    logger.info("Finalized routed device: {}", state.finalizedMicrophone.value?.productName)
+                }
                 logger.trace("Started recording")
                 audioRecord?.setRecordPositionUpdateListener(updateListener)
                 audioRecord?.setPositionNotificationPeriod(framePeriod)
@@ -266,7 +291,12 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     }
 
     private fun setRecordingPath() {
-        recordingFile = File(audioDir, "phone_audio_input"+System.currentTimeMillis()+".wav")
+//        recordingFile = File(audioDir, "phone_audio_input"+System.currentTimeMillis()+".wav")
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+
+        // Create the file in the Downloads directory
+        recordingFile = File(audioDir, "phone_audio_input" + System.currentTimeMillis() + ".wav")
+
         preferences.edit()
             .putString(LAST_RECORDED_AUDIO_FILE, recordingFile!!.absolutePath)
             .apply()
@@ -276,26 +306,60 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
 
     private fun writeFileHeaders() {
 
-        randomAccessWriter?.also {
-            it.setLength(0) // Set file length to 0, to prevent unexpected behavior in case the file already existed
+        randomAccessWriter?.apply {
+            setLength(0) // Set file length to 0, to prevent unexpected behavior in case the file already existed
+
+            val header = ByteArray(44)
             // RIFF header
-            it.writeBytes("RIFF")
-            it.writeInt(0) // Final file size not known yet, write 0
-            it.writeBytes("WAVE")
-            // fmt sub-chunk
-            it.writeBytes("fmt")
-            it.writeInt(Integer.reverseBytes(16)) // Sub-chunk size, 16 for PCM
-            it.writeShort(reverseBytes(1.toShort()).toInt()) // AudioFormat, 1 for PCM
-            it.writeShort(reverseBytes(numChannels).toInt()) // Number of channels, 1 for mono, 2 for stereo
-            it.writeInt(Integer.reverseBytes(sampleRate)) // Sample rate
-            it.writeInt(Integer.reverseBytes(sampleRate * bitsPerSample * numChannels / 8)) // Byte rate, SampleRate*NumberOfChannels*BitsPerSample/8
-            it.writeShort(reverseBytes((numChannels * bitsPerSample / 8).toShort()).toInt()) // Block align, NumberOfChannels*BitsPerSample/8
-            it.writeShort(reverseBytes(bitsPerSample).toInt()) // Bits per sample
-            // data sub-chunk
-            it.writeBytes("data")
-            it.writeInt(0) // Data chunk size not known yet
-            pluginStatusInfo.fileHeadersWritten = true
+            header[0] = 'R'.code.toByte() // RIFF/WAVE header
+            header[1] = 'I'.code.toByte()
+            header[2] = 'F'.code.toByte()
+            header[3] = 'F'.code.toByte()
+            header[4] = (0 and 0xff).toByte() // Final file size not known yet, write 0
+            header[5] = ((0 shr 8) and 0xff).toByte()
+            header[6] = ((0 shr 16) and 0xff).toByte()
+            header[7] = ((0 shr 24) and 0xff).toByte()
+            header[8] = 'W'.code.toByte()
+            header[9] = 'A'.code.toByte()
+            header[10] = 'V'.code.toByte()
+            header[11] = 'E'.code.toByte()
+            header[12] = 'f'.code.toByte() // 'fmt ' chunk
+            header[13] = 'm'.code.toByte()
+            header[14] = 't'.code.toByte()
+            header[15] = ' '.code.toByte()
+            header[16] = 16 // 4 bytes: size of 'fmt ' chunk
+            header[17] = 0
+            header[18] = 0
+            header[19] = 0
+            header[20] = 1 // format = 1
+            header[21] = 0
+            header[22] = numChannels.toByte()
+            header[23] = 0
+            header[24] = (sampleRate.toLong() and 0xffL).toByte()
+            header[25] = ((sampleRate.toLong() shr 8) and 0xffL).toByte()
+            header[26] = ((sampleRate.toLong() shr 16) and 0xffL).toByte()
+            header[27] = ((sampleRate.toLong() shr 24) and 0xffL).toByte()
+            val byteRate = sampleRate * bitsPerSample * numChannels / 8
+            header[28] = (byteRate and 0xff).toByte()
+            header[29] = ((byteRate shr 8) and 0xff).toByte()
+            header[30] = ((byteRate shr 16) and 0xff).toByte()
+            header[31] = ((byteRate shr 24) and 0xff).toByte()
+            val blockAlign = numChannels * bitsPerSample / 8
+            header[32] = blockAlign.toByte() // block align
+            header[33] = 0
+            header[34] = bitsPerSample.toByte() // bits per sample
+            header[35] = 0
+            header[36] = 'd'.code.toByte()
+            header[37] = 'a'.code.toByte()
+            header[38] = 't'.code.toByte()
+            header[39] = 'a'.code.toByte()
+            header[40] = (0 and 0xff).toByte()
+            header[41] = ((0 shr 8) and 0xff).toByte()
+            header[42] = ((0 shr 16) and 0xff).toByte()
+            header[43] = ((0 shr 24) and 0xff).toByte()
+            write(header, 0, 44)
         }
+        pluginStatusInfo.fileHeadersWritten = true
     }
 
     private val updateListener = object : AudioRecord.OnRecordPositionUpdateListener {
@@ -304,12 +368,11 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         }
 
         override fun onPeriodicNotification(recorder: AudioRecord?) {
-            if (state.isRecording.value == true) {
+            if (currentlyRecording) {
                 audioRecordingHandler.execute {
                     audioRecord?.let {
                         val dataRead = it.read(buffer, 0, buffer.size)
-                        bufferedOutputStream?.write(buffer, 0, dataRead)
-                        bufferedOutputStream?.flush()
+                        randomAccessWriter?.write(buffer)
                         payloadSize += dataRead
                         logger.debug("onPeriodicNotification: Recording Audio")
                     }
@@ -324,13 +387,17 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
         logger.warn("Stopping Recording: Saving data")
         audioRecordingHandler.execute {
             state.isRecording.postValue(false)
-            audioRecord?.stop()
-            bufferedOutputStream?.close()
-            randomAccessWriter?.use {
-                it.seek(4)
-                it.writeInt(Integer.reverseBytes(36 + payloadSize))
-                it.seek(40)
-                it.writeInt(Integer.reverseBytes(payloadSize))
+            currentlyRecording = false
+            audioRecord?.apply {
+                setRecordPositionUpdateListener(null)
+                stop()
+            }
+            randomAccessWriter?.apply {
+                seek(4)
+                writeInt(Integer.reverseBytes(36 + payloadSize))
+                seek(40)
+                writeInt(Integer.reverseBytes(payloadSize))
+                close()
             }
         }
     }
@@ -345,5 +412,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) :
     }
     companion object {
         private val logger: Logger = LoggerFactory.getLogger(PhoneAudioInputManager::class.java)
+
+        /** The interval(ms) in which the recorded samples are output to the file */
+        private const val TIMER_INTERVAL = 120
     }
 }
