@@ -24,11 +24,13 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
     private var phoneAudioInputState: PhoneAudioInputState? = null
 
     private var audioFilePath: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val args: Bundle = checkNotNull(arguments) { "Cannot Start Playback without the recorded file location" }
         audioFilePath = args.getString(AUDIO_FILE_NAME)
+        mediaPlayer = MediaPlayer()
     }
 
     override fun onCreateView(
@@ -45,7 +47,8 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
         observeState()
         binding?.apply {
 
-            sendData.apply {
+            sendData.setOnClickListener {
+                logger.debug("Sending the data triggered from fragment")
                 phoneAudioInputState?.audioRecordingManager?.send()
             }
 
@@ -54,8 +57,9 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
                 val length = audio.length()
                 if (audio.canRead()) {
                     logger.info("Can Read Audio file: ${audio.canRead()}")
-                    mediaPlayer = MediaPlayer().apply {
+                    mediaPlayer?.apply {
                         if (isPlaying) return@setOnClickListener
+                        reset()
                         try {
                             setDataSource(requireContext(), Uri.fromFile(audio))
                             prepareAsync()
