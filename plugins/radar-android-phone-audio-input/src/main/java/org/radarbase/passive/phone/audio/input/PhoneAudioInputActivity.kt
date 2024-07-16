@@ -237,7 +237,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private fun disableRecordingAndEnablePlayback() {
         lastRecordedAudioFile = preferences?.getString(LAST_RECORDED_AUDIO_FILE, null)
-//        startAudioPlaybackFragment()
+        startAudioPlaybackFragment()
     }
 
     private fun startAudioPlaybackFragment() {
