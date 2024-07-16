@@ -8,11 +8,12 @@ import org.radarbase.android.util.SafeHandler
 import java.util.Locale
 
 
-class TimerViewModel: ViewModel() {
+class PhoneAudioInputViewModel: ViewModel() {
 
     private val _elapsedTime: MutableLiveData<String> = MutableLiveData()
     val elapsedTime: LiveData<String>
         get() = _elapsedTime
+    val phoneAudioState: MutableLiveData<PhoneAudioInputState> = MutableLiveData()
 
     private var startTime: Long? = null
     private var isRecording: Boolean = false

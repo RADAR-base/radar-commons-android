@@ -2,6 +2,7 @@ package org.radarbase.passive.phone.audio.input
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.SharedPreferences
@@ -39,12 +40,14 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private lateinit var binding: ActivityPhoneAudioInputBinding
     private lateinit var spinner: Spinner
     private var adapter: ArrayAdapter<String>? = null
-    private var isUserInitiatedSection: Boolean = false
 
-    private var lastRecordedAudioFile: String? = null
+    private var isUserInitiatedSection: Boolean = false
+    private val lastRecordedAudioFile: String?
+        get() = preferences?.getString(LAST_RECORDED_AUDIO_FILE, null)
+
 
     private var recorderProvider: PhoneAudioInputProvider? = null
-    private var timerViewModel: TimerViewModel? = null
+    private var audioInputViewModel: PhoneAudioInputViewModel? = null
     private val state: PhoneAudioInputState?
         get() = recorderProvider?.connection?.sourceState
     private var preferences: SharedPreferences? = null
@@ -52,6 +55,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private val radarServiceConnection = object : ServiceConnection{
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            logger.debug("Service bound to PhoneAudiInputActivity")
             val radarService = service as IRadarBinder
             recorderProvider = null
             for (provider in radarService.connections) {
@@ -68,15 +72,18 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             state?.let {
                 it.isRecording.observe(this@PhoneAudioInputActivity, isRecordingObserver)
                 it.finalizedMicrophone.observe(this@PhoneAudioInputActivity, currentMicrophoneObserver)
+                audioInputViewModel?.phoneAudioState?.postValue(it)
             }
             logger.warn("Refresh Input Devices 1")
             refreshInputDevices()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            logger.debug("Service unbound from PhoneAudiInputActivity")
             state?.let {
                 it.isRecording.removeObserver(isRecordingObserver)
                 it.finalizedMicrophone.removeObserver(currentMicrophoneObserver)
+                audioInputViewModel?.phoneAudioState?.postValue(null)
             }
             recorderProvider = null
         }
@@ -85,10 +92,10 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private val isRecordingObserver: Observer<Boolean> = Observer { isRecording->
         if (isRecording) {
             logger.info("Switching to Stop Recording mode")
-            timerViewModel?.startTimer()
+            audioInputViewModel?.startTimer()
         } else {
             logger.info("Switching to Start Recording mode")
-            timerViewModel?.stopTimer()
+            audioInputViewModel?.stopTimer()
         }
     }
 
@@ -126,8 +133,8 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         preferences = getSharedPreferences(PHONE_AUDIO_INPUT_SHARED_PREFS, Context.MODE_PRIVATE)
         createDropDown()
 
-        timerViewModel = ViewModelProvider(this)[TimerViewModel::class.java]
-        timerViewModel?.elapsedTime?.observe(this, recordTimeObserver)
+        audioInputViewModel = ViewModelProvider(this)[PhoneAudioInputViewModel::class.java]
+        audioInputViewModel?.elapsedTime?.observe(this, recordTimeObserver)
     }
 
     private fun createDropDown() {
@@ -150,7 +157,6 @@ class PhoneAudioInputActivity : AppCompatActivity() {
                 // No Action
             }
         }
-//        refreshInputDevices()
         logger.warn("Creating dropDown: microphones: ${microphones.map { it.productName.toString() }}")
         createAdapter()
     }
@@ -207,7 +213,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
                 notRecordingViewUpdate()
                 logger.warn("Stopping Recording")
                 audioRecordManager?.stopRecording()
-                disableRecordingAndEnablePlayback()
+                proceedAfterRecording()
             }
         }
     }
@@ -235,9 +241,33 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         }
     }
 
-    private fun disableRecordingAndEnablePlayback() {
-        lastRecordedAudioFile = preferences?.getString(LAST_RECORDED_AUDIO_FILE, null)
-        startAudioPlaybackFragment()
+    private fun proceedAfterRecording() {
+        AudioDeviceUtils.showAlertDialog (this) {
+            setTitle(getString(R.string.proceed_title)).
+            setMessage(getString(R.string.proceed_message)).
+            setIcon(R.drawable.icon_play_alert_dialogue).
+            setPositiveButton(getString(R.string.send)) { dialog: DialogInterface, _: Int ->
+                dialog.dismiss()
+                logger.debug("Sending the data")
+            }.setNeutralButton(getString(R.string.play)) { dialog: DialogInterface, _: Int ->
+                dialog.dismiss()
+                logger.debug("Playing the audio")
+                startAudioPlaybackFragment()
+            }.setNegativeButton(getString(R.string.discard)) { dialog: DialogInterface, _: Int ->
+                logger.debug("Discarding the last recorded file")
+                dialog.cancel()
+                clearLastRecordedFile()
+                state?.audioRecordManager?.clear()
+            }
+        }
+    }
+
+    private fun clearLastRecordedFile() {
+        preferences?.apply {
+            edit()
+                .putString(LAST_RECORDED_AUDIO_FILE, null)
+                .apply()
+        }
     }
 
     private fun startAudioPlaybackFragment() {
@@ -247,7 +277,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             return
         }
         try {
-            val fragment = PhoneAudioInputPlaybackFragment.newInstance(this, lastRecordedAudioFile!!)
+            val fragment = PhoneAudioInputPlaybackFragment.newInstance(lastRecordedAudioFile!!)
             createPlaybackFragmentLayout(R.id.phone_audio_playback_fragment, fragment)
         } catch (ex: IllegalStateException) {
             logger.error("Failed to start audio playback fragment: is PhoneAudioInputActivity already closed?", ex)
@@ -271,6 +301,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        logger.debug("Finishing PhoneAudioInputActivity")
         super.onDestroy()
     }
 
@@ -278,5 +309,6 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         private val logger: Logger = LoggerFactory.getLogger(PhoneAudioInputActivity::class.java)
 
         const val AUDIO_FILE_NAME = "phone-audio-playback-audio-file-name"
+        const val PHONE_AUDIO_STATE = "phone-audio-state "
     }
 }

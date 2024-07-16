@@ -1,6 +1,5 @@
 package org.radarbase.passive.phone.audio.input
 
-import android.content.Context
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -8,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputActivity.Companion.AUDIO_FILE_NAME
 import org.radarbase.passive.phone.audio.input.databinding.FragmentAudioInputPlaybackBinding
 import org.slf4j.Logger
@@ -20,54 +20,15 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
     private var binding: FragmentAudioInputPlaybackBinding? = null
     private var mediaPlayer: MediaPlayer? = null
 
-    private var audioFilePath: String? = null
+    private val phoneAudioViewModel: PhoneAudioInputViewModel by activityViewModels<PhoneAudioInputViewModel>()
+    private var phoneAudioInputState: PhoneAudioInputState? = null
 
+    private var audioFilePath: String? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val args: Bundle = checkNotNull(arguments) { "Cannot Start Playback without the recorded file location" }
         audioFilePath = args.getString(AUDIO_FILE_NAME)
-
-//        mediaPlayer = MediaPlayer()
-//        val audio = File(audioFilePath!!)
-//        logger.info("Can Read Audio file: ${audio.canRead()}")
-//        mediaPlayer = MediaPlayer.create(context, Uri.fromFile(audio))
-//        mediaPlayer?.start()
-//        mediaPlayer?.apply {
-//            setDataSource(audioFilePath)
-//            prepare()
-//        }
-
-
-        val audio = File(audioFilePath!!)
-        val length = audio.length()
-        if (audio.canRead()) {
-            logger.info("Can Read Audio file: ${audio.canRead()}")
-            mediaPlayer = MediaPlayer().apply {
-                try {
-                    setDataSource(requireContext(), Uri.fromFile(audio))
-                    prepareAsync()
-                    setOnPreparedListener {
-                        start()
-                    }
-                    setOnErrorListener { mp, what, extra ->
-                        logger.error("MediaPlayer Error: what=$what, extra=$extra")
-                        true
-                    }
-                } catch (e: IOException) {
-                    logger.error("IOException: ${e.message}")
-                } catch (e: IllegalArgumentException) {
-                    logger.error("IllegalArgumentException: ${e.message}")
-                } catch (e: SecurityException) {
-                    logger.error("SecurityException: ${e.message}")
-                } catch (e: IllegalStateException) {
-                    logger.error("IllegalStateException: ${e.message}")
-                }
-            }
-        } else {
-            logger.error("Cannot read audio file")
-        }
-
     }
 
     override fun onCreateView(
@@ -81,10 +42,50 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        observeState()
         binding?.apply {
-            startPlayback.setOnClickListener {
-                mediaPlayer?.start()
+
+            sendData.apply {
+                phoneAudioInputState?.audioRecordingManager?.send()
             }
+
+            startPlayback.setOnClickListener {
+                val audio = File(audioFilePath!!)
+                val length = audio.length()
+                if (audio.canRead()) {
+                    logger.info("Can Read Audio file: ${audio.canRead()}")
+                    mediaPlayer = MediaPlayer().apply {
+                        if (isPlaying) return@setOnClickListener
+                        try {
+                            setDataSource(requireContext(), Uri.fromFile(audio))
+                            prepareAsync()
+                            setOnPreparedListener {
+                                start()
+                            }
+                            setOnErrorListener { mp, what, extra ->
+                                logger.error("MediaPlayer Error: what=$what, extra=$extra")
+                                true
+                            }
+                        } catch (e: IOException) {
+                            logger.error("IOException: ${e.message}")
+                        } catch (e: IllegalArgumentException) {
+                            logger.error("IllegalArgumentException: ${e.message}")
+                        } catch (e: SecurityException) {
+                            logger.error("SecurityException: ${e.message}")
+                        } catch (e: IllegalStateException) {
+                            logger.error("IllegalStateException: ${e.message}")
+                        }
+                    }
+                } else {
+                    logger.error("Cannot read audio file")
+                }
+            }
+        }
+    }
+
+    private fun observeState() {
+        phoneAudioViewModel.phoneAudioState.observe(viewLifecycleOwner) { state ->
+            phoneAudioInputState = state
         }
     }
 
@@ -109,10 +110,11 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
         private val logger: Logger =
             LoggerFactory.getLogger(PhoneAudioInputPlaybackFragment::class.java)
 
-        fun newInstance(context: Context, audioFileName: String): PhoneAudioInputPlaybackFragment =
+        fun newInstance(audioFileName: String): PhoneAudioInputPlaybackFragment =
             PhoneAudioInputPlaybackFragment().apply {
                 arguments = Bundle().apply {
                     putString(AUDIO_FILE_NAME, audioFileName)
+
                 }
             }
     }

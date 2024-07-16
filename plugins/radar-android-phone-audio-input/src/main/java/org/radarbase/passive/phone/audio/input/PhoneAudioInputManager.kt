@@ -32,7 +32,7 @@ import java.io.File
 import java.io.RandomAccessFile
 
 class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceManager<PhoneAudioInputService,
-        PhoneAudioInputState>(service), PhoneAudioInputState.AudioRecordManager {
+        PhoneAudioInputState>(service), PhoneAudioInputState.AudioRecordManager, PhoneAudioInputState.AudioRecordingManager {
 
     private var audioRecord: AudioRecord? = null
     private var randomAccessWriter: RandomAccessFile? = null
@@ -86,8 +86,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
 
         val internalDirs = service.filesDir
         status = if (internalDirs != null) {
-            audioDir = File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DOCUMENTS), "org.radarbase.passive.audio.input")
-//            audioDir = File(internalDirs, "org.radarbase.passive.phone.audio.input")
+//            audioDir = File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DOCUMENTS), "org.radarbase.passive.audio.input")
+            audioDir = File(internalDirs, "org.radarbase.passive.phone.audio.input")
             val dirCreated = audioDir.mkdirs()
             val directoryExists = audioDir.exists()
             logger.debug("Directory for saving audio file, created: {}, exists: {}", dirCreated, directoryExists)
@@ -105,6 +105,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
         recordProcessingHandler.start()
         createRecorder()
         state.audioRecordManager = this
+        state.audioRecordingManager = this
     }
 
     private val setPreferredDeviceAndUpdate: (AudioDeviceInfo) -> Unit = { microphone ->
@@ -171,6 +172,10 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
 
     override fun clear() {
         clearAudioDirectory()
+    }
+
+    override fun send() {
+        logger.debug("Sending the audio file")
     }
 
     override fun setPreferredMicrophone(microphone: AudioDeviceInfo) {
@@ -267,16 +272,14 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     private fun setupRecording() {
-//        clearAudioDirectory()
-        setRecordingPath()
-        writeFileHeaders()
+        audioRecordingHandler.execute {
+            clearAudioDirectory()
+            setRecordingPath()
+            writeFileHeaders()
+        }
     }
 
     private fun setRecordingPath() {
-//        recordingFile = File(audioDir, "phone_audio_input"+System.currentTimeMillis()+".wav")
-        Environment.getExternalStoragePublicDirectory(DIRECTORY_DOCUMENTS)
-
-        // Create the file in the Downloads directory
         recordingFile = File(audioDir, "phone_audio_input" + System.currentTimeMillis() + ".wav")
 
         preferences.edit()

@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class PhoneAudioInputState: BaseSourceState() {
 
     var audioRecordManager: AudioRecordManager? = null
+    var audioRecordingManager: AudioRecordingManager? = null
     val isRecording: MutableLiveData<Boolean> = MutableLiveData(false)
     val connectedMicrophones: MutableLiveData<List<AudioDeviceInfo>> = MutableLiveData<List<AudioDeviceInfo>>(emptyList())
     val finalizedMicrophone: MutableLiveData<AudioDeviceInfo> = MutableLiveData()
@@ -39,9 +40,8 @@ class PhoneAudioInputState: BaseSourceState() {
         fun resumePlayback()
     }
 
-    interface InputAudioDeviceManager {
-        fun getConnectedDevices(): List<AudioDeviceInfo>
-        fun setDefaultInputDevice(device: AudioDeviceInfo)
+    interface AudioRecordingManager {
+        fun send()
     }
 
 }

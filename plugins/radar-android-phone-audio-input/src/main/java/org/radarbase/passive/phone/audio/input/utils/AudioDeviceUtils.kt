@@ -3,6 +3,9 @@ package org.radarbase.passive.phone.audio.input.utils
 import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import com.google.android.material.R
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import org.radarbase.passive.phone.audio.input.PhoneAudioInputActivity
 import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil.toLogFriendlyType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -31,6 +34,16 @@ object AudioDeviceUtils {
             }
         }
         return microphones
+    }
+
+    fun showAlertDialog(context: Context, configure: MaterialAlertDialogBuilder.() -> Unit) {
+        try {
+            MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .apply(configure)
+                .show()
+        } catch (ex: IllegalStateException) {
+            logger.warn("Cannot show alert dialogue for closing activity")
+        }
     }
 
     fun setWavHeaders(header: ByteArray, numChannels: Short, sampleRate: Int, bitsPerSample: Short) {
