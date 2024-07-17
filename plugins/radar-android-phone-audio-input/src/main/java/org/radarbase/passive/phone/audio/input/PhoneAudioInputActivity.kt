@@ -309,6 +309,5 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         private val logger: Logger = LoggerFactory.getLogger(PhoneAudioInputActivity::class.java)
 
         const val AUDIO_FILE_NAME = "phone-audio-playback-audio-file-name"
-        const val PHONE_AUDIO_STATE = "phone-audio-state "
     }
 }

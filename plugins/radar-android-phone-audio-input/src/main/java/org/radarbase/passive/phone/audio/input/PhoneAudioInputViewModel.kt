@@ -49,12 +49,11 @@ class PhoneAudioInputViewModel: ViewModel() {
     }
 
     private fun formatElapsedTime(elapsedTime: Long): String {
-        val milliseconds = (elapsedTime % 1000).toInt()
         val seconds = (elapsedTime / 1000).toInt() % 60
         val minutes = ((elapsedTime / (1000 * 60)) % 60).toInt()
         val hours = ((elapsedTime / (1000 * 60 * 60)) % 24).toInt()
 
-        return String.format(Locale.US,"%02d:%02d:%02d:%03d", hours, minutes, seconds, milliseconds)
+        return String.format(Locale.US,"%02d:%02d:%02d", hours, minutes, seconds)
     }
 
 }

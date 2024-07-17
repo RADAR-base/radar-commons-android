@@ -52,10 +52,10 @@ object AudioDeviceUtils {
         header[1] = 'I'.code.toByte()
         header[2] = 'F'.code.toByte()
         header[3] = 'F'.code.toByte()
-        header[4] = (0 and 0xff).toByte() // Final file size not known yet, write 0
-        header[5] = ((0 shr 8) and 0xff).toByte()
-        header[6] = ((0 shr 16) and 0xff).toByte()
-        header[7] = ((0 shr 24) and 0xff).toByte()
+        header[4] = 0 // Final file size not known yet, write 0
+        header[5] = 0
+        header[6] = 0
+        header[7] = 0
         header[8] = 'W'.code.toByte()
         header[9] = 'A'.code.toByte()
         header[10] = 'V'.code.toByte()
@@ -94,7 +94,6 @@ object AudioDeviceUtils {
         header[41] = ((0 shr 8) and 0xff).toByte()
         header[42] = ((0 shr 16) and 0xff).toByte()
         header[43] = ((0 shr 24) and 0xff).toByte()
-
     }
 
     private val logger: Logger = LoggerFactory.getLogger(AudioDeviceUtils::class.java)

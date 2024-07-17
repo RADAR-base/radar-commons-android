@@ -17,4 +17,5 @@
     <string name="discard">Discard</string>
     <string name="proceed_title">Please decide how you would like to proceed</string>
     <string name="proceed_message">What action do you wish to perform? \nYour options are to playback the recorded audio, send it directly, or discard it</string>
+    <string name="cannot_start_player">Cannot start player. Audio file does not exists</string>
 </resources>

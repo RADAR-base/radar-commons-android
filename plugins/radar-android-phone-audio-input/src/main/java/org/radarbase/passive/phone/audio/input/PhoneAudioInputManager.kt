@@ -86,7 +86,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
 
         val internalDirs = service.filesDir
         status = if (internalDirs != null) {
-//            audioDir = File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DOCUMENTS), "org.radarbase.passive.audio.input")
             audioDir = File(internalDirs, "org.radarbase.passive.phone.audio.input")
             val dirCreated = audioDir.mkdirs()
             val directoryExists = audioDir.exists()
@@ -171,6 +170,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     override fun clear() {
+        logger.debug("Got clearing notice from activity ")
         clearAudioDirectory()
     }
 
@@ -272,11 +272,9 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     private fun setupRecording() {
-        audioRecordingHandler.execute {
             clearAudioDirectory()
             setRecordingPath()
             writeFileHeaders()
-        }
     }
 
     private fun setRecordingPath() {
@@ -332,11 +330,20 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                 stop()
             }
             randomAccessWriter?.apply {
+                val chunkSize = 36 + payloadSize
                 seek(4)
-                writeInt(Integer.reverseBytes(36 + payloadSize))
+                write(chunkSize and 0xff)
+                write((chunkSize shr 8) and 0xff)
+                write((chunkSize shr 16) and 0xff)
+                write((chunkSize shr 24) and 0xff)
+
                 seek(40)
-                writeInt(Integer.reverseBytes(payloadSize))
+                write(payloadSize and 0xff)
+                write((payloadSize shr 8) and 0xff)
+                write((payloadSize shr 16) and 0xff)
+                write((payloadSize shr 24) and 0xff)
                 close()
+                payloadSize = 0
             }
         }
     }
