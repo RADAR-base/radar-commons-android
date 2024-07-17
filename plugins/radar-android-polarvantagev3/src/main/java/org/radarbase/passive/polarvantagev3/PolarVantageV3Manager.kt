@@ -67,7 +67,7 @@ class PolarVantageV3Manager(
     override fun start(acceptableIds: Set<String>) {
 
         status = SourceStatusListener.Status.READY // blue loading
-        Log.d(TAG, "RB Device name is $deviceId")
+        Log.d(TAG, "Polar Device is $deviceId")
 
         disconnectToPolarSDK(deviceId)
         connectToPolarSDK()
@@ -108,7 +108,6 @@ class PolarVantageV3Manager(
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
-                Log.d(TAG, "RB Does it come here again?")
                 deviceId = polarDeviceInfo.deviceId
                 name = polarDeviceInfo.name
 
@@ -139,13 +138,11 @@ class PolarVantageV3Manager(
                         setDeviceTime(deviceId)
                     }
 
-//                    PPI online stream or offline recording is not supported in SDK MODE
-
                     when (feature) {
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
                             Log.d(TAG, "Start recording now")
                             streamHR()
-//                            streamPpi()
+                            streamPpi()
                         }
                         else -> {
                             Log.d(TAG, "No feature was ready")
@@ -225,11 +222,11 @@ class PolarVantageV3Manager(
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
-                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTimeNano()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
+                                Log.d(TAG, "HeartRate data for ${name}, ${deviceId}: HR ${sample.hr} time ${getTimeNano()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
-                                        name,
+                                        deviceId,
                                         getTimeNano(),
                                         getTimeSec(),
                                         sample.hr,
@@ -336,39 +333,6 @@ class PolarVantageV3Manager(
             accDisposable?.dispose()
         }
     }
-
-//    fun streamPpg() {
-//        val isDisposed = ppgDisposable?.isDisposed ?: true
-//        if (isDisposed) {
-//            val settingMap = mapOf(
-//                PolarSensorSetting.SettingType.SAMPLE_RATE to 13, //
-//                PolarSensorSetting.SettingType.RESOLUTION to 22, //
-//                PolarSensorSetting.SettingType.CHANNELS to 24 //
-//            )
-//            val ppgSettings = PolarSensorSetting(settingMap)
-//            deviceId?.let { deviceId ->
-//                ppgDisposable = api.startPpgStreaming(deviceId, ppgSettings)
-//                    .subscribe(
-//                        { polarPpgData: PolarPpgData ->
-//                            if (polarPpgData.type == PolarPpgData.PpgDataType.PPG3_AMBIENT1) {
-//                                for (data in polarPpgData.samples) {
-//                                    Log.d(TAG, "PPG    ppg0: ${data.channelSamples[0]} ppg1: ${data.channelSamples[1]} ppg2: ${data.channelSamples[2]} ambient: ${data.channelSamples[3]} timeStamp: ${data.timeStamp}")
-//                                }
-//                            }
-//                        },
-//                        { error: Throwable ->
-//                            Log.e(TAG, "PPG stream failed. Reason $error")
-//                        },
-//                        {
-//                            Log.d(TAG, "PPG stream complete")
-//                        }
-//                    )
-//            }
-//        } else {
-//            // NOTE dispose will stop streaming if it is "running"
-//            ppgDisposable?.dispose()
-//        }
-//    }
 
     fun streamPpi() {
         val isDisposed = ppiDisposable?.isDisposed ?: true

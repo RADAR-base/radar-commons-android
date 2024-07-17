@@ -60,7 +60,7 @@ class PolarH10Manager(
     override fun start(acceptableIds: Set<String>) {
 
         status = SourceStatusListener.Status.READY // blue loading
-        Log.d(TAG, "RB Device name is $deviceId")
+        Log.d(TAG, "Polar Device is $deviceId")
 
         disconnectToPolarSDK(deviceId)
         connectToPolarSDK()
@@ -101,7 +101,6 @@ class PolarH10Manager(
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
-                Log.d(TAG, "RB Does it come here again?")
                 deviceId = polarDeviceInfo.deviceId
                 name = polarDeviceInfo.name
 
@@ -217,7 +216,7 @@ class PolarH10Manager(
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
-                                Log.d(TAG, "HeartRate data for ${deviceId}: HR ${sample.hr} time ${getTimeNano()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
+                                Log.d(TAG, "HeartRate data for ${name}, ${deviceId}: HR ${sample.hr} time ${getTimeNano()} R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} contactStatus: ${sample.contactStatus} contactStatusSupported: ${sample.contactStatusSupported}")
                                 send(
                                     heartRateTopic,
                                     PolarHeartRate(
