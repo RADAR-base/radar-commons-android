@@ -5,10 +5,10 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import com.google.android.material.R
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import org.radarbase.passive.phone.audio.input.PhoneAudioInputActivity
 import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil.toLogFriendlyType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.util.Locale
 
 
 object AudioDeviceUtils {
@@ -95,6 +95,14 @@ object AudioDeviceUtils {
         header[42] = ((0 shr 16) and 0xff).toByte()
         header[43] = ((0 shr 24) and 0xff).toByte()
     }
+
+    fun formatMsToReadableTime(elapsedTime: Long): String {
+        val seconds = (elapsedTime / 1000).toInt() % 60
+        val minutes = ((elapsedTime / (1000 * 60)) % 60).toInt()
+        val hours = ((elapsedTime / (1000 * 60 * 60)) % 24).toInt()
+        return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
 
     private val logger: Logger = LoggerFactory.getLogger(AudioDeviceUtils::class.java)
 }

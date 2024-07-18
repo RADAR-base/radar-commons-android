@@ -8,14 +8,17 @@
     <string name="stop_recording">Stop Recording</string>
     <string name="audio_playback_title">Audio Playback</string>
     <string name="audio_recording_title">Audio Recording</string>
-    <string name="saving_data_to">Saving data to……</string>
     <string name="input_device">Input Device</string>
     <string name="input_audio_device">Input Audio Device: %1$s</string>
-    <string name="timer_text">00:00:00:00</string>
+    <string name="timer_text">00:00:00</string>
     <string name="play">Play</string>
     <string name="send">Send</string>
     <string name="discard">Discard</string>
     <string name="proceed_title">Please decide how you would like to proceed</string>
     <string name="proceed_message">What action do you wish to perform? \nYour options are to playback the recorded audio, send it directly, or discard it</string>
     <string name="cannot_start_player">Cannot start player. Audio file does not exists</string>
+    <string name="start">Start</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="cannot_read_audio_file">Cannot read audio file. There will be no effect on pressing buttons</string>
 </resources>

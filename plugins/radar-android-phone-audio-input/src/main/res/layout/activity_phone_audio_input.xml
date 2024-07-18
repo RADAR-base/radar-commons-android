@@ -57,30 +57,29 @@
             app:layout_constraintStart_toEndOf="@+id/spinner_select_device"
             app:layout_constraintTop_toTopOf="@+id/spinner_select_device" />
 
-
         <Button
-            android:id="@+id/btn_start_rec"
+            android:id="@+id/btn_stop_rec"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="48dp"
+            android:layout_marginBottom="56dp"
             android:background="?attr/colorPrimary"
             android:paddingStart="3dp"
             android:paddingEnd="3dp"
-            android:text="@string/start_recording"
+            android:text="@string/stop_recording"
             android:textStyle="bold"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
         <Button
-            android:id="@+id/btn_stop_rec"
+            android:id="@+id/btn_start_rec"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="48dp"
+            android:layout_marginBottom="56dp"
             android:background="?attr/colorPrimary"
             android:paddingStart="3dp"
             android:paddingEnd="3dp"
-            android:text="@string/stop_recording"
+            android:text="@string/start_recording"
             android:textStyle="bold"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"

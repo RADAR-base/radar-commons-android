@@ -13,8 +13,6 @@ import android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioRecord.STATE_INITIALIZED
-import android.os.Environment
-import android.os.Environment.DIRECTORY_DOCUMENTS
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -25,7 +23,6 @@ import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.LAST_RECORDED_AUDIO_FILE
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
-import org.radarbase.passive.phone.audio.input.utils.InputRecordInfo
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -42,7 +39,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     private val recordProcessingHandler: SafeHandler = SafeHandler.getInstance(
         "AUDIO-RECORD-PROCESSING", Process.THREAD_PRIORITY_AUDIO)
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val pluginStatusInfo: InputRecordInfo = InputRecordInfo()
     private val preferences: SharedPreferences =
         service.getSharedPreferences(PHONE_AUDIO_INPUT_SHARED_PREFS, Context.MODE_PRIVATE)
 
@@ -142,7 +138,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                         } else if (audioRecord?.state == STATE_INITIALIZED) {
                             logger.info("Successfully initialized AudioRecord")
                             status = SourceStatusListener.Status.CONNECTED
-                            pluginStatusInfo.recorderCreated = true
                             mainHandler.post(::observeMicrophones)
                         }
                     } catch (ex: IllegalArgumentException) {
@@ -284,7 +279,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
             .putString(LAST_RECORDED_AUDIO_FILE, recordingFile!!.absolutePath)
             .apply()
         randomAccessWriter = RandomAccessFile(recordingFile, "rw")
-        pluginStatusInfo.recordingPathSet = true
     }
 
     private fun writeFileHeaders() {
@@ -296,7 +290,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
             AudioDeviceUtils.setWavHeaders(header, numChannels, sampleRate, bitsPerSample)
             write(header, 0, 44)
         }
-        pluginStatusInfo.fileHeadersWritten = true
     }
 
     private val updateListener = object : AudioRecord.OnRecordPositionUpdateListener {

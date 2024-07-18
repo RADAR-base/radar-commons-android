@@ -188,12 +188,16 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private fun onRecordingViewUpdate() {
         binding.btnStartRec.visibility = View.INVISIBLE
+        binding.btnStartRec.isEnabled = false
         binding.btnStopRec.visibility = View.VISIBLE
+        binding.btnStopRec.isEnabled = true
     }
 
     private fun notRecordingViewUpdate() {
         binding.btnStartRec.visibility = View.VISIBLE
+        binding.btnStartRec.isEnabled = true
         binding.btnStopRec.visibility = View.INVISIBLE
+        binding.btnStopRec.isEnabled = false
     }
 
     override fun onResume() {

@@ -12,43 +12,84 @@
         android:layout_height="match_parent">
 
         <Button
-            android:id="@+id/start_playback"
+            android:id="@+id/btn_pause"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Start Playback"
+            android:layout_marginBottom="56dp"
+            android:text="@string/pause"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.5"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.5" />
+            app:layout_constraintStart_toStartOf="parent" />
 
         <Button
-            android:id="@+id/send_data"
+            android:id="@+id/btn_resume"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Send"
+            android:layout_marginBottom="56dp"
+            android:text="@string/resume"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.498"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.841" />
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <Button
+            android:id="@+id/btn_start"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="56dp"
+            android:text="@string/start"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <SeekBar
+            android:id="@+id/seekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:layout_marginStart="100dp"
+            android:layout_marginEnd="100dp"
+            app:layout_constraintBottom_toTopOf="@+id/btn_pause"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <TextView
+            android:id="@+id/tv_current_position"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="20dp"
+            android:text="@string/timer_text"
+            app:layout_constraintEnd_toStartOf="@id/seekBar"
+            app:layout_constraintTop_toTopOf="@id/seekBar"
+            app:layout_constraintBottom_toBottomOf="@id/seekBar"
+            />
+
+        <TextView
+            android:id="@+id/tv_audio_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/timer_text"
+            android:layout_marginStart="20dp"
+            app:layout_constraintStart_toEndOf="@id/seekBar"
+            app:layout_constraintTop_toTopOf="@id/seekBar"
+            app:layout_constraintBottom_toBottomOf="@id/seekBar"
+/>
     </androidx.constraintlayout.widget.ConstraintLayout>
+
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.Toolbar
-            android:id="@+id/toolbar_audio_playback"
-            app:title="@string/audio_playback_title"
-            android:background="?attr/colorPrimary"
+            android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
-            app:titleMarginStart="5dp"
-            app:layout_scrollFlags="scroll|enterAlways">
-        </androidx.appcompat.widget.Toolbar>
+            android:layout_height="wrap_content"
+            android:background="?attr/colorPrimary"
+            app:layout_scrollFlags="scroll|enterAlways"
+            app:title="@string/audio_playback_title" />
     </com.google.android.material.appbar.AppBarLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
