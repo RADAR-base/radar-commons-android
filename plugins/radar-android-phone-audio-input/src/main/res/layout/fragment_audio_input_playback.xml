@@ -14,7 +14,6 @@
   ~ See the License for the specific language governing permissions and
   ~ limitations under the License.
   -->
-
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -64,9 +63,9 @@
             android:id="@+id/seekBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="20dp"
             android:layout_marginStart="100dp"
             android:layout_marginEnd="100dp"
+            android:layout_marginBottom="20dp"
             app:layout_constraintBottom_toTopOf="@+id/btn_pause"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
@@ -77,21 +76,31 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="20dp"
             android:text="@string/timer_text"
-            app:layout_constraintEnd_toStartOf="@id/seekBar"
-            app:layout_constraintTop_toTopOf="@id/seekBar"
             app:layout_constraintBottom_toBottomOf="@id/seekBar"
-            />
+            app:layout_constraintEnd_toStartOf="@id/seekBar"
+            app:layout_constraintTop_toTopOf="@id/seekBar" />
 
         <TextView
             android:id="@+id/tv_audio_duration"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/timer_text"
             android:layout_marginStart="20dp"
-            app:layout_constraintStart_toEndOf="@id/seekBar"
-            app:layout_constraintTop_toTopOf="@id/seekBar"
+            android:text="@string/timer_text"
             app:layout_constraintBottom_toBottomOf="@id/seekBar"
-/>
+            app:layout_constraintStart_toEndOf="@id/seekBar"
+            app:layout_constraintTop_toTopOf="@id/seekBar" />
+
+        <Button
+            android:id="@+id/btn_send"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/send"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.5" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 

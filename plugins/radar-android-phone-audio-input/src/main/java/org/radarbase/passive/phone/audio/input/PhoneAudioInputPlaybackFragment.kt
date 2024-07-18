@@ -16,6 +16,8 @@
 
 package org.radarbase.passive.phone.audio.input
 
+import android.content.DialogInterface
+import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Handler
@@ -24,12 +26,15 @@ import android.os.Process
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.SeekBar.OnSeekBarChangeListener
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.commit
 import org.radarbase.android.util.Boast
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputActivity.Companion.AUDIO_FILE_NAME
@@ -53,7 +58,6 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
 
     private var audioFilePath: String? = null
-    private var isPaused: Boolean = false
 
     private val errorListener = { mp: MediaPlayer, what: Int, extra: Int ->
         logger.error("MediaPlayer Error: what=$what, extra=$extra")
@@ -61,15 +65,21 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
         true
     }
 
-    private val preparedListener = { mp: MediaPlayer ->
+    private val preparedListener: (MediaPlayer) -> Unit = { mp: MediaPlayer ->
         mediaPlaybackHandler.execute(mp::start)
         postStartView()
         updateSeekbar()
         binding?.tvAudioDuration?.text = AudioDeviceUtils.formatMsToReadableTime(mp.duration.toLong())
+        keepScreenOn()
     }
 
-    private val completionListener = { _: MediaPlayer ->
+    private val completionListener: (MediaPlayer) -> Unit = { _: MediaPlayer ->
         preStartView()
+        disableKeepScreenOn()
+        binding?.apply {
+            seekBar.progress = 0
+            tvCurrentPosition.text = context?.getString(R.string.timer_text) ?: "00:00:00"
+        }
     }
 
     private val seekBarRunnable: Runnable = object : Runnable {
@@ -88,10 +98,16 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
         }
     }
 
-
     private fun preStartView(): Unit = setVisibilityFor(binding!!.btnStart)
     private fun postStartView(): Unit = setVisibilityFor(binding!!.btnPause)
     private fun postPauseView(): Unit = setVisibilityFor(binding!!.btnResume)
+
+    private fun keepScreenOn() {
+        requireActivity().window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+    private fun disableKeepScreenOn() {
+        requireActivity().window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
 
     private fun setVisibilityFor(btn: Button?) {
         playbackButtons.forEach { button: Button ->
@@ -128,6 +144,26 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object: OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                AudioDeviceUtils.showAlertDialog(requireContext()) {
+                    setTitle(getString(R.string.exit_confirmation))
+                        .setMessage(getString(R.string.exit_message))
+                        .setPositiveButton(getString(R.string.yes)) { dialog: DialogInterface, _->
+                        dialog.cancel()
+                        requireActivity().finish()
+                        val intent = Intent(requireContext(), PhoneAudioInputActivity::class.java)
+                        startActivity(intent)
+                        logger.info("Activity Restarted")
+                    }
+                        .setNegativeButton("No") { dialog: DialogInterface, _ ->
+                        dialog.dismiss()
+                    }
+                }
+            }
+        })
+
         observeState()
         audioFilePath ?: run {
             Boast.makeText(requireActivity(), getString(R.string.cannot_start_player), Toast.LENGTH_SHORT).show(true)
@@ -173,7 +209,7 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
             btnPause.setOnClickListener {
                 try {
                     mediaPlayer?.pause()
-                    isPaused = true
+                    disableKeepScreenOn()
                     mainHandler.removeCallbacks(seekBarRunnable)
                 } catch (ex: IllegalStateException) {
                  logger.error("Cannot pause, the internal player has not been initialized yet.")
@@ -184,7 +220,7 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
             btnResume.setOnClickListener {
                 try {
                     mediaPlayer?.start()
-                    isPaused = false
+                    keepScreenOn()
                     updateSeekbar()
                 } catch (ex: Exception) {
                     logger.error("Cannot start playback, MediaPlayer is in invalid state.")
@@ -202,15 +238,17 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
                         mediaPlayer?.seekTo(progress)
                     }
                 }
-
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
                 override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
             })
+
+            btnSend.setOnClickListener {
+                phoneAudioViewModel.phoneAudioState.value?.audioRecordingManager?.send()
             }
+        }
     }
 
     private fun updateSeekbar() {
-
         binding?.let {
             mediaPlayer?.let {  mp ->
                 it.seekBar.max = mp.duration

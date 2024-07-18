@@ -54,7 +54,8 @@ object AudioDeviceUtils {
 
     fun showAlertDialog(context: Context, configure: MaterialAlertDialogBuilder.() -> Unit) {
         try {
-            MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_Material3_Dialog_Alert)
+            MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_Material3_Dialog_Alert).
+            setIcon(org.radarbase.passive.phone.audio.input.R.drawable.icon_play_alert_dialogue)
                 .apply(configure)
                 .show()
         } catch (ex: IllegalStateException) {

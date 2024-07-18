@@ -24,18 +24,23 @@ import android.content.ServiceConnection
 import android.content.SharedPreferences
 import android.media.AudioDeviceInfo
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.AdapterView
 import android.widget.AdapterView.OnItemSelectedListener
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.Spinner
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.os.postDelayed
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import androidx.lifecycle.Observer
@@ -58,10 +63,11 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private var adapter: ArrayAdapter<String>? = null
 
     private var isUserInitiatedSection: Boolean = false
+    private var isRecording: Boolean = false
     private val lastRecordedAudioFile: String?
         get() = preferences?.getString(LAST_RECORDED_AUDIO_FILE, null)
 
-
+    private val mainHandler: Handler = Handler(Looper.getMainLooper())
     private var recorderProvider: PhoneAudioInputProvider? = null
     private var audioInputViewModel: PhoneAudioInputViewModel? = null
     private val state: PhoneAudioInputState?
@@ -88,7 +94,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             state?.let {
                 it.isRecording.observe(this@PhoneAudioInputActivity, isRecordingObserver)
                 it.finalizedMicrophone.observe(this@PhoneAudioInputActivity, currentMicrophoneObserver)
-                audioInputViewModel?.phoneAudioState?.postValue(it)
+                mainHandler.postDelayed ({
+                    audioInputViewModel?.phoneAudioState?.postValue(it)
+                }, 500)
             }
             logger.warn("Refresh Input Devices 1")
             refreshInputDevices()
@@ -99,7 +107,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             state?.let {
                 it.isRecording.removeObserver(isRecordingObserver)
                 it.finalizedMicrophone.removeObserver(currentMicrophoneObserver)
-                audioInputViewModel?.phoneAudioState?.postValue(null)
+                mainHandler.postDelayed ({
+                    audioInputViewModel?.phoneAudioState?.postValue(null)
+                }, 500)
             }
             recorderProvider = null
         }
@@ -107,11 +117,17 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private val isRecordingObserver: Observer<Boolean> = Observer { isRecording->
         if (isRecording) {
+            this@PhoneAudioInputActivity.isRecording = true
             logger.info("Switching to Stop Recording mode")
             audioInputViewModel?.startTimer()
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            onRecordingViewUpdate()
         } else {
+            this@PhoneAudioInputActivity.isRecording = false
             logger.info("Switching to Start Recording mode")
             audioInputViewModel?.stopTimer()
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            notRecordingViewUpdate()
         }
     }
 
@@ -125,7 +141,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     }
 
     private val recordTimeObserver: Observer<String> = Observer{elapsedTime ->
-        binding.tvRecordTimer.text = elapsedTime }
+        binding.tvRecordTimer.text = elapsedTime
+        logger.debug("Recording Time: $elapsedTime")
+    }
 
     private fun getAudioDeviceByPosition(position: Int): AudioDeviceInfo? =
         (state?.connectedMicrophones?.value)?.get(position)
@@ -148,9 +166,35 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         spinner = binding.spinnerSelectDevice
         preferences = getSharedPreferences(PHONE_AUDIO_INPUT_SHARED_PREFS, Context.MODE_PRIVATE)
         createDropDown()
+        disableButtonsInitially()
+        logger.error("ON Create Activity")
+        mainHandler.postDelayed ({
+            audioInputViewModel = ViewModelProvider(this)[PhoneAudioInputViewModel::class.java]
+            audioInputViewModel?.elapsedTime?.observe(this, recordTimeObserver)
+            notRecordingViewUpdate()
+        }, 500)
 
-        audioInputViewModel = ViewModelProvider(this)[PhoneAudioInputViewModel::class.java]
-        audioInputViewModel?.elapsedTime?.observe(this, recordTimeObserver)
+        manageBackPress()
+    }
+
+    private fun manageBackPress() {
+        this.onBackPressedDispatcher.addCallback(this, object: OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                logger.debug("PhoneAudioInputActivity: On Back Pressed")
+                if (isRecording) {
+                    AudioDeviceUtils.showAlertDialog(this@PhoneAudioInputActivity) {
+                        setTitle("You can't close the activity")
+                            .setMessage("Please stop the onGoing recording first. Then you can exit this activity")
+                            .setNeutralButton("OK") { dialog: DialogInterface, _ ->
+                                dialog.dismiss()
+                            }
+                    }
+                } else {
+                    isEnabled = false
+                    this@PhoneAudioInputActivity.onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
     }
 
     private fun createDropDown() {
@@ -186,6 +230,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        logger.error("ON start Activity")
         bindService(Intent(this, radarApp.radarService), radarServiceConnection, 0)
         notRecordingViewUpdate()
         binding.refreshButton.setOnClickListener{
@@ -216,8 +261,16 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         binding.btnStopRec.isEnabled = false
     }
 
+    private fun disableButtonsInitially() {
+        binding.apply {
+            btnStartRec.isEnabled = false
+            btnStopRec.isEnabled = false
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        logger.error("ON resume Activity")
         binding.btnStartRec.setOnClickListener {
             workOnStateElseShowToast {
                 onRecordingViewUpdate()
@@ -263,10 +316,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private fun proceedAfterRecording() {
         AudioDeviceUtils.showAlertDialog (this) {
-            setTitle(getString(R.string.proceed_title)).
-            setMessage(getString(R.string.proceed_message)).
-            setIcon(R.drawable.icon_play_alert_dialogue).
-            setPositiveButton(getString(R.string.send)) { dialog: DialogInterface, _: Int ->
+            setTitle(getString(R.string.proceed_title))
+                .setMessage(getString(R.string.proceed_message))
+                .setPositiveButton(getString(R.string.send)) { dialog: DialogInterface, _: Int ->
                 dialog.dismiss()
                 logger.debug("Sending the data")
             }.setNeutralButton(getString(R.string.play)) { dialog: DialogInterface, _: Int ->
@@ -316,12 +368,13 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        logger.error("ON stop Activity")
         state?.microphonePrioritized = false
         unbindService(radarServiceConnection)
     }
 
     override fun onDestroy() {
-        logger.debug("Finishing PhoneAudioInputActivity")
+        logger.error("ON destroy Activity")
         super.onDestroy()
     }
 

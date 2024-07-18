@@ -113,6 +113,11 @@
             app:layout_constraintHorizontal_bias="0.5"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <FrameLayout
+            android:id="@+id/phone_audio_playback_fragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"/> <!-- Initially hidden -->
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

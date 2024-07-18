@@ -22,7 +22,8 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
-
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 class PhoneAudioInputViewModel: ViewModel() {
 
@@ -35,22 +36,26 @@ class PhoneAudioInputViewModel: ViewModel() {
     private var isRecording: Boolean = false
 
     private val timerHandler: SafeHandler = SafeHandler.getInstance("TimerThread", Process.THREAD_PRIORITY_BACKGROUND)
+    private var futureHandlerRef: SafeHandler.HandlerFuture? = null
 
     private val timerRunnable: () -> Boolean = {
         val currentTime = System.currentTimeMillis()
         val timeElapsed: Long = currentTime - startTime!!
         _elapsedTime.postValue(AudioDeviceUtils.formatMsToReadableTime(timeElapsed))
+
         isRecording
     }
 
     init {
+        logger.debug("INIT: PhoneAudioInputViewModel")
         timerHandler.start()
     }
 
     fun startTimer() {
+        logger.info("Starting timer")
         startTime = System.currentTimeMillis()
         isRecording = true
-        timerHandler.repeatWhile(10, timerRunnable)
+        futureHandlerRef = timerHandler.repeatWhile(10, timerRunnable)
     }
 
     fun stopTimer() {
@@ -62,7 +67,11 @@ class PhoneAudioInputViewModel: ViewModel() {
     override fun onCleared() {
         super.onCleared()
         timerHandler.stop()
+        futureHandlerRef?.cancel()
+        logger.debug("PhoneAudioInputViewmodel: ON Cleared")
     }
 
-
+    companion object {
+        private val logger: Logger = LoggerFactory.getLogger(PhoneAudioInputViewModel::class.java)
+    }
 }
