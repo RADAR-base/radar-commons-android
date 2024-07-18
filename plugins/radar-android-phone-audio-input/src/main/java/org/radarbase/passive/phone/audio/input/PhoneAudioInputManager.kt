@@ -264,8 +264,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                     state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
                 }
                 audioRecord?.startRecording()
-                state.isRecording.postValue(true)
-//                state.currentRecordingFileName.postValue(recordingFile?.name)
+                mainHandler.post { state.isRecording.value = true }
                 recordProcessingHandler.execute{
                     audioRecord?.read(buffer, 0, buffer.size)
                     currentlyRecording = true
@@ -331,8 +330,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
 
     private fun stopAudioRecording() {
         logger.warn("Stopping Recording: Saving data")
+        mainHandler.post { state.isRecording.value = false }
         audioRecordingHandler.execute {
-            state.isRecording.postValue(false)
             currentlyRecording = false
             audioRecord?.apply {
                 setRecordPositionUpdateListener(null)

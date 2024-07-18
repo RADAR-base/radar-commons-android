@@ -40,7 +40,6 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.os.postDelayed
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import androidx.lifecycle.Observer
@@ -66,6 +65,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private var isRecording: Boolean = false
     private val lastRecordedAudioFile: String?
         get() = preferences?.getString(LAST_RECORDED_AUDIO_FILE, null)
+    private var addStateToVM: (() -> Unit)? = null
+    private var postNullState: (() -> Unit)? = null
+    private var viewModelInitializer: (() -> Unit)? = null
 
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
     private var recorderProvider: PhoneAudioInputProvider? = null
@@ -94,9 +96,10 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             state?.let {
                 it.isRecording.observe(this@PhoneAudioInputActivity, isRecordingObserver)
                 it.finalizedMicrophone.observe(this@PhoneAudioInputActivity, currentMicrophoneObserver)
-                mainHandler.postDelayed ({
+                addStateToVM = {
                     audioInputViewModel?.phoneAudioState?.postValue(it)
-                }, 500)
+                }
+                mainHandler.postDelayed (addStateToVM!!, 500)
             }
             logger.warn("Refresh Input Devices 1")
             refreshInputDevices()
@@ -107,15 +110,18 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             state?.let {
                 it.isRecording.removeObserver(isRecordingObserver)
                 it.finalizedMicrophone.removeObserver(currentMicrophoneObserver)
-                mainHandler.postDelayed ({
+                postNullState = {
                     audioInputViewModel?.phoneAudioState?.postValue(null)
-                }, 500)
+                }
+                mainHandler.postDelayed (postNullState!!, 500)
             }
             recorderProvider = null
         }
     }
 
-    private val isRecordingObserver: Observer<Boolean> = Observer { isRecording->
+    private val isRecordingObserver: Observer<Boolean> = Observer { isRecording: Boolean?->
+        logger.error("Is Recording: $isRecording")
+        isRecording ?: return@Observer
         if (isRecording) {
             this@PhoneAudioInputActivity.isRecording = true
             logger.info("Switching to Stop Recording mode")
@@ -142,7 +148,6 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private val recordTimeObserver: Observer<String> = Observer{elapsedTime ->
         binding.tvRecordTimer.text = elapsedTime
-        logger.debug("Recording Time: $elapsedTime")
     }
 
     private fun getAudioDeviceByPosition(position: Int): AudioDeviceInfo? =
@@ -168,12 +173,18 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         createDropDown()
         disableButtonsInitially()
         logger.error("ON Create Activity")
-        mainHandler.postDelayed ({
-            audioInputViewModel = ViewModelProvider(this)[PhoneAudioInputViewModel::class.java]
-            audioInputViewModel?.elapsedTime?.observe(this, recordTimeObserver)
-            notRecordingViewUpdate()
-        }, 500)
-
+        viewModelInitializer = {
+            audioInputViewModel = ViewModelProvider(this)[PhoneAudioInputViewModel::class.java].apply {
+                elapsedTime.observe(this@PhoneAudioInputActivity, recordTimeObserver)
+            }
+            logger.debug("Making buttons visible now")
+            if (isRecording) {
+                onRecordingViewUpdate()
+            } else {
+                notRecordingViewUpdate()
+            }
+        }
+        mainHandler.postDelayed (viewModelInitializer!!, 500)
         manageBackPress()
     }
 
@@ -183,9 +194,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
                 logger.debug("PhoneAudioInputActivity: On Back Pressed")
                 if (isRecording) {
                     AudioDeviceUtils.showAlertDialog(this@PhoneAudioInputActivity) {
-                        setTitle("You can't close the activity")
-                            .setMessage("Please stop the onGoing recording first. Then you can exit this activity")
-                            .setNeutralButton("OK") { dialog: DialogInterface, _ ->
+                        setTitle(getString(R.string.cannot_close_activity))
+                            .setMessage(getString(R.string.cannot_close_activity_message))
+                            .setNeutralButton(getString(R.string.ok)) { dialog: DialogInterface, _ ->
                                 dialog.dismiss()
                             }
                     }
@@ -232,7 +243,6 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         super.onStart()
         logger.error("ON start Activity")
         bindService(Intent(this, radarApp.radarService), radarServiceConnection, 0)
-        notRecordingViewUpdate()
         binding.refreshButton.setOnClickListener{
             logger.warn("Refresh Input Devices 2")
             refreshInputDevices()
@@ -263,7 +273,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private fun disableButtonsInitially() {
         binding.apply {
+            btnStartRec.visibility = View.VISIBLE
             btnStartRec.isEnabled = false
+            btnStopRec.visibility = View.INVISIBLE
             btnStopRec.isEnabled = false
         }
     }
@@ -273,7 +285,6 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         logger.error("ON resume Activity")
         binding.btnStartRec.setOnClickListener {
             workOnStateElseShowToast {
-                onRecordingViewUpdate()
                 logger.warn("Starting Recording")
                 logger.warn("Refresh Input Devices: 3")
                 refreshInputDevices()
@@ -283,7 +294,6 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
         binding.btnStopRec.setOnClickListener {
             workOnStateElseShowToast {
-                notRecordingViewUpdate()
                 logger.warn("Stopping Recording")
                 audioRecordManager?.stopRecording()
                 proceedAfterRecording()
@@ -369,12 +379,25 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         logger.error("ON stop Activity")
-        state?.microphonePrioritized = false
+        state?.apply{
+            microphonePrioritized = false
+            isRecording.postValue(null)
+        }
         unbindService(radarServiceConnection)
     }
 
+    private fun removeVMCallbacks() {
+        logger.error("Removing callbacks")
+        viewModelInitializer?.toRunnable()?.let(mainHandler::removeCallbacks)
+        addStateToVM?.toRunnable()?.let(mainHandler::removeCallbacks)
+        postNullState?.toRunnable()?.let(mainHandler::removeCallbacks)
+    }
+
+    private fun (() -> Unit).toRunnable(): Runnable = Runnable(this)
+
     override fun onDestroy() {
         logger.error("ON destroy Activity")
+        removeVMCallbacks()
         super.onDestroy()
     }
 

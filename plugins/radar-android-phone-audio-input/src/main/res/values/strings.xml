@@ -24,4 +24,7 @@
     <string name="exit_confirmation">Are you sure you want to exit?</string>
     <string name="exit_message">If you click Yes, you won\'t be able to send the most recent recorded audio</string>
     <string name="yes">Yes</string>
+    <string name="cannot_close_activity">Cannot Close Activity</string>
+    <string name="cannot_close_activity_message">Please stop the ongoing recording before exiting this activity.</string>
+    <string name="ok">OK</string>
 </resources>

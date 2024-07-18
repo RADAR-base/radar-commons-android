@@ -30,7 +30,7 @@ class PhoneAudioInputState: BaseSourceState() {
 
     var audioRecordManager: AudioRecordManager? = null
     var audioRecordingManager: AudioRecordingManager? = null
-    val isRecording: MutableLiveData<Boolean> = MutableLiveData(false)
+    val isRecording: MutableLiveData<Boolean> = MutableLiveData(null)
     val connectedMicrophones: MutableLiveData<List<AudioDeviceInfo>> = MutableLiveData<List<AudioDeviceInfo>>(emptyList())
     val finalizedMicrophone: MutableLiveData<AudioDeviceInfo> = MutableLiveData()
     var microphonePrioritized:Boolean = false
@@ -47,13 +47,6 @@ class PhoneAudioInputState: BaseSourceState() {
         fun stopRecording()
         fun clear()
         fun setPreferredMicrophone(microphone: AudioDeviceInfo)
-    }
-
-    interface AudioPlayerManager {
-        fun startPlayback()
-        fun stopPlayback()
-        fun pausePlayback()
-        fun resumePlayback()
     }
 
     interface AudioRecordingManager {
