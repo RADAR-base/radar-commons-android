@@ -35,3 +35,33 @@ This plugin produces data for the following topics: (types starts with `org.rada
 | Topic                       | Type              | Description                                                                                                                                                                                                                              |
 |-----------------------------|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `android_phone_audio_input` | `PhoneAudioInput` | This topic captures high-quality, uncompressed audio data recorded by the user's device. The PhoneAudioInput type includes detailed information about the audio recording, such as timestamps, file metadata, and device specifications. |
+
+## Workflow Description
+
+This plugin provides an interactive UI for recording and managing audio data. Below is a detailed description of how the plugin works:
+
+### Workflow
+
+1. **Plugin Action**:
+    - The plugin has an action that, when clicked, opens a user interface (UI) for interacting with the plugin.
+
+2. **Activity Launch**:
+    - The action opens the `PhoneAudioInputActivity`, which serves as the main interface for the plugin.
+
+3. **Manager Connection**:
+    - `PhoneAudioInputActivity` is connected to the `PhoneAudioInputManager` through interfaces defined in `PhoneAudioInputState`. This connection manages the state and interactions between the UI and the underlying audio recording functionalities.
+
+4. **Recording Capabilities**:
+    - The activity provides capabilities for recording audio, allowing users to start, stop, and manage audio recordings directly from the UI.
+
+5. **Device Selection Mechanism**:
+    - The device selection mechanism automatically prioritizes the USB audio device if connected. If no USB device is found, the plugin selects external devices in the following order of precedence:
+        - `TYPE_USB_DEVICE`
+        - `TYPE_BLUETOOTH`
+        - `TYPE_WIRED_HEADSET`
+    - If no external device is found, the plugin defaults to using the smartphone's built-in microphone.
+
+6. **Fragment Integration**:
+    - `PhoneAudioInputActivity` opens a fragment that provides additional capabilities, including:
+        - **Audio Playback**: Users can playback the recorded audio to review it before sending.
+        - **Data Sending**: Users can send the recorded audio data for storing to s3.
