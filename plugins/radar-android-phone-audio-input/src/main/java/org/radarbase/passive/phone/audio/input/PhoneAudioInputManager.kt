@@ -189,7 +189,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     override fun clear() {
-        logger.debug("Got clearing notice from activity ")
         clearAudioDirectory()
     }
 
@@ -216,16 +215,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                         state.isRecordingPlayed, wavFile.extension, sampleRate, AudioTypeFormatUtil.toLogFriendlyEncoding(audioFormat)
                     )
                 )
-                logger.debug("Sending the audio file: FileName: {}, filePath: {}, productName: {}, id: {}" +
-                        "sampleRates: {}, encodings: {}, type: {}, channelCounts: {}, duration: {}, length: {}" +
-                        ", isPlayed: {}, extension: {} , sampleRate: {}, encoding: {} ", "will be set after s3 functionality is added",
-                    "after data sending to s3 is enabled", mic.productName.toString(), mic.id.toString(),
-                    mic.sampleRates.joinToString(" "),
-                    mic.encodings.joinToString(" ") {
-                        AudioTypeFormatUtil.toLogFriendlyEncoding(it) },
-                    mic.type.toLogFriendlyType(), mic.channelCounts.joinToString(" "), audioDuration, wavFile.length(),
-                    state.isRecordingPlayed, wavFile.extension, sampleRate, AudioTypeFormatUtil.toLogFriendlyEncoding(audioFormat)
-                )
                 // Dummy Toast, will be removed after file uploading to s3 will be enabled.
                 Boast.makeText(service, "Sending last recorded audio. Is played? : ${state.isRecordingPlayed}", Toast.LENGTH_LONG).show()
 
@@ -238,7 +227,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     override fun setPreferredMicrophone(microphone: AudioDeviceInfo) {
-        logger.warn("Setting prioritized microphone: true")
         state.microphonePrioritized = true
         microphone.let(setPreferredDeviceAndUpdate)
     }
@@ -251,7 +239,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                 }
                 if (state.microphonePrioritized && state.finalizedMicrophone.value !in connectedMicrophones) {
                     state.microphonePrioritized = false
-                    logger.info("Microphone prioritize?: false")
+                    logger.info("Microphone prioritized: false")
                 }
                 logger.info(
                     "PhoneAudioInputManager: Connected microphones: {}",
@@ -263,8 +251,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                 } else {
                     state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
                 }
-                logger.info("Preferred audio input device: {}", audioRecord?.preferredDevice?.productName)
-                logger.info("Selected audio input device: {}", audioRecord?.routedDevice?.productName)
             }
         }
     }
@@ -377,7 +363,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     private fun stopAudioRecording() {
-        logger.warn("Stopping Recording: Saving data")
+        logger.debug("Stopping Recording: Saving data")
         mainHandler.post { state.isRecording.value = false }
         audioRecordingHandler.execute {
             currentlyRecording = false

@@ -47,7 +47,6 @@ class PhoneAudioInputViewModel: ViewModel() {
     }
 
     init {
-        logger.debug("INIT: PhoneAudioInputViewModel")
         timerHandler.start()
     }
 
@@ -68,7 +67,7 @@ class PhoneAudioInputViewModel: ViewModel() {
         super.onCleared()
         timerHandler.stop()
         futureHandlerRef?.cancel()
-        logger.debug("PhoneAudioInputViewmodel: ON Cleared")
+        logger.trace("PhoneAudioInputViewmodel: ON Cleared")
     }
 
     companion object {

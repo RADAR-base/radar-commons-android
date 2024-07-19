@@ -193,7 +193,6 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
 
             if (audio.canRead()) {
                 btnStart.setOnClickListener {
-                    logger.info("Can Read Audio file: ${audio.canRead()}")
                     mediaPlayer?.apply {
                         if (isPlaying) return@setOnClickListener
                         reset()
