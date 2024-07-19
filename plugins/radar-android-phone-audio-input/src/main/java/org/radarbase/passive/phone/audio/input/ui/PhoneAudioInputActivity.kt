@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.passive.phone.audio.input
+package org.radarbase.passive.phone.audio.input.ui
 
 import android.content.ComponentName
 import android.content.Context
@@ -48,8 +48,11 @@ import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.Boast
+import org.radarbase.passive.phone.audio.input.PhoneAudioInputProvider
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.LAST_RECORDED_AUDIO_FILE
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
+import org.radarbase.passive.phone.audio.input.PhoneAudioInputState
+import org.radarbase.passive.phone.audio.input.R
 import org.radarbase.passive.phone.audio.input.databinding.ActivityPhoneAudioInputBinding
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
 import org.slf4j.Logger
@@ -65,6 +68,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     private var isRecording: Boolean = false
     private val lastRecordedAudioFile: String?
         get() = preferences?.getString(LAST_RECORDED_AUDIO_FILE, null)
+    private var previousDevice: String? = null
     private var addStateToVM: (() -> Unit)? = null
     private var postNullState: (() -> Unit)? = null
     private var viewModelInitializer: (() -> Unit)? = null
@@ -119,7 +123,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         }
     }
 
-    private val isRecordingObserver: Observer<Boolean> = Observer { isRecording: Boolean?->
+    private val isRecordingObserver: Observer<Boolean?> = Observer { isRecording: Boolean? ->
         logger.error("Is Recording: $isRecording")
         isRecording ?: return@Observer
         if (isRecording) {
@@ -158,7 +162,8 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             if (it.productName != this) return@also
         }?.run {
             state?.audioRecordManager?.setPreferredMicrophone(this)
-            Boast.makeText(this@PhoneAudioInputActivity, getString(R.string.input_audio_device,
+            Boast.makeText(this@PhoneAudioInputActivity, getString(
+                R.string.input_audio_device,
                 productName), Toast.LENGTH_SHORT).show()
         }
     }
@@ -173,6 +178,11 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         createDropDown()
         disableButtonsInitially()
         logger.error("ON Create Activity")
+
+        if (intent?.hasExtra(EXTERNAL_DEVICE_NAME) != null) {
+            previousDevice = intent?.getStringExtra(EXTERNAL_DEVICE_NAME)
+        }
+
         viewModelInitializer = {
             audioInputViewModel = ViewModelProvider(this)[PhoneAudioInputViewModel::class.java].apply {
                 elapsedTime.observe(this@PhoneAudioInputActivity, recordTimeObserver)
@@ -315,6 +325,13 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 createAdapter()
+                try {
+                    adapter?.getPosition(previousDevice)?.also {
+                        previousDevice?.setPreferredMicrophone(it)
+                    }
+                } catch (ex: Exception) {
+                    logger.warn("Cannot select the last preferred microphone")
+                }
                 if (state.microphonePrioritized) {
                     val microphone = adapter?.getPosition(state.finalizedMicrophone.value?.productName.toString())
                     microphone ?: return@runOnUiThread
@@ -330,6 +347,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
                 .setMessage(getString(R.string.proceed_message))
                 .setPositiveButton(getString(R.string.send)) { dialog: DialogInterface, _: Int ->
                 dialog.dismiss()
+                    state?.audioRecordingManager?.send()
                 logger.debug("Sending the data")
             }.setNeutralButton(getString(R.string.play)) { dialog: DialogInterface, _: Int ->
                 dialog.dismiss()
@@ -338,6 +356,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             }.setNegativeButton(getString(R.string.discard)) { dialog: DialogInterface, _: Int ->
                 logger.debug("Discarding the last recorded file")
                 dialog.cancel()
+                    state?.isRecordingPlayed = false
                 clearLastRecordedFile()
                 state?.audioRecordManager?.clear()
             }
@@ -405,5 +424,6 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         private val logger: Logger = LoggerFactory.getLogger(PhoneAudioInputActivity::class.java)
 
         const val AUDIO_FILE_NAME = "phone-audio-playback-audio-file-name"
+        const val EXTERNAL_DEVICE_NAME = "EXTERNAL-DEVICE-NAME"
     }
 }

@@ -19,11 +19,13 @@ package org.radarbase.passive.phone.audio.input.utils
 import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.MediaMetadataRetriever
 import com.google.android.material.R
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil.toLogFriendlyType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.util.Locale
 
 
@@ -119,6 +121,13 @@ object AudioDeviceUtils {
         val hours = ((elapsedTime / (1000 * 60 * 60)) % 24).toInt()
         return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
     }
+
+    fun getAudioDuration(file: File): Long? {
+        val mediaMetadataRetriever = MediaMetadataRetriever()
+        mediaMetadataRetriever.setDataSource(file.absolutePath)
+        return mediaMetadataRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong()
+    }
+
 
 
     private val logger: Logger = LoggerFactory.getLogger(AudioDeviceUtils::class.java)

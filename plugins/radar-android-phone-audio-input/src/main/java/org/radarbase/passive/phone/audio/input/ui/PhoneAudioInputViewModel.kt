@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package org.radarbase.passive.phone.audio.input
+package org.radarbase.passive.phone.audio.input.ui
 
 import android.os.Process
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.passive.phone.audio.input.PhoneAudioInputState
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -42,7 +43,6 @@ class PhoneAudioInputViewModel: ViewModel() {
         val currentTime = System.currentTimeMillis()
         val timeElapsed: Long = currentTime - startTime!!
         _elapsedTime.postValue(AudioDeviceUtils.formatMsToReadableTime(timeElapsed))
-
         isRecording
     }
 

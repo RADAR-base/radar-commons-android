@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package org.radarbase.passive.phone.audio.input
+package org.radarbase.passive.phone.audio.input.ui
 
 import android.content.DialogInterface
 import android.content.Intent
+import android.media.AudioDeviceInfo
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Handler
@@ -34,10 +35,12 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.fragment.app.commit
 import org.radarbase.android.util.Boast
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.passive.phone.audio.input.PhoneAudioInputActivity.Companion.AUDIO_FILE_NAME
+import org.radarbase.passive.phone.audio.input.PhoneAudioInputState
+import org.radarbase.passive.phone.audio.input.R
+import org.radarbase.passive.phone.audio.input.ui.PhoneAudioInputActivity.Companion.AUDIO_FILE_NAME
+import org.radarbase.passive.phone.audio.input.ui.PhoneAudioInputActivity.Companion.EXTERNAL_DEVICE_NAME
 import org.radarbase.passive.phone.audio.input.databinding.FragmentAudioInputPlaybackBinding
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
 import org.slf4j.Logger
@@ -71,6 +74,7 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
         updateSeekbar()
         binding?.tvAudioDuration?.text = AudioDeviceUtils.formatMsToReadableTime(mp.duration.toLong())
         keepScreenOn()
+        phoneAudioInputState?.isRecordingPlayed = true
     }
 
     private val completionListener: (MediaPlayer) -> Unit = { _: MediaPlayer ->
@@ -150,14 +154,23 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
                 AudioDeviceUtils.showAlertDialog(requireContext()) {
                     setTitle(getString(R.string.exit_confirmation))
                         .setMessage(getString(R.string.exit_message))
-                        .setPositiveButton(getString(R.string.yes)) { dialog: DialogInterface, _->
-                        dialog.cancel()
-                        requireActivity().finish()
-                        val intent = Intent(requireContext(), PhoneAudioInputActivity::class.java)
-                        startActivity(intent)
-                        logger.info("Activity Restarted")
-                    }
-                        .setNegativeButton("No") { dialog: DialogInterface, _ ->
+                        .setPositiveButton(getString(R.string.dialog_yes)) { dialog: DialogInterface, _ ->
+                            phoneAudioInputState?.isRecordingPlayed = false
+                            val intent = Intent(requireContext(), PhoneAudioInputActivity::class.java)
+
+                            (phoneAudioInputState?.finalizedMicrophone?.value)?.let {
+                                if (it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC) return@let null
+                                it.productName.toString()
+                            }?.also {
+                                intent.putExtra(EXTERNAL_DEVICE_NAME, it)
+                            }
+
+                            dialog.cancel()
+                            requireActivity().finish()
+                            startActivity(intent)
+                            logger.info("Activity Restarted")
+                        }
+                        .setNegativeButton(getString(R.string.dialog_no)) { dialog: DialogInterface, _ ->
                         dialog.dismiss()
                     }
                 }
@@ -244,6 +257,18 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
 
             btnSend.setOnClickListener {
                 phoneAudioViewModel.phoneAudioState.value?.audioRecordingManager?.send()
+
+                val intent = Intent(requireContext(), PhoneAudioInputActivity::class.java)
+
+                (phoneAudioInputState?.finalizedMicrophone?.value)?.let {
+                    if (it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC) return@let null
+                    it.productName.toString()
+                }?.also {
+                    intent.putExtra(EXTERNAL_DEVICE_NAME, it)
+                }
+
+                requireActivity().finish()
+                startActivity(intent)
             }
         }
     }
@@ -278,8 +303,7 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
     }
 
     companion object {
-        private val logger: Logger =
-            LoggerFactory.getLogger(PhoneAudioInputPlaybackFragment::class.java)
+        private val logger: Logger = LoggerFactory.getLogger(PhoneAudioInputPlaybackFragment::class.java)
 
         fun newInstance(audioFileName: String): PhoneAudioInputPlaybackFragment =
             PhoneAudioInputPlaybackFragment().apply {

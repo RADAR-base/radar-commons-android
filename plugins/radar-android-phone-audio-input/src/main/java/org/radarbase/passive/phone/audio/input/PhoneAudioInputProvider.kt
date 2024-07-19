@@ -21,6 +21,7 @@ import android.content.Intent
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.passive.phone.audio.input.ui.PhoneAudioInputActivity
 
 class PhoneAudioInputProvider(radarService: RadarService): SourceProvider<PhoneAudioInputState>(radarService) {
 

@@ -32,13 +32,20 @@ import android.media.AudioRecord.STATE_INITIALIZED
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
+import android.widget.Toast
 import androidx.core.content.ContextCompat
+import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.Boast
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.LAST_RECORDED_AUDIO_FILE
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
 import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
+import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil
+import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil.toLogFriendlyType
+import org.radarcns.kafka.ObservationKey
+import org.radarcns.passive.phone.PhoneAudioInput
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -46,6 +53,7 @@ import java.io.RandomAccessFile
 
 class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceManager<PhoneAudioInputService,
         PhoneAudioInputState>(service), PhoneAudioInputState.AudioRecordManager, PhoneAudioInputState.AudioRecordingManager {
+    private val audioInputTopic: DataCache<ObservationKey, PhoneAudioInput> = createCache("android_phone_audio_input", PhoneAudioInput())
 
     private var audioRecord: AudioRecord? = null
     private var randomAccessWriter: RandomAccessFile? = null
@@ -186,7 +194,47 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     override fun send() {
-        logger.debug("Sending the audio file")
+        state.finalizedMicrophone.value?.let { mic ->
+            recordingFile?.let { wavFile ->
+                var audioDuration: Long = -1L
+                try {
+                    audioDuration = AudioDeviceUtils.getAudioDuration(wavFile) ?: throw RuntimeException("Can't retrieve the duration of audio file")
+                    if (audioDuration == -1L) {
+                        throw RuntimeException("Audio length not retrieved")
+                    }
+                } catch (ex: Exception) {
+                    logger.error("Cannot retrieve audio file duration. Discarding sending data")
+                }
+                send(
+                    audioInputTopic, PhoneAudioInput(
+                        currentTime, currentTime, "will be set after s3 functionality is added",
+                        "after data sending to s3 is enabled", mic.productName.toString(), mic.id.toString(),
+                        mic.sampleRates.joinToString(" "),
+                        mic.encodings.joinToString(" ") {
+                            AudioTypeFormatUtil.toLogFriendlyEncoding(it) },
+                        mic.type.toLogFriendlyType(), mic.channelCounts.joinToString(" "), audioDuration, wavFile.length(),
+                        state.isRecordingPlayed, wavFile.extension, sampleRate, AudioTypeFormatUtil.toLogFriendlyEncoding(audioFormat)
+                    )
+                )
+                logger.debug("Sending the audio file: FileName: {}, filePath: {}, productName: {}, id: {}" +
+                        "sampleRates: {}, encodings: {}, type: {}, channelCounts: {}, duration: {}, length: {}" +
+                        ", isPlayed: {}, extension: {} , sampleRate: {}, encoding: {} ", "will be set after s3 functionality is added",
+                    "after data sending to s3 is enabled", mic.productName.toString(), mic.id.toString(),
+                    mic.sampleRates.joinToString(" "),
+                    mic.encodings.joinToString(" ") {
+                        AudioTypeFormatUtil.toLogFriendlyEncoding(it) },
+                    mic.type.toLogFriendlyType(), mic.channelCounts.joinToString(" "), audioDuration, wavFile.length(),
+                    state.isRecordingPlayed, wavFile.extension, sampleRate, AudioTypeFormatUtil.toLogFriendlyEncoding(audioFormat)
+                )
+                // Dummy Toast, will be removed after file uploading to s3 will be enabled.
+                Boast.makeText(service, "Sending last recorded audio. Is played? : ${state.isRecordingPlayed}", Toast.LENGTH_LONG).show()
+
+            }
+        }
+
+
+        // After the data is sent:
+        state.isRecordingPlayed = false
     }
 
     override fun setPreferredMicrophone(microphone: AudioDeviceInfo) {
