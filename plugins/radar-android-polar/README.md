@@ -4,13 +4,23 @@ Application to be run on an Android 5.0 (or later) device with Bluetooth Low Ene
 
 The plugin application uses Bluetooth Low Energy requirement, making it require coarse location permissions. This plugin does not collect location information.
 
-This plugin has currently been tested using Polar's H10 heart rate sensor, but should also be compatible with the Polar H9 Heart rate sensor, Polar Verity Sense Optical heart rate sensor, OH1 Optical heart rate sensor, Ignite 3 watch and Vantage V3 watch, as listed on the [POLAR BLE SDK] GitHub [1].
+This plugin connects to a Polar device, of which the deviceId is hardcoded (on line 44, in PolarManager.kt).
 
-The following H10 features have been implemented:
-- BatteryLevel
-- Heart Rate (as bpm) with sample rate of 1Hz. 
-- Electrocardiography (ECG) data in µV with sample rate 130Hz.
-- Accelerometer data with a sample rate of 25Hz and range of 2G. Axis specific acceleration data in mG.
+This plugin has currently been tested with the Polar H10, Polar Vantage V3 and Polar Verity Sense, of which the following topics are implemented:
+
+| Polar device                   | Topic                       | Description                                                |
+|--------------------------------|-----------------------------|------------------------------------------------------------| 
+| Polar H10 | android_polar_battery_level | Battery level |
+|  | android_polar_heart_rate    | Heart rate (bpm) with sample rate 1Hz|
+|  | android_polar_ecg           | Electrocardiography (ECG) data in µV with sample rate 130Hz|
+|  | android_polar_acceleration  | Accelerometer data with a sample rate of 25Hz, a resoltion of 16 and range of 2G. Axis specific acceleration data in mG.|
+| Polar Vantage V3 | android_polar_battery_level | Battery level|
+|  | android_polar_heart_rate    | Heart rate (bpm) in 1Hz frequency|
+| Polar Verity Sense | android_polar_battery_level | Battery level|
+|  | android_polar_heart_rate    | Heart rate (bpm) with sample rate 1Hz|
+|  | android_polar_ppg           | PPG data with a sample rate of 55Hz, a resolution of 22 using 4 channels. |
+|  | android_polar_ppi           | PP interval representing cardiac pulse-to-pulse interval extracted from PPG signal.|
+
 ****
 ## Installation
 
