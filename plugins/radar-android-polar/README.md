@@ -4,7 +4,7 @@ Application to be run on an Android 5.0 (or later) device with Bluetooth Low Ene
 
 The plugin application uses Bluetooth Low Energy requirement, making it require coarse location permissions. This plugin does not collect location information.
 
-This plugin connects to a Polar device, of which the deviceId is hardcoded (on line 44, in PolarManager.kt).
+This plugin automatically connects to a compatible Polar device using the api.autoConnectToDevice() function from the Polar SDK.
 
 This plugin has currently been tested with the Polar H10, Polar Vantage V3 and Polar Verity Sense, of which the following topics are implemented:
 

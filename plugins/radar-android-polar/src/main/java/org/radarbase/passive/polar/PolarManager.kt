@@ -41,7 +41,7 @@ class PolarManager(
     private var wakeLock: PowerManager.WakeLock? = null
 
     private lateinit var api: PolarBleApi
-    private var deviceId: String = "D733F724"
+    private var deviceId: String? = null
     private var isDeviceConnected: Boolean = false
 
     private var autoConnectDisposable: Disposable? = null
@@ -173,12 +173,21 @@ class PolarManager(
         })
 
         try {
-            api.connectToDevice(deviceId)
-        } catch (a: PolarInvalidArgument) {
-            a.printStackTrace()
+            if (autoConnectDisposable != null) {
+                autoConnectDisposable?.dispose()
+            }
+            autoConnectDisposable = api.autoConnectToDevice(-60, "180D", null)
+                .subscribe(
+                    { Log.d(TAG, "auto connect search complete") },
+                    { throwable: Throwable ->
+                        Log.e(TAG, "" + throwable.toString())
+                    }
+                )
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not find polar device")
         }
-
     }
+
 
     fun disconnectToPolarSDK(deviceId: String?) {
         try {
