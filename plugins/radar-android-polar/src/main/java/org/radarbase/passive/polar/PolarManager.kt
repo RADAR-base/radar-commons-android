@@ -41,7 +41,8 @@ class PolarManager(
     private var wakeLock: PowerManager.WakeLock? = null
 
     private lateinit var api: PolarBleApi
-    private var deviceId: String = "D733F724"
+    // Polar Device ID example given: D733F724
+    private var deviceId: String = "ReplaceMe"
     private var isDeviceConnected: Boolean = false
 
     private var autoConnectDisposable: Disposable? = null
@@ -158,9 +159,7 @@ class PolarManager(
             }
 
             override fun disInformationReceived(identifier: String, uuid: UUID, value: String) {
-                if (uuid == UUID.fromString("00002a28-0000-1000-8000-00805f9b34fb")) {
-                    Log.d(TAG, "Firmware: " + identifier + " " + value.trim { it <= ' ' })
-                }
+                Log.d(TAG, "Firmware: " + identifier + " " + value.trim { it <= ' ' })
             }
 
             override fun batteryLevelReceived(identifier: String, level: Int) {
