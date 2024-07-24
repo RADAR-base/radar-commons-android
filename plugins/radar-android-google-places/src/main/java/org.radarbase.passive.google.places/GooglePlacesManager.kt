@@ -43,7 +43,6 @@ import org.radarbase.android.util.register
 import org.radarbase.passive.google.places.GooglePlacesService.Companion.GOOGLE_PLACES_API_KEY_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GooglePlacesInfo
-import org.radarcns.passive.google.PlacesType
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -60,7 +59,9 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private val isPermissionGranted: Boolean
         get() = checkLocationPermissions()
     private val placesClientCreated: Boolean
-        get() = state.placesClientCreated.get()
+        get() = service.placesClientCreated.get()
+    private val placesClient: PlacesClient?
+        get() = service.placesClient
     private val fromBroadcastRegistration: Boolean
         get()= state.fromBroadcast.get()
     var shouldFetchPlaceId: Boolean
@@ -83,8 +84,6 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
     private val detailsPlaceFields: List<Place.Field> =  listOf(Place.Field.ADDRESS_COMPONENTS)
 
     private var placesBroadcastReceiver: BroadcastRegistration? = null
-    private var placesClient: PlacesClient? = null
-        @Synchronized get() = if (placesClientCreated) field else null
     private var isRecentlySent: AtomicBoolean = AtomicBoolean(false)
 
     private lateinit var currentPlaceRequest:FindCurrentPlaceRequest
@@ -108,8 +107,14 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         register()
         status = SourceStatusListener.Status.READY
         placesProcessor.start()
-        placeHandler.execute { if (!placesClientCreated) createPlacesClient() }
-        service.broadcaster.register(DEVICE_LOCATION_CHANGED) { _, _ ->
+        placeHandler.execute { if (!placesClientCreated) {
+            service.createPlacesClient()
+        }
+        if (!placesClientCreated && !Places.isInitialized()) {
+            updateApiKey(apiKey)
+        } }
+        updateConnected()
+        placesBroadcastReceiver = service.broadcaster?.register(DEVICE_LOCATION_CHANGED) { _, _ ->
             if (placesClientCreated) {
                 placeHandler.execute {
                     state.fromBroadcast.set(true)
@@ -117,17 +122,6 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                     state.fromBroadcast.set(false)
                 }
             }
-        }
-    }
-
-    @Synchronized
-    private fun createPlacesClient() {
-        try {
-            placesClient = Places.createClient(service)
-            state.placesClientCreated.set(true)
-            status = SourceStatusListener.Status.CONNECTED
-        } catch (ex: IllegalStateException) {
-            logger.error("Places client has not been initialized yet.")
         }
     }
 
@@ -144,15 +138,25 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 }
                 if (!Places.isInitialized()) {
                     initializePlacesClient()
-                    if (!placesClientCreated) createPlacesClient()
+                    if (!placesClientCreated) {
+                        service.createPlacesClient()
+                        updateConnected()
+                    }
                 }
             }
+        }
+    }
+
+    private fun updateConnected() {
+        if (Places.isInitialized()) {
+            status = SourceStatusListener.Status.CONNECTED
         }
     }
 
     private fun initializePlacesClient() {
         try {
             Places.initialize(service.applicationContext, apiKey)
+            updateConnected()
         } catch (ex: Exception) {
             logger.error("Exception while initializing places API", ex)
             service.internalError.set(true)
@@ -206,15 +210,17 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
 
     private fun doSend(places: List<PlaceLikelihood>) {
         places.forEach { likelihood ->
-            val types = likelihood.place.types?.map { it.toPlacesType() }
+            val types = likelihood.place.placeTypes
             val placeId: String? = if (shouldFetchPlaceId) likelihood.place.id else null
             val placesInfoBuilder = GooglePlacesInfo.newBuilder().apply {
                 time = currentTime
                 timeReceived = currentTime
-                type1 = types?.getOrNull(0)
-                type2 = types?.getOrNull(1)
-                type3 = types?.getOrNull(2)
-                type4 = types?.getOrNull(3)
+                if (types != null) {
+                    placeType1 = types.getOrNull(0)
+                    placeType2 = types.getOrNull(1)
+                    placeType3 = types.getOrNull(2)
+                    placeType4 = types.getOrNull(3)
+                }
                 this.likelihood = likelihood.likelihood
                 fromBroadcast = fromBroadcastRegistration
                 city = null
@@ -322,6 +328,8 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                     logger.warn("Places receiver already unregistered in broadcast")
                 }
                 placesBroadcastReceiver = null
+// Not using Places.deinitialize for now as it may prevent PlacesClient from being created during a plugin reload. Additionally, multiple calls to Places.initialize do not impact memory or CPU.
+//                Places.deinitialize()
                 placesProcessor.close()
             }
     }
@@ -338,148 +346,5 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         private const val COUNTRY_KEY = "country"
         const val NUMBER_OF_ATTEMPTS_KEY = "number_of_attempts_key"
         const val DEVICE_LOCATION_CHANGED = "org.radarbase.passive.google.places.GooglePlacesManager.DEVICE_LOCATION_CHANGED"
-
-        private fun Place.Type.toPlacesType(): PlacesType? = when (this) {
-            Place.Type.ACCOUNTING -> PlacesType.ACCOUNTING
-            Place.Type.ADMINISTRATIVE_AREA_LEVEL_1 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_1
-            Place.Type.ADMINISTRATIVE_AREA_LEVEL_2 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_2
-            Place.Type.ADMINISTRATIVE_AREA_LEVEL_3 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_3
-            Place.Type.ADMINISTRATIVE_AREA_LEVEL_4 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_4
-            Place.Type.ADMINISTRATIVE_AREA_LEVEL_5 -> PlacesType.ADMINISTRATIVE_AREA_LEVEL_5
-            Place.Type.AIRPORT -> PlacesType.AIRPORT
-            Place.Type.AMUSEMENT_PARK -> PlacesType.AMUSEMENT_PARK
-            Place.Type.AQUARIUM -> PlacesType.AQUARIUM
-            Place.Type.ARCHIPELAGO -> PlacesType.ARCHIPELAGO
-            Place.Type.ART_GALLERY -> PlacesType.ART_GALLERY
-            Place.Type.ATM -> PlacesType.ATM
-            Place.Type.BAKERY -> PlacesType.BAKERY
-            Place.Type.BANK -> PlacesType.BANK
-            Place.Type.BAR -> PlacesType.BAR
-            Place.Type.BEAUTY_SALON -> PlacesType.BEAUTY_SALON
-            Place.Type.BICYCLE_STORE -> PlacesType.BICYCLE_STORE
-            Place.Type.BOOK_STORE -> PlacesType.BOOK_STORE
-            Place.Type.BOWLING_ALLEY -> PlacesType.BOWLING_ALLEY
-            Place.Type.BUS_STATION -> PlacesType.BUS_STATION
-            Place.Type.CAFE -> PlacesType.CAFE
-            Place.Type.CAMPGROUND -> PlacesType.CAMPGROUND
-            Place.Type.CAR_DEALER -> PlacesType.CAR_DEALER
-            Place.Type.CAR_RENTAL -> PlacesType.CAR_RENTAL
-            Place.Type.CAR_REPAIR -> PlacesType.CAR_REPAIR
-            Place.Type.CAR_WASH -> PlacesType.CAR_WASH
-            Place.Type.CASINO -> PlacesType.CASINO
-            Place.Type.CEMETERY -> PlacesType.CEMETERY
-            Place.Type.CHURCH -> PlacesType.CHURCH
-            Place.Type.CITY_HALL -> PlacesType.CITY_HALL
-            Place.Type.CLOTHING_STORE -> PlacesType.CLOTHING_STORE
-            Place.Type.COLLOQUIAL_AREA -> PlacesType.COLLOQUIAL_AREA
-            Place.Type.CONTINENT -> PlacesType.CONTINENT
-            Place.Type.CONVENIENCE_STORE -> PlacesType.CONVENIENCE_STORE
-            Place.Type.COUNTRY -> PlacesType.COUNTRY
-            Place.Type.COURTHOUSE -> PlacesType.COURTHOUSE
-            Place.Type.DENTIST -> PlacesType.DENTIST
-            Place.Type.DEPARTMENT_STORE -> PlacesType.DEPARTMENT_STORE
-            Place.Type.DOCTOR -> PlacesType.DOCTOR
-            Place.Type.DRUGSTORE -> PlacesType.DRUGSTORE
-            Place.Type.ELECTRICIAN -> PlacesType.ELECTRICIAN
-            Place.Type.ELECTRONICS_STORE -> PlacesType.ELECTRONICS_STORE
-            Place.Type.EMBASSY -> PlacesType.EMBASSY
-            Place.Type.ESTABLISHMENT -> PlacesType.ESTABLISHMENT
-            Place.Type.FINANCE -> PlacesType.FINANCE
-            Place.Type.FIRE_STATION -> PlacesType.FIRE_STATION
-            Place.Type.FLOOR -> PlacesType.FLOOR
-            Place.Type.FLORIST -> PlacesType.FLORIST
-            Place.Type.FOOD -> PlacesType.FOOD
-            Place.Type.FUNERAL_HOME -> PlacesType.FUNERAL_HOME
-            Place.Type.FURNITURE_STORE -> PlacesType.FURNITURE_STORE
-            Place.Type.GAS_STATION -> PlacesType.GAS_STATION
-            Place.Type.GENERAL_CONTRACTOR -> PlacesType.GENERAL_CONTRACTOR
-            Place.Type.GEOCODE -> PlacesType.GEOCODE
-            Place.Type.GROCERY_OR_SUPERMARKET -> PlacesType.GROCERY_OR_SUPERMARKET
-            Place.Type.GYM -> PlacesType.GYM
-            Place.Type.HAIR_CARE -> PlacesType.HAIR_CARE
-            Place.Type.HARDWARE_STORE -> PlacesType.HARDWARE_STORE
-            Place.Type.HEALTH -> PlacesType.HEALTH
-            Place.Type.HINDU_TEMPLE -> PlacesType.HINDU_TEMPLE
-            Place.Type.HOME_GOODS_STORE -> PlacesType.HOME_GOODS_STORE
-            Place.Type.HOSPITAL -> PlacesType.HOSPITAL
-            Place.Type.INSURANCE_AGENCY -> PlacesType.INSURANCE_AGENCY
-            Place.Type.INTERSECTION -> PlacesType.INTERSECTION
-            Place.Type.JEWELRY_STORE -> PlacesType.JEWELRY_STORE
-            Place.Type.LAUNDRY -> PlacesType.LAUNDRY
-            Place.Type.LAWYER -> PlacesType.LAWYER
-            Place.Type.LIBRARY -> PlacesType.LIBRARY
-            Place.Type.LIGHT_RAIL_STATION -> PlacesType.LIGHT_RAIL_STATION
-            Place.Type.LIQUOR_STORE -> PlacesType.LIQUOR_STORE
-            Place.Type.LOCAL_GOVERNMENT_OFFICE -> PlacesType.LOCAL_GOVERNMENT_OFFICE
-            Place.Type.LOCALITY -> PlacesType.LOCALITY
-            Place.Type.LOCKSMITH -> PlacesType.LOCKSMITH
-            Place.Type.LODGING -> PlacesType.LODGING
-            Place.Type.MEAL_DELIVERY -> PlacesType.MEAL_DELIVERY
-            Place.Type.MEAL_TAKEAWAY -> PlacesType.MEAL_TAKEAWAY
-            Place.Type.MOSQUE -> PlacesType.MOSQUE
-            Place.Type.MOVIE_RENTAL -> PlacesType.MOVIE_RENTAL
-            Place.Type.MOVIE_THEATER -> PlacesType.MOVIE_THEATER
-            Place.Type.MOVING_COMPANY -> PlacesType.MOVING_COMPANY
-            Place.Type.MUSEUM -> PlacesType.MUSEUM
-            Place.Type.NATURAL_FEATURE -> PlacesType.NATURAL_FEATURE
-            Place.Type.NEIGHBORHOOD -> PlacesType.NEIGHBORHOOD
-            Place.Type.NIGHT_CLUB -> PlacesType.NIGHT_CLUB
-            Place.Type.PAINTER -> PlacesType.PAINTER
-            Place.Type.PARK -> PlacesType.PARK
-            Place.Type.PARKING -> PlacesType.PARKING
-            Place.Type.PET_STORE -> PlacesType.PET_STORE
-            Place.Type.PHARMACY -> PlacesType.PHARMACY
-            Place.Type.PHYSIOTHERAPIST -> PlacesType.PHYSIOTHERAPIST
-            Place.Type.PLACE_OF_WORSHIP -> PlacesType.PLACE_OF_WORSHIP
-            Place.Type.PLUMBER -> PlacesType.PLUMBER
-            Place.Type.PLUS_CODE -> PlacesType.PLUS_CODE
-            Place.Type.POINT_OF_INTEREST -> PlacesType.POINT_OF_INTEREST
-            Place.Type.POLICE -> PlacesType.POLICE
-            Place.Type.POLITICAL -> PlacesType.POLITICAL
-            Place.Type.POST_BOX -> PlacesType.POST_BOX
-            Place.Type.POST_OFFICE -> PlacesType.POST_OFFICE
-            Place.Type.POSTAL_CODE_PREFIX -> PlacesType.POSTAL_CODE_PREFIX
-            Place.Type.POSTAL_CODE_SUFFIX -> PlacesType.POSTAL_CODE_SUFFIX
-            Place.Type.POSTAL_CODE -> PlacesType.POSTAL_CODE
-            Place.Type.POSTAL_TOWN -> PlacesType.POSTAL_TOWN
-            Place.Type.PREMISE -> PlacesType.PREMISE
-            Place.Type.PRIMARY_SCHOOL -> PlacesType.PRIMARY_SCHOOL
-            Place.Type.REAL_ESTATE_AGENCY -> PlacesType.REAL_ESTATE_AGENCY
-            Place.Type.RESTAURANT -> PlacesType.RESTAURANT
-            Place.Type.ROOFING_CONTRACTOR -> PlacesType.ROOFING_CONTRACTOR
-            Place.Type.ROOM -> PlacesType.ROOM
-            Place.Type.ROUTE -> PlacesType.ROUTE
-            Place.Type.RV_PARK -> PlacesType.RV_PARK
-            Place.Type.SCHOOL -> PlacesType.SCHOOL
-            Place.Type.SECONDARY_SCHOOL -> PlacesType.SECONDARY_SCHOOL
-            Place.Type.SHOE_STORE -> PlacesType.SHOE_STORE
-            Place.Type.SHOPPING_MALL -> PlacesType.SHOPPING_MALL
-            Place.Type.SPA -> PlacesType.SPA
-            Place.Type.STADIUM -> PlacesType.STADIUM
-            Place.Type.STORAGE -> PlacesType.STORAGE
-            Place.Type.STORE -> PlacesType.STORE
-            Place.Type.STREET_ADDRESS -> PlacesType.STREET_ADDRESS
-            Place.Type.STREET_NUMBER -> PlacesType.STREET_NUMBER
-            Place.Type.SUBLOCALITY_LEVEL_1 -> PlacesType.SUBLOCALITY_LEVEL_1
-            Place.Type.SUBLOCALITY_LEVEL_2 -> PlacesType.SUBLOCALITY_LEVEL_2
-            Place.Type.SUBLOCALITY_LEVEL_3 -> PlacesType.SUBLOCALITY_LEVEL_3
-            Place.Type.SUBLOCALITY_LEVEL_4 -> PlacesType.SUBLOCALITY_LEVEL_4
-            Place.Type.SUBLOCALITY_LEVEL_5 -> PlacesType.SUBLOCALITY_LEVEL_5
-            Place.Type.SUBLOCALITY -> PlacesType.SUBLOCALITY
-            Place.Type.SUBPREMISE -> PlacesType.SUBPREMISE
-            Place.Type.SUBWAY_STATION -> PlacesType.SUBWAY_STATION
-            Place.Type.SUPERMARKET -> PlacesType.SUPERMARKET
-            Place.Type.SYNAGOGUE -> PlacesType.SYNAGOGUE
-            Place.Type.TAXI_STAND -> PlacesType.TAXI_STAND
-            Place.Type.TOURIST_ATTRACTION -> PlacesType.TOURIST_ATTRACTION
-            Place.Type.TOWN_SQUARE -> PlacesType.TOWN_SQUARE
-            Place.Type.TRAIN_STATION -> PlacesType.TRAIN_STATION
-            Place.Type.TRANSIT_STATION -> PlacesType.TRANSIT_STATION
-            Place.Type.TRAVEL_AGENCY -> PlacesType.TRAVEL_AGENCY
-            Place.Type.UNIVERSITY -> PlacesType.UNIVERSITY
-            Place.Type.VETERINARY_CARE -> PlacesType.VETERINARY_CARE
-            Place.Type.ZOO -> PlacesType.ZOO
-            else -> null
-        }
     }
 }
