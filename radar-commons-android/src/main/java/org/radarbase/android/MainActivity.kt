@@ -33,15 +33,19 @@ import org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
+import org.radarbase.android.RadarService.Companion.ACTION_STOP_FOREGROUND_SERVICE
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
+import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
-import org.radarbase.android.config.CombinedRadarConfig
+import org.radarbase.android.auth.AuthServiceConnection
+import org.radarbase.android.auth.LoginListener
+import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
-abstract class MainActivity : AppCompatActivity() {
+abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     /** Time between refreshes.  */
     private var uiRefreshRate: Long = 0
@@ -56,13 +60,14 @@ abstract class MainActivity : AppCompatActivity() {
 
     private var configurationBroadcastReceiver: BroadcastRegistration? = null
     private lateinit var permissionHandler: PermissionHandler
-    protected lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
+    protected lateinit var authConnection: AuthServiceConnection
     protected lateinit var radarConnection: ManagedServiceConnection<IRadarBinder>
 
     private lateinit var bluetoothEnforcer: BluetoothEnforcer
 
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
+    private lateinit var broadcaster: LocalBroadcastManager
 
     protected open val requestPermissionTimeoutMs: Long
         get() = REQUEST_PERMISSION_TIMEOUT_MS
@@ -98,8 +103,9 @@ abstract class MainActivity : AppCompatActivity() {
             onUnboundListeners += IRadarBinder::stopScanning
         }
 
+        broadcaster = LocalBroadcastManager.getInstance(this)
         bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
-        authConnection = ManagedServiceConnection(this, radarApp.authService)
+        authConnection = AuthServiceConnection(this, this)
         create()
     }
 
@@ -146,6 +152,14 @@ abstract class MainActivity : AppCompatActivity() {
                 logger.error("Failed to update view", ex)
             }
         }
+    }
+
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
+    override fun loginFailed(manager: LoginManager?, ex: Exception?) = Unit
+
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
+
     }
 
     override fun onPause() {
@@ -227,9 +241,19 @@ abstract class MainActivity : AppCompatActivity() {
      */
     protected fun logout(disableRefresh: Boolean) {
         authConnection.applyBinder { invalidate(null, disableRefresh) }
+        radarConfig.reset()
+        cacheDir.deleteRecursively()
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
+        logger.info("Starting SplashActivity")
+        val intent = packageManager.getLaunchIntentForPackage(BuildConfig.LIBRARY_PACKAGE_NAME) ?: return
+        startActivity(intent.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        })
+        finish()
     }
+
 
     companion object {
         private val logger = LoggerFactory.getLogger(MainActivity::class.java)

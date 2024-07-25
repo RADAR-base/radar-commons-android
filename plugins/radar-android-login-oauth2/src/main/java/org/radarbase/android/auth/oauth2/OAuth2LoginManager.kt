@@ -110,6 +110,8 @@ class OAuth2LoginManager(
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
 
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) = Unit
+
     companion object {
         private const val OAUTH2_SOURCE_TYPE = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
         private val OAUTH2_SOURCE_TYPES = listOf(OAUTH2_SOURCE_TYPE)

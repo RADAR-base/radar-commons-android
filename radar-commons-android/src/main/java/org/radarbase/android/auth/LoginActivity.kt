@@ -109,6 +109,8 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
         finish()
     }
 
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) = Unit
+
     companion object {
         private val logger = LoggerFactory.getLogger(LoginActivity::class.java)
         const val ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login"

@@ -75,6 +75,11 @@ abstract class AuthService : Service(), LoginListener {
                 authSerialization.store(appAuth)
                 config.updateWithAuthState(this@AuthService, appAuth)
             }
+
+            override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
+                authSerialization.store(appAuth)
+                config.updateWithAuthState(this@AuthService, appAuth)
+            }
         })
     }
 
@@ -204,6 +209,16 @@ abstract class AuthService : Service(), LoginListener {
 
             callListeners(sinceUpdate = appAuth.lastUpdate) {
                 it.loginListener.loginSucceeded(manager, appAuth)
+            }
+        }
+    }
+
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
+        handler.executeReentrant {
+            logger.info("Logout Succeed")
+            appAuth = authState
+            callListeners {
+                it.loginListener.loggedOut(manager, appAuth)
             }
         }
     }

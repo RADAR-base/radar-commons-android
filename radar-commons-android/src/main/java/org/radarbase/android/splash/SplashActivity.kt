@@ -160,6 +160,8 @@ abstract class SplashActivity : AppCompatActivity() {
                     startActivity(radarApp.loginActivity)
                 }
             }
+
+            override fun loggedOut(manager: LoginManager?, authState: AppAuthState) = Unit
         }
     }
 

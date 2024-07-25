@@ -20,7 +20,6 @@ import android.Manifest.permission.*
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -78,6 +77,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
+    private lateinit var stopForegroundReceiver: BroadcastRegistration
     private lateinit var serverStatusReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
     private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
@@ -236,6 +236,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         permissionsBroadcastReceiver.unregister()
         sourceFailedReceiver.unregister()
+        stopForegroundReceiver.unregister()
         serverStatusReceiver.unregister()
 
         mHandler.stop {
@@ -528,6 +529,15 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
+        mHandler.execute {
+            updateProviders(authState, configuration.latestConfig)
+            removeProviders(mConnections.toSet())
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
     private fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
         if (sourceProviders.isEmpty()) {
             return
@@ -680,6 +690,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         const val ACTION_PERMISSIONS_GRANTED = "$RADAR_PACKAGE.ACTION_PERMISSIONS_GRANTED"
         const val EXTRA_GRANT_RESULTS = "$RADAR_PACKAGE.EXTRA_GRANT_RESULTS"
+        const val ACTION_STOP_FOREGROUND_SERVICE = "$RADAR_PACKAGE.ACTION_STOP_FOREGROUND_SERVICE"
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
