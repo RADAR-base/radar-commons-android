@@ -77,7 +77,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private lateinit var authConnection: AuthServiceConnection
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
-    private lateinit var stopForegroundReceiver: BroadcastRegistration
     private lateinit var serverStatusReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
     private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
@@ -236,7 +235,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         permissionsBroadcastReceiver.unregister()
         sourceFailedReceiver.unregister()
-        stopForegroundReceiver.unregister()
         serverStatusReceiver.unregister()
 
         mHandler.stop {
@@ -251,6 +249,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             .filter(SourceProvider<*>::isBound)
             .forEach(SourceProvider<*>::unbind)
 
+        logger.info("Destroying RADAR Service")
         super.onDestroy()
     }
 
@@ -532,7 +531,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
         mHandler.execute {
             updateProviders(authState, configuration.latestConfig)
+            val oldProviders = mConnections
             removeProviders(mConnections.toSet())
+            oldProviders.forEach {
+                it.stopService()
+            }
+            logger.info("Finalizing Source Services")
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }

@@ -97,6 +97,11 @@ class CombinedRadarConfig(
         persistChanges()
     }
 
+    override fun resetFirebaseRemoteConfigs() {
+        (remoteConfigs.find { it is FirebaseRemoteConfiguration } as FirebaseRemoteConfiguration).resetConfigs()
+        status = INITIAL
+    }
+
     override fun fetch() = remoteConfigs.forEach {
         it.fetch(latestConfig.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT))
     }

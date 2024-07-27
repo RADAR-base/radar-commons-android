@@ -42,6 +42,7 @@ import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
+import java.io.File
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
@@ -240,19 +241,61 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
      * still valid.
      */
     protected fun logout(disableRefresh: Boolean) {
+        radarConnection.unbind()
         authConnection.applyBinder { invalidate(null, disableRefresh) }
         radarConfig.reset()
-        cacheDir.deleteRecursively()
+        clearConfigSharedPrefs()
+        clearAppData(this)
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
-        logger.info("Starting SplashActivity")
-        val intent = packageManager.getLaunchIntentForPackage(BuildConfig.LIBRARY_PACKAGE_NAME) ?: return
+        logger.info("Starting SplashActivity: ${packageManager.getLaunchIntentForPackage(packageName)}")
+        val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return
+        logger.info("Starting Launch Activity named: ${BuildConfig.LIBRARY_PACKAGE_NAME}")
         startActivity(intent.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         })
         finish()
     }
+
+    private fun clearConfigSharedPrefs() {
+        val sharedPreferences = getSharedPreferences("org.radarbase.android.config.LocalConfiguration", Context.MODE_PRIVATE)
+        sharedPreferences.all.forEach { (key, value) ->
+            logger.info("Finalizing Source service: Shared Prefs: Deleting: $key -> $value")
+        }
+        sharedPreferences.edit().clear().apply()
+    }
+
+    private fun clearAppData(context: Context) {
+        clearCache(context)
+        clearFilesDir(context)
+    }
+
+    private fun clearFilesDir(context: Context) {
+        logger.info("Finalizing Source Service: clearing files")
+        val filesDir = context.filesDir
+        deleteFilesInDirectory(filesDir)
+    }
+
+    private fun clearCache(context: Context) {
+        logger.info("Finalizing Source Service: clearing cache")
+        val cacheDir = context.cacheDir
+        deleteFilesInDirectory(cacheDir)
+    }
+
+    private fun deleteFilesInDirectory(directory: File) {
+        if (directory.isDirectory) {
+            val children = directory.listFiles()
+            if (children != null) {
+                for (child in children) {
+                    logger.info("Finalizing Source Service: deleting: $child")
+                    deleteFilesInDirectory(child)
+                }
+            }
+        }
+        directory.delete()
+    }
+
 
 
     companion object {

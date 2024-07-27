@@ -273,7 +273,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
             logger.error("Cannot construct ManagementPortalClient without client credentials")
             null
         }
-
+        logger.debug("Client Config: {} and new client config: {}", clientConfig, newClientConfig)
         if (newClientConfig == clientConfig) return
 
         client = newClientConfig?.let {
@@ -284,6 +284,8 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                 client = restClient,
             ).also { restClient = it.client }
         }
+
+        logger.info("Ensured new client: id: {}, secret: {}", {config.getString(OAUTH2_CLIENT_ID)}, {config.getString(OAUTH2_CLIENT_SECRET, "")})
     }
 
     private fun addSource(authState: AppAuthState, source: SourceMetadata): AppAuthState {
