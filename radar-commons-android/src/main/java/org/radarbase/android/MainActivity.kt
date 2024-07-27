@@ -246,7 +246,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         clearAppData(this)
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
-        logger.info("Starting SplashActivity: ${packageManager.getLaunchIntentForPackage(packageName)}")
         radarConfig.resetStatus()
         // Start Launcher Activity in overriding method
     }
@@ -254,7 +253,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     private fun clearConfigSharedPrefs() {
         val sharedPreferences = getSharedPreferences("org.radarbase.android.config.LocalConfiguration", Context.MODE_PRIVATE)
         sharedPreferences.all.forEach { (key, value) ->
-            logger.info("Finalizing Source service: Shared Prefs: Deleting: $key -> $value")
         }
         sharedPreferences.edit().clear().apply()
     }
@@ -265,13 +263,11 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     }
 
     private fun clearFilesDir(context: Context) {
-        logger.info("Finalizing Source Service: clearing files")
         val filesDir = context.filesDir
         deleteFilesInDirectory(filesDir)
     }
 
     private fun clearCache(context: Context) {
-        logger.info("Finalizing Source Service: clearing cache")
         val cacheDir = context.cacheDir
         deleteFilesInDirectory(cacheDir)
     }
@@ -282,7 +278,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             if (children != null) {
                 for (child in children) {
                     if (child.absolutePath.toString().contains("firebase")) return
-                    logger.info("Finalizing Source Service: deleting: ${child.absolutePath}")
                     deleteFilesInDirectory(child)
                 }
             }

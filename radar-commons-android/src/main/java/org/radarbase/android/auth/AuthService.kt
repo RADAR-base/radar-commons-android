@@ -218,7 +218,6 @@ abstract class AuthService : Service(), LoginListener {
             logger.info("Logout Succeed")
             appAuth = authState
             callListeners {
-                logger.debug("Finalizing Source Service: LL #{}: {} (starting with {} listeners)", it.id, it.loginListener, listeners.size)
                 it.loginListener.loggedOut(manager, appAuth)
             }
         }

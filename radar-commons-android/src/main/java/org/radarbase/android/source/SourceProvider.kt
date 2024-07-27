@@ -150,11 +150,8 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     }
 
     fun stopService() {
-        logger.info("Start of Finalizing Source Service")
         val intent = Intent(radarService, serviceClass)
-        val isStopped = radarService.stopService(intent)
-        logger.info("Mid of Finalizing Source Service: ${serviceClass.name} isStopped: ${isStopped}")
-        logger.info("End of Finalizing Source Service: ${serviceClass.name}")
+        radarService.stopService(intent)
     }
 
     /**
