@@ -33,10 +33,8 @@ import org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
-import org.radarbase.android.RadarService.Companion.ACTION_STOP_FOREGROUND_SERVICE
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AppAuthState
-import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
@@ -249,13 +247,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
         logger.info("Starting SplashActivity: ${packageManager.getLaunchIntentForPackage(packageName)}")
-        val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return
-        logger.info("Starting Launch Activity named: ${BuildConfig.LIBRARY_PACKAGE_NAME}")
-        startActivity(intent.apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        })
-        finish()
+        radarConfig.resetStatus()
+        // Start Launcher Activity in overriding method
     }
 
     private fun clearConfigSharedPrefs() {
@@ -288,7 +281,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             val children = directory.listFiles()
             if (children != null) {
                 for (child in children) {
-                    logger.info("Finalizing Source Service: deleting: $child")
+                    if (child.absolutePath.toString().contains("firebase")) return
+                    logger.info("Finalizing Source Service: deleting: ${child.absolutePath}")
                     deleteFilesInDirectory(child)
                 }
             }

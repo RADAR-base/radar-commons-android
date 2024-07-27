@@ -118,7 +118,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
             disableRefresh -> authState.alter {
                 attributes -= MP_REFRESH_TOKEN_PROPERTY
                 isPrivacyPolicyAccepted = false
-            }.apply { listener.loggedOut(this@ManagementPortalLoginManager, authState.reset()) }
+            }.also { listener.loggedOut(this@ManagementPortalLoginManager, authState.clear()) }
             else -> authState
         }
     }

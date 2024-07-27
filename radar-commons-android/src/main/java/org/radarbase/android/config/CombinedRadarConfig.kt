@@ -97,8 +97,8 @@ class CombinedRadarConfig(
         persistChanges()
     }
 
-    override fun resetFirebaseRemoteConfigs() {
-        (remoteConfigs.find { it is FirebaseRemoteConfiguration } as FirebaseRemoteConfiguration).resetConfigs()
+    override fun resetStatus() {
+        (remoteConfigs.find { it is FirebaseRemoteConfiguration } as FirebaseRemoteConfiguration).resetStatus()
         status = INITIAL
     }
 

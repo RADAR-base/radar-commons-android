@@ -116,8 +116,7 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
         }
     }
 
-    fun resetConfigs() {
-        firebase.reset()
+    fun resetStatus() {
         status = RadarConfiguration.RemoteConfigStatus.INITIAL
     }
 

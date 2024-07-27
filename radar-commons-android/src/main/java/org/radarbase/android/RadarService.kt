@@ -530,9 +530,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
         mHandler.execute {
+            logger.info("RADAR Service: Start: Finalizing Source Service")
             updateProviders(authState, configuration.latestConfig)
             val oldProviders = mConnections
+            logger.info("RADAR Service: Mid: Finalizing Source Service")
             removeProviders(mConnections.toSet())
+            logger.info("RADAR Service: End: Finalizing Source Service")
             oldProviders.forEach {
                 it.stopService()
             }

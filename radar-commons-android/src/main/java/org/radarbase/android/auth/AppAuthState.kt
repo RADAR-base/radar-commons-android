@@ -99,7 +99,7 @@ class AppAuthState private constructor(builder: Builder) {
         }.apply(changes).build()
     }
 
-    fun reset(): AppAuthState = Builder().build()
+    fun clear(): AppAuthState = Builder().build()
 
     class Builder {
         val lastUpdate = SystemClock.elapsedRealtime()
