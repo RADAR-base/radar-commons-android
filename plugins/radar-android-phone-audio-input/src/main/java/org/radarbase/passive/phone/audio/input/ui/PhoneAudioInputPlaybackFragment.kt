@@ -158,12 +158,7 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
                             phoneAudioInputState?.isRecordingPlayed = false
                             val intent = Intent(requireContext(), PhoneAudioInputActivity::class.java)
 
-                            (phoneAudioInputState?.finalizedMicrophone?.value)?.let {
-                                if (it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC) return@let null
-                                it.productName.toString()
-                            }?.also {
-                                intent.putExtra(EXTERNAL_DEVICE_NAME, it)
-                            }
+                            forwardMicIfPreferred(intent)
 
                             dialog.cancel()
                             requireActivity().finish()
@@ -258,17 +253,21 @@ class PhoneAudioInputPlaybackFragment : Fragment() {
                 phoneAudioViewModel.phoneAudioState.value?.audioRecordingManager?.send()
 
                 val intent = Intent(requireContext(), PhoneAudioInputActivity::class.java)
-
-                (phoneAudioInputState?.finalizedMicrophone?.value)?.let {
-                    if (it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC) return@let null
-                    it.productName.toString()
-                }?.also {
-                    intent.putExtra(EXTERNAL_DEVICE_NAME, it)
-                }
-
+                forwardMicIfPreferred(intent)
                 requireActivity().finish()
                 startActivity(intent)
             }
+        }
+    }
+
+    private fun forwardMicIfPreferred(intent: Intent) {
+        (phoneAudioInputState?.finalizedMicrophone?.value)?.let {
+            logger.debug("Forwarding preferred device: {}", it)
+            val isMicPreferred = phoneAudioInputState?.microphonePrioritized ?: false
+            if (it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC && !isMicPreferred) return@let null
+            it.productName.toString()
+        }?.also {
+            intent.putExtra(EXTERNAL_DEVICE_NAME, it)
         }
     }
 
