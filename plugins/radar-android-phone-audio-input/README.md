@@ -57,11 +57,42 @@ This plugin provides an interactive UI for recording and managing audio data. Be
 5. **Device Selection Mechanism**:
     - The device selection mechanism automatically prioritizes the USB audio device if connected. If no USB device is found, the plugin selects external devices in the following order of precedence:
         - `TYPE_USB_DEVICE`
-        - `TYPE_BLUETOOTH`
         - `TYPE_WIRED_HEADSET`
-    - If no external device is found, the plugin defaults to using the smartphone's built-in microphone.
+        - `TYPE_BLUETOOTH`
+     - If no external device is found, the plugin defaults to using the smartphone's built-in microphone.
 
 6. **Fragment Integration**:
     - `PhoneAudioInputActivity` opens a fragment that provides additional capabilities, including:
         - **Audio Playback**: Users can playback the recorded audio to review it before sending.
         - **Data Sending**: Users can send the recorded audio data for storing to s3.
+
+### Guide for Using the PhoneAudioInput Plugin
+<br>
+<img src="assets/images/audio_input_plugin/action_devices.jpg" width="200px"   alt="action_devices"/>
+<img src="assets/images/audio_input_plugin/recording_activity.jpg" width="200px"   alt="recording_activity"/>
+<br>
+1. In the main activity, where plugins are visible along with their actions (if any), click on the specific action for the **Phone Audio Input** plugin.
+   - This will redirect you to the first activity of the Phone Audio Input plugin.
+<br>
+<img src="assets/images/audio_input_plugin/recording_activity_devices.jpg" width="200px"   alt="recording_activity_devices"/>
+<img src="assets/images/audio_input_plugin/recording_activity_paused.jpg" width="200px"   alt="recording_activity_paused"/>
+<br>
+2. At the top of this activity, there is a dropdown menu for selecting microphones.
+   - The current input routing microphone is shown by default in the dropdown menu when it is collapsed.
+   - Click on the refresh button near dropdown menu to refresh microphones.
+   - Select your preferred microphone from the dropdown menu. If no preferred microphone is selected, the automatic device selection logic will take place.
+<br>
+<img src="assets/images/audio_input_plugin/alert_rec_ongoing.jpg" width="200px"   alt="alert_rec_ongoing"/>
+<img src="assets/images/audio_input_plugin/alert_rec_stopped.jpg" width="200px"   alt="alert_rec_stopped"/>
+<br>
+3. Click **Start Recording** to begin recording audio.
+   - While recording, you can pause or resume the recording.
+   - Do not quit the recording activity while recording is in progress or paused, as this may cause the application to misbehave. An alert will also be shown if you attempt to quit the activity in a recording or paused state. You can safely quit the activity after stopping the recording.
+<br>
+<img src="assets/images/audio_input_plugin/playback_frag.jpg" width="200px"   alt="playback_frag"/>
+<img src="assets/images/audio_input_plugin/playback_exit_alert.jpg" width="200px"   alt="playback_exit_alert"/>
+<br>
+4. After stopping the recording, an alert dialog will appear with three options: play the recorded audio, send it directly without playing, or discard it.
+   - If you click **Play**, you will be redirected to a new fragment for listening to the last recorded audio. Here, you can review the recording and send it after listening.
+
+   

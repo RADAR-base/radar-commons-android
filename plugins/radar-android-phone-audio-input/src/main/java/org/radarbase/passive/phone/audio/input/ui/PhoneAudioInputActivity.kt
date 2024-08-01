@@ -425,6 +425,9 @@ class PhoneAudioInputActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         state?.apply{
+            isRecording.value?.let {
+                audioRecordManager?.stopRecording()
+            }
             microphonePrioritized = false
             isRecording.postValue(null)
         }

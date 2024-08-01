@@ -265,9 +265,9 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
         logger.info("Running device selection logic")
        (arrayOf(TYPE_USB_DEVICE, TYPE_USB_HEADSET).let { deviceTypes ->
             connectedMicrophones.run { preferByDeviceType(deviceTypes) }
+        }?: arrayOf(TYPE_WIRED_HEADSET).let { deviceTypes ->
+           connectedMicrophones.run { preferByDeviceType(deviceTypes) }
         } ?: arrayOf(TYPE_BLUETOOTH_A2DP, TYPE_BLUETOOTH_SCO).let { deviceTypes ->
-            connectedMicrophones.run { preferByDeviceType(deviceTypes) }
-        } ?: arrayOf(TYPE_WIRED_HEADSET).let { deviceTypes ->
             connectedMicrophones.run { preferByDeviceType(deviceTypes) }
         } ?: connectedMicrophones.firstOrNull())?.also(setPreferredDeviceAndUpdate)
     }
@@ -278,6 +278,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
         }
 
     private fun clearAudioDirectory() {
+        payloadSize = 0
             audioDir?.let { audioDir ->
                 audioDir.parentFile
                     ?.list { _, name -> name.startsWith("phone_audio_input") && name.endsWith(".wav") }
