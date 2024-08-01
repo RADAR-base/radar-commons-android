@@ -279,21 +279,21 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
 
     private fun clearAudioDirectory() {
         payloadSize = 0
-            audioDir?.let { audioDir ->
-                audioDir.parentFile
-                    ?.list { _, name -> name.startsWith("phone_audio_input") && name.endsWith(".wav") }
-                    ?.forEach {
-                        File(audioDir.parentFile, it).delete()
-                        logger.debug("Deleted audio file: {}", it)
-                    }
+        audioDir?.let { audioDir ->
+            audioDir.parentFile
+                ?.list { _, name -> name.startsWith("phone_audio_input") && name.endsWith(".wav") }
+                ?.forEach {
+                    File(audioDir.parentFile, it).delete()
+                    logger.debug("Deleted audio file: {}", it)
+                }
 
-                audioDir.walk()
-                    .filter { it.name.startsWith("phone_audio_input") && it.path.endsWith(".wav") }
-                    .forEach {
-                        it.delete()
-                        logger.debug("Deleted file: {}", it)
-                    }
-            }
+            audioDir.walk()
+                .filter { it.name.startsWith("phone_audio_input") && it.path.endsWith(".wav") }
+                .forEach {
+                    it.delete()
+                    logger.debug("Deleted file: {}", it)
+                }
+        }
     }
 
     private fun startAudioRecording() {

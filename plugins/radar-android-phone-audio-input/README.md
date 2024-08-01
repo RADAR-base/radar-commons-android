@@ -71,7 +71,7 @@ This plugin provides an interactive UI for recording and managing audio data. Be
 <img src="assets/images/audio_input_plugin/action_devices.jpg" width="200px"   alt="action_devices"/>
 <img src="assets/images/audio_input_plugin/recording_activity.jpg" width="200px"   alt="recording_activity"/>
 <br>
-1. In the main activity, where plugins are visible along with their actions (if any), click on the specific action for the **Phone Audio Input** plugin.
+1. In the main activity, where plugins are visible along with their actions (if any), click on the specific action for the Phone Audio Input plugin.
    - This will redirect you to the first activity of the Phone Audio Input plugin.
 <br>
 <img src="assets/images/audio_input_plugin/recording_activity_devices.jpg" width="200px"   alt="recording_activity_devices"/>
@@ -85,7 +85,7 @@ This plugin provides an interactive UI for recording and managing audio data. Be
 <img src="assets/images/audio_input_plugin/alert_rec_ongoing.jpg" width="200px"   alt="alert_rec_ongoing"/>
 <img src="assets/images/audio_input_plugin/alert_rec_stopped.jpg" width="200px"   alt="alert_rec_stopped"/>
 <br>
-3. Click **Start Recording** to begin recording audio.
+3. Click Start Recording to begin recording audio.
    - While recording, you can pause or resume the recording.
    - Do not quit the recording activity while recording is in progress or paused, as this may cause the application to misbehave. An alert will also be shown if you attempt to quit the activity in a recording or paused state. You can safely quit the activity after stopping the recording.
 <br>
@@ -93,6 +93,6 @@ This plugin provides an interactive UI for recording and managing audio data. Be
 <img src="assets/images/audio_input_plugin/playback_exit_alert.jpg" width="200px"   alt="playback_exit_alert"/>
 <br>
 4. After stopping the recording, an alert dialog will appear with three options: play the recorded audio, send it directly without playing, or discard it.
-   - If you click **Play**, you will be redirected to a new fragment for listening to the last recorded audio. Here, you can review the recording and send it after listening.
+   - If you click Play, you will be redirected to a new fragment for listening to the last recorded audio. Here, you can review the recording and send it after listening.
 
    
