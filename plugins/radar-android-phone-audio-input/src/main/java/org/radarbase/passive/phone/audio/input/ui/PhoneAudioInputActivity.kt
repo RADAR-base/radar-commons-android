@@ -83,7 +83,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
     private val radarServiceConnection = object : ServiceConnection{
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            logger.debug("Service bound to PhoneAudiInputActivity")
+            logger.debug("Service bound to PhoneAudioInputActivity")
             val radarService = service as IRadarBinder
             recorderProvider = null
             for (provider in radarService.connections) {
@@ -162,7 +162,7 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             state?.audioRecordManager?.setPreferredMicrophone(this)
             Boast.makeText(this@PhoneAudioInputActivity, getString(
                 R.string.input_audio_device,
-                productName), Toast.LENGTH_SHORT).show()
+                productName), Toast.LENGTH_SHORT).show(true)
         }
     }
 
@@ -176,8 +176,11 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         createDropDown()
         disableButtonsInitially()
 
-        if (intent?.hasExtra(EXTERNAL_DEVICE_NAME) != null) {
-            previousDevice = intent?.getStringExtra(EXTERNAL_DEVICE_NAME)
+        intent?.let {
+            if (it.hasExtra(EXTERNAL_DEVICE_NAME)) {
+                previousDevice = it.getStringExtra(EXTERNAL_DEVICE_NAME)
+                logger.debug("Previously preferred device: {}", previousDevice)
+            }
         }
 
         viewModelInitializer = {
@@ -259,26 +262,44 @@ class PhoneAudioInputActivity : AppCompatActivity() {
         }
     }
 
+    private fun disableButtonsInitially() {
+        binding.apply {
+            btnStartRec.setVisibleAndDisabled()
+            btnStopRec.setInvisibleAndDisabled()
+            btnPauseRec.setInvisibleAndDisabled()
+            btnResumeRec.setInvisibleAndDisabled()
+        }
+    }
+
     private fun onRecordingViewUpdate() {
-        binding.btnStartRec.visibility = View.INVISIBLE
-        binding.btnStartRec.isEnabled = false
-        binding.btnStopRec.visibility = View.VISIBLE
-        binding.btnStopRec.isEnabled = true
+        binding.apply {
+            btnStartRec.setInvisibleAndDisabled()
+            btnStopRec.setVisibleAndEnabled()
+        }
     }
 
     private fun notRecordingViewUpdate() {
-        binding.btnStartRec.visibility = View.VISIBLE
-        binding.btnStartRec.isEnabled = true
-        binding.btnStopRec.visibility = View.INVISIBLE
-        binding.btnStopRec.isEnabled = false
+        binding.apply {
+            btnStartRec.setVisibleAndEnabled()
+            btnStopRec.setInvisibleAndDisabled()
+        }
     }
 
-    private fun disableButtonsInitially() {
+    private fun onPauseViewUpdate() {
         binding.apply {
-            btnStartRec.visibility = View.VISIBLE
-            btnStartRec.isEnabled = false
-            btnStopRec.visibility = View.INVISIBLE
-            btnStopRec.isEnabled = false
+            btnStartRec.setInvisibleAndDisabled()
+            btnStopRec.setVisibleAndDisabled()
+            btnPauseRec.setInvisibleAndDisabled()
+            btnResumeRec.setVisibleAndEnabled()
+        }
+    }
+
+    private fun onResumeViewUpdate() {
+        binding.apply {
+            btnStartRec.setInvisibleAndDisabled()
+            btnStopRec.setVisibleAndEnabled()
+            btnPauseRec.setVisibleAndEnabled()
+            btnResumeRec.setInvisibleAndDisabled()
         }
     }
 
@@ -289,6 +310,8 @@ class PhoneAudioInputActivity : AppCompatActivity() {
                 logger.debug("Starting Recording")
                 refreshInputDevices()
                 audioRecordManager?.startRecording()
+                binding.btnPauseRec.setVisibleAndEnabled()
+                binding.btnResumeRec.setInvisibleAndDisabled()
             }
         }
 
@@ -296,8 +319,22 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             workOnStateElseShowToast {
                 logger.debug("Stopping Recording")
                 audioRecordManager?.stopRecording()
+                binding.btnPauseRec.setInvisibleAndDisabled()
+                binding.btnResumeRec.setInvisibleAndDisabled()
                 proceedAfterRecording()
             }
+        }
+
+        binding.btnPauseRec.setOnClickListener {
+            onPauseViewUpdate()
+            audioInputViewModel?.pauseTimer()
+            state?.let { it.audioRecordManager?.apply { pauseRecording() } }
+        }
+
+        binding.btnResumeRec.setOnClickListener {
+            onResumeViewUpdate()
+            audioInputViewModel?.resumeTimer()
+            state?.let { it.audioRecordManager?.apply { resumeRecording() } }
         }
     }
 
@@ -412,5 +449,20 @@ class PhoneAudioInputActivity : AppCompatActivity() {
 
         const val AUDIO_FILE_NAME = "phone-audio-playback-audio-file-name"
         const val EXTERNAL_DEVICE_NAME = "EXTERNAL-DEVICE-NAME"
+
+        private fun View.setVisibleAndEnabled() {
+            visibility = View.VISIBLE
+            isEnabled = true
+        }
+
+        private fun View.setVisibleAndDisabled() {
+            visibility = View.VISIBLE
+            isEnabled = false
+        }
+
+        private fun View.setInvisibleAndDisabled() {
+            visibility = View.INVISIBLE
+            isEnabled = false
+        }
     }
 }

@@ -184,6 +184,14 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
         startAudioRecording()
     }
 
+    override fun pauseRecording() {
+        state.isPaused.value = true
+    }
+
+    override fun resumeRecording() {
+        state.isPaused.value = false
+    }
+
     override fun stopRecording() {
         stopAudioRecording()
     }
@@ -221,7 +229,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
             }
         }
 
-
         // After the data is sent:
         state.isRecordingPlayed = false
     }
@@ -246,7 +253,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                     connectedMicrophones.map { it.productName })
 
                 if (!state.microphonePrioritized) {
-                    logger.info("Running device selection logic")
                     connectedMicrophones.also(::runDeviceSelectionLogic)
                 } else {
                     state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
@@ -256,6 +262,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     private fun runDeviceSelectionLogic(connectedMicrophones: List<AudioDeviceInfo>) {
+        logger.info("Running device selection logic")
        (arrayOf(TYPE_USB_DEVICE, TYPE_USB_HEADSET).let { deviceTypes ->
             connectedMicrophones.run { preferByDeviceType(deviceTypes) }
         } ?: arrayOf(TYPE_BLUETOOTH_A2DP, TYPE_BLUETOOTH_SCO).let { deviceTypes ->
@@ -283,7 +290,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                     .filter { it.name.startsWith("phone_audio_input") && it.path.endsWith(".wav") }
                     .forEach {
                         it.delete()
-                        logger.debug("Deleted audio file: {}", it)
+                        logger.debug("Deleted file: {}", it)
                     }
             }
     }
@@ -347,7 +354,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
         }
 
         override fun onPeriodicNotification(recorder: AudioRecord?) {
-            if (currentlyRecording) {
+            if (currentlyRecording && !state.isPaused.value!!) {
                 audioRecordingHandler.execute {
                     audioRecord?.let {
                         val dataRead = it.read(buffer, 0, buffer.size)
@@ -356,8 +363,13 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                         logger.debug("onPeriodicNotification: Recording Audio")
                     }
                 }
-            } else {
-                logger.warn("Callback: onPeriodicNotification after recording stopped.")
+            } else if (state.isPaused.value!!) {
+                // Triggering a dummy read to keep the callback active
+                audioRecordingHandler.execute { audioRecord?.read(buffer, 0, buffer.size) }
+                logger.debug("Callback: onPeriodicNotification: recording is paused.")
+            }
+            else {
+                logger.debug("Callback: onPeriodicNotification after recording is stopped.")
             }
         }
     }

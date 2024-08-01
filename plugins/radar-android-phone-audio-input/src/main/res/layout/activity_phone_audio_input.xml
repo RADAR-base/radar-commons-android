@@ -113,6 +113,34 @@
             app:layout_constraintHorizontal_bias="0.5"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_pause_rec"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintStart_toEndOf="@+id/btn_stop_rec"
+            app:layout_constraintBottom_toBottomOf="@+id/btn_stop_rec"
+            app:layout_constraintTop_toTopOf="@+id/btn_stop_rec"
+            android:layout_marginStart="16dp"
+            app:fabSize="mini"
+            android:src="@drawable/icon_pause_recording"
+            android:layout_gravity="center"
+            android:contentDescription="@string/pause_btn_desc"
+            android:backgroundTint="?attr/colorPrimary" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_resume_rec"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintStart_toEndOf="@+id/btn_stop_rec"
+            app:layout_constraintBottom_toBottomOf="@+id/btn_stop_rec"
+            app:layout_constraintTop_toTopOf="@+id/btn_stop_rec"
+            android:layout_marginStart="16dp"
+            android:src="@drawable/icon_resume_recording"
+            app:fabSize="mini"
+            android:layout_gravity="center"
+            android:contentDescription="@string/resume_btn_desc"
+            android:backgroundTint="?attr/colorPrimary" />
+
         <FrameLayout
             android:id="@+id/phone_audio_playback_fragment"
             android:layout_width="match_parent"

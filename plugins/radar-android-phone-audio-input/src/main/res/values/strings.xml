@@ -28,4 +28,6 @@
     <string name="cannot_close_activity">Cannot Close Activity</string>
     <string name="cannot_close_activity_message">Please stop the ongoing recording before exiting this activity.</string>
     <string name="ok">OK</string>
+    <string name="pause_btn_desc">Button for pausing audio when recording</string>
+    <string name="resume_btn_desc">Button for resuming audio when recording</string>
 </resources>

@@ -32,6 +32,7 @@ class PhoneAudioInputViewModel: ViewModel() {
     val elapsedTime: LiveData<String>
         get() = _elapsedTime
     val phoneAudioState: MutableLiveData<PhoneAudioInputState> = MutableLiveData()
+    private var timeElapsedMillis: Long = 0L
 
     private var startTime: Long? = null
     private var isRecording: Boolean = false
@@ -41,8 +42,8 @@ class PhoneAudioInputViewModel: ViewModel() {
 
     private val timerRunnable: () -> Boolean = {
         val currentTime = System.currentTimeMillis()
-        val timeElapsed: Long = currentTime - startTime!!
-        _elapsedTime.postValue(AudioDeviceUtils.formatMsToReadableTime(timeElapsed))
+        timeElapsedMillis = currentTime - startTime!!
+        _elapsedTime.postValue(AudioDeviceUtils.formatMsToReadableTime(timeElapsedMillis))
         isRecording
     }
 
@@ -54,7 +55,28 @@ class PhoneAudioInputViewModel: ViewModel() {
         logger.info("Starting timer")
         startTime = System.currentTimeMillis()
         isRecording = true
-        futureHandlerRef = timerHandler.repeatWhile(10, timerRunnable)
+        futureHandlerRef = timerHandler.repeatWhile(20, timerRunnable)
+        logger.debug("Created timer future handler ref: {}", System.identityHashCode(timerRunnable))
+    }
+
+    fun pauseTimer() {
+        logger.debug("Pause timer")
+        val elapsedTime = timeElapsedMillis
+        futureHandlerRef?.let {
+            it.cancel()
+            logger.debug("Cancelled timer future handler ref, {}", System.identityHashCode(timerRunnable))
+            futureHandlerRef = null
+        }
+        isRecording = false
+        timeElapsedMillis = elapsedTime
+        _elapsedTime.postValue(AudioDeviceUtils.formatMsToReadableTime(timeElapsedMillis))
+    }
+
+    fun resumeTimer() {
+        logger.debug("Resumed Timer")
+        startTime = System.currentTimeMillis() - timeElapsedMillis
+        isRecording = true
+        futureHandlerRef = timerHandler.repeatWhile(20, timerRunnable)
     }
 
     fun stopTimer() {
@@ -65,8 +87,12 @@ class PhoneAudioInputViewModel: ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        timerHandler.stop()
-        futureHandlerRef?.cancel()
+        timerHandler.stop {
+            futureHandlerRef?.let {
+                it.cancel()
+                logger.debug("Cancelled timer future handler ref 2, {}", System.identityHashCode(timerRunnable))
+            }
+        }
         logger.trace("PhoneAudioInputViewmodel: ON Cleared")
     }
 
