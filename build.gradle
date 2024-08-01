@@ -17,6 +17,7 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        mavenLocal()
     }
 
     dependencies {
@@ -40,7 +41,7 @@ allprojects {
     ext.issueUrl = 'https://github.com/' + githubRepoName + '/issues'
     ext.website = 'http://radar-base.org'
 
-    version = "1.2.4"
+    version = "$project_version"
     group = 'org.radarbase'
 
     ext.versionCode = 52
@@ -61,7 +62,8 @@ subprojects {
     repositories {
         google()
         mavenCentral()
-//        maven { url = "https://oss.sonatype.org/content/repositories/snapshots" }
+        mavenLocal()
+        maven { url = "https://oss.sonatype.org/content/repositories/snapshots" }
     }
 
     dependencies {
