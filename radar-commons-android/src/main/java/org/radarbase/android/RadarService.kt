@@ -242,6 +242,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 it.close()
                 sourceRegistrar = null
             }
+            (dataHandler as? TableDataHandler)?.close()
+            dataHandler = null
         }
         authConnection.unbind()
 
