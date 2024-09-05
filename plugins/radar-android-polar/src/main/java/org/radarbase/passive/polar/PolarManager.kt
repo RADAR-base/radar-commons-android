@@ -19,6 +19,7 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.polar.*
+import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -53,12 +54,7 @@ class PolarManager(
     private var accDisposable: Disposable? = null
     private var ppiDisposable: Disposable? = null
     private var ppgDisposable: Disposable? = null
-
-    companion object {
-        private const val TAG = "POLAR"
-
-    }
-
+    
     init {
         status = SourceStatusListener.Status.DISCONNECTED // red icon
         name = service.getString(R.string.polarDisplayName)
@@ -68,7 +64,7 @@ class PolarManager(
     override fun start(acceptableIds: Set<String>) {
 
         status = SourceStatusListener.Status.READY // blue loading
-        Log.d(TAG, "Polar Device is $deviceId")
+        logger.debug("Polar Device is $deviceId")
 
         disconnectToPolarSDK(deviceId)
         connectToPolarSDK()
@@ -85,7 +81,7 @@ class PolarManager(
     }
 
     private fun connectToPolarSDK() {
-        Log.d(TAG, "Connecting to Polar API")
+        logger.debug("Connecting to Polar API")
         api = defaultImplementation(
             service.applicationContext,
             setOf(
@@ -101,7 +97,7 @@ class PolarManager(
         api.setApiLogger { str: String -> Log.d("P-SDK", str) }
         api.setApiCallback(object : PolarBleApiCallback() {
             override fun blePowerStateChanged(powered: Boolean) {
-                Log.d(TAG, "BluetoothStateChanged $powered")
+                logger.debug("BluetoothStateChanged $powered")
                 status = if (!powered) {
                     SourceStatusListener.Status.DISCONNECTED // red circle
                 } else {
@@ -110,7 +106,7 @@ class PolarManager(
             }
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
-                Log.d(TAG, "Device connected ${polarDeviceInfo.deviceId}")
+                logger.debug("Device connected ${polarDeviceInfo.deviceId}")
                 service.savePolarDevice(polarDeviceInfo.deviceId)
                 deviceId = polarDeviceInfo.deviceId
                 name = polarDeviceInfo.name
@@ -123,11 +119,11 @@ class PolarManager(
 
             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
                 status = SourceStatusListener.Status.CONNECTING // green dots
-                Log.d(TAG, "Device connecting ${polarDeviceInfo.deviceId}")
+                logger.debug("Device connecting ${polarDeviceInfo.deviceId}")
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
-                Log.d(TAG, "Device disconnected ${polarDeviceInfo.deviceId}")
+                logger.debug("Device disconnected ${polarDeviceInfo.deviceId}")
                 isDeviceConnected = false
                 status = SourceStatusListener.Status.DISCONNECTED // red circle
 
@@ -139,7 +135,7 @@ class PolarManager(
             ) {
 
                 if (isDeviceConnected) {
-                    Log.d(TAG, "Feature ready $feature for $deviceId")
+                    logger.debug("Feature ready {} for {}", feature, deviceId)
 
                     if (feature == PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP) {
                         setDeviceTime(deviceId)
@@ -155,22 +151,22 @@ class PolarManager(
                         }
 
                         else -> {
-                            Log.d(TAG, "No feature was ready")
+                            logger.debug("No feature was ready")
                         }
                     }
                 } else {
-                    Log.d(TAG, "No device was connected")
+                    logger.debug("No device was connected")
                 }
             }
 
             override fun disInformationReceived(identifier: String, uuid: UUID, value: String) {
-                Log.d(TAG, "Firmware: " + identifier + " " + value.trim { it <= ' ' })
+                logger.debug("Firmware: " + identifier + " " + value.trim { it <= ' ' })
             }
 
             override fun batteryLevelReceived(identifier: String, level: Int) {
                 val batteryLevel = level.toFloat() / 100.0f
                 state.batteryLevel = batteryLevel
-                Log.d(TAG, "Battery level $level%, which is $batteryLevel at $currentTime")
+                logger.debug("Battery level $level%, which is $batteryLevel at $currentTime")
                 send(
                     batteryLevelTopic,
                     PolarBatteryLevel(name, currentTime, currentTime, batteryLevel)
@@ -182,10 +178,10 @@ class PolarManager(
         try {
             deviceId = service.getPolarDevice()
             if (deviceId == null) {
-                Log.d(TAG, "Searching for Polar devices")
+                logger.debug("Searching for Polar devices")
                 connectToPolarDevice()
             } else {
-                Log.d(TAG, "Connecting to Polar device $deviceId")
+                logger.debug("Connecting to Polar device $deviceId")
                 api.connectToDevice(deviceId!!)
             }
         } catch (a: PolarInvalidArgument) {
@@ -209,7 +205,7 @@ class PolarManager(
                 if (deviceId == null || !isDeviceConnected) {
                     searchPolarDevice(true)
                 }
-            }, { error: Throwable -> Log.e(TAG, "Searching auto Polar devices failed: $error") })
+            }, { error: Throwable -> logger.error("Searching auto Polar devices failed: $error") })
     }
 
     private fun searchPolarDevice(force: Boolean = false): Disposable? {
@@ -217,13 +213,13 @@ class PolarManager(
             return api.searchForDevice()
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({ device: PolarDeviceInfo ->
-                    Log.d(TAG, "Device found: ${device.deviceId} ${device.name}")
+                    logger.debug("Device found: ${device.deviceId} ${device.name}")
                     if (deviceId == null || force) {
                         api.connectToDevice(device.deviceId)
                     }
                 },
                     { error: Throwable ->
-                        Log.e(TAG, "Search for Polar devices failed: $error")
+                        logger.error("Search for Polar devices failed: $error")
                     })
         } catch (a: PolarInvalidArgument) {
             a.printStackTrace()
@@ -238,7 +234,7 @@ class PolarManager(
             }
             api.shutDown()
         } catch (e: Exception) {
-            Log.e(TAG, "Error occurred during shutdown: ${e.message}")
+            logger.error("Error occurred during shutdown: ${e.message}")
         }
     }
 
@@ -251,12 +247,12 @@ class PolarManager(
                 .subscribe(
                     {
                         val timeSetString = "Time ${calendar.time} set to device"
-                        Log.d(TAG, timeSetString)
+                        logger.debug(timeSetString)
                     },
-                    { error: Throwable -> Log.e(TAG, "Set time failed: $error") }
+                    { error: Throwable -> logger.error("Set time failed: $error") }
                 )
         } ?: run {
-            Log.e(TAG, "Device ID is null. Cannot set device time.")
+            logger.error("Device ID is null. Cannot set device time.")
         }
     }
 
@@ -266,18 +262,17 @@ class PolarManager(
     }
 
     fun streamHR() {
-        Log.d(TAG, "start streamHR for $deviceId")
+        logger.debug("start streamHR for $deviceId")
         val isDisposed = hrDisposable?.isDisposed ?: true
         if (isDisposed) {
             hrDisposable = deviceId?.let {
                 api.startHrStreaming(it)
                     .observeOn(AndroidSchedulers.mainThread())
-                    .doOnSubscribe { Log.d(TAG, "Subscribed to HrStreaming for $deviceId") }
+                    .doOnSubscribe { logger.debug("Subscribed to HrStreaming for $deviceId") }
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
-                                Log.d(
-                                    TAG,
+                                logger.debug(
                                     "HeartRate data for ${name}, ${deviceId}: HR ${sample.hr} " +
                                             "timeStamp: ${getTimeNano()} currentTime: $currentTime " +
                                             "R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} " +
@@ -301,21 +296,21 @@ class PolarManager(
                             }
                         },
                         { error: Throwable ->
-                            Log.e(TAG, "HR stream failed for ${deviceId}. Reason $error")
+                            logger.error("HR stream failed for ${deviceId}. Reason $error")
                             hrDisposable = null
                         },
-                        { Log.d(TAG, "HR stream for $deviceId complete") }
+                        { logger.debug("HR stream for $deviceId complete") }
                     )
             }
         } else {
             hrDisposable?.dispose()
-            Log.d(TAG, "HR stream disposed")
+            logger.debug("HR stream disposed")
             hrDisposable = null
         }
     }
 
     fun streamEcg() {
-        Log.d(TAG, "start streamECG for $deviceId")
+        logger.debug("start streamECG for $deviceId")
         val isDisposed = ecgDisposable?.isDisposed ?: true
         if (isDisposed) {
             val settingMap = mapOf(
@@ -328,8 +323,7 @@ class PolarManager(
                     .subscribe(
                         { polarEcgData: PolarEcgData ->
                             for (data in polarEcgData.samples) {
-                                Log.d(
-                                    TAG,
+                                logger.debug(
                                     "ECG yV: ${data.voltage} timeStamp: ${
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
                                     } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
@@ -346,9 +340,9 @@ class PolarManager(
                             }
                         },
                         { error: Throwable ->
-                            Log.e(TAG, "ECG stream failed. Reason $error")
+                            logger.error("ECG stream failed. Reason $error")
                         },
-                        { Log.d(TAG, "ECG stream complete") }
+                        { logger.debug("ECG stream complete") }
                     )
             }
         } else {
@@ -370,8 +364,7 @@ class PolarManager(
                     .subscribe(
                         { polarAccelerometerData: PolarAccelerometerData ->
                             for (data in polarAccelerometerData.samples) {
-                                Log.d(
-                                    TAG,
+                                logger.debug(
                                     "ACC    x: ${data.x} y: ${data.y} z: ${data.z} timeStamp: ${
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
                                     } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
@@ -390,10 +383,10 @@ class PolarManager(
                             }
                         },
                         { error: Throwable ->
-                            Log.e(TAG, "ACC stream failed. Reason $error")
+                            logger.error("ACC stream failed. Reason $error")
                         },
                         {
-                            Log.d(TAG, "ACC stream complete")
+                            logger.debug("ACC stream complete")
                         }
                     )
             }
@@ -403,7 +396,7 @@ class PolarManager(
     }
 
     fun streamPpg() {
-        Log.d(TAG, "start streamPpg for $deviceId")
+        logger.debug("start streamPpg for $deviceId")
         val isDisposed = ppgDisposable?.isDisposed ?: true
         if (isDisposed) {
             val settingMap = mapOf(
@@ -418,8 +411,7 @@ class PolarManager(
                         { polarPpgData: PolarPpgData ->
                             if (polarPpgData.type == PolarPpgData.PpgDataType.PPG3_AMBIENT1) {
                                 for (data in polarPpgData.samples) {
-                                    Log.d(
-                                        TAG,
+                                    logger.debug(
                                         "PPG    ppg0: ${data.channelSamples[0]} ppg1: ${data.channelSamples[1]} ppg2: ${data.channelSamples[2]} ambient: ${data.channelSamples[3]} timeStamp: ${
                                             PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
                                         } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
@@ -440,9 +432,9 @@ class PolarManager(
                             }
                         },
                         { error: Throwable ->
-                            Log.e(TAG, "ECG stream failed. Reason $error")
+                            logger.error("ECG stream failed. Reason $error")
                         },
-                        { Log.d(TAG, "ECG stream complete") }
+                        { logger.debug("ECG stream complete") }
                     )
             }
         } else {
@@ -459,8 +451,7 @@ class PolarManager(
                     .subscribe(
                         { ppiData: PolarPpiData ->
                             for (sample in ppiData.samples) {
-                                Log.d(
-                                    TAG,
+                                logger.debug(
                                     "PPI    ppi: ${sample.ppi} blocker: ${sample.blockerBit} " +
                                             "errorEstimate: ${sample.errorEstimate} " +
                                             "currentTime: $currentTime"
@@ -482,16 +473,19 @@ class PolarManager(
                             }
                         },
                         { error: Throwable ->
-                            Log.e(TAG, "PPI stream failed. Reason $error")
+                            logger.error("PPI stream failed. Reason $error")
                         },
-                        { Log.d(TAG, "PPI stream complete") }
+                        { logger.debug("PPI stream complete") }
                     )
             }
         } else {
             ppiDisposable?.dispose()
         }
     }
-
+    
+    companion object {
+        private val logger = LoggerFactory.getLogger(PolarManager::class.java)
+    }
 }
 
 
