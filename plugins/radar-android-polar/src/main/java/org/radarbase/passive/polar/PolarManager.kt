@@ -55,7 +55,6 @@ class PolarManager(
     private var accDisposable: Disposable? = null
     private var ppiDisposable: Disposable? = null
     private var ppgDisposable: Disposable? = null
-    private var timeDisposable: Disposable? = null
 
     companion object {
         private const val TAG = "POLAR"
@@ -87,7 +86,7 @@ class PolarManager(
 
     }
 
-    fun connectToPolarSDK() {
+    private fun connectToPolarSDK() {
 
         Log.d(TAG, "Connecting to Polar API")
         api = defaultImplementation(
@@ -106,10 +105,10 @@ class PolarManager(
         api.setApiCallback(object : PolarBleApiCallback() {
             override fun blePowerStateChanged(powered: Boolean) {
                 Log.d(TAG, "BluetoothStateChanged $powered")
-                if (!powered) {
-                    status = SourceStatusListener.Status.DISCONNECTED // red circle
+                status = if (!powered) {
+                    SourceStatusListener.Status.DISCONNECTED // red circle
                 } else {
-                    status = SourceStatusListener.Status.READY // blue loading
+                    SourceStatusListener.Status.READY // blue loading
                 }
             }
 
@@ -174,7 +173,7 @@ class PolarManager(
             override fun batteryLevelReceived(identifier: String, level: Int) {
                 val batteryLevel = level.toFloat() / 100.0f
                 state.batteryLevel = batteryLevel
-                Log.d(TAG, "Battery level $level%, which is $batteryLevel at " + currentTime)
+                Log.d(TAG, "Battery level $level%, which is $batteryLevel at $currentTime")
                 send(
                     batteryLevelTopic,
                     PolarBatteryLevel(name, currentTime, currentTime, batteryLevel)
@@ -198,11 +197,11 @@ class PolarManager(
 
     }
 
-    fun connectToPolarDevice() {
+    private fun connectToPolarDevice() {
         autoConnectToPolarSDK()
     }
 
-    fun autoConnectToPolarSDK() {
+    private fun autoConnectToPolarSDK() {
         if (autoConnectDisposable != null && !autoConnectDisposable!!.isDisposed) {
             autoConnectDisposable?.dispose()
         }
@@ -216,7 +215,7 @@ class PolarManager(
             }, { error: Throwable -> Log.e(TAG, "Searching auto Polar devices failed: $error") })
     }
 
-    fun searchPolarDevice(force: Boolean = false): Disposable? {
+    private fun searchPolarDevice(force: Boolean = false): Disposable? {
         try {
             return api.searchForDevice()
                 .observeOn(AndroidSchedulers.mainThread())
@@ -235,7 +234,7 @@ class PolarManager(
         return null
     }
 
-    fun disconnectToPolarSDK(deviceId: String?) {
+    private fun disconnectToPolarSDK(deviceId: String?) {
         try {
             if (deviceId != null) {
                 api.disconnectFromDevice(deviceId)
@@ -264,26 +263,26 @@ class PolarManager(
         }
     }
 
-    fun getTimeNano(): Double {
+    private fun getTimeNano(): Double {
         val nano = (System.currentTimeMillis() * 1_000_000L).toDouble()
         return nano / 1000_000_000L
     }
 
     fun streamHR() {
-        Log.d(TAG, "start streamHR for ${deviceId}")
+        Log.d(TAG, "start streamHR for $deviceId")
         val isDisposed = hrDisposable?.isDisposed ?: true
         if (isDisposed) {
             hrDisposable = deviceId?.let {
                 api.startHrStreaming(it)
                     .observeOn(AndroidSchedulers.mainThread())
-                    .doOnSubscribe { Log.d(TAG, "Subscribed to HrStreaming for ${deviceId}") }
+                    .doOnSubscribe { Log.d(TAG, "Subscribed to HrStreaming for $deviceId") }
                     .subscribe(
                         { hrData: PolarHrData ->
                             for (sample in hrData.samples) {
                                 Log.d(
                                     TAG,
                                     "HeartRate data for ${name}, ${deviceId}: HR ${sample.hr} " +
-                                            "timeStamp: ${getTimeNano()} currentTime: ${currentTime} " +
+                                            "timeStamp: ${getTimeNano()} currentTime: $currentTime " +
                                             "R ${sample.rrsMs} rrAvailable: ${sample.rrAvailable} " +
                                             "contactStatus: ${sample.contactStatus} " +
                                             "contactStatusSupported: ${sample.contactStatusSupported}"
@@ -308,7 +307,7 @@ class PolarManager(
                             Log.e(TAG, "HR stream failed for ${deviceId}. Reason $error")
                             hrDisposable = null
                         },
-                        { Log.d(TAG, "HR stream for ${deviceId} complete") }
+                        { Log.d(TAG, "HR stream for $deviceId complete") }
                     )
             }
         } else {
@@ -319,7 +318,7 @@ class PolarManager(
     }
 
     fun streamEcg() {
-        Log.d(TAG, "start streamECG for ${deviceId}")
+        Log.d(TAG, "start streamECG for $deviceId")
         val isDisposed = ecgDisposable?.isDisposed ?: true
         if (isDisposed) {
             val settingMap = mapOf(
@@ -336,7 +335,7 @@ class PolarManager(
                                     TAG,
                                     "ECG yV: ${data.voltage} timeStamp: ${
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
-                                    } currentTime: ${currentTime} PolarTimeStamp: ${data.timeStamp}"
+                                    } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
                                 )
                                 send(
                                     ecgTopic,
@@ -378,7 +377,7 @@ class PolarManager(
                                     TAG,
                                     "ACC    x: ${data.x} y: ${data.y} z: ${data.z} timeStamp: ${
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
-                                    } currentTime: ${currentTime} PolarTimeStamp: ${data.timeStamp}"
+                                    } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
                                 )
                                 send(
                                     accelerationTopic,
@@ -407,7 +406,7 @@ class PolarManager(
     }
 
     fun streamPpg() {
-        Log.d(TAG, "start streamPpg for ${deviceId}")
+        Log.d(TAG, "start streamPpg for $deviceId")
         val isDisposed = ppgDisposable?.isDisposed ?: true
         if (isDisposed) {
             val settingMap = mapOf(
@@ -426,7 +425,7 @@ class PolarManager(
                                         TAG,
                                         "PPG    ppg0: ${data.channelSamples[0]} ppg1: ${data.channelSamples[1]} ppg2: ${data.channelSamples[2]} ambient: ${data.channelSamples[3]} timeStamp: ${
                                             PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
-                                        } currentTime: ${currentTime} PolarTimeStamp: ${data.timeStamp}"
+                                        } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
                                     )
                                     send(
                                         ppgTopic,
@@ -467,7 +466,7 @@ class PolarManager(
                                     TAG,
                                     "PPI    ppi: ${sample.ppi} blocker: ${sample.blockerBit} " +
                                             "errorEstimate: ${sample.errorEstimate} " +
-                                            "currentTime: ${currentTime}"
+                                            "currentTime: $currentTime"
                                 )
                                 send(
                                     ppIntervalTopic,
