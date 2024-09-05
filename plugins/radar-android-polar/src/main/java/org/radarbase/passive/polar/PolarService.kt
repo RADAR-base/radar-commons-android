@@ -22,7 +22,7 @@ class PolarService : SourceService<PolarState>() {
         handler = SafeHandler.getInstance("Polar", Process.THREAD_PRIORITY_FOREGROUND)
     }
 
-    override fun createSourceManager() = PolarManager(this, applicationContext)
+    override fun createSourceManager() = PolarManager(this)
 
     override fun configureSourceManager(
         manager: SourceManager<PolarState>,

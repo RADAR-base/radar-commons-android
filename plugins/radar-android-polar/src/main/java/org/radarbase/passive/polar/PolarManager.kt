@@ -1,7 +1,6 @@
 package org.radarbase.passive.polar
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Context.POWER_SERVICE
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
@@ -25,7 +24,6 @@ import java.util.concurrent.TimeUnit
 
 class PolarManager(
     polarService: PolarService,
-    private val applicationContext: Context
 ) : AbstractSourceManager<PolarService, PolarState>(polarService) {
 
     private val accelerationTopic: DataCache<ObservationKey, PolarAcceleration> =
@@ -87,10 +85,9 @@ class PolarManager(
     }
 
     private fun connectToPolarSDK() {
-
         Log.d(TAG, "Connecting to Polar API")
         api = defaultImplementation(
-            applicationContext,
+            service.applicationContext,
             setOf(
                 PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_SDK_MODE,
