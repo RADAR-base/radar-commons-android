@@ -1,15 +1,11 @@
 package org.radarbase.passive.polar
 
 import android.content.Context
-import android.hardware.Sensor
 import android.os.Process
-import android.util.SparseIntArray
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.SafeHandler
-import org.slf4j.LoggerFactory
-import java.util.concurrent.TimeUnit
 
 /**
  * A service that manages the Polar manager and a TableDataHandler to send store the data of
@@ -17,7 +13,7 @@ import java.util.concurrent.TimeUnit
  */
 class PolarService : SourceService<PolarState>() {
     private lateinit var handler: SafeHandler
-//    private lateinit var context: Context
+
     override val defaultState: PolarState
         get() = PolarState()
 
@@ -28,8 +24,28 @@ class PolarService : SourceService<PolarState>() {
 
     override fun createSourceManager() = PolarManager(this, applicationContext)
 
-    override fun configureSourceManager(manager: SourceManager<PolarState>, config: SingleRadarConfiguration) {
+    override fun configureSourceManager(
+        manager: SourceManager<PolarState>,
+        config: SingleRadarConfiguration
+    ) {
         manager as PolarManager
+    }
+
+    fun savePolarDevice(deviceId: String) {
+        applicationContext.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SHARED_PREF_KEY, deviceId)
+            .apply()
+    }
+
+    fun getPolarDevice(): String? {
+        return applicationContext.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
+            .getString(SHARED_PREF_KEY, null)
+    }
+
+    companion object {
+        val SHARED_PREF_NAME: String = PolarService::class.java.name
+        const val SHARED_PREF_KEY = "polar_device_id"
     }
 }
 
