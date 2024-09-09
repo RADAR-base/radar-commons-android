@@ -54,7 +54,7 @@ class PolarManager(
     private var accDisposable: Disposable? = null
     private var ppiDisposable: Disposable? = null
     private var ppgDisposable: Disposable? = null
-    
+
     init {
         status = SourceStatusListener.Status.DISCONNECTED // red icon
         name = service.getString(R.string.polarDisplayName)
@@ -64,9 +64,7 @@ class PolarManager(
     override fun start(acceptableIds: Set<String>) {
 
         status = SourceStatusListener.Status.READY // blue loading
-        logger.debug("Polar Device is $deviceId")
 
-        disconnectToPolarSDK(deviceId)
         connectToPolarSDK()
 
         register()
@@ -125,8 +123,7 @@ class PolarManager(
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                 logger.debug("Device disconnected ${polarDeviceInfo.deviceId}")
                 isDeviceConnected = false
-                status = SourceStatusListener.Status.DISCONNECTED // red circle
-
+                disconnect()
             }
 
             override fun bleSdkFeatureReady(
@@ -137,11 +134,10 @@ class PolarManager(
                 if (isDeviceConnected) {
                     logger.debug("Feature ready {} for {}", feature, deviceId)
 
-                    if (feature == PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP) {
-                        setDeviceTime(deviceId)
-                    }
-
                     when (feature) {
+                        PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP ->
+                            setDeviceTime(deviceId)
+
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
                             streamHR()
                             streamEcg()
@@ -167,13 +163,16 @@ class PolarManager(
                 val batteryLevel = level.toFloat() / 100.0f
                 state.batteryLevel = batteryLevel
                 logger.debug("Battery level $level%, which is $batteryLevel at $currentTime")
-                send(
-                    batteryLevelTopic,
-                    PolarBatteryLevel(name, currentTime, currentTime, batteryLevel)
-                )
+                mHandler.execute {
+                    send(
+                        batteryLevelTopic,
+                        PolarBatteryLevel(name, currentTime, currentTime, batteryLevel)
+                    )
+                }
             }
-
         })
+
+        api.setApiLogger { s: String -> logger.debug("POLAR_API: {}", s) }
 
         try {
             deviceId = service.getPolarDevice()
@@ -186,6 +185,33 @@ class PolarManager(
             }
         } catch (a: PolarInvalidArgument) {
             a.printStackTrace()
+        }
+    }
+
+    override fun onClose() {
+        super.onClose()
+        if (autoConnectDisposable != null && !autoConnectDisposable!!.isDisposed) {
+            autoConnectDisposable?.dispose()
+        }
+        if (hrDisposable != null && !hrDisposable!!.isDisposed) {
+            hrDisposable?.dispose()
+        }
+        if (ecgDisposable != null && !ecgDisposable!!.isDisposed) {
+            ecgDisposable?.dispose()
+        }
+        if (accDisposable != null && !accDisposable!!.isDisposed) {
+            accDisposable?.dispose()
+        }
+        if (ppiDisposable != null && !ppiDisposable!!.isDisposed) {
+            ppiDisposable?.dispose()
+        }
+        if (ppgDisposable != null && !ppgDisposable!!.isDisposed) {
+            ppgDisposable?.dispose()
+        }
+
+        disconnectToPolarSDK(deviceId)
+        mHandler.stop {
+            wakeLock?.release()
         }
 
     }
@@ -200,7 +226,6 @@ class PolarManager(
         }
 
         autoConnectDisposable = Flowable.interval(0, 5, TimeUnit.SECONDS)
-            .observeOn(AndroidSchedulers.mainThread())
             .subscribe({
                 if (deviceId == null || !isDeviceConnected) {
                     searchPolarDevice(true)
@@ -211,7 +236,6 @@ class PolarManager(
     private fun searchPolarDevice(force: Boolean = false): Disposable? {
         try {
             return api.searchForDevice()
-                .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({ device: PolarDeviceInfo ->
                     logger.debug("Device found: ${device.deviceId} ${device.name}")
                     if (deviceId == null || force) {
@@ -267,7 +291,6 @@ class PolarManager(
         if (isDisposed) {
             hrDisposable = deviceId?.let {
                 api.startHrStreaming(it)
-                    .observeOn(AndroidSchedulers.mainThread())
                     .doOnSubscribe { logger.debug("Subscribed to HrStreaming for $deviceId") }
                     .subscribe(
                         { hrData: PolarHrData ->
@@ -279,19 +302,21 @@ class PolarManager(
                                             "contactStatus: ${sample.contactStatus} " +
                                             "contactStatusSupported: ${sample.contactStatusSupported}"
                                 )
-                                send(
-                                    heartRateTopic,
-                                    PolarHeartRate(
-                                        name,
-                                        getTimeNano(),
-                                        currentTime,
-                                        sample.hr,
-                                        sample.rrsMs,
-                                        sample.rrAvailable,
-                                        sample.contactStatus,
-                                        sample.contactStatusSupported
+                                mHandler.execute {
+                                    send(
+                                        heartRateTopic,
+                                        PolarHeartRate(
+                                            name,
+                                            getTimeNano(),
+                                            currentTime,
+                                            sample.hr,
+                                            sample.rrsMs,
+                                            sample.rrAvailable,
+                                            sample.contactStatus,
+                                            sample.contactStatusSupported
+                                        )
                                     )
-                                )
+                                }
 
                             }
                         },
@@ -328,15 +353,17 @@ class PolarManager(
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
                                     } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
                                 )
-                                send(
-                                    ecgTopic,
-                                    PolarEcg(
-                                        name,
-                                        PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
-                                        currentTime,
-                                        data.voltage
+                                mHandler.execute {
+                                    send(
+                                        ecgTopic,
+                                        PolarEcg(
+                                            name,
+                                            PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                            currentTime,
+                                            data.voltage
+                                        )
                                     )
-                                )
+                                }
                             }
                         },
                         { error: Throwable ->
@@ -369,17 +396,19 @@ class PolarManager(
                                         PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
                                     } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
                                 )
-                                send(
-                                    accelerationTopic,
-                                    PolarAcceleration(
-                                        name,
-                                        PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
-                                        currentTime,
-                                        data.x,
-                                        data.y,
-                                        data.z
+                                mHandler.execute {
+                                    send(
+                                        accelerationTopic,
+                                        PolarAcceleration(
+                                            name,
+                                            PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                            currentTime,
+                                            data.x,
+                                            data.y,
+                                            data.z
+                                        )
                                     )
-                                )
+                                }
                             }
                         },
                         { error: Throwable ->
@@ -416,18 +445,20 @@ class PolarManager(
                                             PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp)
                                         } currentTime: $currentTime PolarTimeStamp: ${data.timeStamp}"
                                     )
-                                    send(
-                                        ppgTopic,
-                                        PolarPpg(
-                                            name,
-                                            PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
-                                            currentTime,
-                                            data.channelSamples[0],
-                                            data.channelSamples[1],
-                                            data.channelSamples[2],
-                                            data.channelSamples[3]
+                                    mHandler.execute {
+                                        send(
+                                            ppgTopic,
+                                            PolarPpg(
+                                                name,
+                                                PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
+                                                currentTime,
+                                                data.channelSamples[0],
+                                                data.channelSamples[1],
+                                                data.channelSamples[2],
+                                                data.channelSamples[3]
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             }
                         },
@@ -447,7 +478,6 @@ class PolarManager(
         if (isDisposed) {
             ppiDisposable = deviceId?.let {
                 api.startPpiStreaming(it)
-                    .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(
                         { ppiData: PolarPpiData ->
                             for (sample in ppiData.samples) {
@@ -456,20 +486,22 @@ class PolarManager(
                                             "errorEstimate: ${sample.errorEstimate} " +
                                             "currentTime: $currentTime"
                                 )
-                                send(
-                                    ppIntervalTopic,
-                                    PolarPpInterval(
-                                        name,
-                                        currentTime,
-                                        currentTime,
-                                        sample.blockerBit,
-                                        sample.errorEstimate,
-                                        sample.hr,
-                                        sample.ppi,
-                                        sample.skinContactStatus,
-                                        sample.skinContactSupported
+                                mHandler.execute {
+                                    send(
+                                        ppIntervalTopic,
+                                        PolarPpInterval(
+                                            name,
+                                            currentTime,
+                                            currentTime,
+                                            sample.blockerBit,
+                                            sample.errorEstimate,
+                                            sample.hr,
+                                            sample.ppi,
+                                            sample.skinContactStatus,
+                                            sample.skinContactSupported
+                                        )
                                     )
-                                )
+                                }
                             }
                         },
                         { error: Throwable ->
@@ -482,7 +514,7 @@ class PolarManager(
             ppiDisposable?.dispose()
         }
     }
-    
+
     companion object {
         private val logger = LoggerFactory.getLogger(PolarManager::class.java)
     }
