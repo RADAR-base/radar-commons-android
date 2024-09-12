@@ -20,17 +20,23 @@ import android.app.Activity
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.RadarApplication.Companion.radarApp
+import org.radarbase.android.RadarApplication.Companion.radarConfig
+import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.*
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager
+import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
+import org.radarbase.android.auth.oauth2.utils.PreLoginQRParser
 import org.radarbase.producer.AuthenticationException
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 /**
- * Authenticates against the RADAR Management Portal.
+ * Authenticates against the RADAR-base ory kratos server.
  */
 class OAuth2LoginManager(
     private val service: AuthService,
 ) : LoginManager, LoginListener {
     private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
+    private val config: RadarConfiguration = service.radarConfig
 
     override fun refresh(authState: AppAuthState): Boolean {
         if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER) {
@@ -40,13 +46,36 @@ class OAuth2LoginManager(
                 ?.also { stateManager.refresh(service, it) } != null
     }
 
+    private fun parsePreLoginQR(authState: AppAuthState, oAuthQrContent: String) {
+        try {
+            synchronized(this) {
+                val parser = PreLoginQRParser(authState)
+                parser.parse(oAuthQrContent).also { appAuth: AppAuthState ->
+                    config.updateWithAuthState(service, appAuth)
+
+                    start(appAuth)
+                }
+            }
+        } catch (ex: Exception) {
+            logger.error("Failed to authorize with the authorization server: ", ex)
+            service.loginFailed(this, ex)
+        }
+    }
+
 
     override fun isRefreshable(authState: AppAuthState): Boolean =
         authState.userId != null && authState.projectId != null && authState.getAttribute(LOGIN_REFRESH_TOKEN) != null
 
     override fun start(authState: AppAuthState) {
+        if (authState.getAttribute(BASE_URL_PROPERTY) == null || authState.projectId == null) {
+            logger.debug("Authorization cannot proceed, either the base URL or project ID is missing")
+            return
+        }
+        logger.debug("Staring authorization ")
         service.radarApp.let { app ->
-            stateManager.login(service, app.loginActivity, app.configuration.latestConfig)
+            synchronized(this) {
+                stateManager.login(service, app.loginActivity, app.configuration.latestConfig)
+            }
         }
     }
 
@@ -58,7 +87,7 @@ class OAuth2LoginManager(
     override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
         return if (authState.authenticationSource != OAUTH2_SOURCE_TYPE) null
         else if (disableRefresh) {
-            return authState.alter {
+            authState.alter {
                 attributes -= LOGIN_REFRESH_TOKEN
                 isPrivacyPolicyAccepted = false
             }
@@ -119,8 +148,9 @@ class OAuth2LoginManager(
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
 
     companion object {
-        private const val OAUTH2_SOURCE_TYPE = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
+        const val OAUTH2_SOURCE_TYPE = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
         private val OAUTH2_SOURCE_TYPES = listOf(OAUTH2_SOURCE_TYPE)
         const val LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
+        private val logger: Logger = LoggerFactory.getLogger(OAuth2LoginManager::class.java)
     }
 }
