@@ -18,6 +18,7 @@ package org.radarbase.android.auth.oauth2
 
 import android.app.Activity
 import org.json.JSONException
+import org.json.JSONObject
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.auth.*
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager
@@ -28,8 +29,6 @@ import org.radarbase.producer.AuthenticationException
  */
 class OAuth2LoginManager(
     private val service: AuthService,
-    private val projectIdClaim: String,
-    private val userIdClaim: String
 ) : LoginManager, LoginListener {
     private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
 
@@ -43,7 +42,7 @@ class OAuth2LoginManager(
 
 
     override fun isRefreshable(authState: AppAuthState): Boolean =
-        authState.userId != null && authState.getAttribute(LOGIN_REFRESH_TOKEN) != null
+        authState.userId != null && authState.projectId != null && authState.getAttribute(LOGIN_REFRESH_TOKEN) != null
 
     override fun start(authState: AppAuthState) {
         service.radarApp.let { app ->
@@ -56,8 +55,17 @@ class OAuth2LoginManager(
         return true
     }
 
-    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? =
-        authState.takeIf { it.authenticationSource == OAUTH2_SOURCE_TYPE }
+    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
+        return if (authState.authenticationSource != OAUTH2_SOURCE_TYPE) null
+        else if (disableRefresh) {
+            return authState.alter {
+                attributes -= LOGIN_REFRESH_TOKEN
+                isPrivacyPolicyAccepted = false
+            }
+        } else {
+            authState
+        }
+    }
 
     override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
 
@@ -99,13 +107,11 @@ class OAuth2LoginManager(
     }
 
     private fun processJwt(authState: AppAuthState, jwt: Jwt): AppAuthState {
-        val body = jwt.body
+        val body: JSONObject = jwt.body
 
         return authState.alter {
             authenticationSource = OAUTH2_SOURCE_TYPE
-            needsRegisteredSources = false
-            projectId = body.optString(projectIdClaim)
-            userId = body.optString(userIdClaim)
+            needsRegisteredSources = true
             expiration = body.optLong("exp", java.lang.Long.MAX_VALUE / 1000L) * 1000L
         }
     }
