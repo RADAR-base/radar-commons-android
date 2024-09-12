@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory
 class OAuth2StateManager(context: Context) {
     private val mPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
     private var mCurrentAuthState: AuthState
+    private val oAuthService: AuthorizationService? = null
 
     init {
         mCurrentAuthState = readState()
@@ -59,8 +60,7 @@ class OAuth2StateManager(context: Context) {
             redirectUri,  // the redirect URI to which the auth response is sent
         )
 
-        val service = AuthorizationService(context)
-        service.performAuthorizationRequest(
+        oAuthService?.performAuthorizationRequest(
             authRequestBuilder.build(),
             PendingIntent.getActivity(
                 context,
@@ -87,9 +87,8 @@ class OAuth2StateManager(context: Context) {
         }
 
         if (resp != null) {
-            val service = AuthorizationService(authService)
             // authorization succeeded
-            service.performTokenRequest(
+            oAuthService?.performTokenRequest(
                 resp.createTokenExchangeRequest(),
                 processTokenResponse(authService),
             )
@@ -100,7 +99,6 @@ class OAuth2StateManager(context: Context) {
 
     @Synchronized
     fun refresh(context: AuthService, refreshToken: String?) {
-        val service = AuthorizationService(context)
         // refreshToken does not originate from the current auth state.
         if (refreshToken != null && refreshToken != mCurrentAuthState.refreshToken) {
             try {
@@ -112,7 +110,7 @@ class OAuth2StateManager(context: Context) {
             }
         }
         // authorization succeeded
-        service.performTokenRequest(
+        oAuthService?.performTokenRequest(
             mCurrentAuthState.createTokenRefreshRequest(),
             processTokenResponse(context),
         )
@@ -167,6 +165,10 @@ class OAuth2StateManager(context: Context) {
                 remove(KEY_STATE)
             }
         }.apply()
+    }
+
+    fun release() {
+        oAuthService?.dispose()
     }
 
     companion object {

@@ -77,7 +77,9 @@ class OAuth2LoginManager(
         return true
     }
 
-    override fun onDestroy() = Unit
+    override fun onDestroy() {
+        stateManager.release()
+    }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         val token = authState.token
