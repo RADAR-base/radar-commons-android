@@ -30,11 +30,12 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.LOGIN_REFRESH_TOKEN
+import org.radarbase.android.auth.oauth2.utils.client.OAuthClient
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.toPendingIntentFlag
 import org.slf4j.LoggerFactory
 
-class OAuth2StateManager(context: Context) {
+class OAuth2StateManager(context: Context, private var client: OAuthClient) {
     private val mPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
     private var mCurrentAuthState: AuthState
     private val oAuthService: AuthorizationService? = null
@@ -69,6 +70,10 @@ class OAuth2StateManager(context: Context) {
                 PendingIntent.FLAG_ONE_SHOT.toPendingIntentFlag(),
             ),
         )
+    }
+
+    fun updateClient(newClient: OAuthClient){
+        client = newClient
     }
 
     @AnyThread
@@ -120,24 +125,30 @@ class OAuth2StateManager(context: Context) {
         context: AuthService
     ) = AuthorizationService.TokenResponseCallback { resp, ex ->
         resp ?: return@TokenResponseCallback context.loginFailed(null, ex)
-        updateAfterTokenResponse(resp, ex)
-        context.loginSucceeded(null, AppAuthState {
-            token = checkNotNull(mCurrentAuthState.accessToken) { "Missing access token after successful login"}
-                .also { addHeader("Authorization","Bearer $it") }
-            tokenType = LoginManager.AUTH_TYPE_BEARER
-            this.expiration = mCurrentAuthState.accessTokenExpirationTime ?: 0L
-            attributes[LOGIN_REFRESH_TOKEN] = checkNotNull(mCurrentAuthState.refreshToken) { "Missing refresh token after successful login" }
-        })
+        val authorizedState: AppAuthState = updateAfterTokenResponse(resp, context, ex)
+        context.loginSucceeded(null, authorizedState)
     }
 
     @AnyThread
     @Synchronized
     fun updateAfterTokenResponse(
         response: TokenResponse?,
+        service: AuthService,
         ex: AuthorizationException?
-    ) {
+    ): AppAuthState {
         mCurrentAuthState.update(response, ex)
         writeState(mCurrentAuthState)
+        val authorizedAuthState = AppAuthState {
+            token =
+                checkNotNull(mCurrentAuthState.accessToken) { "Missing access token after successful login" }
+                    .also { addHeader("Authorization", "Bearer $it") }
+            tokenType = LoginManager.AUTH_TYPE_BEARER
+            this.expiration = mCurrentAuthState.accessTokenExpirationTime ?: 0L
+            attributes[LOGIN_REFRESH_TOKEN] =
+                checkNotNull(mCurrentAuthState.refreshToken) { "Missing refresh token after successful login" }
+        }
+        service.updateState(authorizedAuthState)
+        return client.requestSubjectsFromMp(authorizedAuthState)
     }
 
     @AnyThread
