@@ -28,7 +28,7 @@ import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTIO
 import org.radarbase.android.auth.*
 import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.oauth2.utils.client.OAuthClient
-import org.radarbase.android.auth.oauth2.utils.parser.PreLoginQRParser
+import org.radarbase.android.auth.oauth2.utils.parser.PreLoginQrParser
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.config.ServerConfig
@@ -49,7 +49,7 @@ class OAuth2LoginManager(private val service: AuthService) : LoginManager, Login
     private var clientConfig: OAuthClientConfig? = null
     private var restClient: RestClient? = null
     private val configurationObserver: Observer<SingleRadarConfiguration> = Observer { newConfig ->
-        refreshMPClient(newConfig)
+        refreshOauthClient(newConfig)
     }
     private val stateManager: OAuth2StateManager = OAuth2StateManager(service, client)
 
@@ -65,13 +65,13 @@ class OAuth2LoginManager(private val service: AuthService) : LoginManager, Login
                 ?.also { stateManager.refresh(service, it) } != null
     }
 
-    fun parsePreLoginQR(authState: AppAuthState, oAuthQrContent: String) {
+    fun parsePreLoginQr(authState: AppAuthState, oAuthQrContent: String) {
         try {
             synchronized(this) {
-                val parser = PreLoginQRParser(authState)
+                val parser = PreLoginQrParser(authState)
                 parser.parse(oAuthQrContent).also { appAuth: AppAuthState ->
                     config.updateWithAuthState(service, appAuth)
-                    refreshMPClient(config.latestConfig)
+                    refreshOauthClient(config.latestConfig)
                     start(appAuth)
                 }
             }
@@ -166,7 +166,7 @@ class OAuth2LoginManager(private val service: AuthService) : LoginManager, Login
     }
 
     @Synchronized
-    private fun refreshMPClient(config: SingleRadarConfiguration) {
+    private fun refreshOauthClient(config: SingleRadarConfiguration) {
         val oAuthClientConfig = try {
             OAuthClientConfig(
                 config.getString(MANAGEMENT_PORTAL_URL_KEY),

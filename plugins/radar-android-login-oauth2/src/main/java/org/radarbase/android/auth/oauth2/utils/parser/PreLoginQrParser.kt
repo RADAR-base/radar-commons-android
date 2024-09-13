@@ -9,7 +9,7 @@ import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.OAUTH2_SOURCE_TYPE
 import java.io.IOException
 
-class PreLoginQRParser(private val currentState: AppAuthState): AuthStringParser {
+class PreLoginQrParser(private val currentState: AppAuthState): AuthStringParser {
 
     @Throws(IOException::class)
     override fun parse(value: String): AppAuthState {
