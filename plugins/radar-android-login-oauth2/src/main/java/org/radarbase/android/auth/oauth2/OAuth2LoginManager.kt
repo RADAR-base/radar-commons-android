@@ -50,6 +50,7 @@ class OAuth2LoginManager(private val service: AuthService, appAuthState: AppAuth
 
     private val config: RadarConfiguration = service.radarConfig
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
+    private var listenerRegistration: AuthService.LoginListenerRegistration? = null
 
     private var client: OAuthClient? = null
     private var clientConfig: OAuthClientConfig? = null
@@ -59,9 +60,11 @@ class OAuth2LoginManager(private val service: AuthService, appAuthState: AppAuth
     }
     private val stateManager: OAuth2StateManager = OAuth2StateManager(service, client)
 
+
     init {
         config.config.observeForever(configurationObserver)
         updateSources(appAuthState)
+        listenerRegistration = service.addLoginListener(this)
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
@@ -257,6 +260,7 @@ class OAuth2LoginManager(private val service: AuthService, appAuthState: AppAuth
     override fun onDestroy() {
         stateManager.release()
         config.config.removeObserver(configurationObserver)
+        listenerRegistration?.let(service::removeLoginListener)
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
