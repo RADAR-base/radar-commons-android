@@ -41,9 +41,10 @@ import java.net.MalformedURLException
 /**
  * Authenticates against the RADAR-base ory kratos server.
  */
-class OAuth2LoginManager(private val service: AuthService) : LoginManager, LoginListener {
+class OAuth2LoginManager(private val service: AuthService, appAuthState: AppAuthState) : LoginManager, LoginListener {
 
     private val config: RadarConfiguration = service.radarConfig
+    private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
 
     private var client: OAuthClient? = null
     private var clientConfig: OAuthClientConfig? = null
@@ -55,6 +56,7 @@ class OAuth2LoginManager(private val service: AuthService) : LoginManager, Login
 
     init {
         config.config.observeForever(configurationObserver)
+        updateSources(appAuthState)
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
@@ -71,7 +73,6 @@ class OAuth2LoginManager(private val service: AuthService) : LoginManager, Login
                 val parser = PreLoginQrParser(authState)
                 parser.parse(oAuthQrContent).also { appAuth: AppAuthState ->
                     config.updateWithAuthState(service, appAuth)
-                    refreshOauthClient(config.latestConfig)
                     start(appAuth)
                 }
             }
@@ -99,7 +100,9 @@ class OAuth2LoginManager(private val service: AuthService) : LoginManager, Login
     }
 
     override fun onActivityCreate(activity: Activity): Boolean {
-        stateManager.updateAfterAuthorization(service, activity.intent)
+        refreshOauthClient(config.latestConfig)
+        val authState: AppAuthState? = stateManager.updateAfterAuthorization(service, activity.intent)
+        authState?.let(::updateSources)
         return true
     }
 
@@ -190,6 +193,14 @@ class OAuth2LoginManager(private val service: AuthService) : LoginManager, Login
         }
     }
 
+    private fun updateSources(authState: AppAuthState) {
+        authState.sourceMetadata
+            .forEach { sourceMetadata ->
+                sourceMetadata.sourceId?.let {
+                    sources[it] = sourceMetadata
+                }
+            }
+    }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
 

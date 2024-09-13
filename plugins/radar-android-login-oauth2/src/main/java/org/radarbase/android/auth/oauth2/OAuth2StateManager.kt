@@ -39,6 +39,7 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
     private val mPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
     private var mCurrentAuthState: AuthState
     private val oAuthService: AuthorizationService? = null
+    private var authorizedState: AppAuthState? = null
 
     init {
         mCurrentAuthState = readState()
@@ -78,9 +79,9 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
 
     @AnyThread
     @Synchronized
-    fun updateAfterAuthorization(authService: AuthService, intent: Intent?) {
+    fun updateAfterAuthorization(authService: AuthService, intent: Intent?): AppAuthState? {
         if (intent == null) {
-            return
+            return null
         }
 
         val resp = AuthorizationResponse.fromIntent(intent)
@@ -99,7 +100,9 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
             )
         } else if (ex != null) {
             authService.loginFailed(null, ex)
+            return null
         }
+        return authorizedState
     }
 
     @Synchronized
@@ -125,7 +128,7 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
         context: AuthService
     ) = AuthorizationService.TokenResponseCallback { resp, ex ->
         resp ?: return@TokenResponseCallback context.loginFailed(null, ex)
-        val authorizedState: AppAuthState? = updateAfterTokenResponse(resp, context, ex)
+        authorizedState= updateAfterTokenResponse(resp, context, ex)
         authorizedState?.let {
             context.loginSucceeded(null, it)
         } ?: throw SubjectFetchFailedException("Failed to retrieve subjects from management portal")
