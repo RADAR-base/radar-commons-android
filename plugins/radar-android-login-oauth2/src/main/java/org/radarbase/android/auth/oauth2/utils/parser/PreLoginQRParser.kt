@@ -1,4 +1,4 @@
-package org.radarbase.android.auth.oauth2.utils
+package org.radarbase.android.auth.oauth2.utils.parser
 
 import org.json.JSONException
 import org.json.JSONObject
