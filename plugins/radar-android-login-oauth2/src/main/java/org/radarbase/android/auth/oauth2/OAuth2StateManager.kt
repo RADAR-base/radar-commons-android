@@ -35,7 +35,7 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.toPendingIntentFlag
 import org.slf4j.LoggerFactory
 
-class OAuth2StateManager(context: Context, private var client: OAuthClient) {
+class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
     private val mPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
     private var mCurrentAuthState: AuthState
     private val oAuthService: AuthorizationService? = null
@@ -125,8 +125,10 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient) {
         context: AuthService
     ) = AuthorizationService.TokenResponseCallback { resp, ex ->
         resp ?: return@TokenResponseCallback context.loginFailed(null, ex)
-        val authorizedState: AppAuthState = updateAfterTokenResponse(resp, context, ex)
-        context.loginSucceeded(null, authorizedState)
+        val authorizedState: AppAuthState? = updateAfterTokenResponse(resp, context, ex)
+        authorizedState?.let {
+            context.loginSucceeded(null, it)
+        } ?: throw SubjectFetchFailedException("Failed to retrieve subjects from management portal")
     }
 
     @AnyThread
@@ -135,7 +137,7 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient) {
         response: TokenResponse?,
         service: AuthService,
         ex: AuthorizationException?
-    ): AppAuthState {
+    ): AppAuthState? {
         mCurrentAuthState.update(response, ex)
         writeState(mCurrentAuthState)
         val authorizedAuthState = AppAuthState {
@@ -148,7 +150,7 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient) {
                 checkNotNull(mCurrentAuthState.refreshToken) { "Missing refresh token after successful login" }
         }
         service.updateState(authorizedAuthState)
-        return client.requestSubjectsFromMp(authorizedAuthState)
+        return client?.requestSubjectsFromMp(authorizedAuthState)
     }
 
     @AnyThread
@@ -189,5 +191,7 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient) {
 
         private const val STORE_NAME = "AuthState"
         private const val KEY_STATE = "state"
+
+        class SubjectFetchFailedException(message: String): RuntimeException(message)
     }
 }

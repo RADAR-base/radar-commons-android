@@ -17,26 +17,45 @@
 package org.radarbase.android.auth.oauth2
 
 import android.app.Activity
+import androidx.lifecycle.Observer
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
+import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.*
 import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
-import org.radarbase.android.auth.oauth2.utils.PreLoginQRParser
+import org.radarbase.android.auth.oauth2.utils.client.OAuthClient
+import org.radarbase.android.auth.oauth2.utils.parser.PreLoginQRParser
+import org.radarbase.android.config.SingleRadarConfiguration
+import org.radarbase.android.util.ServerConfigUtil.toServerConfig
+import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
+import org.radarbase.producer.rest.RestClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.net.MalformedURLException
 
 /**
  * Authenticates against the RADAR-base ory kratos server.
  */
-class OAuth2LoginManager(
-    private val service: AuthService,
-) : LoginManager, LoginListener {
-    private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
+class OAuth2LoginManager(private val service: AuthService) : LoginManager, LoginListener {
+
     private val config: RadarConfiguration = service.radarConfig
+
+    private var client: OAuthClient? = null
+    private var clientConfig: OAuthClientConfig? = null
+    private var restClient: RestClient? = null
+    private val configurationObserver: Observer<SingleRadarConfiguration> = Observer { newConfig ->
+        refreshMPClient(newConfig)
+    }
+    private val stateManager: OAuth2StateManager = OAuth2StateManager(service, client)
+
+    init {
+        config.config.observeForever(configurationObserver)
+    }
 
     override fun refresh(authState: AppAuthState): Boolean {
         if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER) {
@@ -46,13 +65,13 @@ class OAuth2LoginManager(
                 ?.also { stateManager.refresh(service, it) } != null
     }
 
-    private fun parsePreLoginQR(authState: AppAuthState, oAuthQrContent: String) {
+    fun parsePreLoginQR(authState: AppAuthState, oAuthQrContent: String) {
         try {
             synchronized(this) {
                 val parser = PreLoginQRParser(authState)
                 parser.parse(oAuthQrContent).also { appAuth: AppAuthState ->
                     config.updateWithAuthState(service, appAuth)
-
+                    refreshMPClient(config.latestConfig)
                     start(appAuth)
                 }
             }
@@ -116,6 +135,7 @@ class OAuth2LoginManager(
 
     override fun onDestroy() {
         stateManager.release()
+        config.config.removeObserver(configurationObserver)
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
@@ -145,6 +165,32 @@ class OAuth2LoginManager(
         }
     }
 
+    @Synchronized
+    private fun refreshMPClient(config: SingleRadarConfiguration) {
+        val oAuthClientConfig = try {
+            OAuthClientConfig(
+                config.getString(MANAGEMENT_PORTAL_URL_KEY),
+                config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
+            )
+        } catch (e: MalformedURLException) {
+            logger.error("Cannot construct OAuthClient with malformed URL")
+            null
+        } catch (e: Exception) {
+            logger.error("Exception when creating oAuth client")
+            null
+        }
+
+        if (oAuthClientConfig == clientConfig) return
+
+        client = oAuthClientConfig?.let {
+            OAuthClient(
+                oAuthClientConfig.serverConfig,
+                client = restClient,
+            ).also { restClient = it.httpClient }
+        }
+    }
+
+
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
 
     companion object {
@@ -152,5 +198,9 @@ class OAuth2LoginManager(
         private val OAUTH2_SOURCE_TYPES = listOf(OAUTH2_SOURCE_TYPE)
         const val LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
         private val logger: Logger = LoggerFactory.getLogger(OAuth2LoginManager::class.java)
+    }
+
+    private data class OAuthClientConfig(val serverConfig: ServerConfig) {
+        constructor(url: String, isUnsafeConnection: Boolean): this(url.toServerConfig(isUnsafeConnection))
     }
 }

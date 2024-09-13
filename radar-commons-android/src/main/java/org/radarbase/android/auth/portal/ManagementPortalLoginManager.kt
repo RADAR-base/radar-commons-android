@@ -325,7 +325,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
         val sourceTypeList = listOf(SOURCE_TYPE)
     }
 
-    data class ManagementPortalConfig(
+    private data class ManagementPortalConfig(
         val serverConfig: ServerConfig,
         val clientId: String,
         val clientSecret: String,
