@@ -21,8 +21,19 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
+/**
+ * OAuthClient is responsible for interacting with the Management Portal (MP) through OAuth2-based REST requests.
+ * It provides functionality for registering and updating sources, as well as fetching subjects from the MP.
+ *
+ * @param serverConfig the server configuration in form of [ServerConfig] for the Management Portal.
+ * @param client an optional RestClient instance for making requests. If not provided, a new RestClient is created.
+ */
 class OAuthClient(serverConfig: ServerConfig, client: RestClient? = null) {
 
+    /**
+     * The HTTP client for interacting with the Management Portal.
+     * Built using the provided server configuration and an optional RestClient.
+     */
     val httpClient: RestClient = (client?.newBuilder() ?: RestClient.newClient())
         .server(serverConfig)
         .build()
@@ -45,6 +56,13 @@ class OAuthClient(serverConfig: ServerConfig, client: RestClient? = null) {
         source,
     )
 
+    /**
+     * Requests subject information from the Management Portal based on the current AppAuthState.
+     *
+     * @param state the current AppAuthState containing userId and OAuth credentials.
+     * @return an updated AppAuthState containing subject information from the Management Portal.
+     * @throws IOException if the userId is null or if there is a network error or invalid response from the Management Portal.
+     */
     @Throws(IOException::class)
     fun requestSubjectsFromMp(state: AppAuthState): AppAuthState {
         if (state.userId == null) {
@@ -73,6 +91,16 @@ class OAuthClient(serverConfig: ServerConfig, client: RestClient? = null) {
             }
     }
 
+    /**
+     * Helper function to handle requests for source registration or updates.
+     *
+     * @param auth the current authentication state containing user information and OAuth credentials.
+     * @param relativePath the relative API path to either register or update a source.
+     * @param requestBody the request body containing source data in JSON format.
+     * @param source the metadata of the source to register or update.
+     * @return the source metadata returned by the Management Portal.
+     * @throws IOException if there is a network error, a conflict, or the source/user is not found.
+     */
     private fun handleSourceUpdateRequest(
         auth: AppAuthState,
         relativePath: String,

@@ -42,7 +42,9 @@ import java.io.IOException
 import java.net.MalformedURLException
 
 /**
- * Authenticates against the RADAR-base ory kratos server.
+ * Manages OAuth2 login and authentication for RADAR-base self-enrollment.
+ * This class is responsible for handling OAuth2 authentication processes, refreshing tokens, and
+ * interacting with the ManagementPortal to register and update sources.
  */
 class OAuth2LoginManager(private val service: AuthService, appAuthState: AppAuthState) : LoginManager, LoginListener {
 
@@ -70,6 +72,13 @@ class OAuth2LoginManager(private val service: AuthService, appAuthState: AppAuth
                 ?.also { stateManager.refresh(service, it) } != null
     }
 
+    /**
+     * Parses a pre-login QR code scanned from Self-enrolment portal UI and updates the
+     * authentication state accordingly.
+     *
+     * @param authState the current authentication state
+     * @param oAuthQrContent the content of the pre-login QR code containing the projectId, baseurl etc
+     */
     fun parsePreLoginQr(authState: AppAuthState, oAuthQrContent: String) {
         try {
             synchronized(this) {
@@ -277,6 +286,11 @@ class OAuth2LoginManager(private val service: AuthService, appAuthState: AppAuth
         }
     }
 
+    /**
+     * Refreshes the OAuth client configuration whenever the [RadarConfiguration] changes.
+     *
+     * @param config
+     */
     @Synchronized
     private fun refreshOauthClient(config: SingleRadarConfiguration) {
         val oAuthClientConfig = try {

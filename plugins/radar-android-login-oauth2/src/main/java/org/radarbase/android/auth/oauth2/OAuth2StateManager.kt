@@ -35,6 +35,16 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.toPendingIntentFlag
 import org.slf4j.LoggerFactory
 
+/**
+ * Manages OAuth2 authentication states and login flow by utilizing AppAuth-Android library.
+ * This class handles OAuth2 login, token refresh, and state persistence using
+ * SharedPreferences. It interacts with the AuthorizationService to manage OAuth2
+ * requests and responses It manages [AuthState] to be used in AppAuth-Android library and
+ * [AppAuthState] for [AuthService] functioning.
+ *
+ * @param context the context in which the state manager operates.
+ * @param client the OAuthClient instance used for OAuth2 communication.
+ */
 class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
     private val mPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
     private var mCurrentAuthState: AuthState
@@ -45,6 +55,14 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
         mCurrentAuthState = readState()
     }
 
+    /**
+     * Initiates the OAuth 2.0 login process.
+     * It constructs an authorization request and initiates the OAuth authorization flow.
+     *
+     * @param context The AuthService instance responsible for handling login success or failure.
+     * @param activityClass The class of the Activity to be launched for handling the login.
+     * @param config The OAuth configuration containing URLs and client details.
+     */
     @AnyThread
     @Synchronized
     fun login(context: AuthService, activityClass: Class<out Activity>, config: SingleRadarConfiguration) {
@@ -105,6 +123,12 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
         return authorizedState
     }
 
+    /**
+     * Refreshes the OAuth 2.0 access token using the stored refresh token.
+     *
+     * @param context
+     * @param refreshToken The refresh token to be used for the token refresh request.
+     */
     @Synchronized
     fun refresh(context: AuthService, refreshToken: String?) {
         // refreshToken does not originate from the current auth state.
@@ -124,6 +148,12 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
         )
     }
 
+    /**
+     * Processes the token response and updates the authentication state after the token exchange.
+     * If successful, the authorized state is updated with the new access and refresh tokens.
+     *
+     * @param context The AuthService instance to handle login success or failure.
+     */
     private fun processTokenResponse(
         context: AuthService
     ) = AuthorizationService.TokenResponseCallback { resp, ex ->
@@ -134,6 +164,14 @@ class OAuth2StateManager(context: Context, private var client: OAuthClient?) {
         } ?: throw SubjectFetchFailedException("Failed to retrieve subjects from management portal")
     }
 
+    /**
+     * Updates the [AppAuthState] after a successful token response and prepares the authorized state.
+     *
+     * @param response The token response from the server.
+     * @param service The AuthService instance responsible for handling login success callback.
+     * @param ex The exception in case of a failure during token exchange.
+     * @return The updated [AppAuthState].
+     */
     @AnyThread
     @Synchronized
     fun updateAfterTokenResponse(
