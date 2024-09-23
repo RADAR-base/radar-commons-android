@@ -1,2 +1,3 @@
 <resources>
+    <string name="callback_redirect_response">Open pRMT Callback Activity</string>
 </resources>
