@@ -53,6 +53,8 @@ interface RadarConfiguration {
      */
     fun reset(vararg keys: String)
 
+    fun resetStatus()
+
     /**
      * Fetch the remote configuration from server if it is outdated.
      */

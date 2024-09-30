@@ -149,6 +149,11 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         connection.onServiceDisconnected(null)
     }
 
+    fun stopService() {
+        val intent = Intent(radarService, serviceClass)
+        radarService.stopService(intent)
+    }
+
     /**
      * Update the configuration of the service based on the given RadarConfiguration.
      * @throws IllegalStateException if [.getConnection] has not been called

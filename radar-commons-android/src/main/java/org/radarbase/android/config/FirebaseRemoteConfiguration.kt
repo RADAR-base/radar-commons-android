@@ -117,6 +117,10 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
         }
     }
 
+    fun resetStatus() {
+        status = RadarConfiguration.RemoteConfigStatus.INITIAL
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(FirebaseRemoteConfiguration::class.java)
         private const val FIREBASE_FETCH_TIMEOUT_MS_DEFAULT = 12 * 60 * 60 * 1000L

@@ -269,6 +269,7 @@ class ApplicationStatusManager(
         cacheReceiver?.unregister()
         serverRecordsReceiver?.unregister()
         serverStatusReceiver?.unregister()
+        tzProcessor?.close()
     }
 
     private fun processTimeZone() {

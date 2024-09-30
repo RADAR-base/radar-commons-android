@@ -34,14 +34,17 @@ import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
-import org.radarbase.android.auth.AuthService
-import org.radarbase.android.config.CombinedRadarConfig
+import org.radarbase.android.auth.AppAuthState
+import org.radarbase.android.auth.AuthServiceConnection
+import org.radarbase.android.auth.LoginListener
+import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
+import java.io.File
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
-abstract class MainActivity : AppCompatActivity() {
+abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     /** Time between refreshes.  */
     private var uiRefreshRate: Long = 0
@@ -56,13 +59,14 @@ abstract class MainActivity : AppCompatActivity() {
 
     private var configurationBroadcastReceiver: BroadcastRegistration? = null
     private lateinit var permissionHandler: PermissionHandler
-    protected lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
+    protected lateinit var authConnection: AuthServiceConnection
     protected lateinit var radarConnection: ManagedServiceConnection<IRadarBinder>
 
     private lateinit var bluetoothEnforcer: BluetoothEnforcer
 
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
+    private lateinit var broadcaster: LocalBroadcastManager
 
     protected open val requestPermissionTimeoutMs: Long
         get() = REQUEST_PERMISSION_TIMEOUT_MS
@@ -98,8 +102,9 @@ abstract class MainActivity : AppCompatActivity() {
             onUnboundListeners += IRadarBinder::stopScanning
         }
 
+        broadcaster = LocalBroadcastManager.getInstance(this)
         bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
-        authConnection = ManagedServiceConnection(this, radarApp.authService)
+        authConnection = AuthServiceConnection(this, this)
         create()
     }
 
@@ -146,6 +151,14 @@ abstract class MainActivity : AppCompatActivity() {
                 logger.error("Failed to update view", ex)
             }
         }
+    }
+
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
+    override fun loginFailed(manager: LoginManager?, ex: Exception?) = Unit
+
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
+
     }
 
     override fun onPause() {
@@ -226,10 +239,53 @@ abstract class MainActivity : AppCompatActivity() {
      * still valid.
      */
     protected fun logout(disableRefresh: Boolean) {
+        radarConnection.unbind()
         authConnection.applyBinder { invalidate(null, disableRefresh) }
+        radarConfig.reset()
+        clearConfigSharedPrefs()
+        clearAppData(this)
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
+        radarConfig.resetStatus()
+        // Start Launcher Activity in overriding method
     }
+
+    private fun clearConfigSharedPrefs() {
+        val sharedPreferences = getSharedPreferences("org.radarbase.android.config.LocalConfiguration", Context.MODE_PRIVATE)
+        sharedPreferences.all.forEach { (key, value) ->
+        }
+        sharedPreferences.edit().clear().apply()
+    }
+
+    private fun clearAppData(context: Context) {
+        clearCache(context)
+        clearFilesDir(context)
+    }
+
+    private fun clearFilesDir(context: Context) {
+        val filesDir = context.filesDir
+        deleteFilesInDirectory(filesDir)
+    }
+
+    private fun clearCache(context: Context) {
+        val cacheDir = context.cacheDir
+        deleteFilesInDirectory(cacheDir)
+    }
+
+    private fun deleteFilesInDirectory(directory: File) {
+        if (directory.isDirectory) {
+            val children = directory.listFiles()
+            if (children != null) {
+                for (child in children) {
+                    if (child.absolutePath.toString().contains("firebase")) return
+                    deleteFilesInDirectory(child)
+                }
+            }
+        }
+        directory.delete()
+    }
+
+
 
     companion object {
         private val logger = LoggerFactory.getLogger(MainActivity::class.java)

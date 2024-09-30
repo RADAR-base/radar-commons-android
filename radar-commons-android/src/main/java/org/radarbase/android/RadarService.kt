@@ -20,7 +20,6 @@ import android.Manifest.permission.*
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -243,6 +242,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 it.close()
                 sourceRegistrar = null
             }
+            (dataHandler as? TableDataHandler)?.close()
+            dataHandler = null
         }
         authConnection.unbind()
 
@@ -250,6 +251,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             .filter(SourceProvider<*>::isBound)
             .forEach(SourceProvider<*>::unbind)
 
+        logger.info("Destroying RADAR Service")
         super.onDestroy()
     }
 
@@ -528,6 +530,19 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) {
+        mHandler.execute {
+            updateProviders(authState, configuration.latestConfig)
+            val oldProviders = mConnections
+            removeProviders(mConnections.toSet())
+            oldProviders.forEach {
+                it.stopService()
+            }
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
     private fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
         if (sourceProviders.isEmpty()) {
             return
@@ -680,6 +695,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         const val ACTION_PERMISSIONS_GRANTED = "$RADAR_PACKAGE.ACTION_PERMISSIONS_GRANTED"
         const val EXTRA_GRANT_RESULTS = "$RADAR_PACKAGE.EXTRA_GRANT_RESULTS"
+        const val ACTION_STOP_FOREGROUND_SERVICE = "$RADAR_PACKAGE.ACTION_STOP_FOREGROUND_SERVICE"
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 

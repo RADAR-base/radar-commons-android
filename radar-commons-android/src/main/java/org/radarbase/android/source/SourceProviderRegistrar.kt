@@ -42,6 +42,8 @@ class SourceProviderRegistrar(
         }
     }
 
+    override fun loggedOut(manager: LoginManager?, authState: AppAuthState) = Unit
+
     private fun registerProvider(provider: SourceProvider<*>, authState: AppAuthState) {
         if (isClosed) {
             return

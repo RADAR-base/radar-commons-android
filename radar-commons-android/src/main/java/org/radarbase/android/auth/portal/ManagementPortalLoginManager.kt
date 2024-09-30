@@ -118,7 +118,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
             disableRefresh -> authState.alter {
                 attributes -= MP_REFRESH_TOKEN_PROPERTY
                 isPrivacyPolicyAccepted = false
-            }
+            }.also { listener.loggedOut(this@ManagementPortalLoginManager, authState.clear()) }
             else -> authState
         }
     }
@@ -273,7 +273,6 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
             logger.error("Cannot construct ManagementPortalClient without client credentials")
             null
         }
-
         if (newClientConfig == clientConfig) return
 
         client = newClientConfig?.let {
@@ -284,6 +283,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                 client = restClient,
             ).also { restClient = it.client }
         }
+
     }
 
     private fun addSource(authState: AppAuthState, source: SourceMetadata): AppAuthState {
