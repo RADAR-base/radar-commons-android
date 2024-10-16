@@ -129,7 +129,10 @@ class NetworkConnectedReceiver(
     sealed class NetworkState(
         val hasWifiOrEthernet: Boolean
     ) {
-        fun hasConnection(needsWifiOrEthernetOnly: Boolean): Boolean = !needsWifiOrEthernetOnly || hasWifiOrEthernet
+        fun hasConnection(needsWifiOrEthernetOnly: Boolean): Boolean = when(this) {
+            is Disconnected -> false
+            is Connected -> !needsWifiOrEthernetOnly || hasWifiOrEthernet
+        }
 
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
