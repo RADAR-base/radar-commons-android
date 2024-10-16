@@ -10,26 +10,26 @@ Plugins that are implemented as part of RADAR-base are included in the `plugins`
 
 This library takes the following firebase parameters:
 
-| Parameter | Type | Default | Description |
-| --------- | ---- | ------- | ----------- |
-| `kafka_rest_proxy_url` | URL | `<empty>` | URL of a Kafka REST Proxy or RADAR-Gateway to send data to. |
-| `schema_registry_url` | URL | `<empty>` | URL of a Kafka Schema Registry to sync schemas with. |
-| `management_portal_url` | URL | `<empty>` | URL of the RADAR Management Portal. If empty, the Management Portal will not be used. |
-| `unsafe_kafka_connection` | boolean | `false` | Whether to accept unsafe HTTPS certificates. Only meant to be set to `true` in development environments. |
-| `plugins` | string | `<empty>` | A space-separated list of source providers to connect. |
-| `kafka_records_send_limit` | int | 1000 | Number of records to send in a single request. |
-| `kafka_records_size_limit` | int (bytes) | 5000000 (= 5 MB)| Maximum size to read for a single request. |
-| `kafka_upload_rate` | int (s) | 50 | Rate after which to send data. In addition, after every `kafka_upload_rate` divided by 5 seconds, if more than `kafka_records_send_limit` are in the buffer, these are sent immediately. |
-| `database_commit_rate` | int (ms) | 10000 (= 10 seconds) | Rate of committing new data to disk. If the application crashes, at most this interval of data will be lost. |
-| `sender_connection_timeout` | int (s) | 120 | HTTP timeout setting for data uploading. |
-| `kafka_upload_minimum_battery_level` | int (s) | 0.1 (= 10%) | Battery level percentage below which to stop sending data. Data will still be collected. |
-| `max_cache_size_bytes` | long (byte) | 450000000 | Maximum number of bytes per topic to store. |
-| `send_only_with_wifi` | boolean | `true` | Whether to send only when WiFi is connected. If false, for example LTE would also be used. |
-| `send_over_data_high_priority_only` | boolean | `true` | Only the data of high priority topics will be sent over LTE. Only used if `send_only_with_wifi` is set to `true`. High priority topics are determined by the `topics_high_priority` property. |
-| `topics_high_priority` | string | `<empty>` | A comma separated list of topics that should be considered high priority. |
-| `send_with_compression` | boolean | `true` | Send data with GZIP compression. This requires RADAR-Gateway to be installed in front of the Kafka REST Proxy. |
-| `firebase_fetch_timeout_ms` | long (ms) | 43200000 (= 12 hours) | Interval for fetching new Firebase configuration if the app is not active. |
-| `send_binary_data` | boolean | `true` | Send data using a binary protocol. If the server does not support it, the app will fall back to regular JSON protocol. |
+| Parameter                            | Type        | Default               | Description                                                                                                                                                                                   |
+|--------------------------------------|-------------|-----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `kafka_rest_proxy_url`               | URL         | `<empty>`             | URL of a Kafka REST Proxy or RADAR-Gateway to send data to.                                                                                                                                   |
+| `schema_registry_url`                | URL         | `<empty>`             | URL of a Kafka Schema Registry to sync schemas with.                                                                                                                                          |
+| `management_portal_url`              | URL         | `<empty>`             | URL of the RADAR Management Portal. If empty, the Management Portal will not be used.                                                                                                         |
+| `unsafe_kafka_connection`            | boolean     | `false`               | Whether to accept unsafe HTTPS certificates. Only meant to be set to `true` in development environments.                                                                                      |
+| `plugins`                            | string      | `<empty>`             | A space-separated list of source providers to connect.                                                                                                                                        |
+| `kafka_records_send_limit`           | int         | 1000                  | Number of records to send in a single request.                                                                                                                                                |
+| `kafka_records_size_limit`           | int (bytes) | 5000000 (= 5 MB)      | Maximum size to read for a single request.                                                                                                                                                    |
+| `kafka_upload_rate`                  | int (s)     | 50                    | Rate after which to send data. In addition, after every `kafka_upload_rate` divided by 5 seconds, if more than `kafka_records_send_limit` are in the buffer, these are sent immediately.      |
+| `database_commit_rate`               | int (ms)    | 10000 (= 10 seconds)  | Rate of committing new data to disk. If the application crashes, at most this interval of data will be lost.                                                                                  |
+| `sender_connection_timeout`          | int (s)     | 120                   | HTTP timeout setting for data uploading.                                                                                                                                                      |
+| `kafka_upload_minimum_battery_level` | int (s)     | 0.1 (= 10%)           | Battery level percentage below which to stop sending data. Data will still be collected.                                                                                                      |
+| `max_cache_size_bytes`               | long (byte) | 450000000             | Maximum number of bytes per topic to store.                                                                                                                                                   |
+| `send_only_with_wifi`                | boolean     | `true`                | Whether to send only when WiFi is connected. If false, for example LTE would also be used.                                                                                                    |
+| `send_over_data_high_priority_only`  | boolean     | `true`                | Only the data of high priority topics will be sent over LTE. Only used if `send_only_with_wifi` is set to `true`. High priority topics are determined by the `topics_high_priority` property. |
+| `topics_high_priority`               | string      | `<empty>`             | A comma separated list of topics that should be considered high priority.                                                                                                                     |
+| `send_with_compression`              | boolean     | `true`                | Send data with GZIP compression. This requires RADAR-Gateway to be installed in front of the Kafka REST Proxy.                                                                                |
+| `firebase_fetch_timeout_ms`          | long (ms)   | 43200000 (= 12 hours) | Interval for fetching new Firebase configuration if the app is not active.                                                                                                                    |
+| `send_binary_data`                   | boolean     | `true`                | Send data using a binary protocol. If the server does not support it, the app will fall back to regular JSON protocol.                                                                        |
 
 ## Usage
 
@@ -40,7 +40,7 @@ repositories {
     mavenCentral()
 }
 dependencies {
-    api 'org.radarbase:radar-commons-android:1.2.1'
+    api 'org.radarbase:radar-commons-android:1.2.2'
 }
 ```
 
@@ -48,7 +48,7 @@ Include additional plugins by adding:
 
 ```gradle
 dependencies {
-    implementation 'org.radarbase:<plugin name>:1.2.1'
+    implementation 'org.radarbase:<plugin name>:1.2.2'
 }
 ```
 
@@ -96,6 +96,35 @@ For latest code use `dev` branch. Code should be formatted using the [Google Jav
 To only build plugins that are of interest to you, add a `gradle.skip` file in all plugin directories that should not be built.
 
 If you want to contribute a feature or fix browse our [issues](https://github.com/RADAR-base/radar-commons-android/issues), and please make a pull request.
+
+## Publishing Schemas to Maven Local
+
+While the plugin is in development phase schemas are not published centrally. To access the java generated file from avro schemas first publish them to maven local.
+To publish schemas locally to Maven, please follow these steps:
+
+1. Change your working directory to java-sdk in RADAR-Schemas.
+
+2. Run the following commands in your terminal:
+```shell
+./gradlew build 
+./gradlew publishToMavenLocal
+```
+
+3. In your build.gradle file, add the following to your repositories block:
+```gradle
+repositories {
+    mavenLocal()
+}
+```
+
+4. In the same build.gradle file, add the following to your dependencies block, replacing `$radarSchemasVersion` with its corresponding value:
+```gradle
+dependencies {
+    implementation "org.radarbase:radar-schemas-commons:$radarSchemasVersion"
+}
+```
+
+You can find the version value in the metadata of your local Maven repository. It should end in `SNAPSHOT`.
 
 ## Licensing
 

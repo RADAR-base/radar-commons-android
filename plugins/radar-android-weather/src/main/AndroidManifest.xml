@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <application>
-        <service android:name=".WeatherApiService" />
+        <service android:name=".WeatherApiService"
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="@string/weather_api_description" />
     </application>
 </manifest>

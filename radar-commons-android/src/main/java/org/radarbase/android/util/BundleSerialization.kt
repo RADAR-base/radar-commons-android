@@ -29,11 +29,6 @@ import java.io.IOException
 object BundleSerialization {
     private val logger = LoggerFactory.getLogger(BundleSerialization::class.java)
 
-    fun bundleToString(bundle: Bundle): String {
-        return bundle.keySet()
-                .joinToString(prefix = "{", postfix = "}") { "$it: ${bundle.get(it)}" }
-    }
-
     fun getPersistentExtras(intent: Intent?, context: Context): Bundle? {
         val prefs = context.getSharedPreferences(context.javaClass.name, Context.MODE_PRIVATE)
         val bundle: Bundle? = intent?.extras?.also { saveToPreferences(prefs, it) }

@@ -30,11 +30,6 @@ interface RadarApplication {
 
     val configuration: RadarConfiguration
 
-    /** Large icon bitmap.  */
-    val largeIcon: Bitmap
-    /** Small icon drawable resource ID.  */
-    val smallIcon: Int
-
     val mainActivity: Class<out Activity>
 
     val loginActivity: Class<out Activity>

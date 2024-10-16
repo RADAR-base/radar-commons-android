@@ -16,15 +16,16 @@
 
 package org.radarbase.passive.weather
 
-import android.Manifest.permission.ACCESS_COARSE_LOCATION
-import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.Manifest.permission.*
 import android.content.pm.PackageManager
+import android.os.Build
+import androidx.annotation.Keep
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
-import java.util.*
 
+@Keep
 open class WeatherApiProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val description: String?
         get() = radarService.getString(R.string.weather_api_description)
@@ -41,7 +42,13 @@ open class WeatherApiProvider(radarService: RadarService) : SourceProvider<BaseS
     override val displayName: String
         get() = radarService.getString(R.string.weatherApiServiceDisplayName)
 
-    override val permissionsNeeded: List<String> = listOf(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)
+    override val permissionsNeeded: List<String> = buildList(3) {
+        add(ACCESS_COARSE_LOCATION)
+        add(ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            add(ACCESS_BACKGROUND_LOCATION)
+        }
+    }
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_LOCATION)
 

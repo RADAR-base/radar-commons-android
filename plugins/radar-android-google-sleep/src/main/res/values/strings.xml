@@ -1,0 +1,8 @@
+<resources>
+    <string name="google_sleep_description">The user sleep data is tracked via the Google Sleep API.
+        The API extracts the user sleep start time, end time, and duration through SleepSegmentEvent.
+        Additionally, it tracks sleep confidence, surrounding light, and device motion for more accurate
+        sleep tracking using SleepClassifyEvent.
+    </string>
+    <string name="googleSleepDisplayName">Google Sleep</string>
+</resources>

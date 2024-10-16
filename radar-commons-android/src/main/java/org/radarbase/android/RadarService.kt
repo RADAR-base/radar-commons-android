@@ -20,6 +20,7 @@ import android.Manifest.permission.*
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -28,13 +29,7 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.lifecycle.LifecycleService
-import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -45,11 +40,11 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.data.CacheStore
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.TableDataHandler
-import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.*
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
+import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
 import org.radarbase.android.util.*
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
@@ -58,10 +53,11 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.HashSet
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private var configurationUpdateFuture: SafeHandler.HandlerFuture? = null
-    private val fetchTimeout = MutableStateFlow<Long>()
+    private val fetchTimeout = ChangeRunner<Long>()
     private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
     protected open val showSourceStatus: Boolean = false
@@ -72,35 +68,35 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     open val cacheStore: CacheStore = CacheStore()
 
     private lateinit var mHandler: SafeHandler
-    private var needsBluetooth = MutableStateFlow(false)
+    private var needsBluetooth = ChangeRunner(false)
     protected lateinit var configuration: RadarConfiguration
 
     /** Filters to only listen to certain source IDs or source names.  */
     private val sourceFilters: MutableMap<SourceServiceConnection<*>, Set<String>> = HashMap()
 
     private lateinit var providerLoader: SourceProviderLoader
-    private lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
+    private lateinit var authConnection: AuthServiceConnection
     private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
+    private lateinit var serverStatusReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
-    private val configuredProviders = MutableStateFlow<List<SourceProvider<*>>>()
+    private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
 
     private val isMakingAuthRequest = AtomicBoolean(false)
 
     abstract val plugins: List<SourceProvider<*>>
 
     /** Connections.  */
-    private val mConnections = MutableStateFlow<List<SourceProvider<*>>>(emptyList())
-    private val connections: StateFlow<List<SourceProvider<*>>> = mConnections
+    private var mConnections: List<SourceProvider<*>> = emptyList()
     private var isScanningEnabled = false
 
     /** An overview of how many records have been sent throughout the application.  */
     private var latestNumberOfRecordsSent = TimedLong(0)
 
     /** Current server status.  */
-    override val serverStatus: MutableStateFlow<ServerStatus> = MutableStateFlow(ServerStatus.DISABLED)
+    private lateinit var serverStatus: ServerStatusListener.Status
 
-    private val needsPermissions = mutableSetOf<String>()
+    private val needsPermissions = LinkedHashSet<String>()
 
     protected open val servicePermissions: List<String>
         get() = listOf(ACCESS_NETWORK_STATE, INTERNET)
@@ -110,6 +106,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         return binder
     }
 
+    private lateinit var broadcaster: LocalBroadcastManager
+
     private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
 
     /** Defines callbacks for service binding, passed to bindService()  */
@@ -117,6 +115,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     override fun onCreate() {
         super.onCreate()
+        serverStatus = ServerStatusListener.Status.DISABLED
         binder = createBinder()
         mHandler = SafeHandler.getInstance("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
             start()
@@ -125,35 +124,32 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         configuration = radarConfig
         providerLoader = SourceProviderLoader(plugins)
-
-        lifecycleScope.launch {
-            launch(Dispatchers.Default) {
-                serverStatus.collect { value ->
-                    if (value == ServerStatus.DISCONNECTED) {
-                        latestNumberOfRecordsSent = TimedLong(-1)
-                    }
-
-                    if (value == ServerStatus.UNAUTHORIZED) {
-                        logger.debug("Status unauthorized")
-                        authConnection.applyBinder {
-                            if (isMakingAuthRequest.compareAndSet(false, true)) {
-                                invalidate(null, false)
-                                refresh()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         broadcaster = LocalBroadcastManager.getInstance(this)
 
         broadcaster.run {
+            permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
+                val extraPermissions = intent.getStringArrayExtra(EXTRA_PERMISSIONS) ?: return@register
+                val extraGrants = intent.getIntArrayExtra(EXTRA_GRANT_RESULTS) ?: return@register
+                onPermissionsGranted(extraPermissions, extraGrants)
+            }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
                         getString(R.string.cannot_connect_device,
                                 intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
                         Toast.LENGTH_SHORT).show()
+            }
+            serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
+                val serverStatusChanged = intent.getIntExtra(SERVER_STATUS_CHANGED, 0)
+                serverStatus = ServerStatusListener.Status.values()[serverStatusChanged]
+                if (serverStatus == ServerStatusListener.Status.UNAUTHORIZED) {
+                    logger.debug("Status unauthorized")
+                    authConnection.applyBinder {
+                        if (isMakingAuthRequest.compareAndSet(false, true)) {
+                            invalidate(null, false)
+                            refresh()
+                        }
+                    }
+                }
             }
         }
 
@@ -192,7 +188,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
             }
         }
-        serverStatus = ServerStatus.DISABLED
     }
 
     protected open fun createBinder(): IBinder {
@@ -204,7 +199,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         configure(configuration.latestConfig)
         checkPermissions()
         startForeground(1, createForegroundNotification())
-        radarApp.radarServiceImplementation = this
+
         return START_STICKY
     }
 
@@ -231,7 +226,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         permissionsBroadcastReceiver.unregister()
         sourceFailedReceiver.unregister()
-        radarApp.radarServiceImplementation = null
+        serverStatusReceiver.unregister()
+
         mHandler.stop {
             sourceRegistrar?.let {
                 it.close()
@@ -332,7 +328,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
             connection.serverStatus
                     ?.also { logger.debug("Initial server status: {}", it) }
-                    ?.also { serverStatus = it }
+                    ?.also(::updateServerStatus)
 
             updateBluetoothNeeded(needsBluetooth.value || connection.needsBluetooth())
             startScanning()
@@ -383,6 +379,20 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     .filter { !it.isBound && (isScanningEnabled || it.mayBeConnectedInBackground) }
                     .forEach(SourceProvider<*>::bind)
             }
+        }
+    }
+
+    override fun updateServerStatus(status: ServerStatusListener.Status) {
+        if (status == this.serverStatus) {
+            return
+        }
+        this.serverStatus = status
+        if (status == ServerStatusListener.Status.DISCONNECTED) {
+            this.latestNumberOfRecordsSent = TimedLong(-1)
+        }
+
+        broadcaster.send(SERVER_STATUS_CHANGED) {
+            putExtra(SERVER_STATUS_CHANGED, status.ordinal)
         }
     }
 
@@ -558,20 +568,17 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         dataHandler?.handler {
             logger.info("Setting data submission authentication")
             rest {
-                headers = authState.ktorHeaders
+                headers = authState.okHttpHeaders
             }
             submitter {
                 userId = authState.userId
             }
         }
 
-        val supportedPlugins = if (authState.userId != null) {
-            val packageManager = packageManager
-            providerLoader.loadProvidersFromNames(config)
-                .filter { hasFeatures(it, packageManager) }
-        } else {
-            emptyList()
-        }
+        val packageManager = packageManager
+
+        val supportedPlugins = providerLoader.loadProvidersFromNames(config)
+            .filter { hasFeatures(it, packageManager) }
 
         configuredProviders.applyIfChanged(supportedPlugins) { providers ->
             val previousConnections = mConnections
@@ -593,19 +600,11 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         isMakingAuthRequest.set(false)
     }
 
-    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
-        mHandler.execute {
-            updateProviders(authState, configuration.latestConfig)
-        }
-        stopForeground(true)
-        stopSelf()
-    }
-
     protected inner class RadarBinder : Binder(), IRadarBinder {
         override fun startScanning() = this@RadarService.startActiveScanning()
         override fun stopScanning() = this@RadarService.stopActiveScanning()
 
-        override val serverStatus: ServerStatus
+        override val serverStatus: ServerStatusListener.Status
             get() = this@RadarService.serverStatus
 
         override val latestNumberOfRecordsSent: TimedLong
@@ -618,8 +617,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             sourceFilters[connection] = allowedIds.sanitizeIds()
 
             mHandler.execute {
-                val status = connection.sourceStatus?.value
-                    ?: SourceStatusListener.Status.UNAVAILABLE
+                val status = connection.sourceStatus
 
                 if (
                     status == SourceStatusListener.Status.READY ||
@@ -639,22 +637,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             get() = this@RadarService.dataHandler
 
         override fun needsBluetooth(): Boolean = needsBluetooth.value
-
-        override fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit) {
-            dataHandler
-                ?.flushCaches(successCallback, errorCallback)
-                ?: errorCallback()
-        }
-
-        override fun permissionGranted(permissions: Array<String>, grantResults: IntArray) {
-            onPermissionsGranted(permissions, grantResults)
-        }
     }
 
     private fun stopActiveScanning() {
         mHandler.execute {
             isScanningEnabled = false
-            connections.value.asSequence()
+            mConnections.asSequence()
                 .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
                 .forEach(SourceProvider<*>::unbind)
         }
@@ -680,9 +668,20 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         const val ACTION_CHECK_PERMISSIONS = "$RADAR_PACKAGE.ACTION_CHECK_PERMISSIONS"
         const val EXTRA_PERMISSIONS = "$RADAR_PACKAGE.EXTRA_PERMISSIONS"
 
+        const val ACTION_PERMISSIONS_GRANTED = "$RADAR_PACKAGE.ACTION_PERMISSIONS_GRANTED"
+        const val EXTRA_GRANT_RESULTS = "$RADAR_PACKAGE.EXTRA_GRANT_RESULTS"
+
         private const val BLUETOOTH_NOTIFICATION = 521290
+
+        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
+        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
+
         private const val BACKGROUND_REQUEST_CODE = 9559
 
-        fun Collection<String>.sanitizeIds(): Set<String> = mapNotNullTo(HashSet(), String::takeTrimmedIfNotEmpty)
+        fun Collection<String>.sanitizeIds(): Set<String> = HashSet(mapNotNull(String::takeTrimmedIfNotEmpty))
     }
 }

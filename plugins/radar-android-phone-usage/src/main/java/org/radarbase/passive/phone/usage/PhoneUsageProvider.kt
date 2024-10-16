@@ -16,7 +16,7 @@
 
 package org.radarbase.passive.phone.usage
 
-import android.os.Build
+import android.Manifest.permission.PACKAGE_USAGE_STATS
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
@@ -39,11 +39,7 @@ class PhoneUsageProvider(radarService: RadarService) : SourceProvider<BaseSource
     override val displayName: String
         get() = radarService.getString(R.string.phoneUsageServiceDisplayName)
 
-    override val permissionsNeeded: List<String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            listOf(android.Manifest.permission.PACKAGE_USAGE_STATS)
-        } else {
-            emptyList()
-        }
+    override val permissionsNeeded: List<String> = listOf(PACKAGE_USAGE_STATS)
 
     override val sourceProducer: String = "ANDROID"
     override val sourceModel: String = "PHONE"

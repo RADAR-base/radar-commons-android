@@ -18,13 +18,14 @@ package org.radarbase.android
 
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.flow.StateFlow
+import com.google.firebase.analytics.FirebaseAnalytics
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
@@ -35,6 +36,8 @@ import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.*
+import org.radarbase.android.auth.AuthService
+import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration
@@ -179,11 +182,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         val radarServiceCls = radarApp.radarService
         try {
             val intent = Intent(this, radarServiceCls)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            ContextCompat.startForegroundService(this, intent)
         } catch (ex: IllegalStateException) {
             logger.error("Failed to start RadarService: activity is in background.", ex)
         }
@@ -237,6 +236,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
      */
     protected fun logout(disableRefresh: Boolean) {
         authConnection.applyBinder { invalidate(null, disableRefresh) }
+        logger.debug("Disabling Firebase Analytics")
+        FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit

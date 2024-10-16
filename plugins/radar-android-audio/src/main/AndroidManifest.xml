@@ -7,6 +7,9 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
     <application>
-        <service android:name=".OpenSmileAudioService"/>
+        <service android:name=".OpenSmileAudioService"
+            android:foregroundServiceType="microphone"
+            android:exported="false"
+            android:description="@string/audio_description" />
     </application>
 </manifest>

@@ -135,7 +135,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
                     ?.list { _, name -> name.startsWith("audio_") && name.endsWith(".bin") }
                     ?.forEach { File(audioDir.parentFile, it).delete() }
 
-            audioDir.walk().filter { it.startsWith("audio_") && it.endsWith(".bin") }
+            audioDir.walk().filter { it.startsWith("audio_") && it.path.endsWith(".bin") }
                     .forEach { it.delete() }
         }
     }

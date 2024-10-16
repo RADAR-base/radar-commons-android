@@ -1,0 +1,21 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    namespace "org.radarbase.passive.google.sleep"
+}
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = "Google sleep plugin for RADAR passive remote monitoring app."
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+dependencies {
+    api project(":radar-commons-android")
+    implementation "com.google.android.gms:play-services-location:$play_services_location_version"
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"

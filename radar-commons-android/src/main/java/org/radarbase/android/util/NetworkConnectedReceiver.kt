@@ -16,12 +16,16 @@
 
 package org.radarbase.android.util
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
-import android.net.ConnectivityManager.*
+import android.net.ConnectivityManager.CONNECTIVITY_ACTION
+import android.net.ConnectivityManager.NetworkCallback
+import android.net.ConnectivityManager.TYPE_ETHERNET
+import android.net.ConnectivityManager.TYPE_WIFI
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
@@ -33,11 +37,11 @@ import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Keeps track of whether there is a network connection (e.g., WiFi or Ethernet).
  */
+@SuppressLint("ObsoleteSdkInt")
 class NetworkConnectedReceiver(
     private val context: Context
 ) {
@@ -59,6 +63,7 @@ class NetworkConnectedReceiver(
         } else {
             callbackFlow {
                 val receiver = createBroadcastReceiver()
+                @Suppress("DEPRECATION")
                 context.registerReceiver(receiver, IntentFilter(CONNECTIVITY_ACTION))
                 awaitClose {
                     context.unregisterReceiver(receiver)

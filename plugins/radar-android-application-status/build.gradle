@@ -7,15 +7,15 @@ android {
 // Configuration                                                             //
 //---------------------------------------------------------------------------//
 
-description = 'Application statistics plugin for RADAR passive remote monitoring app'
+description = "Application statistics plugin for RADAR passive remote monitoring app"
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
 //---------------------------------------------------------------------------//
 
 dependencies {
-    api project(':radar-commons-android')
-    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
+    api project(":radar-commons-android")
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:$localbroadcastmanager_version"
 }
 
 apply from: "$rootDir/gradle/publishing.gradle"

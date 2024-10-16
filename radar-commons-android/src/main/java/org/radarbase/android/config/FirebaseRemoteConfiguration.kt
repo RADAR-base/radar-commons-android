@@ -81,17 +81,19 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
 
     /**
      * Fetch the configuration from the firebase server.
-     * @param maxCacheAge seconds
+     * @param maxCacheAgeMillis seconds
      * @return fetch task or null status is [RadarConfiguration.RemoteConfigStatus.UNAVAILABLE].
      */
-    override suspend fun doFetch(maxCacheAge: Long) {
+    override suspend fun doFetch(maxCacheAgeMillis: Long) {
         if (status.value == RadarConfiguration.RemoteConfigStatus.UNAVAILABLE) {
             return
         }
-        val task = firebase.fetch(maxCacheAge)
-        status.value = RadarConfiguration.RemoteConfigStatus.FETCHING
-        task.addOnSuccessListener(onFetchCompleteHandler)
-        task.addOnFailureListener(onFailureListener)
+        val task = firebase.fetch(maxCacheAgeMillis / 1000L)
+        synchronized(this) {
+            status.value = RadarConfiguration.RemoteConfigStatus.FETCHING
+            task.addOnSuccessListener(onFetchCompleteHandler)
+            task.addOnFailureListener(onFailureListener)
+        }
     }
 
     override suspend fun updateWithAuthState(appAuthState: AppAuthState?) {

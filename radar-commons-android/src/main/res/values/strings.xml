@@ -1,16 +1,44 @@
 <resources>
     <string name="app_name">RADAR common android app</string>
 
-    <string name="service_notification_ticker">Wearables data collection</string>
-    <string name="service_notification_text">Collecting data from your wearable bluetooth device.</string>
-    <string name="service_notification_title">Wearables data collection</string>
+    <string name="service_notification_ticker">Data Collection</string>
+    <string name="service_notification_text">Collecting data from connected sources</string>
+    <string name="service_notification_title">Data Collection in Progress</string>
 
     <string name="filter_split_regex">,</string>
     <string name="retry_oauth_login">Failed to login to authorization service, please retry</string>
     <string name="login_failed">Failed to log in</string>
-    <string name="enable_location">
-        <![CDATA[Location information needed to enable Bluetooth Low Energy. Enable location settings in Settings -> Location]]></string>
+
+    <string name="location_bg_dialog_title">pRMT App uses your \"Location in Background\"</string>
+    <string name="location_bg_dialog_message">This app collects location data to enable Bluetooth Low Energy and/or location tracking as
+        part of the study even when the app is closed or not in use.</string>
+    <string name="dialog_usage">The researcher(s) only use the collected data in the study you consented to.</string>
+
+    <string name="location_dialog_title">pRMT App uses your \"Location\"</string>
+    <string name="location_dialog_message">Location information is needed to enable Bluetooth Low Energy and/or location tracking as part of the study.</string>
+
+    <string name="usage_tracking_dialog_title">Enable \"Usage tracking\"</string>
+    <string name="usage_tracking_dialog_message">Enable usage access to keep track of what kind of applications you use.</string>
+    <string name="usage_tracking_dialog_help">After click \"OK\", select RADAR pRMT from the list and enable \"Usage access\"</string>
+
+    <string name="system_window_dialog_title">Enable \"Display over other apps\"</string>
+    <string name="system_window_dialog_message">Allow this app to display on top of other apps.</string>
+    <string name="system_window_dialog_help">After click \"OK\", select RADAR pRMT from the list and enable \"Display over other apps\".</string>
+
+
+    <string name="disable_battery_optimization_dialog_title">Enable \"No Restrictions\" for background apps</string>
+    <string name="disable_battery_optimization_dialog_message">\"No Restrictions for background apps\" means that the battery saver does not restrict app\'s activity.</string>
+    <string name="disable_battery_optimization_dialog_help">After click \"OK\", select \"No restrictions\".</string>
+
+    <string name="enable_location">Location information is needed to enable Bluetooth Low Energy and/or location tracking as part of the study.</string>
+    <string name="enable_location_background">
+        Background location is needed to keep passively collecting data while the app is in the background, either for Bluetooth devices or for actual, relative location.
+    </string>
+
+    <string name="enable_location_instruction">
+        <![CDATA[Location information needed to enable Bluetooth Low Energy and location tracking. Enable location settings in Settings -> Location]]></string>
     <string name="enable_package_usage">Enable usage access to keep track of what kind of applications you use.</string>
+
     <string name="enable_location_title">Enable location tracking</string>
     <string name="enable_package_usage_title">Enable usage tracking</string>
 

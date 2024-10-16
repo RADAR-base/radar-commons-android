@@ -1,0 +1,8 @@
+<resources>
+    <string name="google_places_description">The Google Places API for Android simplifies the development
+        of location-aware applications that can adapt to nearby businesses and other points of interest
+        on the device. By utilizing distinct place IDs, the API allows retrieval of PlaceDetails and
+        facilitates monitoring of the device CurrentPlace, providing richer contextual data.
+    </string>
+    <string name="googlePlacesDisplayName">Google Places</string>
+</resources>

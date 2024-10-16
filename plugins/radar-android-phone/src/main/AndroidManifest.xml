@@ -4,20 +4,34 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-feature android:name="android.hardware.location" android:required="false"/>
 
-    <uses-permission android:name="android.permission.BLUETOOTH"/>
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
+
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
 
     <application android:allowBackup="true">
-        <service android:name=".PhoneSensorService"/>
+        <service android:name=".PhoneSensorService"
+            android:exported="false"
+            android:description="@string/phone_sensors_description" />
         <service android:name=".PhoneLocationService"
-            android:foregroundServiceType="location"/>
-        <service android:name=".PhoneContactsListService"/>
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="@string/phone_location_description" />
+        <service android:name=".PhoneContactsListService"
+            android:exported="false"
+            android:description="@string/phone_contact_list_description" />
         <service android:name=".PhoneBluetoothService"
-            android:foregroundServiceType="location"/>
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:description="@string/phone_bluetooth_description" />
     </application>
 </manifest>

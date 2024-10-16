@@ -10,7 +10,7 @@ interface RemoteConfig {
     var lastFetch: Long
     val cache: Map<String, String>
 
-    suspend fun doFetch(maxCacheAge: Long)
+    suspend fun doFetch(maxCacheAgeMillis: Long)
 
     suspend fun fetch(maxCacheAge: Long) {
         if (lastFetch + maxCacheAge < System.currentTimeMillis()) {

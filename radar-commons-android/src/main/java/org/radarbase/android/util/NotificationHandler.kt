@@ -15,15 +15,18 @@ import androidx.annotation.RequiresApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import androidx.appcompat.content.res.AppCompatResources.getDrawable
+import androidx.core.graphics.drawable.toBitmap
 import org.radarbase.android.R
-import org.radarbase.android.RadarApplication
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Handle notifications and notification channels.
  */
-class NotificationHandler(private val context: Context) {
+class NotificationHandler(
+    private val context: Context
+) {
     private val isCreated = AtomicBoolean(false)
 
     val manager : NotificationManager?
@@ -181,10 +184,13 @@ class NotificationHandler(private val context: Context) {
     }
 
     private fun Notification.Builder.updateNotificationAppSettings(includeIntent: Boolean) {
-        (context.applicationContext as? RadarApplication)?.let { app ->
-            setLargeIcon(app.largeIcon)
-            setSmallIcon(app.smallIcon)
-        }
+        setLargeIcon(
+            getDrawable(context, R.mipmap.ic_launcher)
+                ?.toBitmap()
+        )
+        setSmallIcon(
+            R.drawable.ic_bt_connected
+        )
 
         if (includeIntent) {
             val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -222,6 +228,18 @@ class NotificationHandler(private val context: Context) {
         const val NOTIFICATION_CHANNEL_FINAL_ALERT = "org.radarbase.android.NotificationHandler.FINAL_ALERT"
 
         private const val NOTIFICATION_REQUEST_CODE = 27581
+
+        private val syncObject = Any()
+        private var isCreated = false
+
+        private fun shouldCreate(): Boolean = synchronized(syncObject) {
+            if (!isCreated) {
+                isCreated = true
+                true
+            } else {
+                false
+            }
+        }
     }
 
     data class NotificationRegistration(

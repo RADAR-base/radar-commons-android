@@ -2,6 +2,7 @@ package org.radarbase.android.util
 
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import androidx.annotation.Keep
 import org.radarbase.android.util.SafeHandler.Companion.getInstance
 import org.slf4j.LoggerFactory
@@ -14,7 +15,11 @@ import java.util.concurrent.SynchronousQueue
  * handling and multithreading.
  * @constructor consider using [getInstance] instead for shared or reinitializing handlers.
  */
-class SafeHandler(val name: String, private val priority: Int) {
+@Suppress("unused", "MemberVisibilityCanBePrivate")
+class SafeHandler(
+    val name: String,
+    private val priority: Int,
+) {
     private var handlerThread: HandlerThread? = null
 
     /** Whether the handler has been started. */
@@ -169,37 +174,27 @@ class SafeHandler(val name: String, private val priority: Int) {
      */
     @Synchronized
     fun delay(delay: Long, runnable: () -> Unit): HandlerFuture? {
-        return handler?.let {
-            val r = Runnable {
-                runnable.tryRunOrNull()
-            }
-            it.postDelayed(r, delay)
-            HandlerFutureRef(r)
+        val handler = handler ?: return null
+        val r = Runnable {
+            runnable.tryRunOrNull()
         }
+        handler.postDelayed(r, delay)
+        return HandlerFutureRef(r)
     }
 
     /**
      * Repeat given [runnable] after every [delay] milliseconds, as long as it returns true.
      */
-    fun repeatWhile(delay: Long, runnable: RepeatableRunnable): HandlerFuture? = repeatWhile(delay, runnable::runAndRepeat)
-
-    /**
-     * Repeat given [runnable] after every [delay] milliseconds, as long as it returns true.
-     */
-    fun repeatWhile(delay: Long, runnable: () -> Boolean): HandlerFuture? {
-        return this.delay(delay) {
-            if (runnable.tryRunOrNull() == true) repeatWhile(delay, runnable)
-        }
+    fun repeatWhile(delay: Long, runnable: () -> Boolean): HandlerFuture? = this.delay(delay) {
+        if (runnable.tryRunOrNull() == true) repeatWhile(delay, runnable)
     }
 
     /**
      * Repeat given [runnable] after every [delay] milliseconds.
      */
-    fun repeat(delay: Long, runnable: () -> Unit): HandlerFuture? {
-        return this.delay(delay) {
-            runnable.tryRunOrNull()
-            repeat(delay, runnable)
-        }
+    fun repeat(delay: Long, runnable: () -> Unit): HandlerFuture? = this.delay(delay) {
+        runnable.tryRunOrNull()
+        repeat(delay, runnable)
     }
 
     /**
@@ -213,7 +208,8 @@ class SafeHandler(val name: String, private val priority: Int) {
 
     /**
      * Stop the handler, running [finalization], if any, as the last operation. If the handler
-     * was already stopped, the finalization is still run, but on the current thread.
+     * was already stopped, the finalization is still run, but on the current thread. If the thread
+     * was never started, none of the finalization is run.
      */
     @Synchronized
     fun stop(finalization: (() -> Unit)? = null, currentThreadFinalization: (() -> Unit)? = null) {
@@ -224,8 +220,8 @@ class SafeHandler(val name: String, private val priority: Int) {
         val oldHandler = handler
         if (oldHandler != null) {
             handler = null
-            finalization?.let {
-                oldHandler.post { it.tryRunOrNull() }
+            if (finalization != null) {
+                oldHandler.post { finalization.tryRunOrNull() }
             }
         } else {
             finalization?.tryRunOrNull()
@@ -233,13 +229,6 @@ class SafeHandler(val name: String, private val priority: Int) {
         thread.quitSafely()
 
         handlerThread = null
-    }
-
-    /**
-     * A runnable that will repeat as long as [runAndRepeat] returns true.
-     */
-    interface RepeatableRunnable {
-        fun runAndRepeat(): Boolean
     }
 
     /**
@@ -268,28 +257,22 @@ class SafeHandler(val name: String, private val priority: Int) {
     }
 
     private inner class HandlerFutureRef(val runnable: Runnable): HandlerFuture {
-        override fun awaitNow() {
-            synchronized(this@SafeHandler) {
-                handler?.removeCallbacks(runnable)
-                await(runnable)
-            }
+        override fun awaitNow(): Unit = synchronized(this@SafeHandler) {
+            handler?.removeCallbacks(runnable)
+            await(runnable)
         }
-        override fun runNow() {
-            synchronized(this@SafeHandler) {
-                handler?.removeCallbacks(runnable)
-                executeReentrant(runnable)
-            }
+        override fun runNow(): Unit = synchronized(this@SafeHandler) {
+            handler?.removeCallbacks(runnable)
+            executeReentrant(runnable)
         }
-        override fun cancel() {
-            synchronized(this@SafeHandler) {
-                handler?.removeCallbacks(runnable)
-            }
+        override fun cancel(): Unit = synchronized(this@SafeHandler) {
+            handler?.removeCallbacks(runnable)
         }
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(SafeHandler::class.java)
-        private val nullMarker = object : Any() {}
+        private val nullMarker = Any()
         private val map: MutableMap<String, WeakReference<SafeHandler>> = HashMap()
 
         /**
@@ -298,24 +281,24 @@ class SafeHandler(val name: String, private val priority: Int) {
          * being moved to another thread.
          */
         @Synchronized
-        fun getInstance(name: String, priority: Int): SafeHandler {
+        fun getInstance(
+            name: String,
+            priority: Int,
+        ): SafeHandler {
             val handlerRef = map[name]?.get()
-            return if (handlerRef != null) {
-                handlerRef
-            } else {
-                val handler = SafeHandler(name, priority)
-                map[name] = WeakReference(handler)
-                handler
-            }
+            return handlerRef
+                ?: run {
+                    val handler = SafeHandler(name, priority)
+                    map[name] = WeakReference(handler)
+                    handler
+                }
         }
 
-        private fun <T> (() -> T).tryRunOrNull(): T? {
-            return try {
-                this()
-            } catch (ex: Exception) {
-                logger.error("Failed to run posted runnable", ex)
-                null
-            }
+        private fun <T> (() -> T).tryRunOrNull(): T? = try {
+            this()
+        } catch (ex: Exception) {
+            logger.error("Failed to run posted runnable", ex)
+            null
         }
     }
 }

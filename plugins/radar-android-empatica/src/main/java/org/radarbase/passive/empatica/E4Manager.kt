@@ -26,7 +26,6 @@ import com.empatica.empalink.config.EmpaStatus
 import com.empatica.empalink.delegate.EmpaDataDelegate
 import com.empatica.empalink.delegate.EmpaSessionManagerDelegate
 import com.empatica.empalink.delegate.EmpaStatusDelegate
-import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
@@ -46,6 +45,9 @@ class E4Manager(
         EmpaDataDelegate,
         EmpaStatusDelegate,
         EmpaSessionManagerDelegate {
+    private val notificationHandler: NotificationHandler by lazy {
+        NotificationHandler(service)
+    }
     private var doNotify: Boolean = false
     private val accelerationTopic = createCache("android_empatica_e4_acceleration", EmpaticaE4Acceleration())
     private val batteryLevelTopic = createCache("android_empatica_e4_battery_level", EmpaticaE4BatteryLevel())
@@ -54,6 +56,7 @@ class E4Manager(
     private val interBeatIntervalTopic = createCache("android_empatica_e4_inter_beat_interval", EmpaticaE4InterBeatInterval())
     private val temperatureTopic = createCache("android_empatica_e4_temperature", EmpaticaE4Temperature())
     private val sensorStatusTopic = createCache("android_empatica_e4_sensor_status", EmpaticaE4SensorStatus())
+    private val tagTopic = createCache("android_empatica_e4_tag", EmpaticaE4Tag())
 
     private val isScanning = AtomicBoolean(false)
     private var hasBeenConnecting = false
@@ -122,7 +125,7 @@ class E4Manager(
             EmpaStatus.CONNECTING -> hasBeenConnecting = true
             EmpaStatus.CONNECTED -> {
                 status = SourceStatusListener.Status.CONNECTED
-                service.radarApp.notificationHandler.manager?.cancel(EMPATICA_DISCONNECTED_NOTIFICATION_ID)
+                notificationHandler.manager?.cancel(EMPATICA_DISCONNECTED_NOTIFICATION_ID)
             }
             EmpaStatus.DISCONNECTED ->
                 // The device manager disconnected from a device. Before it ever makes a connection,
@@ -231,10 +234,11 @@ class E4Manager(
 
     override fun disconnect() {
         if (status != SourceStatusListener.Status.UNAVAILABLE && !isClosed && doNotify) {
-            service.radarApp.notificationHandler.notify(
-                    id = EMPATICA_DISCONNECTED_NOTIFICATION_ID,
-                    channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
-                    includeStartIntent = true) {
+            notificationHandler.notify(
+                id = EMPATICA_DISCONNECTED_NOTIFICATION_ID,
+                channel = NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                includeStartIntent = true,
+            ) {
                 setContentTitle(service.getString(R.string.notification_empatica_disconnected_title))
                 setContentText(service.getString(R.string.notification_empatica_disconnected_text))
             }
@@ -270,7 +274,8 @@ class E4Manager(
     }
 
     override fun didReceiveTag(timestamp: Double) {
-
+        val value =  EmpaticaE4Tag(timestamp, currentTime)
+        send(tagTopic, value)
     }
 
     override fun didReceiveGSR(gsr: Float, timestamp: Double) {

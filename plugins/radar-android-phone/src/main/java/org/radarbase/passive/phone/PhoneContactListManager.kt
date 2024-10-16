@@ -38,7 +38,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
     private val contactsTopic: DataCache<ObservationKey, PhoneContactList> = createCache("android_phone_contacts", PhoneContactList())
     private val processor: OfflineProcessor
     private val db: ContentResolver = service.contentResolver
-    private lateinit var savedContactLookups: Set<String>
+    private var savedContactLookups: Set<String> = emptySet()
 
     init {
         name = service.getString(R.string.contact_list)

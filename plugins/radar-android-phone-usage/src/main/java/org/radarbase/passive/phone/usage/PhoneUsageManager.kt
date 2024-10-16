@@ -52,11 +52,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     init {
         name = service.getString(R.string.phoneUsageServiceDisplayName)
-        this.usageStatsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-            context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-        } else {
-            null
-        }
+        this.usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
 
         usageEventTopic = if (usageStatsManager != null) {
             createCache("android_phone_usage_event", PhoneUsageEvent())
@@ -177,7 +173,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
             ACTIVITY_PAUSED -> UsageEventType.BACKGROUND
             CONFIGURATION_CHANGE -> UsageEventType.CONFIG
             SHORTCUT_INVOCATION_COMPAT -> UsageEventType.SHORTCUT
-            USER_INTERACTION_COMPAT -> UsageEventType.INTERACTION
+            USER_INTERACTION -> UsageEventType.INTERACTION
             else -> UsageEventType.OTHER
         }
 
@@ -227,8 +223,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     companion object {
         private val logger = LoggerFactory.getLogger(PhoneUsageManager::class.java)
 
-        private val SHORTCUT_INVOCATION_COMPAT = if (Build.VERSION.SDK_INT >= 25) SHORTCUT_INVOCATION else 8
-        private val USER_INTERACTION_COMPAT = if (Build.VERSION.SDK_INT >= 23) USER_INTERACTION else 7
+        private val SHORTCUT_INVOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) SHORTCUT_INVOCATION else 8
 
         private const val LAST_PACKAGE_NAME = "org.radarcns.phone.packageName"
         private const val LAST_EVENT_TIMESTAMP = "org.radarcns.phone.timestamp"

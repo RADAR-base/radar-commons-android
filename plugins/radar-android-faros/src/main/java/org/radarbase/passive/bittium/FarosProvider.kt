@@ -16,12 +16,11 @@
 
 package org.radarbase.passive.bittium
 
-import android.Manifest.permission.*
 import android.content.pm.PackageManager
-import android.os.Build
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothPermissionList
 
 class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(radarService) {
     override val description: String?
@@ -38,16 +37,7 @@ class FarosProvider(radarService: RadarService) : SourceProvider<FarosState>(rad
 
     override val hasDetailView: Boolean = true
 
-    override val permissionsNeeded: List<String> = buildList {
-        add(ACCESS_COARSE_LOCATION)
-        add(ACCESS_FINE_LOCATION)
-        add(BLUETOOTH)
-        add(BLUETOOTH_ADMIN)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            add(BLUETOOTH_SCAN)
-            add(BLUETOOTH_CONNECT)
-        }
-    }
+    override val permissionsNeeded: List<String> = bluetoothPermissionList
 
     override val featuresNeeded: List<String> = listOf(PackageManager.FEATURE_BLUETOOTH)
 
