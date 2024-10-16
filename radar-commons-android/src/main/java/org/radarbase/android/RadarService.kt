@@ -144,9 +144,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
-                        getString(R.string.cannot_connect_device,
-                                intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
-                        Toast.LENGTH_SHORT).show()
+                    getString(R.string.cannot_connect_device,
+                        intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
+                    Toast.LENGTH_SHORT).show()
             }
             serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
                 val serverStatusChanged = intent.getIntExtra(SERVER_STATUS_CHANGED, 0)
@@ -255,26 +255,26 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     @CallSuper
     protected open fun configure(config: SingleRadarConfiguration) {
-       mHandler.executeReentrant {
-           doConfigure(config)
+        mHandler.executeReentrant {
+            doConfigure(config)
 
-           fetchTimeout.applyIfChanged(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) { timeout ->
-               configurationUpdateFuture?.cancel()
-               configurationUpdateFuture = mHandler.repeat(timeout) {
-                   configuration.fetch()
-               }
-           }
-       }
+            fetchTimeout.applyIfChanged(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) { timeout ->
+                configurationUpdateFuture?.cancel()
+                configurationUpdateFuture = mHandler.repeat(timeout) {
+                    configuration.fetch()
+                }
+            }
+        }
     }
 
     @CallSuper
     protected open fun doConfigure(config: SingleRadarConfiguration) {
         synchronized(this) {
             dataHandler ?: TableDataHandler(this, cacheStore)
-                    .also {
-                        dataHandler = it
-                        it.statusListener = this
-                    }
+                .also {
+                    dataHandler = it
+                    it.statusListener = this
+                }
         }.handler {
             configure(config)
         }
@@ -337,8 +337,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
             }
             connection.serverStatus
-                    ?.also { logger.debug("Initial server status: {}", it) }
-                    ?.also(::updateServerStatus)
+                ?.also { logger.debug("Initial server status: {}", it) }
+                ?.also(::updateServerStatus)
 
             updateBluetoothNeeded(needsBluetooth.value || connection.needsBluetooth())
             startScanning()

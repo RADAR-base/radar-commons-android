@@ -115,7 +115,7 @@ class OpensmileAudioManager constructor(service: OpenSmileAudioService) : Abstra
 
     override fun onClose() {
         if (isRunning) {
-            processor.close()
+            processor.stop()
         }
         clearDataDirectory()
     }

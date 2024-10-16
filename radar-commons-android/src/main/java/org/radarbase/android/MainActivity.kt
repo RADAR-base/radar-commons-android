@@ -24,6 +24,7 @@ import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.flow.StateFlow
 import com.google.firebase.analytics.FirebaseAnalytics
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -34,14 +35,19 @@ import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
+import org.radarbase.android.auth.*
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
-abstract class MainActivity : AppCompatActivity() {
+@Suppress("MemberVisibilityCanBePrivate")
+abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     /** Time between refreshes.  */
     private var uiRefreshRate: Long = 0
@@ -64,11 +70,11 @@ abstract class MainActivity : AppCompatActivity() {
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
-    protected open val requestPermissionTimeoutMs: Long
-        get() = REQUEST_PERMISSION_TIMEOUT_MS
+    protected open val requestPermissionTimeout: Duration
+        get() = REQUEST_PERMISSION_TIMEOUT
 
-    val radarService: IRadarBinder?
-        get() = radarConnection.binder
+    val radarService: StateFlow<BindState<IRadarBinder>>
+        get() = radarConnection.state
 
     val userId: String?
         get() = configuration.latestConfig.optString(USER_ID_KEY)
@@ -87,7 +93,9 @@ abstract class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
         mHandler = SafeHandler.getInstance("Main background handler", Process.THREAD_PRIORITY_BACKGROUND)
-        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeoutMs)
+        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeout) { permissions, grantResults ->
+            radarService.value.applyBinder { permissionGranted(permissions, grantResults) }
+        }
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
@@ -99,7 +107,15 @@ abstract class MainActivity : AppCompatActivity() {
         }
 
         bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
-        authConnection = ManagedServiceConnection(this, radarApp.authService)
+        authConnection = AuthServiceConnection(this, this).apply {
+            onBoundListeners += { binder ->
+                binder.applyState {
+                    if (userId == null) {
+                        this@MainActivity.logoutSucceeded(null, this)
+                    }
+                }
+            }
+        }
         create()
     }
 
@@ -173,8 +189,6 @@ abstract class MainActivity : AppCompatActivity() {
 
         radarConnection.bind()
 
-        permissionHandler.invalidateCache()
-
         LocalBroadcastManager.getInstance(this).apply {
             connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
                 synchronized(this@MainActivity) {
@@ -208,15 +222,10 @@ abstract class MainActivity : AppCompatActivity() {
         connectionsUpdatedReceiver?.unregister()
     }
 
+    @Deprecated("Super was deprecated in favor of Activity Result API")
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         super.onActivityResult(requestCode, resultCode, result)
         bluetoothEnforcer.onActivityResult(requestCode, resultCode)
-        permissionHandler.onActivityResult(requestCode, resultCode)
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        permissionHandler.permissionsGranted(requestCode, permissions, grantResults)
     }
 
     /**
@@ -231,9 +240,20 @@ abstract class MainActivity : AppCompatActivity() {
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
     }
 
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        logger.info("Starting SplashActivity")
+        val intent = packageManager.getLaunchIntentForPackage(BuildConfig.LIBRARY_PACKAGE_NAME) ?: return
+        startActivity(intent.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        })
+        finish()
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(MainActivity::class.java)
 
-        private const val REQUEST_PERMISSION_TIMEOUT_MS = 86_400_000L // 1 day
+        private val REQUEST_PERMISSION_TIMEOUT = 86_400_000.milliseconds // 1 day
     }
 }

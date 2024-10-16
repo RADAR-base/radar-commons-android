@@ -298,7 +298,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     }
 
     override fun onClose() {
-        logProcessor.close()
+        logProcessor.stop()
     }
 
     companion object {

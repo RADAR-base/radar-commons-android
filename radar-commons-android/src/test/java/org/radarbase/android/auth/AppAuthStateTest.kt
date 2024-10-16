@@ -40,7 +40,7 @@ class AppAuthStateTest {
         assertTrue(state.isValidFor(9, TimeUnit.SECONDS))
         assertFalse(state.isValidFor(11, TimeUnit.SECONDS))
         assertEquals(LoginManager.AUTH_TYPE_BEARER.toLong(), state.tokenType.toLong())
-        assertEquals("Bearer abcd", state.headers[0].value)
+        assertEquals("Bearer abcd", state.headers[0].second)
         assertEquals(sources, state.sourceMetadata)
     }
 

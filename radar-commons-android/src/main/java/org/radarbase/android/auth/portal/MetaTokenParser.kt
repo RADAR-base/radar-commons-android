@@ -17,9 +17,8 @@ import java.io.IOException
 class MetaTokenParser(private val currentState: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
-    override fun parse(value: String): AppAuthState {
+    override fun parse(json: JSONObject): AppAuthState {
         try {
-            val json = JSONObject(value)
             return currentState.alter {
                 attributes[MP_REFRESH_TOKEN_PROPERTY] = json.getString("refreshToken")
                 attributes[PRIVACY_POLICY_URL_PROPERTY] = json.getString("privacyPolicyUrl")

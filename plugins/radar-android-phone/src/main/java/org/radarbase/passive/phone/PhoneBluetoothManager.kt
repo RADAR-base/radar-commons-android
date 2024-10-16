@@ -176,7 +176,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
     }
 
     override fun onClose() {
-        processor.close()
+        processor.stop()
         bluetoothBroadcastReceiver?.let {
             try {
                 service.unregisterReceiver(it)

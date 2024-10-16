@@ -21,11 +21,9 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.util.Boast
-import org.radarbase.android.util.send
 import org.slf4j.LoggerFactory
 
 /** Activity to log in using a variety of login managers.  */
@@ -94,8 +92,6 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         logger.info("Login succeeded")
 
-        LocalBroadcastManager.getInstance(this).send(ACTION_LOGIN_SUCCESS)
-
         if (startedFromActivity) {
             logger.debug("Start next activity with result")
             setResult(RESULT_OK, intent)
@@ -113,6 +109,5 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
         private val logger = LoggerFactory.getLogger(LoginActivity::class.java)
         const val ACTION_LOGIN = "org.radarcns.auth.LoginActivity.login"
         const val ACTION_REFRESH = "org.radarcns.auth.LoginActivity.refresh"
-        const val ACTION_LOGIN_SUCCESS = "org.radarcns.auth.LoginActivity.success"
     }
 }

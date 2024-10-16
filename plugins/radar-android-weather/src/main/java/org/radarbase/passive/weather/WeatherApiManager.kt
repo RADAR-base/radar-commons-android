@@ -159,7 +159,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: OkHttpCl
 
     override fun onClose() {
         networkReceiver.unregister()
-        processor.close()
+        processor.stop()
     }
 
     companion object {
