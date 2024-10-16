@@ -98,8 +98,17 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private val needsPermissions = LinkedHashSet<String>()
 
-    protected open val servicePermissions: List<String>
-        get() = listOf(ACCESS_NETWORK_STATE, INTERNET)
+    protected open val servicePermissions: List<String> = buildList(4) {
+        add(ACCESS_NETWORK_STATE)
+        add(INTERNET)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            add(FOREGROUND_SERVICE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(POST_NOTIFICATIONS)
+        }
+    }
+    private lateinit var notificationHandler: NotificationHandler
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -116,6 +125,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     override fun onCreate() {
         super.onCreate()
         serverStatus = ServerStatusListener.Status.DISABLED
+        notificationHandler = NotificationHandler(this)
         binder = createBinder()
         mHandler = SafeHandler.getInstance("RadarService", THREAD_PRIORITY_BACKGROUND).apply {
             start()
@@ -134,9 +144,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
             sourceFailedReceiver = register(SOURCE_CONNECT_FAILED) { context, intent ->
                 Boast.makeText(context,
-                        getString(R.string.cannot_connect_device,
-                                intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
-                        Toast.LENGTH_SHORT).show()
+                    getString(R.string.cannot_connect_device,
+                        intent.getStringExtra(SourceService.SOURCE_STATUS_NAME)),
+                    Toast.LENGTH_SHORT).show()
             }
             serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
                 val serverStatusChanged = intent.getIntExtra(SERVER_STATUS_CHANGED, 0)
@@ -178,7 +188,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     .filter { it.needsBluetooth() }
                     .forEach { it.stopRecording() }
 
-                bluetoothNotification = radarApp.notificationHandler.notify(
+                bluetoothNotification = notificationHandler.notify(
                     BLUETOOTH_NOTIFICATION,
                     NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
                     false
@@ -205,7 +215,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     protected open fun createForegroundNotification(): Notification {
         val mainIntent = Intent(this, radarApp.mainActivity)
-        return radarApp.notificationHandler.create(
+        return notificationHandler.create(
             NOTIFICATION_CHANNEL_INFO,
             true
         ) {
@@ -245,26 +255,26 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     @CallSuper
     protected open fun configure(config: SingleRadarConfiguration) {
-       mHandler.executeReentrant {
-           doConfigure(config)
+        mHandler.executeReentrant {
+            doConfigure(config)
 
-           fetchTimeout.applyIfChanged(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) { timeout ->
-               configurationUpdateFuture?.cancel()
-               configurationUpdateFuture = mHandler.repeat(timeout) {
-                   configuration.fetch()
-               }
-           }
-       }
+            fetchTimeout.applyIfChanged(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) { timeout ->
+                configurationUpdateFuture?.cancel()
+                configurationUpdateFuture = mHandler.repeat(timeout) {
+                    configuration.fetch()
+                }
+            }
+        }
     }
 
     @CallSuper
     protected open fun doConfigure(config: SingleRadarConfiguration) {
         synchronized(this) {
             dataHandler ?: TableDataHandler(this, cacheStore)
-                    .also {
-                        dataHandler = it
-                        it.statusListener = this
-                    }
+                .also {
+                    dataHandler = it
+                    it.statusListener = this
+                }
         }.handler {
             configure(config)
         }
@@ -327,8 +337,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
             }
             connection.serverStatus
-                    ?.also { logger.debug("Initial server status: {}", it) }
-                    ?.also(::updateServerStatus)
+                ?.also { logger.debug("Initial server status: {}", it) }
+                ?.also(::updateServerStatus)
 
             updateBluetoothNeeded(needsBluetooth.value || connection.needsBluetooth())
             startScanning()
@@ -673,10 +683,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
-        val REQUEST_IGNORE_BATTERY_OPTIMIZATIONS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            REQUEST_IGNORE_BATTERY_OPTIMIZATIONS else "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
-        val PACKAGE_USAGE_STATS_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            PACKAGE_USAGE_STATS else "android.permission.PACKAGE_USAGE_STATS"
         val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 
