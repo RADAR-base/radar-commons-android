@@ -19,7 +19,6 @@ package org.radarbase.passive.phone.audio.input
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.MediaRecorder
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE_DEFAULT

@@ -46,7 +46,7 @@ import org.radarbase.passive.phone.audio.input.utils.AudioDeviceUtils
 import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil
 import org.radarbase.passive.phone.audio.input.utils.AudioTypeFormatUtil.toLogFriendlyType
 import org.radarcns.kafka.ObservationKey
-import org.radarcns.passive.phone.PhoneAudioInput
+import org.radarcns.passive.audio.PhoneAudioInput
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
