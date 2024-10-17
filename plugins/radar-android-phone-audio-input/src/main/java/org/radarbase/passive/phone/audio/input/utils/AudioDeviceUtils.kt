@@ -47,9 +47,6 @@ object AudioDeviceUtils {
                 microphones.add(device)
                 logger.info("Devices found: $device")
             }
-            microphones.forEach {
-                logger.info("Name: ${it.productName}, type: ${it.type.  toLogFriendlyType()}, encodings: ${it.encodings.joinToString(", ") { encoding -> AudioTypeFormatUtil.toLogFriendlyEncoding(encoding) }}, SampleRates: ${it.sampleRates.joinToString(", ") { srs-> srs.toString() }} channels: ${it.channelCounts.joinToString (", "){ channels -> channels.toString() }} Id: ${it.id}")
-            }
         }
         return microphones
     }
