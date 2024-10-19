@@ -104,7 +104,7 @@ abstract class SplashActivity : AppCompatActivity() {
         logger.info("Starting SplashActivity")
         networkReceiver.register()
 
-        when (config.status) {
+        when (config.status.value) {
             RadarConfiguration.RemoteConfigStatus.UNAVAILABLE -> {
                 logger.info("Firebase unavailable")
                 updateState(STATE_FIREBASE_UNAVAILABLE)
