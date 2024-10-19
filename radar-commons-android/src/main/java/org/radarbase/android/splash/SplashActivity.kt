@@ -16,10 +16,12 @@ import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.AppAuthState
-import org.radarbase.android.auth.AuthServiceConnection
+import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.config.SingleRadarConfiguration
+import org.radarbase.android.util.ManagedServiceConnection
+import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
@@ -30,7 +32,7 @@ import java.io.IOException
  */
 @Keep
 abstract class SplashActivity : AppCompatActivity() {
-    private lateinit var authConnection: AuthServiceConnection
+    private lateinit var authServiceConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     private lateinit var loginListener: LoginListener
     private lateinit var config: RadarConfiguration
     private lateinit var networkReceiver: NetworkConnectedReceiver
@@ -81,7 +83,7 @@ abstract class SplashActivity : AppCompatActivity() {
         networkReceiver = NetworkConnectedReceiver(this, null)
 
         loginListener = createLoginListener()
-        authConnection = AuthServiceConnection(this@SplashActivity, loginListener)
+        authServiceConnection = serviceConnection(radarApp.authService)
         config = radarConfig
         configReceiver = false
         handler = Handler(Looper.getMainLooper())
@@ -153,6 +155,8 @@ abstract class SplashActivity : AppCompatActivity() {
                 }
             }
 
+            override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 if (authState.isPrivacyPolicyAccepted) {
                     startActivity(radarApp.mainActivity)
@@ -186,8 +190,8 @@ abstract class SplashActivity : AppCompatActivity() {
                 finish()
             }.also { runnable ->
                 startActivityFuture = runnable
-                val delayRemaining = Math.max(0, delayMs - (SystemClock.elapsedRealtime() - startedAt))
-                handler.postDelayed(runnable, delayRemaining)
+                val delayRemaining = delayMs - (SystemClock.elapsedRealtime() - startedAt)
+                handler.postDelayed(runnable, delayRemaining.coerceAtLeast(0))
             }
         }
     }
@@ -204,9 +208,9 @@ abstract class SplashActivity : AppCompatActivity() {
     }
 
     protected open fun startAuthConnection() {
-        if (!authConnection.isBound) {
+        if (authServiceConnection.state.value !is ManagedServiceConnection.BoundService) {
             updateState(STATE_AUTHORIZING)
-            authConnection.bind()
+            authServiceConnection.bind()
         }
     }
 
@@ -218,7 +222,7 @@ abstract class SplashActivity : AppCompatActivity() {
     }
 
     protected open fun stopAuthConnection() {
-        authConnection.unbind()
+        authServiceConnection.unbind()
     }
 
     @Keep

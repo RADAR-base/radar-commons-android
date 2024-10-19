@@ -23,8 +23,13 @@ import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.flow.StateFlow
 import com.google.firebase.analytics.FirebaseAnalytics
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
@@ -34,14 +39,19 @@ import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
+import org.radarbase.android.auth.*
 import org.radarbase.android.auth.AuthService
-import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+
+typealias RadarServiceStateReactor = (IRadarBinder) -> Unit
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
-abstract class MainActivity : AppCompatActivity() {
+@Suppress("MemberVisibilityCanBePrivate")
+abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     /** Time between refreshes.  */
     private var uiRefreshRate: Long = 0
@@ -64,17 +74,27 @@ abstract class MainActivity : AppCompatActivity() {
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
-    protected open val requestPermissionTimeoutMs: Long
-        get() = REQUEST_PERMISSION_TIMEOUT_MS
+    private var serviceActionBinder: IRadarBinder? = null
 
-    val radarService: IRadarBinder?
-        get() = radarConnection.binder
+    protected open val requestPermissionTimeout: Duration
+        get() = REQUEST_PERMISSION_TIMEOUT
+
+    val radarService: StateFlow<BindState<IRadarBinder>>
+        get() = radarConnection.state
 
     val userId: String?
         get() = configuration.latestConfig.optString(USER_ID_KEY)
 
     val projectId: String?
         get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
+
+    private val serviceBoundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
+        IRadarBinder::startScanning,
+        {binder -> view?.onRadarServiceBound(binder)},
+    )
+    private val serviceUnboundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
+        IRadarBinder::stopScanning
+    )
 
     @CallSuper
     override fun onSaveInstanceState(savedInstanceState: Bundle) {
@@ -87,19 +107,57 @@ abstract class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
         mHandler = SafeHandler.getInstance("Main background handler", Process.THREAD_PRIORITY_BACKGROUND)
-        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeoutMs)
+        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeout) { permissions, grantResults ->
+            radarService.value.applyBinder { permissionGranted(permissions, grantResults) }
+        }
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
-        radarConnection = ManagedServiceConnection<IRadarBinder>(this@MainActivity, radarApp.radarService).apply {
-            bindFlags = Context.BIND_ABOVE_CLIENT or Context.BIND_AUTO_CREATE
-            onBoundListeners += IRadarBinder::startScanning
-            onBoundListeners += { binder -> view?.onRadarServiceBound(binder) }
-            onUnboundListeners += IRadarBinder::stopScanning
+        radarConnection = ManagedServiceConnection(
+            this,
+            radarApp.radarService,
+            IRadarBinder::class.java
+        ).apply {
+            bindFlags = Context.BIND_AUTO_CREATE or Context.BIND_ABOVE_CLIENT
         }
 
-        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
-        authConnection = ManagedServiceConnection(this, radarApp.authService)
+        lifecycleScope.launch {
+//            repeatOnLifecycle(Lifecycle.State.CREATED)
+            radarConnection.state
+                .onEach { bindState: BindState<IRadarBinder> ->
+                    when (bindState) {
+                        is ManagedServiceConnection.BoundService -> {
+                            serviceActionBinder = bindState.binder
+                                .also { binder ->
+                                    serviceBoundActions.forEach { action ->
+                                        action(binder)
+                                    }
+                                }
+                        }
+
+                        is ManagedServiceConnection.Unbound -> {
+                            serviceActionBinder?.also { binder ->
+                                serviceUnboundActions.forEach { action ->
+                                    action(binder)
+                                }
+                                serviceActionBinder = null
+                            }
+                        }
+                    }
+                }.launchIn(this)
+        }
+
+
+        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, serviceBoundActions)
+        authConnection = AuthServiceConnection(this, this).apply {
+            onBoundListeners += { binder ->
+                binder.applyState {
+                    if (userId == null) {
+                        this@MainActivity.logoutSucceeded(null, this)
+                    }
+                }
+            }
+        }
         create()
     }
 
@@ -173,8 +231,6 @@ abstract class MainActivity : AppCompatActivity() {
 
         radarConnection.bind()
 
-        permissionHandler.invalidateCache()
-
         LocalBroadcastManager.getInstance(this).apply {
             connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
                 synchronized(this@MainActivity) {
@@ -208,15 +264,10 @@ abstract class MainActivity : AppCompatActivity() {
         connectionsUpdatedReceiver?.unregister()
     }
 
+    @Deprecated("Super was deprecated in favor of Activity Result API")
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         super.onActivityResult(requestCode, resultCode, result)
         bluetoothEnforcer.onActivityResult(requestCode, resultCode)
-        permissionHandler.onActivityResult(requestCode, resultCode)
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        permissionHandler.permissionsGranted(requestCode, permissions, grantResults)
     }
 
     /**
@@ -231,9 +282,20 @@ abstract class MainActivity : AppCompatActivity() {
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
     }
 
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        logger.info("Starting SplashActivity")
+        val intent = packageManager.getLaunchIntentForPackage(BuildConfig.LIBRARY_PACKAGE_NAME) ?: return
+        startActivity(intent.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        })
+        finish()
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(MainActivity::class.java)
 
-        private const val REQUEST_PERMISSION_TIMEOUT_MS = 86_400_000L // 1 day
+        private val REQUEST_PERMISSION_TIMEOUT = 86_400_000.milliseconds // 1 day
     }
 }

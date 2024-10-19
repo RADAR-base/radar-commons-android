@@ -18,12 +18,13 @@ package org.radarbase.passive.phone
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.SharedPreferences
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Process
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.coroutineScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -45,6 +46,7 @@ import org.radarcns.passive.phone.PhoneRelativeLocation
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.util.concurrent.ThreadLocalRandom
+import kotlin.coroutines.coroutineContext
 
 class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManager<PhoneLocationService, BaseSourceState>(context), LocationListener {
     private val locationTopic: DataCache<ObservationKey, PhoneRelativeLocation> = createCache("android_phone_relative_location", PhoneRelativeLocation())
@@ -62,17 +64,23 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     @Volatile
     var isAbsoluteLocation: Boolean = false
 
-    private val preferences: SharedPreferences
-        get() = service.getSharedPreferences(PhoneLocationService::class.java.name, Context.MODE_PRIVATE)
-
     init {
         name = service.getString(R.string.phoneLocationServiceDisplayName)
-        preferences.apply {
+    }
+
+    override suspend fun start(acceptableIds: Set<String>) {
+        locationManager ?: return
+        register()
+        handler.start()
+
+        service.withMutablePreferences { editor ->
             latitudeReference = getString(LATITUDE_REFERENCE, null)
-                    ?.let { BigDecimal(it) }
+                ?.let { BigDecimal(it) }
 
             longitudeReference = getString(LONGITUDE_REFERENCE, null)
-                    ?.let { BigDecimal(it) }
+                ?.let { BigDecimal(it) }
+
+            var editorWasUsed = false
 
             if (contains(ALTITUDE_REFERENCE)) {
                 try {
@@ -80,7 +88,8 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
                 } catch (ex: ClassCastException) {
                     // to fix bug where this was stored as String
                     altitudeReference = getString(ALTITUDE_REFERENCE, "0.0")?.toDouble() ?: 0.0
-                    edit().putLong(ALTITUDE_REFERENCE, altitudeReference.toRawBits()).apply()
+                    editor.putLong(ALTITUDE_REFERENCE, altitudeReference.toRawBits())
+                    editorWasUsed = true
                 }
             } else {
                 altitudeReference = Double.NaN
@@ -93,16 +102,12 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
                 while (referenceId == 0) {
                     referenceId = random.nextInt()
                 }
-                edit().putInt(REFERENCE_ID, referenceId).apply()
+                editor.putInt(REFERENCE_ID, referenceId)
+                editorWasUsed = true
             }
-        }
-        isStarted = false
-    }
 
-    override fun start(acceptableIds: Set<String>) {
-        locationManager ?: return
-        register()
-        handler.start()
+            editorWasUsed
+        }
 
         status = SourceStatusListener.Status.READY
         broadcaster = LocalBroadcastManager.getInstance(service)

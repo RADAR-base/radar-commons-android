@@ -264,7 +264,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     }
 
     override fun onClose() {
-        batteryProcessor.close()
+        batteryProcessor.stop()
 
         mHandler.stop {
             sensorManager?.unregisterListener(this)
