@@ -25,6 +25,8 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
@@ -103,6 +105,8 @@ abstract class SourceService<T : BaseSourceState> :
 
     private var _registeredSource: SourceMetadata? = null
 
+    private var authConnectionBinder: AuthService.AuthServiceBinder? = null
+
     var registeredSource: SourceMetadata?
         get() = handler.compute { _registeredSource }
         private set(value) {
@@ -176,6 +180,15 @@ abstract class SourceService<T : BaseSourceState> :
                         startFuture?.runNow()
                     }
             }
+            launch {
+                authConnection.state
+                    .onEach { bindState ->
+                        authConnectionBinder = when (bindState) {
+                            is ManagedServiceConnection.BoundService -> bindState.binder
+                            is ManagedServiceConnection.Unbound -> null
+                        }
+                    }.launchIn(this)
+            }
             radarConnection.bind()
         }
         handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
@@ -236,7 +249,7 @@ abstract class SourceService<T : BaseSourceState> :
             SourceConnectFailed(
             this@SourceService.javaClass,
             name,
-        )
+        ))
     }
 
     private fun broadcastSourceStatus(status: SourceStatusListener.Status) {
@@ -427,7 +440,7 @@ abstract class SourceService<T : BaseSourceState> :
             }
         }
 
-        authConnection.binder?.updateSource(
+        authConnectionBinder?.updateSource(
             source,
             { authState, updatedSource ->
                 key.projectId = authState.projectId

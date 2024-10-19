@@ -15,11 +15,11 @@ import java.util.regex.Pattern
 
 @Serializable(with = SourceMetadataSerializer::class)
 data class SourceMetadata(
-    val type: SourceType? = null,
-    val sourceId: String? = null,
-    val sourceName: String? = null,
-    val expectedSourceName: String? = null,
-    val attributes: Map<String, String> = mapOf()
+    var type: SourceType? = null,
+    var sourceId: String? = null,
+    var sourceName: String? = null,
+    var expectedSourceName: String? = null,
+    var attributes: Map<String, String> = mapOf()
 ) {
     fun deduplicateType(types: MutableCollection<SourceType>): SourceMetadata {
         val currentType = type ?: return this
