@@ -23,9 +23,11 @@ import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -168,9 +170,10 @@ abstract class MainActivity : AppCompatActivity() {
     public override fun onStart() {
         super.onStart()
         mHandler.start()
-        runBlocking {
+        lifecycleScope.launch {
             logger.debug("::ktorCoroutinesTest -> AuthService Bound")
             authConnection.bind()
+            logger.debug("::ktorCoroutinesTest -> Coroutine completing")
         }
         bluetoothEnforcer.start()
 
@@ -182,7 +185,7 @@ abstract class MainActivity : AppCompatActivity() {
             logger.error("Failed to start RadarService: activity is in background.", ex)
         }
 
-        runBlocking {
+        lifecycleScope.launch {
             val boundService = radarConnection.bind()
             listenerBinder = boundService.binder
             logger.debug("::ktorCoroutinesTest -> Bound to RadarService and assigned listener binder")

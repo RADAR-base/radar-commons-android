@@ -29,7 +29,9 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
@@ -167,9 +169,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         configuration.config.observe(this, ::configure)
 
         authConnection = AuthServiceConnection(this, this).apply {
-            runBlocking {
-                logger.debug("::ktorCoroutinesTest -> binding AuthService")
+            lifecycleScope.launch {
                 bind()
+                logger.debug("::ktorCoroutinesTest -> Bound AuthService")
             }
         }
         authConnection.onUnboundListeners += {

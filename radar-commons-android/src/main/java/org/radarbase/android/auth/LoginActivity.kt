@@ -21,7 +21,9 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.radarbase.android.R
 import org.radarbase.android.RadarApplication.Companion.radarApp
@@ -67,9 +69,9 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
         authConnection.onUnboundListeners.add { binder ->
             binder.isInLoginActivity = false
         }
-        runBlocking {
-            logger.debug("::ktorCoroutinesTest  -> Binding AuthService")
+        lifecycleScope.launch {
             authConnection.bind()
+            logger.debug("::ktorCoroutinesTest  -> Bound AuthService")
         }
     }
 

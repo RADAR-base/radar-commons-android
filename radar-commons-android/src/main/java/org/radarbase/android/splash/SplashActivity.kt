@@ -210,11 +210,11 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun startAuthConnection() {
         val serviceState: BindState<AuthService.AuthServiceBinder> = authConnection.state.value
-        if (serviceState is ManagedServiceConnection.BoundService) {
+        if (serviceState !is ManagedServiceConnection.BoundService) {
             updateState(STATE_AUTHORIZING)
             lifecycleScope.launch {
-                logger.debug("::ktorCoroutinesTest  -> UnBounding Auth connection")
                 authConnection.bind()
+                logger.debug("::ktorCoroutinesTest  ->  Bound Auth connection")
             }
         }
     }

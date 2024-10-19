@@ -153,7 +153,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         authConnection = AuthServiceConnection(this, this)
 
         radarConnection = ManagedServiceConnection(this, radarApp.radarService, IRadarBinder::class.java)
-        runBlocking {
+        lifecycleScope.launch {
             val boundService = radarConnection.bind()
             logger.debug("::ktorCoroutinesTest  -> Bound RadarService and now assigning the binder")
             listenerServiceBinder = boundService.binder
@@ -163,6 +163,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
                     it(binder)
                 }
             }
+            logger.debug("::ktorCoroutinesTest completing scope")
         }
         lifecycleScope.launch {
             authConnection.state.
@@ -403,8 +404,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 //        }
         val authConnectionState = authConnection.state.value
         if (authConnectionState !is ManagedServiceConnection.BoundService) {
-            runBlocking {
+            lifecycleScope.launch {
                 authConnection.bind()
+                logger.debug("::ktorCoroutinesTest -> Bound to Auth Service")
             }
         }
     }
