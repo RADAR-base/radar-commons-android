@@ -23,9 +23,13 @@ import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.flow.StateFlow
 import com.google.firebase.analytics.FirebaseAnalytics
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
@@ -37,12 +41,12 @@ import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.*
 import org.radarbase.android.auth.AuthService
-import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
+typealias ServiceStateReactor = (IRadarBinder) -> Unit
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
@@ -70,6 +74,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
+    private var serviceActionBinder: IRadarBinder? = null
+
     protected open val requestPermissionTimeout: Duration
         get() = REQUEST_PERMISSION_TIMEOUT
 
@@ -81,6 +87,14 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     val projectId: String?
         get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
+
+    private val serviceBoundActions: MutableList<ServiceStateReactor> = mutableListOf(
+        IRadarBinder::startScanning,
+        {binder -> view?.onRadarServiceBound(binder)},
+    )
+    private val serviceUnboundActions: MutableList<ServiceStateReactor> = mutableListOf(
+        IRadarBinder::stopScanning
+    )
 
     @CallSuper
     override fun onSaveInstanceState(savedInstanceState: Bundle) {
@@ -99,14 +113,42 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
-        radarConnection = ManagedServiceConnection<IRadarBinder>(this@MainActivity, radarApp.radarService).apply {
-            bindFlags = Context.BIND_ABOVE_CLIENT or Context.BIND_AUTO_CREATE
-            onBoundListeners += IRadarBinder::startScanning
-            onBoundListeners += { binder -> view?.onRadarServiceBound(binder) }
-            onUnboundListeners += IRadarBinder::stopScanning
+        radarConnection = ManagedServiceConnection(
+            this,
+            radarApp.radarService,
+            IRadarBinder::class.java
+        ).apply {
+            bindFlags = Context.BIND_AUTO_CREATE or Context.BIND_ABOVE_CLIENT
         }
 
-        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
+        lifecycleScope.launch {
+//            repeatOnLifecycle(Lifecycle.State.CREATED)
+            radarConnection.state
+                .onEach { bindState: BindState<IRadarBinder> ->
+                    when (bindState) {
+                        is ManagedServiceConnection.BoundService -> {
+                            serviceActionBinder = bindState.binder
+                                .also { binder ->
+                                    serviceBoundActions.forEach { action ->
+                                        action(binder)
+                                    }
+                                }
+                        }
+
+                        is ManagedServiceConnection.Unbound -> {
+                            serviceActionBinder?.also { binder ->
+                                serviceUnboundActions.forEach { action ->
+                                    action(binder)
+                                }
+                                serviceActionBinder = null
+                            }
+                        }
+                    }
+                }.launchIn(this)
+        }
+
+
+        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, serviceBoundActions)
         authConnection = AuthServiceConnection(this, this).apply {
             onBoundListeners += { binder ->
                 binder.applyState {
