@@ -12,7 +12,7 @@ import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.ENABLE_BLUETOOTH_REQUESTS
 import org.radarbase.android.RadarService
-import org.radarbase.android.ServiceStateReactor
+import org.radarbase.android.RadarServiceStateReactor
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
 class BluetoothEnforcer(
     private val context: ComponentActivity,
     private val radarConnection: ManagedServiceConnection<IRadarBinder>,
-    private val serviceBoundActions: MutableList<ServiceStateReactor>
+    private val serviceBoundActions: MutableList<RadarServiceStateReactor>
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var isRequestingBluetooth = false

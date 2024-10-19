@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-typealias ServiceStateReactor = (IRadarBinder) -> Unit
+typealias RadarServiceStateReactor = (IRadarBinder) -> Unit
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
@@ -88,11 +88,11 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     val projectId: String?
         get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
 
-    private val serviceBoundActions: MutableList<ServiceStateReactor> = mutableListOf(
+    private val serviceBoundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
         IRadarBinder::startScanning,
         {binder -> view?.onRadarServiceBound(binder)},
     )
-    private val serviceUnboundActions: MutableList<ServiceStateReactor> = mutableListOf(
+    private val serviceUnboundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
         IRadarBinder::stopScanning
     )
 
