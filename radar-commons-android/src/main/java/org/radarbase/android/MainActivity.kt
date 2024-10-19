@@ -169,6 +169,7 @@ abstract class MainActivity : AppCompatActivity() {
         super.onStart()
         mHandler.start()
         runBlocking {
+            logger.debug("::ktorCoroutinesTest -> AuthService Bound")
             authConnection.bind()
         }
         bluetoothEnforcer.start()
@@ -184,9 +185,11 @@ abstract class MainActivity : AppCompatActivity() {
         runBlocking {
             val boundService = radarConnection.bind()
             listenerBinder = boundService.binder
+            logger.debug("::ktorCoroutinesTest -> Bound to RadarService and assigned listener binder")
         }
         listenerBinder?.let{ binder ->
             serviceBoundActions.forEach {
+                println("::ktorCoroutinesTest -> boundActions -> $it")
                 it(binder)
             }
         }
@@ -220,6 +223,7 @@ abstract class MainActivity : AppCompatActivity() {
 
         listenerBinder?.let { binder ->
             serviceUnboundActions.forEach {
+                logger.debug("::ktorCoroutinesTest -> unboundActions: $it")
                 it(binder)
             }
             listenerBinder = null

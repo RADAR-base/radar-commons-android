@@ -168,6 +168,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         authConnection = AuthServiceConnection(this, this).apply {
             runBlocking {
+                logger.debug("::ktorCoroutinesTest -> binding AuthService")
                 bind()
             }
         }
@@ -380,6 +381,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 if (authConnection.state.value is ManagedServiceConnection.BoundService) {
                     (authConnection.state.value as ManagedServiceConnection.BoundService).binder
                 } else null
+            logger.debug("::ktorCoroutinesTest  -> Assigned AuthBinder: {}", authBinder)
             if (authBinder == null) {
                 mHandler.delay(1000) { bindServices(providers, unbindFirst) }
             } else {

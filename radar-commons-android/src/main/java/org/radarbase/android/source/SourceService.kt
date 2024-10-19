@@ -155,8 +155,14 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         radarConnection = ManagedServiceConnection(this, radarApp.radarService, IRadarBinder::class.java)
         runBlocking {
             val boundService = radarConnection.bind()
+            logger.debug("::ktorCoroutinesTest  -> Bound RadarService and now assigning the binder")
             listenerServiceBinder = boundService.binder
-            serviceBoundActions.forEach()
+            listenerServiceBinder?.let { binder: IRadarBinder ->
+                serviceBoundActions.forEach {
+                    logger.debug("::ktorCoroutinesTest  -> Executing Bound Actions {}", it)
+                    it(binder)
+                }
+            }
         }
         lifecycleScope.launch {
             authConnection.state.
@@ -182,6 +188,13 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         logger.info("Destroying SourceService {}", this)
         super.onDestroy()
 
+        listenerServiceBinder?.let { binder ->
+            serviceUnboundActions.forEach {
+                logger.debug("::ktorCoroutinesTest  -> Service unbound actions: $it")
+                it(binder)
+            }
+            listenerServiceBinder = null
+        }
         radarConnection.unbind()
         authConnection.unbind()
 

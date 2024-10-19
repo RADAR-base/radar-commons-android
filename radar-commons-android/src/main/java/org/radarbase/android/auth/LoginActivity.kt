@@ -68,6 +68,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
             binder.isInLoginActivity = false
         }
         runBlocking {
+            logger.debug("::ktorCoroutinesTest  -> Binding AuthService")
             authConnection.bind()
         }
     }

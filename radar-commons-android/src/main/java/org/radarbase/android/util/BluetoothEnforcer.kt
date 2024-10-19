@@ -57,6 +57,7 @@ class BluetoothEnforcer(
         }
 
         serviceBoundActions += {
+            println("::ktorCoroutinesTest  -> Adding service bound action in bluetooth enforcer")
             updateNeedsBluetooth(it.needsBluetooth())
         }
         enableBluetoothRequests = ChangeRunner(
