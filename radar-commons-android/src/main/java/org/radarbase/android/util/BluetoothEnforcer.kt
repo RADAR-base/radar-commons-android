@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit
 class BluetoothEnforcer(
     private val context: ComponentActivity,
     private val radarConnection: ManagedServiceConnection<IRadarBinder>,
+    private val serviceBoundActions: MutableList<(IRadarBinder) -> Unit>
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var isRequestingBluetooth = false
@@ -55,7 +56,7 @@ class BluetoothEnforcer(
             config.reset(ENABLE_BLUETOOTH_REQUESTS)
         }
 
-        radarConnection.onBoundListeners += {
+        serviceBoundActions += {
             updateNeedsBluetooth(it.needsBluetooth())
         }
         enableBluetoothRequests = ChangeRunner(

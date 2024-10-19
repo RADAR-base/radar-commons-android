@@ -22,6 +22,7 @@ import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.runBlocking
 import org.radarbase.android.R
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.util.Boast
@@ -60,13 +61,15 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
         authConnection.onBoundListeners.add { binder ->
             binder.refresh()
             binder.managers
-                    .find { it.onActivityCreate(this@LoginActivity)}
-                    ?.let { binder.update(it) }
+                .find { it.onActivityCreate(this@LoginActivity) }
+                ?.let { binder.update(it) }
         }
         authConnection.onUnboundListeners.add { binder ->
             binder.isInLoginActivity = false
         }
-        authConnection.bind()
+        runBlocking {
+            authConnection.bind()
+        }
     }
 
     override fun onDestroy() {

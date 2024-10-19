@@ -22,8 +22,14 @@ import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
@@ -82,7 +88,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
     private lateinit var authConnection: AuthServiceConnection
     protected lateinit var config: RadarConfiguration
-    private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
+    private lateinit var radarConnection: ManagedServiceConnection<IRadarBinder>
     private lateinit var handler: SafeHandler
     private var startFuture: SafeHandler.HandlerFuture? = null
     private lateinit var broadcaster: LocalBroadcastManager
@@ -92,6 +98,22 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     private lateinit var sourceProducer: String
     private val name = javaClass.simpleName
     private var delayedStart: Set<String>? = null
+
+    private val serviceBoundActions: MutableList<(IRadarBinder) -> Unit> =  mutableListOf(
+        { binder: IRadarBinder ->
+            dataHandler = binder.dataHandler
+            handler.execute {
+                startFuture?.runNow()
+            }
+        }
+    )
+
+    private val serviceUnboundActions: MutableList<(IRadarBinder) -> Unit> = mutableListOf(
+        { _ ->
+            dataHandler = null
+        }
+    )
+
 
     val state: T
         get() {
@@ -115,6 +137,9 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     open val isBluetoothConnectionRequired: Boolean
         get() = hasBluetoothPermission
 
+    private var authServiceBinder: AuthService.AuthServiceBinder? = null
+    private var listenerServiceBinder: IRadarBinder? = null
+
     @CallSuper
     override fun onCreate() {
         logger.info("Creating SourceService {}", this)
@@ -127,14 +152,22 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
         authConnection = AuthServiceConnection(this, this)
 
-        radarConnection = ManagedServiceConnection(this, radarApp.radarService)
-        radarConnection.onBoundListeners.add { binder ->
-            dataHandler = binder.dataHandler
-            handler.execute {
-                startFuture?.runNow()
-            }
+        radarConnection = ManagedServiceConnection(this, radarApp.radarService, IRadarBinder::class.java)
+        runBlocking {
+            val boundService = radarConnection.bind()
+            listenerServiceBinder = boundService.binder
+            serviceBoundActions.forEach()
         }
-        radarConnection.bind()
+        lifecycleScope.launch {
+            authConnection.state.
+                    onEach {
+                        authServiceBinder = if (it is ManagedServiceConnection.BoundService) {
+                            it.binder
+                        } else {
+                            null
+                        }
+                    }.launchIn(this)
+        }
         handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
         radarConfig.config.observe(this, ::configure)
@@ -352,8 +385,14 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         pluginName = requireNotNull(bundle.getString(PLUGIN_NAME_KEY)) { "Missing source producer" }
         sourceProducer = requireNotNull(bundle.getString(PRODUCER_KEY)) { "Missing source producer" }
         sourceModel = requireNotNull(bundle.getString(MODEL_KEY)) { "Missing source model" }
-        if (!authConnection.isBound) {
-            authConnection.bind()
+//        if (!authConnection.isBound) {
+//            authConnection.bind()
+//        }
+        val authConnectionState = authConnection.state.value
+        if (authConnectionState !is ManagedServiceConnection.BoundService) {
+            runBlocking {
+                authConnection.bind()
+            }
         }
     }
 
@@ -382,7 +421,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             }
         }
 
-        authConnection.binder?.updateSource(
+        authServiceBinder?.updateSource(
             source,
             { authState, updatedSource ->
                 key.projectId = authState.projectId

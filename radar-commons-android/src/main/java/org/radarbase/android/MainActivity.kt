@@ -25,6 +25,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.firebase.analytics.FirebaseAnalytics
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.runBlocking
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
@@ -35,7 +37,6 @@ import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AuthService
-import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
 
@@ -67,14 +68,24 @@ abstract class MainActivity : AppCompatActivity() {
     protected open val requestPermissionTimeoutMs: Long
         get() = REQUEST_PERMISSION_TIMEOUT_MS
 
-    val radarService: IRadarBinder?
-        get() = radarConnection.binder
+    val radarService: StateFlow<BindState<IRadarBinder>>
+        get() = radarConnection.state
+
+    private val serviceBoundActions: MutableList<(IRadarBinder) -> Unit> = mutableListOf(
+        IRadarBinder::startScanning,
+        {binder -> view?.onRadarServiceBound(binder)},
+    )
+
+    private val serviceUnboundActions: MutableList<(IRadarBinder) -> Unit> = mutableListOf(
+        IRadarBinder::stopScanning
+    )
 
     val userId: String?
         get() = configuration.latestConfig.optString(USER_ID_KEY)
 
     val projectId: String?
         get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
+    private var listenerBinder: IRadarBinder? = null
 
     @CallSuper
     override fun onSaveInstanceState(savedInstanceState: Bundle) {
@@ -91,15 +102,12 @@ abstract class MainActivity : AppCompatActivity() {
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
-        radarConnection = ManagedServiceConnection<IRadarBinder>(this@MainActivity, radarApp.radarService).apply {
+        radarConnection = ManagedServiceConnection(this@MainActivity, radarApp.radarService, IRadarBinder::class.java).apply {
             bindFlags = Context.BIND_ABOVE_CLIENT or Context.BIND_AUTO_CREATE
-            onBoundListeners += IRadarBinder::startScanning
-            onBoundListeners += { binder -> view?.onRadarServiceBound(binder) }
-            onUnboundListeners += IRadarBinder::stopScanning
         }
 
-        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection)
-        authConnection = ManagedServiceConnection(this, radarApp.authService)
+        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, serviceBoundActions)
+        authConnection = ManagedServiceConnection(this, radarApp.authService, AuthService.AuthServiceBinder::class.java)
         create()
     }
 
@@ -160,7 +168,9 @@ abstract class MainActivity : AppCompatActivity() {
     public override fun onStart() {
         super.onStart()
         mHandler.start()
-        authConnection.bind()
+        runBlocking {
+            authConnection.bind()
+        }
         bluetoothEnforcer.start()
 
         val radarServiceCls = radarApp.radarService
@@ -171,8 +181,15 @@ abstract class MainActivity : AppCompatActivity() {
             logger.error("Failed to start RadarService: activity is in background.", ex)
         }
 
-        radarConnection.bind()
-
+        runBlocking {
+            val boundService = radarConnection.bind()
+            listenerBinder = boundService.binder
+        }
+        listenerBinder?.let{ binder ->
+            serviceBoundActions.forEach {
+                it(binder)
+            }
+        }
         permissionHandler.invalidateCache()
 
         LocalBroadcastManager.getInstance(this).apply {
@@ -201,6 +218,12 @@ abstract class MainActivity : AppCompatActivity() {
 
         mHandler.stop { view = null }
 
+        listenerBinder?.let { binder ->
+            serviceUnboundActions.forEach {
+                it(binder)
+            }
+            listenerBinder = null
+        }
         radarConnection.unbind()
         authConnection.unbind()
         bluetoothEnforcer.stop()
@@ -226,7 +249,7 @@ abstract class MainActivity : AppCompatActivity() {
      * still valid.
      */
     protected fun logout(disableRefresh: Boolean) {
-        authConnection.applyBinder { invalidate(null, disableRefresh) }
+//        authConnection.applyBinder { invalidate(null, disableRefresh) }
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
     }

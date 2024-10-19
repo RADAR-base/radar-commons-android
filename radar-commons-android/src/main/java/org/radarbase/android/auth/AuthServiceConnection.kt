@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
 
 @Keep
 open class AuthServiceConnection(context: Context, private val listener: LoginListener):
-        ManagedServiceConnection<AuthService.AuthServiceBinder>(context, (context.applicationContext as RadarApplication).authService) {
+        ManagedServiceConnection<AuthService.AuthServiceBinder>(context, (context.applicationContext as RadarApplication).authService, AuthService.AuthServiceBinder::class.java    ) {
     private lateinit var registration: AuthService.LoginListenerRegistration
 
     init {

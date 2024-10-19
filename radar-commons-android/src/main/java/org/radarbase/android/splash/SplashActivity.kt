@@ -12,14 +12,19 @@ import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.Observer
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.AppAuthState
+import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.AuthServiceConnection
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.config.SingleRadarConfiguration
+import org.radarbase.android.util.BindState
+import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
@@ -204,9 +209,16 @@ abstract class SplashActivity : AppCompatActivity() {
     }
 
     protected open fun startAuthConnection() {
-        if (!authConnection.isBound) {
+//        if (!authConnection.isBound) {
+//            updateState(STATE_AUTHORIZING)
+//            authConnection.bind()
+//        }
+        val serviceState: BindState<AuthService.AuthServiceBinder> = authConnection.state.value
+        if (serviceState is ManagedServiceConnection.BoundService) {
             updateState(STATE_AUTHORIZING)
-            authConnection.bind()
+            lifecycleScope.launch {
+                authConnection.bind()
+            }
         }
     }
 

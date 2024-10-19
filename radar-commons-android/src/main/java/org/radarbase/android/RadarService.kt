@@ -30,6 +30,7 @@ import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.runBlocking
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -166,7 +167,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         configuration.config.observe(this, ::configure)
 
         authConnection = AuthServiceConnection(this, this).apply {
-            bind()
+            runBlocking {
+                bind()
+            }
         }
         authConnection.onUnboundListeners += {
             mHandler.execute {
@@ -373,7 +376,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private fun bindServices(providers: Collection<SourceProvider<*>>, unbindFirst: Boolean) {
         mHandler.executeReentrant {
-            val authBinder = authConnection.binder
+            val authBinder: AuthService.AuthServiceBinder? =
+                if (authConnection.state.value is ManagedServiceConnection.BoundService) {
+                    (authConnection.state.value as ManagedServiceConnection.BoundService).binder
+                } else null
             if (authBinder == null) {
                 mHandler.delay(1000) { bindServices(providers, unbindFirst) }
             } else {
