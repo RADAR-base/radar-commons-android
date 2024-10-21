@@ -7,7 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 fun String.takeTrimmedIfNotEmpty(): String? = trim { it <= ' ' }
-            .takeUnless(String::isEmpty)
+    .takeUnless(String::isEmpty)
 
 fun Int.toPendingIntentFlag(mutable: Boolean = false) = this or when {
     mutable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> PendingIntent.FLAG_MUTABLE
@@ -16,7 +16,10 @@ fun Int.toPendingIntentFlag(mutable: Boolean = false) = this or when {
 }
 
 @Suppress("UNCHECKED_CAST")
-inline fun <reified T> Context.applySystemService(type: String, callback: (T) -> Boolean): Boolean? {
+inline fun <reified T> Context.applySystemService(
+    type: String,
+    callback: (T) -> Boolean
+): Boolean? {
     return (getSystemService(type) as T?)?.let(callback)
 }
 
@@ -33,7 +36,8 @@ internal inline fun buildJsonArray(config: JSONArray.() -> Unit): JSONArray {
     return JSONArray().apply(config)
 }
 
-internal fun JSONObject.optNonEmptyString(key: String): String? = if (isNull(key)) null else optString(key).takeTrimmedIfNotEmpty()?.takeIf { it != "null" }
+internal fun JSONObject.optNonEmptyString(key: String): String? =
+    if (isNull(key)) null else optString(key).takeTrimmedIfNotEmpty()?.takeIf { it != "null" }
 
 internal fun JSONObject.toStringMap(): Map<String, String> = buildMap {
     this@toStringMap.keys().forEach { key ->
@@ -53,7 +57,7 @@ internal fun JSONObject.putAll(map: Map<String, Any?>) {
     }
 }
 
-internal inline fun <reified T: Any> T.equalTo(other: Any?, vararg fields: T.() -> Any?): Boolean {
+internal inline fun <reified T : Any> T.equalTo(other: Any?, vararg fields: T.() -> Any?): Boolean {
     if (this === other) return true
     if (other == null || javaClass !== other.javaClass) return false
     other as T
