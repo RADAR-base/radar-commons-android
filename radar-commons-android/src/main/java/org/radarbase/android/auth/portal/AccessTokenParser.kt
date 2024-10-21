@@ -15,23 +15,27 @@ import java.util.concurrent.TimeUnit
 class AccessTokenParser(private val state: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
-    override fun parse(value: String): AppAuthState {
+    override suspend fun parse(value: JSONObject): AppAuthState {
         var refreshToken = state.getAttribute(MP_REFRESH_TOKEN_PROPERTY)
         try {
-            val json = JSONObject(value)
-            val accessToken = json.getString("access_token")
-            refreshToken = json.optNonEmptyString("refresh_token")
-                    ?: refreshToken?.takeIf { it.isNotEmpty() }
-                    ?: throw IOException("Missing refresh token")
+            val accessToken = value.getString("access_token")
+            refreshToken = value.optNonEmptyString("refresh_token")
+                ?: refreshToken?.takeIf { it.isNotEmpty() }
+                        ?: throw IOException("Missing refresh token")
             return state.alter {
                 attributes[MP_REFRESH_TOKEN_PROPERTY] = refreshToken
-                attributes[SOURCE_IDS_PROPERTY] = json.optJSONArray("sources")?.join(",") ?: ""
+                attributes[SOURCE_IDS_PROPERTY] = value.optJSONArray("sources")?.join(",") ?: ""
                 setHeader("Authorization", "Bearer $accessToken")
 
                 token = accessToken
                 tokenType = AUTH_TYPE_BEARER
-                userId = json.getString("sub")
-                expiration = TimeUnit.SECONDS.toMillis(json.optLong("expires_in", 3600L)) + System.currentTimeMillis()
+                userId = value.getString("sub")
+                expiration = TimeUnit.SECONDS.toMillis(
+                    value.optLong(
+                        "expires_in",
+                        3600L
+                    )
+                ) + System.currentTimeMillis()
                 needsRegisteredSources = true
                 authenticationSource = SOURCE_TYPE
             }

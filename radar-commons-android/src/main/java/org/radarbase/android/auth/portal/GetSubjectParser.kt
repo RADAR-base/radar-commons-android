@@ -19,11 +19,10 @@ import kotlin.collections.ArrayList
 class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
-    override fun parse(value: String): AppAuthState {
+    override suspend fun parse(value: JSONObject): AppAuthState {
         try {
-            val jsonObject = JSONObject(value)
-            val project = jsonObject.getJSONObject("project")
-            val sources = jsonObject.getJSONArray("sources")
+            val project = value.getJSONObject("project")
+            val sources = value.getJSONArray("sources")
 
             val types = parseSourceTypes(project)
 
@@ -32,32 +31,34 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                 sourceTypes += types
                 sourceMetadata.clear()
                 sourceMetadata += parseSources(types, sources)
-                userId = parseUserId(jsonObject)
+                userId = parseUserId(value)
                 projectId = parseProjectId(project)
                 needsRegisteredSources = true
                 authenticationSource = SOURCE_TYPE
 
-                jsonObject.opt("attributes")?.let { attrObjects ->
+                value.opt("attributes")?.let { attrObjects ->
                     if (attrObjects is JSONArray) {
                         attrObjects
                             .asJSONObjectSequence()
                             .forEach { attrObject ->
-                                attributes[attrObject.getString("key")] = attrObject.getString("value")
+                                attributes[attrObject.getString("key")] =
+                                    attrObject.getString("value")
                             }
                     } else if (attrObjects is JSONObject) {
                         attributes += attrObjects.toStringMap()
                     }
                 }
-                jsonObject.optNonEmptyString("externalId")?.let {
+                value.optNonEmptyString("externalId")?.let {
                     attributes[RADAR_EXTERNAL_ID] = it
                 }
-                jsonObject.optNonEmptyString("externalLink")?.let {
+                value.optNonEmptyString("externalLink")?.let {
                     attributes[RADAR_EXTERNAL_URL] = it
                 }
             }
         } catch (e: JSONException) {
             throw IOException(
-                    "ManagementPortal did not give a valid response: $value", e)
+                "ManagementPortal did not give a valid response: $value", e
+            )
         }
     }
 
@@ -88,8 +89,10 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
         }
 
         @Throws(JSONException::class)
-        internal fun parseSources(sourceTypes: List<SourceType>,
-                                  sources: JSONArray): List<SourceMetadata> {
+        internal fun parseSources(
+            sourceTypes: List<SourceType>,
+            sources: JSONArray
+        ): List<SourceMetadata> {
 
             val actualSources = sources
                 .asJSONObjectSequence()
@@ -138,8 +141,8 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
 
         val AppAuthState.humanReadableUserId: String?
             get() = attributes.values
-                    .find { it.equals("Human-readable-identifier", ignoreCase = true) }
-                    ?.takeTrimmedIfNotEmpty()
-                    ?: userId
+                .find { it.equals("Human-readable-identifier", ignoreCase = true) }
+                ?.takeTrimmedIfNotEmpty()
+                ?: userId
     }
 }
