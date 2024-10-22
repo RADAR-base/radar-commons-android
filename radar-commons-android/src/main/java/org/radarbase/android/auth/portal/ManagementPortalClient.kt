@@ -29,7 +29,7 @@ import java.io.IOException
 import java.lang.RuntimeException
 import java.net.MalformedURLException
 
-class ManagementPortalClient constructor(
+class ManagementPortalClient(
     managementPortal: ServerConfig,
     private val clientId: String,
     private val clientSecret: String,
@@ -76,15 +76,15 @@ class ManagementPortalClient constructor(
         if (state.userId == null) {
             throw IOException("Authentication state does not contain user ID")
         }
-        val request = client.request("api/subjects/${state.userId}") {
-
+        val request = client.prepareRequest("api/subjects/${state.userId}") {
+            headers {
+                appendAll(state.ktorHeaders)
+                append(HttpHeaders.Accept, APPLICATION_JSON)
+            }
         }
-                .headers(state.okHttpHeaders)
-                .header("Accept", APPLICATION_JSON)
-                .build()
 
         logger.info("Requesting subject {} with parseHeaders {}", state.userId,
-                state.okHttpHeaders)
+                state.ktorHeaders)
 
         return handleRequest(request, parser)
     }
@@ -168,7 +168,7 @@ class ManagementPortalClient constructor(
     @Throws(IOException::class)
     private suspend fun <T> handleRequest(request: HttpStatement, parser: Parser<JSONObject, T>): T {
         return request.execute { response ->
-            val body: OAuthAccess = response.body()
+            val body: JSONObject = response.body()
 
             if (response.status == HttpStatusCode.Unauthorized) {
                 throw AuthenticationException("QR code is invalid: $body")
