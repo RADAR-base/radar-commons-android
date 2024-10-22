@@ -34,6 +34,7 @@ interface LoginManager {
 
     /**
      * With or without user interaction, refresh the current authentication state.
+     * The result will be passed to a LoginListener.
      * Returns false if no refresh information is available.
      */
     suspend fun refresh(authState: AppAuthState.Builder): Boolean
@@ -75,21 +76,36 @@ interface LoginManager {
     /**
      * Register a source.
      * @param authState authentication state
-     * @param source source metadata to resgister
+     * @param source source metadata to register
+     * @param success callback to call on success
+     * @param failure callback to call on failure
      * @return true if the current LoginManager can handle the registration, false otherwise.
      * @throws AuthenticationException if the manager cannot log in
      */
     @Throws(AuthenticationException::class)
     suspend fun registerSource(
         authState: AppAuthState.Builder,
-        source: SourceMetadata
+        source: SourceMetadata,
+        success: (AppAuthState, SourceMetadata) -> Unit,
+        failure: (Exception?) -> Unit
     ): SourceMetadata
 
     fun onDestroy()
 
+    /**
+     * Update a source.
+     * @param appAuth authentication state
+     * @param source source metadata to register
+     * @param success callback to call on success
+     * @param failure callback to call on failure
+     * @return true if the current LoginManager can handle the update, false otherwise.
+     * @throws AuthenticationException if the manager cannot log in
+     */
     suspend fun updateSource(
         appAuth: AppAuthState.Builder,
         source: SourceMetadata,
+        success: (AppAuthState, SourceMetadata) -> Unit,
+        failure: (Exception?) -> Unit
     ): SourceMetadata
 
     companion object {
