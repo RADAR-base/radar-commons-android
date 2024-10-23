@@ -56,12 +56,12 @@ class ManagementPortalClient(
      * response.
      */
     @Throws(IOException::class)
-    suspend fun getRefreshToken(metaTokenUrl: String, parser: AuthStringParser): AppAuthState {
+    suspend fun getRefreshToken(metaTokenUrl: String, parser: AuthStringParser): AppAuthState.Builder {
         val request = client.prepareRequest(metaTokenUrl) {
             logger.debug("Requesting refreshToken with token-url {}", metaTokenUrl)
         }
 
-        return handleRequest(request, parser).build()
+        return handleRequest(request, parser)
     }
 
     /**
@@ -95,7 +95,8 @@ class ManagementPortalClient(
 
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
-    suspend fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata = handleSourceUpdateRequest(
+    suspend fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata =
+        handleSourceUpdateRequest(
         auth,
         "api/subjects/${auth.userId}/sources",
         sourceRegistrationBody(source),
@@ -104,7 +105,8 @@ class ManagementPortalClient(
 
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
-    suspend fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata = handleSourceUpdateRequest(
+    suspend fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata =
+        handleSourceUpdateRequest(
         auth,
         "api/subjects/${auth.userId}/sources/${source.sourceName}",
         sourceUpdateBody(source),
@@ -119,6 +121,11 @@ class ManagementPortalClient(
     ): SourceMetadata {
         val response = client.post(relativePath) {
             contentType(ContentType.Application.Json)
+            headers {
+                appendAll(auth.ktorHeaders)
+                append(HttpHeaders.ContentType, APPLICATION_JSON)
+                append(HttpHeaders.Accept, APPLICATION_JSON)
+            }
             setBody(requestBody)
         }
         val responseBody = response.bodyAsText()
