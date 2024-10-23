@@ -29,6 +29,26 @@ import java.io.IOException
 import java.lang.RuntimeException
 import java.net.MalformedURLException
 
+/**
+ * Client for interacting with the Management Portal to authenticate and manage users and devices.
+ * This class handles requests related to authentication, user retrieval, source registration, and
+ * source updates.
+ *
+ * This client uses the Ktor HTTP client for making requests, and handles different types of
+ * JSON responses from the Management Portal.
+ *
+ * It expects a [ServerConfig] instance to define the Management Portal URL and handles
+ * basic authentication using client credentials (client ID and secret).
+ *
+ * Operations in this class include:
+ *
+ *     Getting a refresh token from a meta-token URL.
+ *     Fetching subject information such as project details, available source types, and
+ *     assigned sources.
+ *     Registering and updating sources linked to a subject.
+ * </ul>
+ */
+
 class ManagementPortalClient(
     managementPortal: ServerConfig,
     private val clientId: String,
@@ -93,7 +113,15 @@ class ManagementPortalClient(
         return handleRequest(request, parser)
     }
 
-    /** Register a source with the Management Portal.  */
+    /**
+     * Registers a source in the Management Portal for the specified subject.
+     *
+     * @param auth the current authentication state
+     * @param source the [SourceMetadata] of the source to register
+     * @return the registered [SourceMetadata], with updated information
+     * @throws IOException if the request fails
+     * @throws JSONException if the response cannot be parsed as valid JSON
+     */
     @Throws(IOException::class, JSONException::class)
     suspend fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata =
         handleSourceUpdateRequest(
@@ -103,7 +131,15 @@ class ManagementPortalClient(
         source,
     )
 
-    /** Register a source with the Management Portal.  */
+    /**
+     * Updates the metadata of a registered source in the Management Portal.
+     *
+     * @param auth the current authentication state
+     * @param source the [SourceMetadata] of the source to update
+     * @return the [SourceMetadata], with updated information
+     * @throws IOException if the request fails
+     * @throws JSONException if the response cannot be parsed as valid JSON
+     */
     @Throws(IOException::class, JSONException::class)
     suspend fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata =
         handleSourceUpdateRequest(
@@ -154,6 +190,14 @@ class ManagementPortalClient(
         return source
     }
 
+    /**
+     * Exchanges access-token from refresh-token using the refresh token stored in the [AppAuthState.Builder].
+     *
+     * @param authState the current [AppAuthState] builder
+     * @param parser an [AuthStringParser] specifically [AccessTokenParser]  to parse the response
+     * @return the updated [AppAuthState.Builder] with the access token, updated headers and source information
+     * @throws IOException if the request fails or the refresh token is missing
+     */
     @Throws(IOException::class)
     suspend fun refreshToken(authState: AppAuthState.Builder, parser: AuthStringParser): AppAuthState.Builder {
         try {
@@ -176,6 +220,15 @@ class ManagementPortalClient(
 
     }
 
+    /**
+     * Internal method to handle requests and parse responses using a generic parser.
+     *
+     * @param <T> the type of the response object
+     * @param request the prepared [HttpStatement] request
+     * @param parser the parser ([AuthStringParser]]) for processing the JSON response
+     * @return the parsed response of type [T]
+     * @throws IOException if the request fails or the response cannot be processed
+     */
     @Throws(IOException::class)
     private suspend fun <T> handleRequest(request: HttpStatement, parser: Parser<JSONObject, T>): T {
         return request.execute { response ->

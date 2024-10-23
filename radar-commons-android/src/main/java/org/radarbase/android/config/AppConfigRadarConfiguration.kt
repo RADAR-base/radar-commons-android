@@ -216,6 +216,7 @@ class AppConfigRadarConfiguration(
 
     override suspend fun stop() {
         job.cancelAndJoin()
+        baseClient.close()
     }
 
     private data class AppConfigClientConfig(
