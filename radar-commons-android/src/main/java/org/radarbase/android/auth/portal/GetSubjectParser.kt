@@ -16,17 +16,17 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import kotlin.collections.ArrayList
 
-class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
+class GetSubjectParser(private val state: AppAuthState.Builder) : AuthStringParser {
 
     @Throws(IOException::class)
-    override suspend fun parse(value: JSONObject): AppAuthState {
+    override suspend fun parse(value: JSONObject): AppAuthState.Builder {
         try {
             val project = value.getJSONObject("project")
             val sources = value.getJSONArray("sources")
 
             val types = parseSourceTypes(project)
 
-            return state.alter {
+            return state.apply {
                 sourceTypes.clear()
                 sourceTypes += types
                 sourceMetadata.clear()

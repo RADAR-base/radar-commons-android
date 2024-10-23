@@ -24,4 +24,4 @@ import java.io.IOException
 /** AuthStringProcessor to parse a string with some form of authentication and parse it to a
  * proper state.  */
 @Keep
-interface AuthStringParser : Parser<JSONObject, AppAuthState>
+interface AuthStringParser : Parser<JSONObject, AppAuthState.Builder>

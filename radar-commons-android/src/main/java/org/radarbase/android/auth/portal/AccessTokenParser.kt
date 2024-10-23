@@ -12,32 +12,33 @@ import org.radarbase.android.util.optNonEmptyString
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class AccessTokenParser(private val state: AppAuthState) : AuthStringParser {
+class AccessTokenParser(private val state: AppAuthState.Builder) : AuthStringParser {
 
     @Throws(IOException::class)
-    override suspend fun parse(value: JSONObject): AppAuthState {
-        var refreshToken = state.getAttribute(MP_REFRESH_TOKEN_PROPERTY)
+    override suspend fun parse(value: JSONObject): AppAuthState.Builder {
+        var refreshToken = state.attributes[MP_REFRESH_TOKEN_PROPERTY]
         try {
             val accessToken = value.getString("access_token")
             refreshToken = value.optNonEmptyString("refresh_token")
                 ?: refreshToken?.takeIf { it.isNotEmpty() }
                         ?: throw IOException("Missing refresh token")
-            return state.alter {
-                attributes[MP_REFRESH_TOKEN_PROPERTY] = refreshToken
-                attributes[SOURCE_IDS_PROPERTY] = value.optJSONArray("sources")?.join(",") ?: ""
-                setHeader("Authorization", "Bearer $accessToken")
-
-                token = accessToken
-                tokenType = AUTH_TYPE_BEARER
-                userId = value.getString("sub")
-                expiration = TimeUnit.SECONDS.toMillis(
-                    value.optLong(
-                        "expires_in",
-                        3600L
-                    )
-                ) + System.currentTimeMillis()
-                needsRegisteredSources = true
-                authenticationSource = SOURCE_TYPE
+            return state.apply {
+                attributes.apply {
+                    put(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
+                    put(SOURCE_IDS_PROPERTY, value.optJSONArray("sources")?.join(",") ?: "")
+                    setHeader("Authorization", "Bearer $accessToken")
+                    token = accessToken
+                    tokenType = AUTH_TYPE_BEARER
+                    userId = value.getString("sub")
+                    expiration = TimeUnit.SECONDS.toMillis(
+                        value.optLong(
+                            "expires_in",
+                            3600L
+                        )
+                    ) + System.currentTimeMillis()
+                    needsRegisteredSources = true
+                    authenticationSource = SOURCE_TYPE
+                }
             }
         } catch (ex: JSONException) {
             throw IOException("Failed to parse json string $value", ex)

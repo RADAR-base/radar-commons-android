@@ -6,13 +6,13 @@ import org.radarbase.android.auth.AuthStringParser
 
 import java.io.IOException
 
-class SubjectTokenParser(private val client: ManagementPortalClient, state: AppAuthState) :
+class SubjectTokenParser(private val client: ManagementPortalClient, state: AppAuthState.Builder) :
     AuthStringParser {
     private val accessTokenParser: AccessTokenParser = AccessTokenParser(state)
 
     @Throws(IOException::class)
-    override suspend fun parse(value: JSONObject): AppAuthState {
+    override suspend fun parse(value: JSONObject): AppAuthState.Builder {
         val newState = this.accessTokenParser.parse(value)
-        return client.getSubject(newState, GetSubjectParser(newState))
+        return client.getSubject(newState.build(), GetSubjectParser(newState))
     }
 }
