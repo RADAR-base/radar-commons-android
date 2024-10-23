@@ -8,7 +8,16 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONException
@@ -60,9 +69,20 @@ class ManagementPortalLoginManager(
     }
     private val mutex: Mutex = Mutex()
 
+    private val mpManagerExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        logger.error("Exception while ensuring client connectivity", throwable)
+    }
+    private var configObserverJob: Job? = null
+    private val managerScope = CoroutineScope(Job() + mpManagerExceptionHandler + CoroutineName("mpManagerScope") + Dispatchers.Default)
+
     init {
         ktorClient = HttpClient(CIO)
-//        config.config.observeForever(configUpdateObserver)
+        configObserverJob = managerScope.launch {
+            config.config
+                .collect { newConfig: SingleRadarConfiguration ->
+                    ensureClientConnectivity(newConfig)
+                }
+        }
         updateSources(authState.value)
     }
 
@@ -158,7 +178,7 @@ class ManagementPortalLoginManager(
         source: SourceMetadata,
         success: (AppAuthState, SourceMetadata) -> Unit,
         failure: (Exception?) -> Unit
-    ): SourceMetadata {
+    ): Boolean {
         logger.debug("Handling source update")
 
         val client = client
@@ -172,8 +192,8 @@ class ManagementPortalLoginManager(
                 success(appAuth.addSource(source), source)
             } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
                 logger.warn("Source no longer exists - removing from auth state")
-                val updatedAppAuth = appAuth.removeSource(source)
-                registerSource(AppAuthState.Builder(updatedAppAuth), source, success, failure)
+                appAuth.removeSource(source)
+                registerSource(appAuth, source, success, failure)
             } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
                 logger.warn("User no longer exists - invalidating auth state")
                 listener.invalidate(appAuth.token, false)
@@ -207,18 +227,27 @@ class ManagementPortalLoginManager(
         source: SourceMetadata,
         success: (AppAuthState, SourceMetadata) -> Unit,
         failure: (Exception?) -> Unit
-    ): SourceMetadata {
+    ): Boolean {
         logger.debug("Handling source registration")
-
+        val appAuth: AppAuthState = authState.build()
         val existingSource = sources[source.sourceId]
         if (existingSource != null) {
-            return existingSource
+            success(appAuth, source)
+            return true
         }
 
-        val client = requireNotNull(client) { "Cannot register source without a client" }
-        requireNotNull(authState.original) { "Cannot register source without a base authentication." }
+        val client = client
+        if (client == null) {
+            failure(IllegalStateException("Cannot register source without a client"))
+            return false
+        }
 
-        return try {
+        if (authState.original == null)  {
+            failure(IllegalStateException("Cannot register source without a base authentication."))
+            return false
+        }
+
+        try {
             val updatedSource = if (source.sourceId == null) {
                 // temporary measure to reuse existing source IDs if they exist
                 source.type?.id
@@ -232,12 +261,10 @@ class ManagementPortalLoginManager(
             } else {
                 client.updateSource(authState.original, source)
             }
-            authState.addSource(updatedSource)
-            updatedSource
+            success(authState.addSource(updatedSource), updatedSource)
         } catch (ex: UnsupportedOperationException) {
             logger.warn("ManagementPortal does not support updating the app source.")
-            authState.addSource(source)
-            source
+            success(authState.addSource(source),source)
         } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
             logger.warn("Source no longer exists - removing from auth state")
             authState.removeSource(source)
@@ -245,34 +272,37 @@ class ManagementPortalLoginManager(
         } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
             logger.warn("User no longer exists - invalidating auth state")
             listener.invalidate(authState.token, false)
-            throw ex
+            failure(ex)
         } catch (ex: ConflictException) {
             try {
-                client.getSubject(authState, GetSubjectParser(authState)).let { authState ->
-                    updateSources(authState.build())
-                    requireNotNull(sources[source.sourceId]) { "Source was not added to ManagementPortal, even though conflict was reported." }
+                client.getSubject(authState, GetSubjectParser(authState)).let { appAuthState ->
+                    updateSources(appAuthState.build())
+                    sources[source.sourceId]?.let { sourceMetadata ->
+                        success(authState.build(), source)
+                    } ?:
+                    failure(IllegalStateException("Source was not added to ManagementPortal, even though conflict was reported."))
                 }
             } catch (ioex: IOException) {
                 logger.error("Failed to register source {} with {}: already registered",
                         source.sourceName, source.type, ex)
-                throw ex
+                failure(ex)
             }
         } catch (ex: java.lang.IllegalArgumentException) {
             logger.error("Source {} is not valid", source)
-            throw ex
+            failure(ex)
         } catch (ex: AuthenticationException) {
             listener.invalidate(authState.token, false)
             logger.error("Authentication error; failed to register source {} of type {}",
                     source.sourceName, source.type, ex)
-            throw ex
+            failure(ex)
         } catch (ex: IOException) {
             logger.error("Failed to register source {} with {}",
                     source.sourceName, source.type, ex)
-            throw ex
+            failure(ex)
         } catch (ex: JSONException) {
             logger.error("Failed to register source {} with {}",
                     source.sourceName, source.type, ex)
-            throw ex
+            failure(ex)
         }
 
         return true
@@ -289,7 +319,12 @@ class ManagementPortalLoginManager(
     }
 
     override fun onDestroy() {
-//        config.config.removeObserver(configUpdateObserver)
+        configObserverJob?.cancel()
+        ktorClient = ktorClient?.let {
+            it.close()
+            null
+        }
+        managerScope.cancel()
     }
 
     /**

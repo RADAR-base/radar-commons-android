@@ -88,7 +88,7 @@ interface LoginManager {
         source: SourceMetadata,
         success: (AppAuthState, SourceMetadata) -> Unit,
         failure: (Exception?) -> Unit
-    ): SourceMetadata
+    ): Boolean
 
     fun onDestroy()
 
@@ -106,7 +106,7 @@ interface LoginManager {
         source: SourceMetadata,
         success: (AppAuthState, SourceMetadata) -> Unit,
         failure: (Exception?) -> Unit
-    ): SourceMetadata
+    ): Boolean
 
     companion object {
         /** HTTP basic authentication.  */
