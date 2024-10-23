@@ -13,6 +13,6 @@ class SubjectTokenParser(private val client: ManagementPortalClient, state: AppA
     @Throws(IOException::class)
     override suspend fun parse(value: JSONObject): AppAuthState.Builder {
         val newState = this.accessTokenParser.parse(value)
-        return client.getSubject(newState.build(), GetSubjectParser(newState))
+        return client.getSubject(newState, GetSubjectParser(newState))
     }
 }

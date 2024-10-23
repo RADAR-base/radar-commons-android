@@ -61,7 +61,7 @@ class ManagementPortalClient(
             logger.debug("Requesting refreshToken with token-url {}", metaTokenUrl)
         }
 
-        return handleRequest(request, parser)
+        return handleRequest(request, parser).build()
     }
 
     /**
@@ -72,19 +72,23 @@ class ManagementPortalClient(
      * response.
      */
     @Throws(IOException::class)
-    suspend fun getSubject(state: AppAuthState, parser: AuthStringParser): AppAuthState {
+    suspend fun getSubject(state: AppAuthState.Builder, parser: AuthStringParser): AppAuthState.Builder {
         if (state.userId == null) {
             throw IOException("Authentication state does not contain user ID")
         }
+        val ktorHeaders: Headers = Headers.build {
+            state.headers.forEach { (k, v) -> append(k, v) }
+        }
+
         val request = client.prepareRequest("api/subjects/${state.userId}") {
             headers {
-                appendAll(state.ktorHeaders)
+                appendAll(ktorHeaders)
                 append(HttpHeaders.Accept, APPLICATION_JSON)
             }
         }
 
         logger.info("Requesting subject {} with parseHeaders {}", state.userId,
-                state.ktorHeaders)
+                ktorHeaders)
 
         return handleRequest(request, parser)
     }
@@ -144,7 +148,7 @@ class ManagementPortalClient(
     }
 
     @Throws(IOException::class)
-    suspend fun refreshToken(authState: AppAuthState.Builder, parser: AuthStringParser): AppAuthState {
+    suspend fun refreshToken(authState: AppAuthState.Builder, parser: AuthStringParser): AppAuthState.Builder {
         try {
             val refreshToken = requireNotNull(authState.attributes[MP_REFRESH_TOKEN_PROPERTY]) {
                 "No refresh token found"
