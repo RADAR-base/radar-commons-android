@@ -30,9 +30,7 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneContactList
-import java.util.*
 import java.util.concurrent.TimeUnit
-import kotlin.collections.ArrayList
 import kotlin.collections.LinkedHashSet
 
 class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourceManager<PhoneContactsListService, BaseSourceState>(service) {
@@ -111,7 +109,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
     }
 
     override fun onClose() {
-        processor.close()
+        processor.stop()
     }
 
     private fun makeQuery(

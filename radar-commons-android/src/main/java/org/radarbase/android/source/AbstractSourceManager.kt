@@ -149,7 +149,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
      */
     protected fun <V : SpecificRecord> send(dataCache: DataCache<ObservationKey, V>, value: V) {
         val key = state.id
-        if (key.getSourceId() != null) {
+        if (key.sourceId != null) {
             try {
                 dataCache.addMeasurement(key, value)
             } catch (ex: IllegalArgumentException) {
@@ -163,7 +163,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
 
     @CallSuper
     override fun didRegister(source: SourceMetadata) {
-        state.id.setSourceId(source.sourceId)
+        state.id.sourceId = source.sourceId
     }
 
     /**
