@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.radarbase.android.data.DataHandler
 import org.radarbase.android.util.DelayedRetry
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
@@ -47,8 +48,9 @@ import kotlin.coroutines.CoroutineContext
  */
 internal class KafkaConnectionChecker(
     private val sender: KafkaSender,
+    private val listener: DataHandler<*, *>,
     heartbeatSecondsInterval: Long,
-    coroutineContext: CoroutineContext = Dispatchers.IO
+    checkerCoroutineContext: CoroutineContext = Dispatchers.Default
 ) {
     private var future: Job? = null
     private val heartbeatInterval: Long = heartbeatSecondsInterval * 1000L
@@ -57,17 +59,15 @@ internal class KafkaConnectionChecker(
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
-    private val _serverStatus = MutableStateFlow(ServerStatus.DISCONNECTED)
-    val serverStatus: StateFlow<ServerStatus> = _serverStatus
 
     private val checkerExceptionHandler: CoroutineExceptionHandler =
         CoroutineExceptionHandler { _, throwable ->
-            logger.error("Exception when checking connection", throwable)
+            logger.error("CoroutineExceptionHandler - Exception when checking connection: ", throwable)
         }
 
     private val job: Job = SupervisorJob()
-    private val connectionCheckScope = CoroutineScope(
-        coroutineContext + job + CoroutineName("connection-checker") + checkerExceptionHandler
+    private val connectionCheckScope: CoroutineScope = CoroutineScope(
+        checkerCoroutineContext + job + CoroutineName("connection-checker") + checkerExceptionHandler
     )
 
     suspend fun initialize() {
@@ -88,9 +88,13 @@ internal class KafkaConnectionChecker(
             if (!isConnected.value) {
                 if (sender.resetConnection()) {
                     didConnect()
-                    _serverStatus.value = ServerStatus.CONNECTED
+                    listener.serverStatus.value = ServerStatus.CONNECTED
                     logger.info("Sender reconnected")
                 } else {
+                    future?.also {
+                        it.cancelAndJoin()
+                        future = null
+                    }
                     retry()
                 }
             } else if (SystemClock.uptimeMillis() - lastConnection > 15_000L) {
@@ -124,7 +128,10 @@ internal class KafkaConnectionChecker(
             lastConnection = SystemClock.uptimeMillis()
             if (!_isConnected.value) {
                 _isConnected.value = true
-                future?.cancelAndJoin()
+                future = future?.let {
+                    it.cancelAndJoin()
+                    null
+                }
                 future = connectionCheckScope.launch {
                     while (true) {
                         delay(heartbeatInterval)
@@ -147,16 +154,19 @@ internal class KafkaConnectionChecker(
 
             if (_isConnected.value) {
                 _isConnected.value = false
-                future?.cancelAndJoin()
+                future = future?.let {
+                    it.cancelAndJoin()
+                    null
+                }
                 future = connectionCheckScope.launch {
                     delay(INCREMENTAL_BACKOFF_MILLISECONDS)
                     makeCheck()
                 }
                 if (ex is AuthenticationException) {
                     logger.warn("Failed to authenticate to server: {}", ex.message)
-                    _serverStatus.value = ServerStatus.UNAUTHORIZED
+                    listener.serverStatus.value = ServerStatus.UNAUTHORIZED
                 } else {
-                    _serverStatus.value = ServerStatus.DISCONNECTED
+                    listener.serverStatus.value = ServerStatus.DISCONNECTED
                 }
             }
         }
