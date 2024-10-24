@@ -29,6 +29,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.util.DelayedRetry
@@ -133,9 +134,8 @@ internal class KafkaConnectionChecker(
                     null
                 }
                 future = connectionCheckScope.launch {
-                    while (true) {
+                    while (isActive) {
                         delay(heartbeatInterval)
-                        ensureActive()
                         makeCheck()
                     }
                 }

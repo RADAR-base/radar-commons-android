@@ -22,16 +22,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.apache.avro.SchemaValidationException
 import org.apache.avro.generic.IndexedRecord
 import org.radarbase.android.data.DataCacheGroup
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.ReadableDataCache
-import org.radarbase.android.util.SafeHandler
 import org.radarbase.data.AvroRecordData
 import org.radarbase.data.RecordData
 import org.radarbase.producer.AuthenticationException
@@ -47,7 +47,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.HashSet
 import kotlin.coroutines.CoroutineContext
-import kotlin.math.exp
 
 /**
  * Separate thread to read from the database and send it to the Kafka server. It cleans the
@@ -65,8 +64,8 @@ class KafkaDataSubmitter(
     private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>> = ConcurrentHashMap()
     private val connection: KafkaConnectionChecker
 
-    private val _serverStatus: MutableStateFlow<ServerStatus> = MutableStateFlow(ServerStatus.DISCONNECTED)
-    val serverStatus: StateFlow<ServerStatus> = _serverStatus
+//    private val _serverStatus: MutableStateFlow<ServerStatus> = MutableStateFlow(ServerStatus.DISCONNECTED)
+//    val serverStatus: StateFlow<ServerStatus> = _serverStatus
 
     private val submitterExceptionHandler: CoroutineExceptionHandler = CoroutineExceptionHandler{ _, throwable ->
         logger.error("CoroutineExceptionHandler - Error in KafkaDataSubmitter: ", throwable)
@@ -78,8 +77,8 @@ class KafkaDataSubmitter(
 
     var config: SubmitterConfiguration = config
         set(newValue) {
-            this.submitHandler.execute {
-                if (newValue == field) return@execute
+            submitterScope.launch {
+                if (newValue == field) return@launch
 
                 validate(newValue)
                 field = newValue.copy()
@@ -87,25 +86,24 @@ class KafkaDataSubmitter(
             }
         }
 
-    private var uploadFuture: SafeHandler.HandlerFuture? = null
-    private var uploadIfNeededFuture: SafeHandler.HandlerFuture? = null
+    private var uploadFuture: Job? = null
+    private var uploadIfNeededFuture: Job? = null
     /** Upload rate in milliseconds.  */
 
     init {
         validate(config)
 
-        submitHandler.start()
-
         logger.debug("Started data submission executor")
 
         connection = KafkaConnectionChecker(sender, dataHandler, config.uploadRate * 5)
 
-        submitHandler.execute {
+        submitterScope.launch {
             uploadFuture = null
             uploadIfNeededFuture = null
 
             try {
                 submitterScope.launch {
+                    connection.initialize()
                     if (sender.connectionState.first() == ConnectionState.State.CONNECTED) {
                         dataHandler.serverStatus.value = ServerStatus.CONNECTED
                         connection.didConnect()
@@ -126,17 +124,36 @@ class KafkaDataSubmitter(
         requireNotNull(config.userId) { "User ID is mandatory to start KafkaDataSubmitter" }
     }
 
-    private fun schedule() {
+    private suspend fun schedule() {
         val uploadRate = config.uploadRate * config.uploadRateMultiplier * 1000L
-        uploadFuture?.cancel()
-        uploadIfNeededFuture?.cancel()
+        uploadFuture = uploadFuture?.let {
+            it.cancelAndJoin()
+            null
+        }
+        uploadIfNeededFuture = uploadIfNeededFuture?.let {
+            it.cancelAndJoin()
+            null
+        }
 
         // Get upload frequency from system property
-        uploadFuture = this.submitHandler.repeat(uploadRate, ::uploadAllCaches)
-        uploadIfNeededFuture = this.submitHandler.repeat(uploadRate / 5, ::uploadFullCaches)
+        uploadFuture = submitterScope.launch {
+            while (isActive) {
+                delay(uploadRate)
+                uploadAllCaches()
+            }
+        }
+
+        uploadIfNeededFuture = submitterScope.launch {
+            while (isActive) {
+                delay(uploadRate / 5)
+                uploadFullCaches()
+            }
+        }
+//        uploadFuture = this.submitHandler.repeat(uploadRate, ::uploadAllCaches)
+//        uploadIfNeededFuture = this.submitHandler.repeat(uploadRate / 5, ::uploadFullCaches)
     }
 
-    private fun uploadAllCaches() {
+    private suspend fun uploadAllCaches() {
         val topicsToSend = dataHandler.activeCaches.mapTo(HashSet()) { it.topicName }
         while (connection.isConnected.value && topicsToSend.isNotEmpty()) {
             logger.debug("Uploading topics {}", topicsToSend)
@@ -144,7 +161,7 @@ class KafkaDataSubmitter(
         }
     }
 
-    private fun uploadFullCaches() {
+    private suspend fun uploadFullCaches() {
         var sendAgain = true
         while (connection.isConnected.value && sendAgain) {
             logger.debug("Uploading full topics")
@@ -152,9 +169,9 @@ class KafkaDataSubmitter(
         }
     }
 
-    suspend fun flush() {
+    suspend fun flush(successCallback: () -> Unit, errorCallback: () -> Unit) {
         uploadAllCaches()
-        this.submitHandler.execute {
+        this.submitterScope.launch {
             uploadAllCaches()
             if (dataHandler.serverStatus.value == ServerStatus.CONNECTED) {
                 successCallback()
