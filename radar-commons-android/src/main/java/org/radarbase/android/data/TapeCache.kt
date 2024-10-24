@@ -26,6 +26,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -46,6 +47,8 @@ import java.io.File
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -77,6 +80,7 @@ class TapeCache<K: Any, V: Any>(
     private val queueFileFactory = config.queueFileType
 
     private var addMeasurementFuture: Job? = null
+    private var configObserverJob: Job? = null
 
     private val mutex: Mutex = Mutex()
     override val numberOfRecords: MutableStateFlow<Long> = MutableStateFlow(0)
@@ -107,6 +111,13 @@ class TapeCache<K: Any, V: Any>(
                 }
                 queue = BackedObjectQueue(queueFile, serializer, deserializer)
                 numberOfRecords.value = queue.size.toLong()
+            }
+        }
+
+        configObserverJob = cacheScope.launch {
+            this@TapeCache.config.collect {
+                ensureActive()
+                queueFile.maximumFileSize = it.maximumSize
             }
         }
     }
@@ -187,7 +198,7 @@ class TapeCache<K: Any, V: Any>(
                         topic.name
                     )
                     queue -= actualRemoveSize
-                    numberOfRecords.value = numberOfRecords.value - actualRemoveSize
+                    numberOfRecords.value -= actualRemoveSize
                 }
             }
         }
@@ -214,6 +225,7 @@ class TapeCache<K: Any, V: Any>(
     @Throws(IOException::class)
     override suspend fun stop() {
         flush()
+        configObserverJob?.cancelAndJoin()
         queue.close()
     }
 
@@ -254,16 +266,16 @@ class TapeCache<K: Any, V: Any>(
             return
         }
         try {
-            logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
+            logger.info("Writing {} records to file in topic {}.", measurementsToAdd.size, topic.name)
             withContext(Dispatchers.IO) {
                 queue += measurementsToAdd
+                numberOfRecords.value += measurementsToAdd.size
             }
-            numberOfRecords.value = numberOfRecords.value + measurementsToAdd.size
         } catch (ex: IOException) {
             logger.error("Failed to add records", ex)
             throw RuntimeException(ex)
         } catch (ex: IllegalStateException) {
-            logger.error("Queue {} is full, not adding records", topic.name)
+            logger.error("Queue {} is full, not adding records.", topic.name)
         } catch (ex: IllegalArgumentException) {
             logger.error("Failed to validate all records; adding individual records instead", ex)
             try {
