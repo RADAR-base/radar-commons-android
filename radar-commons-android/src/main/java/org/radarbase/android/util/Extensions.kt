@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import org.json.JSONArray
 import org.json.JSONObject
+import org.slf4j.Logger
 
 fun String.takeTrimmedIfNotEmpty(): String? = trim { it <= ' ' }
     .takeUnless(String::isEmpty)
@@ -43,6 +44,13 @@ internal fun JSONObject.toStringMap(): Map<String, String> = buildMap {
     this@toStringMap.keys().forEach { key ->
         this@buildMap.put(key, getString(key))
     }
+}
+
+inline fun <T> Logger.runSafeOrNull(block: () -> T) = try {
+    block()
+} catch (ex: Exception) {
+    this.error("Failed to complete task", ex)
+    null
 }
 
 internal fun JSONArray.asJSONObjectSequence(): Sequence<JSONObject> = sequence {
