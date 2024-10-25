@@ -33,6 +33,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.util.DelayedRetry
+import org.radarbase.android.util.runSafeOrNull
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
 import org.radarbase.producer.rest.ConnectionState
@@ -72,12 +73,16 @@ internal class KafkaConnectionChecker(
     )
 
     suspend fun initialize() {
-        if (sender.connectionState.first() == ConnectionState.State.CONNECTED) {
-            _isConnected.value = false
-            didConnect()
-        } else {
-            _isConnected.value = true
-            didDisconnect(null)
+        connectionCheckScope.launch {
+            logger.runSafeOrNull {
+                if (sender.connectionState.first() == ConnectionState.State.CONNECTED) {
+                    _isConnected.value = false
+                    didConnect()
+                } else {
+                    _isConnected.value = true
+                    didDisconnect(null)
+                }
+            }
         }
     }
 
@@ -112,35 +117,43 @@ internal class KafkaConnectionChecker(
 
     /** Check the connection as soon as possible.  */
     suspend fun check() {
-        makeCheck()
+        logger.runSafeOrNull {
+            makeCheck()
+        }
     }
 
     /** Retry the connection with an incremental backoff.  */
     private fun retry() {
         future = connectionCheckScope.launch {
             delay(retryDelay.nextDelay())
-            makeCheck()
+            logger.runSafeOrNull {
+                makeCheck()
+            }
         }
     }
 
     /** Signal that the sender successfully connected.  */
     fun didConnect() {
         connectionCheckScope.launch {
-            lastConnection = SystemClock.uptimeMillis()
-            if (!_isConnected.value) {
-                _isConnected.value = true
-                future = future?.let {
-                    it.cancelAndJoin()
-                    null
-                }
-                future = connectionCheckScope.launch {
-                    while (isActive) {
-                        delay(heartbeatInterval)
-                        makeCheck()
+            logger.runSafeOrNull {
+                lastConnection = SystemClock.uptimeMillis()
+                if (!_isConnected.value) {
+                    _isConnected.value = true
+                    future = future?.let {
+                        it.cancelAndJoin()
+                        null
+                    }
+                    future = connectionCheckScope.launch {
+                        while (isActive) {
+                            delay(heartbeatInterval)
+                            logger.runSafeOrNull {
+                                makeCheck()
+                            }
+                        }
                     }
                 }
+                retryDelay.reset()
             }
-            retryDelay.reset()
         }
     }
 
@@ -150,23 +163,27 @@ internal class KafkaConnectionChecker(
      */
     fun didDisconnect(ex: Exception?) {
         connectionCheckScope.launch {
-            logger.warn("Sender is disconnected", ex)
+            logger.runSafeOrNull {
+                logger.warn("Sender is disconnected", ex)
 
-            if (_isConnected.value) {
-                _isConnected.value = false
-                future = future?.let {
-                    it.cancelAndJoin()
-                    null
-                }
-                future = connectionCheckScope.launch {
-                    delay(INCREMENTAL_BACKOFF_MILLISECONDS)
-                    makeCheck()
-                }
-                if (ex is AuthenticationException) {
-                    logger.warn("Failed to authenticate to server: {}", ex.message)
-                    listener.serverStatus.value = ServerStatus.UNAUTHORIZED
-                } else {
-                    listener.serverStatus.value = ServerStatus.DISCONNECTED
+                if (_isConnected.value) {
+                    _isConnected.value = false
+                    future = future?.let {
+                        it.cancelAndJoin()
+                        null
+                    }
+                    future = connectionCheckScope.launch {
+                        delay(INCREMENTAL_BACKOFF_MILLISECONDS)
+                        logger.runSafeOrNull {
+                            makeCheck()
+                        }
+                    }
+                    if (ex is AuthenticationException) {
+                        logger.warn("Failed to authenticate to server: {}", ex.message)
+                        listener.serverStatus.value = ServerStatus.UNAUTHORIZED
+                    } else {
+                        listener.serverStatus.value = ServerStatus.DISCONNECTED
+                    }
                 }
             }
         }
