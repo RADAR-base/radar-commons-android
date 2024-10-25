@@ -130,6 +130,17 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
 
+    @RequiresApi(Q)
+    val fgsHealthPermissions: Set<String> = setOf(BODY_SENSORS, ACTIVITY_RECOGNITION)
+    @RequiresApi(S)
+    val fgsConnectDevicePermissions: Set<String> =
+        setOf(BLUETOOTH_CONNECT, BLUETOOTH_SCAN, BLUETOOTH_ADVERTISE, UWB_RANGING)
+    private val fgsLocationPermissions: Set<String> =
+        setOf(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)
+    private val fgsMicrophonePermissions: Set<String> =
+        setOf(RECORD_AUDIO)
+
+
     /** Defines callbacks for service binding, passed to bindService()  */
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
 
@@ -239,7 +250,48 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         return START_STICKY
     }
 
+    private fun startForegroundIfNeeded(grantedPermissions: Set<String>) {
+        if (SDK_INT < Q) return
 
+        val fgsTypePermissions: MutableSet<Int> = mutableSetOf()
+
+        if (SDK_INT >= S) {
+            if (grantedPermissions.intersect(fgsConnectDevicePermissions).isNotEmpty()) {
+                fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            }
+        }
+
+        if (grantedPermissions.intersect(fgsHealthPermissions)
+                .isNotEmpty() && (SDK_INT >= UPSIDE_DOWN_CAKE)
+        ) {
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_HEALTH)
+        }
+
+        if (grantedPermissions.intersect(fgsLocationPermissions).isNotEmpty()) {
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_LOCATION)
+        }
+
+        if (grantedPermissions.intersect(fgsMicrophonePermissions)
+                .isNotEmpty() && (SDK_INT >= VERSION_CODES.R)
+        ) {
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        }
+
+        if (fgsTypePermissions.isNotEmpty()) {
+            if (SDK_INT >= UPSIDE_DOWN_CAKE) {
+                fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            }
+
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+
+            val combinedFgsType = fgsTypePermissions.reduce { acc, type -> acc or type }
+
+            startForeground(
+                1, createForegroundNotification(),
+                combinedFgsType
+            )
+        }
+    }
 
     protected open fun createForegroundNotification(): Notification {
         val mainIntent = Intent(this, radarApp.mainActivity)
@@ -345,9 +397,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
 
         if (grantedPermissions.isNotEmpty()) {
+            startForegroundIfNeeded(grantedPermissions)
             mHandler.execute {
                 logger.info("Granted permissions {}", grantedPermissions)
-//                startForegroundIfNeeded(grantedPermissions)
                 // Permission granted.
                 needsPermissions -= grantedPermissions
                 startScanning()
