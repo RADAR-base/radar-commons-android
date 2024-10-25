@@ -29,6 +29,8 @@ import android.os.Debug
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.RECEIVER_EXPORTED
 import org.radarbase.util.CountedReference
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -103,7 +105,12 @@ class OfflineProcessor(
         }
         handler.execute {
             didStart = true
-            context.registerReceiver(this.receiver, IntentFilter(requestName))
+            ContextCompat.registerReceiver(
+                context,
+                this.receiver,
+                IntentFilter(requestName),
+                RECEIVER_EXPORTED
+            )
             schedule()
             initializer?.let { it() }
         }

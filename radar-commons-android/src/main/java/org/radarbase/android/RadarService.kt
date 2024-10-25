@@ -237,7 +237,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         } else {
 
             /**
-             * API 34+ (Android 14+): Adding HEALTH and SPECIAL_USE types
+             * API 34+ (Android 14+): Adding DATA_SYNC and SPECIAL_USE types
              * Currently this is not explicitly checking for android 14+ version.
              * This need to be modified it in future when setting new targetSdkVersion
              */
@@ -284,7 +284,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
             fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 
-            val combinedFgsType = fgsTypePermissions.reduce { acc, type -> acc or type }
+            val combinedFgsType: Int = fgsTypePermissions.reduce { acc, type -> acc or type }
 
             startForeground(
                 1, createForegroundNotification(),

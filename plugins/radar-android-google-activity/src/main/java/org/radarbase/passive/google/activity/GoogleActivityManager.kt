@@ -69,7 +69,9 @@ class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceMana
 
     private fun registerActivityTransitionReceiver() {
         val filter = IntentFilter(ACTION_ACTIVITY_UPDATE)
-        service.registerReceiver(activityTransitionReceiver, filter)
+        ContextCompat.registerReceiver(service, activityTransitionReceiver, filter,
+            ContextCompat.RECEIVER_EXPORTED
+        )
         logger.info("Registered activity transition receiver.")
     }
 
