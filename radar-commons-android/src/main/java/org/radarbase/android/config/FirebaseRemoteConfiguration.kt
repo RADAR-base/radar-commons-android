@@ -70,6 +70,7 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
             // activated before newly fetched values are returned.
             firebase.activate()
                     .addOnSuccessListener {
+                        lastFetch = System.currentTimeMillis()
                         cache = firebase.getKeysByPrefix("")
                                 .mapNotNull { key ->
                                     firebase.getValue(key).asString()
@@ -91,11 +92,11 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
      * @param maxCacheAge seconds
      * @return fetch task or null status is [RadarConfiguration.RemoteConfigStatus.UNAVAILABLE].
      */
-    override fun doFetch(maxCacheAge: Long) {
+    override fun doFetch(maxCacheAgeMillis: Long) {
         if (status == RadarConfiguration.RemoteConfigStatus.UNAVAILABLE) {
             return
         }
-        val task = firebase.fetch(maxCacheAge)
+        val task = firebase.fetch(maxCacheAgeMillis / 1000L)
         synchronized(this) {
             status = RadarConfiguration.RemoteConfigStatus.FETCHING
             task.addOnSuccessListener(onFetchCompleteHandler)

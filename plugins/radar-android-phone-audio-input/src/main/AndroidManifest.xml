@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools" >
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+
+    <application android:allowBackup="true" >
+        <activity
+            android:name=".ui.PhoneAudioInputActivity"
+            android:exported="false" />
+
+        <service
+            android:name=".PhoneAudioInputService"
+            android:description="@string/phone_audio_input_description"
+            android:exported="false" />
+    </application>
+
+</manifest>

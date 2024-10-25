@@ -1,0 +1,33 @@
+apply from: "$rootDir/gradle/android.gradle"
+
+android {
+    namespace "org.radarbase.passive.phone.audio.input"
+}
+
+//---------------------------------------------------------------------------//
+// Configuration                                                             //
+//---------------------------------------------------------------------------//
+
+description = "Plugin for recording uncompressed high-quality audio."
+
+//---------------------------------------------------------------------------//
+// Sources and classpath configurations                                      //
+//---------------------------------------------------------------------------//
+android {
+    buildFeatures {
+        viewBinding true
+    }
+}
+
+dependencies {
+    api project(":radar-commons-android")
+    implementation "androidx.appcompat:appcompat:$appcompat_version"
+    implementation "com.google.android.material:material:$material_version"
+    implementation "androidx.activity:activity:1.9.0"
+    implementation "androidx.constraintlayout:constraintlayout:$constraintlayout_version"
+    implementation "androidx.legacy:legacy-support-v4:$legacy_support_version"
+    implementation 'androidx.fragment:fragment-ktx:1.8.1'
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+apply plugin: 'org.jetbrains.kotlin.android'

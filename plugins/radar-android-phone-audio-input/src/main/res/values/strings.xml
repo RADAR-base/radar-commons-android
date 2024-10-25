@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_audio_input_description">Plugin for recording uncompressed high-quality audio, utilizing low-level classes to directly interact with hardware, with capabilities for playback and audio input device selection.</string>
+    <string name="phone_audio_input_display_name">Phone Audio Input</string>
+    <string name="startRecordingActivity">Phone Audio Input</string>
+    <string name="unable_to_record_toast">Cannot process request, the plugin status is not CONNECTED. Please try reconnecting the plugin.</string>
+    <string name="start_recording">Start Recording</string>
+    <string name="stop_recording">Stop Recording</string>
+    <string name="audio_playback_title">Audio Playback</string>
+    <string name="audio_recording_title">Audio Recording</string>
+    <string name="input_device">Input Device</string>
+    <string name="input_audio_device">Input Audio Device: %1$s</string>
+    <string name="timer_text">00:00:00</string>
+    <string name="play">Play</string>
+    <string name="send">Send</string>
+    <string name="discard">Discard</string>
+    <string name="proceed_title">Please decide how you would like to proceed</string>
+    <string name="proceed_message">What action do you wish to perform? \nYour options are to playback the recorded audio, send it directly, or discard it</string>
+    <string name="cannot_start_player">Cannot start player. Audio file does not exists</string>
+    <string name="start">Start</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="cannot_read_audio_file">Cannot read audio file. There will be no effect on pressing buttons</string>
+    <string name="exit_confirmation">Are you sure you want to exit?</string>
+    <string name="exit_message">If you click Yes, you won\'t be able to send the most recent recorded audio</string>
+    <string name="dialog_yes">Yes</string>
+    <string name="dialog_no">No</string>
+    <string name="cannot_close_activity">Cannot Close Activity</string>
+    <string name="cannot_close_activity_message">Please stop the ongoing recording before exiting this activity.</string>
+    <string name="ok">OK</string>
+    <string name="pause_btn_desc">Button for pausing audio when recording</string>
+    <string name="resume_btn_desc">Button for resuming audio when recording</string>
+</resources>
