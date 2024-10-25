@@ -20,14 +20,25 @@ import android.Manifest.permission.*
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
 import android.os.*
+import android.os.Build.VERSION.SDK_INT
+import android.os.Build.VERSION_CODES
+import android.os.Build.VERSION_CODES.Q
+import android.os.Build.VERSION_CODES.S
+import android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.widget.Toast
 import androidx.annotation.CallSuper
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
@@ -101,10 +112,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     protected open val servicePermissions: List<String> = buildList(4) {
         add(ACCESS_NETWORK_STATE)
         add(INTERNET)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        if (SDK_INT >= VERSION_CODES.P) {
             add(FOREGROUND_SERVICE)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (SDK_INT >= VERSION_CODES.TIRAMISU) {
             add(POST_NOTIFICATIONS)
         }
     }
@@ -208,10 +219,27 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         super.onStartCommand(intent, flags, startId)
         configure(configuration.latestConfig)
         checkPermissions()
-        startForeground(1, createForegroundNotification())
+
+        if (SDK_INT < UPSIDE_DOWN_CAKE) {
+            // Below API 34: Start foreground without service types
+            startForeground(1, createForegroundNotification())
+        } else {
+
+            /**
+             * API 34+ (Android 14+): Adding HEALTH and SPECIAL_USE types
+             * Currently this is not explicitly checking for android 14+ version.
+             * This need to be modified it in future when setting new targetSdkVersion
+             */
+            startForeground(1, createForegroundNotification(),
+                FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                        FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        }
 
         return START_STICKY
     }
+
+
 
     protected open fun createForegroundNotification(): Notification {
         val mainIntent = Intent(this, radarApp.mainActivity)
@@ -319,6 +347,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         if (grantedPermissions.isNotEmpty()) {
             mHandler.execute {
                 logger.info("Granted permissions {}", grantedPermissions)
+//                startForegroundIfNeeded(grantedPermissions)
                 // Permission granted.
                 needsPermissions -= grantedPermissions
                 startScanning()
@@ -683,7 +712,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
-        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (SDK_INT >= VERSION_CODES.Q)
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 
         private const val BACKGROUND_REQUEST_CODE = 9559
