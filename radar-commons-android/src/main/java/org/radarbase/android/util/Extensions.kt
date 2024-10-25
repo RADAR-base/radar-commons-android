@@ -8,6 +8,7 @@ fun String.takeTrimmedIfNotEmpty(): String? = trim { it <= ' ' }
             .takeUnless(String::isEmpty)
 
 fun Int.toPendingIntentFlag(mutable: Boolean = false) = this or when {
+    mutable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT
     mutable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> PendingIntent.FLAG_MUTABLE
     !mutable -> PendingIntent.FLAG_IMMUTABLE
     else -> 0
