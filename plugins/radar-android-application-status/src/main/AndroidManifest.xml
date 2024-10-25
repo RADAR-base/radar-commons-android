@@ -3,7 +3,9 @@
 
     <application>
         <service android:name=".ApplicationStatusService"
+            android:foregroundServiceType="dataSync"
             android:exported="false"
-            android:description="@string/application_status_description" />
+            android:description="@string/application_status_description" >
+        </service>
     </application>
 </manifest>

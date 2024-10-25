@@ -9,6 +9,7 @@
     <application android:allowBackup="true">
         <service android:name=".PhoneUsageService"
             android:exported="false"
+            android:foregroundServiceType="dataSync"
             android:description="@string/phone_usage_description" />
     </application>
 </manifest>

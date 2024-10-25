@@ -7,6 +7,7 @@
 
     <application android:allowBackup="true">
         <service android:name=".GoogleActivityService"
+            android:foregroundServiceType="dataSync"
             android:exported="false"
             android:description="@string/google_activity_description" />
     </application>

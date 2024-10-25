@@ -6,6 +6,7 @@
 
     <application android:allowBackup="true">
         <service android:name=".GooglePlacesService"
+            android:foregroundServiceType="location"
             android:exported="false"
             android:description="@string/google_places_description" />
     </application>

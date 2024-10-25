@@ -20,6 +20,7 @@
 
     <application android:allowBackup="true">
         <service android:name=".PhoneSensorService"
+            android:foregroundServiceType="dataSync"
             android:exported="false"
             android:description="@string/phone_sensors_description" />
         <service android:name=".PhoneLocationService"
@@ -27,6 +28,7 @@
             android:exported="false"
             android:description="@string/phone_location_description" />
         <service android:name=".PhoneContactsListService"
+            android:foregroundServiceType="dataSync"
             android:exported="false"
             android:description="@string/phone_contact_list_description" />
         <service android:name=".PhoneBluetoothService"

@@ -6,7 +6,9 @@
 
     <application android:allowBackup="true">
         <service android:name=".PhoneLogService"
+            android:foregroundServiceType="dataSync"
             android:exported="false"
-            android:description="@string/phone_log_description" />
+            android:description="@string/phone_log_description">
+        </service>
     </application>
 </manifest>
