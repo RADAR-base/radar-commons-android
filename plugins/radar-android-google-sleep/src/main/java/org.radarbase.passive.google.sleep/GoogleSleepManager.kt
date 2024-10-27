@@ -74,7 +74,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
     private fun registerSleepReceiver() {
         val filter = IntentFilter(ACTION_SLEEP_DATA)
         ContextCompat.registerReceiver(service, sleepBroadcastReceiver, filter,
-            ContextCompat.RECEIVER_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
         logger.info("registering for the sleep receiver.")
     }
@@ -130,7 +130,9 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
     }
 
     private fun createSleepPendingIntent(): PendingIntent {
-        val intent = Intent(ACTION_SLEEP_DATA)
+        val intent = Intent(ACTION_SLEEP_DATA).apply {
+            `package` = service.packageName
+        }
         logger.info("Sleep pending intent created")
         return PendingIntent.getBroadcast(service, SLEEP_DATA_REQUEST_CODE, intent,
             PendingIntent.FLAG_CANCEL_CURRENT.toPendingIntentFlag(true))

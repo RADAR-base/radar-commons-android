@@ -81,7 +81,9 @@ class OfflineProcessor(
         this.alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
 
         handler = config.handlerReference.acquire()
-        val intent = Intent(config.requestName)
+        val intent = Intent(config.requestName).apply {
+            `package` = context.packageName
+        }
         pendingIntent = PendingIntent.getBroadcast(
             context,
             requireNotNull(config.requestCode) { "Cannot start processor without request code" },
@@ -109,7 +111,7 @@ class OfflineProcessor(
                 context,
                 this.receiver,
                 IntentFilter(requestName),
-                RECEIVER_EXPORTED
+                ContextCompat.RECEIVER_NOT_EXPORTED
             )
             schedule()
             initializer?.let { it() }
