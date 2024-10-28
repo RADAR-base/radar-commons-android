@@ -28,7 +28,6 @@ import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
 import android.os.*
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES
@@ -64,7 +63,6 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.HashSet
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private var configurationUpdateFuture: SafeHandler.HandlerFuture? = null
@@ -237,12 +235,11 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         } else {
 
             /**
-             * API 34+ (Android 14+): Adding DATA_SYNC and SPECIAL_USE types
+             * API 34+ (Android 14+): Adding DATA_SYNC type
              * Currently this is not explicitly checking for android 14+ version.
              * This need to be modified it in future when setting new targetSdkVersion
              */
             startForeground(1, createForegroundNotification(),
-                FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
                         FOREGROUND_SERVICE_TYPE_DATA_SYNC
             )
         }
@@ -278,9 +275,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
 
         if (fgsTypePermissions.isNotEmpty()) {
-            if (SDK_INT >= UPSIDE_DOWN_CAKE) {
-                fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            }
 
             fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 
