@@ -1,3 +1,19 @@
+/*
+ * Copyright 2017 The Hyve
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.radarbase.android.util
 
 import kotlinx.coroutines.CoroutineDispatcher
@@ -5,9 +21,9 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,7 +31,7 @@ import kotlinx.coroutines.withContext
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ExecutionException
-import kotlin.coroutines.CoroutineContext
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -25,25 +41,31 @@ import kotlin.coroutines.suspendCoroutine
  * repeated, and safe execution. Supports exception handling, task cancellation, and synchronization.
  *
  * @param name The name assigned to this executor.
- * @param coroutineContext The coroutine context to use for execution.
+ * @param coroutineDispatcher The coroutine dispatcher to use for execution.
  */
-class CoroutineWorkExecutor(
+class CoroutineTaskExecutor(
     val name: String,
-    coroutineContext: CoroutineContext
+    coroutineDispatcher: CoroutineDispatcher,
+    private val job: Job = Job()
 ) {
 
     private val executorExceptionHandler: CoroutineExceptionHandler =
         CoroutineExceptionHandler { _, ex ->
             logger.error("Failed to run task", ex)
+            throw ex
         }
-    private val job: Job = SupervisorJob()
+
     private val executorScope: CoroutineScope =
-        CoroutineScope(job + coroutineContext + CoroutineName(name) + executorExceptionHandler)
+        CoroutineScope(job + coroutineDispatcher + CoroutineName(name) + executorExceptionHandler)
 
     private val nullValue: Any = Any()
+    private val isStarted: AtomicBoolean = AtomicBoolean(false)
 
     private val activeTasks = mutableListOf<CoroutineFutureExecutor>()
 
+    fun start()  {
+        isStarted.set(true)
+    }
     /**
      * Executes a suspendable task and waits for its completion.
      *
@@ -63,6 +85,7 @@ class CoroutineWorkExecutor(
      */
     @Throws(ExecutionException::class)
     suspend fun <T> computeResult(work: suspend () -> T?): T? = suspendCoroutine { continuation ->
+        checkExecutorStarted() ?: return@suspendCoroutine
         executorScope.launch {
             try {
                 val result = work() ?: nullValue
@@ -91,6 +114,7 @@ class CoroutineWorkExecutor(
         defaultToCurrentDispatcher: Boolean = false,
         dispatcher: CoroutineDispatcher? = null
     ) {
+        checkExecutorStarted() ?: return
         executorScope.launch {
             if (
                 (dispatcher == null) ||
@@ -116,7 +140,8 @@ class CoroutineWorkExecutor(
     fun delay(
         delayMillis: Long,
         task: suspend () -> Unit
-    ): CoroutineFutureExecutor {
+    ): CoroutineFutureExecutor? {
+        checkExecutorStarted() ?: return null
         val future = CoroutineFutureExecutorRef()
         activeTasks.add(future)
         future.startDelayed(delayMillis, task)
@@ -133,7 +158,8 @@ class CoroutineWorkExecutor(
     fun repeat(
         delayMillis: Long,
         task: suspend () -> Unit
-    ): CoroutineFutureExecutor {
+    ): CoroutineFutureExecutorRef? {
+        checkExecutorStarted() ?: return null
         val future = CoroutineFutureExecutorRef()
         activeTasks.add(future)
         future.startRepeated(delayMillis, task)
@@ -147,6 +173,25 @@ class CoroutineWorkExecutor(
         activeTasks.forEach { it.cancel() }
         activeTasks.clear()
     }
+
+    /**
+     * Cancel the coroutine, running [finalization], if any, as the last operation.
+     * None of the finalization will run if [CoroutineTaskExecutor.start] was not called.
+     */
+    suspend fun stop(finalization: (suspend () -> Unit)? = null) {
+        finalization?.let {
+            checkExecutorStarted() ?: return
+            joinAll(
+                executorScope.launch {
+                    finalization()
+                    logger.info("Executed the finalization task")
+                }
+            )
+        }
+        cancelAllFutures()
+        job.cancel()
+    }
+
 
     /**
      * Safely runs a task, logging errors if execution fails.
@@ -275,30 +320,31 @@ class CoroutineWorkExecutor(
         }
     }
 
-    fun stop() {
-        cancelAllFutures()
-        job.cancel()
+    private fun checkExecutorStarted(): Boolean? {
+        if (!isStarted.get()) {
+            logger.warn("Executor not started yet! Please call start() to execute tasks")
+        }
+        return if (isStarted.get()) return true else null
     }
 
     companion object {
-        private val logger: Logger = LoggerFactory.getLogger(CoroutineWorkExecutor::class.java)
+        private val logger: Logger = LoggerFactory.getLogger(CoroutineTaskExecutor::class.java)
 
-        private val instances = mutableMapOf<String, CoroutineWorkExecutor>()
+        private val instances = mutableMapOf<String, CoroutineTaskExecutor>()
 
         /**
-         * Retrieves or creates an instance of [CoroutineWorkExecutor] by name.
+         * Retrieves or creates an instance of [CoroutineTaskExecutor] by name.
          *
          * @param name The unique name for the executor.
-         * @param coroutineContext The coroutine context to be used by this executor.
-         * @return A singleton instance of [CoroutineWorkExecutor] for the specified name.
+         * @param coroutineDispatcher The Dispatcher to be used by this executor.
+         * @return A singleton instance of [CoroutineTaskExecutor] for the specified name.
          */
         @Synchronized
-        fun getInstance(name: String, coroutineContext: CoroutineContext): CoroutineWorkExecutor {
-            return instances[name] ?: CoroutineWorkExecutor(
+        fun getInstance(name: String, coroutineDispatcher: CoroutineDispatcher): CoroutineTaskExecutor {
+            return instances[name] ?: CoroutineTaskExecutor(
                 name,
-                coroutineContext
+                coroutineDispatcher
             ).also { instances[name] = it }
         }
-
     }
 }
