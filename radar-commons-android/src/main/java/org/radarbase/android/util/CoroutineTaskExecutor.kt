@@ -44,7 +44,6 @@ import kotlin.coroutines.suspendCoroutine
  * @param coroutineDispatcher The coroutine dispatcher to use for execution.
  */
 class CoroutineTaskExecutor(
-    val name: String,
     coroutineDispatcher: CoroutineDispatcher,
     private val job: Job = Job()
 ) {
@@ -56,7 +55,7 @@ class CoroutineTaskExecutor(
         }
 
     private val executorScope: CoroutineScope =
-        CoroutineScope(job + coroutineDispatcher + CoroutineName(name) + executorExceptionHandler)
+        CoroutineScope(job + coroutineDispatcher + executorExceptionHandler)
 
     private val nullValue: Any = Any()
     private val isStarted: AtomicBoolean = AtomicBoolean(false)
@@ -85,6 +84,11 @@ class CoroutineTaskExecutor(
      */
     @Throws(ExecutionException::class)
     suspend fun <T> computeResult(work: suspend () -> T?): T? = suspendCoroutine { continuation ->
+        if (!executorScope.isActive) {
+            logger.warn("Scope is already cancelled")
+            continuation.resume(null)
+            return@suspendCoroutine
+        }
         checkExecutorStarted() ?: return@suspendCoroutine
         executorScope.launch {
             try {
@@ -114,6 +118,10 @@ class CoroutineTaskExecutor(
         defaultToCurrentDispatcher: Boolean = false,
         dispatcher: CoroutineDispatcher? = null
     ) {
+        if (!executorScope.isActive) {
+            println("Can't execute task, scope is already cancelled")
+            return
+        }
         checkExecutorStarted() ?: return
         executorScope.launch {
             if (
@@ -258,9 +266,9 @@ class CoroutineTaskExecutor(
 
         @Synchronized
         override fun cancel() {
-            job = job?.let {
+            job?.also {
                 it.cancel()
-                null
+                job = null
             }
         }
     }
@@ -313,38 +321,21 @@ class CoroutineTaskExecutor(
         }
 
         override fun cancel() {
-            job = job?.let {
+            job?.also {
                 it.cancel()
-                null
+                job = null
             }
         }
     }
 
     private fun checkExecutorStarted(): Boolean? {
         if (!isStarted.get()) {
-            logger.warn("Executor not started yet! Please call start() to execute tasks")
+            logger.warn("Either executor not started yet or it has already stopped! Please call start() to execute tasks")
         }
         return if (isStarted.get()) return true else null
     }
 
     companion object {
         private val logger: Logger = LoggerFactory.getLogger(CoroutineTaskExecutor::class.java)
-
-        private val instances = mutableMapOf<String, CoroutineTaskExecutor>()
-
-        /**
-         * Retrieves or creates an instance of [CoroutineTaskExecutor] by name.
-         *
-         * @param name The unique name for the executor.
-         * @param coroutineDispatcher The Dispatcher to be used by this executor.
-         * @return A singleton instance of [CoroutineTaskExecutor] for the specified name.
-         */
-        @Synchronized
-        fun getInstance(name: String, coroutineDispatcher: CoroutineDispatcher): CoroutineTaskExecutor {
-            return instances[name] ?: CoroutineTaskExecutor(
-                name,
-                coroutineDispatcher
-            ).also { instances[name] = it }
-        }
     }
 }
