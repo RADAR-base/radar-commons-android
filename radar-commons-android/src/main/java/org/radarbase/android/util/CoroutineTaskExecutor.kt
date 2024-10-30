@@ -18,7 +18,6 @@ package org.radarbase.android.util
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,7 +26,6 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ExecutionException
@@ -40,29 +38,35 @@ import kotlin.coroutines.suspendCoroutine
  * Coroutine-based executor that manages and schedules tasks with various options for delayed,
  * repeated, and safe execution. Supports exception handling, task cancellation, and synchronization.
  *
- * @param name The name assigned to this executor.
+ * @param job The job assigned to this executor.
  * @param coroutineDispatcher The coroutine dispatcher to use for execution.
  */
 class CoroutineTaskExecutor(
-    coroutineDispatcher: CoroutineDispatcher,
-    private val job: Job = Job()
+    private val invokingClassName: String
+    private val coroutineDispatcher: CoroutineDispatcher,
 ) {
-
+    private var job: Job? = null
     private val executorExceptionHandler: CoroutineExceptionHandler =
         CoroutineExceptionHandler { _, ex ->
             logger.error("Failed to run task", ex)
             throw ex
         }
 
-    private val executorScope: CoroutineScope =
-        CoroutineScope(job + coroutineDispatcher + executorExceptionHandler)
+    private var executorScope: CoroutineScope? = null
 
     private val nullValue: Any = Any()
-    private val isStarted: AtomicBoolean = AtomicBoolean(false)
+    val isStarted: AtomicBoolean = AtomicBoolean(executorScope != null)
+    private val executorMutex: Mutex = Mutex()
 
     private val activeTasks = mutableListOf<CoroutineFutureExecutor>()
 
-    fun start()  {
+    fun start(job: Job = Job())  {
+        if (isStarted.get()) {
+            logger.warn("Tried to start executor multiple times.")
+            return
+        }
+        this.job = job
+        executorScope = CoroutineScope(coroutineDispatcher + job + executorExceptionHandler)
         isStarted.set(true)
     }
     /**
@@ -84,13 +88,14 @@ class CoroutineTaskExecutor(
      */
     @Throws(ExecutionException::class)
     suspend fun <T> computeResult(work: suspend () -> T?): T? = suspendCoroutine { continuation ->
-        if (!executorScope.isActive) {
+        val activeStatus: Boolean? = executorScope?.isActive
+        if (activeStatus == null || activeStatus == false) {
             logger.warn("Scope is already cancelled")
             continuation.resume(null)
             return@suspendCoroutine
         }
         checkExecutorStarted() ?: return@suspendCoroutine
-        executorScope.launch {
+        executorScope?.launch {
             try {
                 val result = work() ?: nullValue
                 if (result == nullValue) {
@@ -105,38 +110,59 @@ class CoroutineTaskExecutor(
         }
     }
 
-    /**
-     * Launches a suspendable task, optionally on a specified [CoroutineDispatcher].
-     *
-     * @param task The suspendable task to be executed.
-     * @param defaultToCurrentDispatcher If true, uses the current dispatcher if no dispatcher is specified.
-     * @param dispatcher The dispatcher to use for task execution, or null to use the executor's dispatcher.
-     */
-    @OptIn(ExperimentalStdlibApi::class)
-    suspend fun execute(
-        task: suspend () -> Unit,
-        defaultToCurrentDispatcher: Boolean = false,
-        dispatcher: CoroutineDispatcher? = null
-    ) {
-        if (!executorScope.isActive) {
-            println("Can't execute task, scope is already cancelled")
+    fun executeReentrant(task: suspend () -> Unit) = execute(task)
+
+    fun execute(task: suspend () -> Unit) {
+        val activeStatus: Boolean? = executorScope?.isActive
+        if (activeStatus == null || activeStatus == false) {
+            logger.warn("Can't execute task, scope is already cancelled")
             return
         }
         checkExecutorStarted() ?: return
-        executorScope.launch {
-            if (
-                (dispatcher == null) ||
-                defaultToCurrentDispatcher ||
-                (this.coroutineContext[CoroutineDispatcher] == dispatcher)
-            ) {
+
+        executorScope?.launch {
+            executorMutex.withLock {
                 runTaskSafely(task)
-            } else {
-                withContext(dispatcher) {
-                    runTaskSafely(task)
-                }
             }
         }
     }
+
+//    /**
+//     * Launches a suspendable task, optionally on a specified [CoroutineDispatcher].
+//     *
+//     * @param task The suspendable task to be executed.
+//     * @param defaultToCurrentDispatcher If true, uses the current dispatcher if no dispatcher is specified.
+//     * @param dispatcher The dispatcher to use for task execution, or null to use the executor's dispatcher.
+//     */
+//    @OptIn(ExperimentalStdlibApi::class)
+//    fun execute(
+//        task: suspend () -> Unit,
+//        defaultToCurrentDispatcher: Boolean = false,
+//        dispatcher: CoroutineDispatcher? = null
+//    ) {
+//        if (!executorScope?.isActive) {
+//            logger.warn("Can't execute task, scope is already cancelled")
+//            return
+//        }
+//        checkExecutorStarted() ?: return
+//        executorScope?.launch {
+//            if (
+//                (dispatcher == null) ||
+//                defaultToCurrentDispatcher ||
+//                (this.coroutineContext[CoroutineDispatcher] == dispatcher)
+//            ) {
+//                executorMutex.withLock {
+//                    runTaskSafely(task)
+//                }
+//            } else {
+//                withContext(dispatcher) {
+//                    executorMutex.withLock {
+//                        runTaskSafely(task)
+//                    }
+//                }
+//            }
+//        }
+//    }
 
     /**
      * Schedules a task to be executed after a specified delay.
@@ -148,12 +174,12 @@ class CoroutineTaskExecutor(
     fun delay(
         delayMillis: Long,
         task: suspend () -> Unit
-    ): CoroutineFutureExecutor? {
+    ): CoroutineFutureHandle? {
         checkExecutorStarted() ?: return null
         val future = CoroutineFutureExecutorRef()
         activeTasks.add(future)
         future.startDelayed(delayMillis, task)
-        return future
+        return CoroutineFutureHandleRef(future.job, task)
     }
 
     /**
@@ -166,12 +192,12 @@ class CoroutineTaskExecutor(
     fun repeat(
         delayMillis: Long,
         task: suspend () -> Unit
-    ): CoroutineFutureExecutorRef? {
+    ): CoroutineFutureHandle? {
         checkExecutorStarted() ?: return null
         val future = CoroutineFutureExecutorRef()
         activeTasks.add(future)
         future.startRepeated(delayMillis, task)
-        return future
+        return CoroutineFutureHandleRef(future.job, task)
     }
 
     /**
@@ -188,16 +214,21 @@ class CoroutineTaskExecutor(
      */
     suspend fun stop(finalization: (suspend () -> Unit)? = null) {
         finalization?.let {
-            checkExecutorStarted() ?: return
-            joinAll(
-                executorScope.launch {
-                    finalization()
-                    logger.info("Executed the finalization task")
-                }
-            )
+            executorScope?.let { execScope ->
+                checkExecutorStarted() ?: return
+                joinAll(
+                    execScope.launch {
+                        finalization()
+                        logger.info("Executed the finalization task")
+                    }
+                )
+            }
         }
         cancelAllFutures()
-        job.cancel()
+        job?.cancel()
+        isStarted.set(false)
+        job = null
+        executorScope = null
     }
 
 
@@ -282,7 +313,7 @@ class CoroutineTaskExecutor(
 
         override fun startDelayed(delayMillis: Long, task: suspend () -> Unit) {
             checkNullJob() ?: return
-            job = executorScope.launch {
+            job = executorScope?.launch {
                 delay(delayMillis)
                 task()
             }
@@ -290,7 +321,7 @@ class CoroutineTaskExecutor(
 
         override fun startRepeated(delayMillis: Long, task: suspend () -> Unit) {
             checkNullJob() ?: return
-            job = executorScope.launch {
+            job = executorScope?.launch {
                 while (isActive) {
                     delay(delayMillis)
                     task()
@@ -303,7 +334,7 @@ class CoroutineTaskExecutor(
             task: suspend () -> Boolean
         ) {
             checkNullJob() ?: return
-            job = executorScope.launch {
+            job = executorScope?.launch {
                 var lastResult = true
                 while (isActive && lastResult) {
                     delay(delayMillis)
