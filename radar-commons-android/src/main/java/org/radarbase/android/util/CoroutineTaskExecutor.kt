@@ -36,11 +36,14 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 /**
- * Coroutine-based executor that manages and schedules tasks with various options for delayed,
- * repeated, and safe execution. Supports exception handling, task cancellation, and synchronization.
+ * Coroutine-based task executor that provides a flexible API for managing, scheduling,
+ * and safely executing tasks in a concurrent environment. Supports options for delayed
+ * and repeated task execution, exception handling, cancellation, and synchronization.
+ * Designed as a coroutine-based replacement for traditional handlers with additional
+ * features for coroutine-safe task management.
  *
- * @param job The job assigned to this executor.
- * @param coroutineDispatcher The coroutine dispatcher to use for execution.
+ * @property invokingClassName Name of the invoking class, used for logging purposes.
+ * @property coroutineDispatcher Dispatcher for executing tasks within this executor.
  */
 class CoroutineTaskExecutor(
     private val invokingClassName: String,
@@ -61,6 +64,12 @@ class CoroutineTaskExecutor(
 
     private val activeTasks = mutableListOf<CoroutineFutureExecutor>()
 
+    /**
+     * Starts the executor, initializing the coroutine scope with a specified [Job],
+     * [coroutineDispatcher], and an exception handler.
+     *
+     * @param job The root job for this executor's coroutine scope. Defaults to a new [Job].
+     */
     fun start(job: Job = Job())  {
         if (isStarted.get()) {
             logger.warn("Tried to start executor multiple times.")
@@ -71,21 +80,23 @@ class CoroutineTaskExecutor(
         isStarted.set(true)
     }
     /**
-     * Executes a suspendable task and waits for its completion.
+     * Executes a suspendable task and suspends until it completes. If an exception occurs,
+     * it throws an [ExecutionException].
      *
      * @param work The suspendable task to be executed.
-     * @throws ExecutionException if the task fails during execution.
+     * @throws ExecutionException if the task encounters an error during execution.
      */
     @Throws(ExecutionException::class)
     suspend fun waitAndExecute(work: suspend () -> Unit): Unit = computeResult(work)!!
 
     /**
-     * Executes a suspendable task and returns its result, or throws an exception if it fails.
+     * Executes a suspendable task and returns its result. If an exception occurs,
+     * it throws an [ExecutionException].
      *
      * @param work The suspendable task to be executed.
      * @param T The return type of the task.
-     * @return The result of the task, or null if the task returns null.
-     * @throws ExecutionException if the task fails during execution.
+     * @return The result of the task, or null if it returns null.
+     * @throws ExecutionException if the task encounters an error during execution.
      */
     @Throws(ExecutionException::class)
     suspend fun <T> computeResult(work: suspend () -> T?): T? = suspendCoroutine { continuation ->
@@ -111,8 +122,19 @@ class CoroutineTaskExecutor(
         }
     }
 
+    /**
+     * This method serves as an alias for [execute] to indicate that the task allows reentrancy.
+     *
+     * @param task The suspendable task to be executed.
+     */
     fun executeReentrant(task: suspend () -> Unit) = execute(task)
 
+    /**
+     * Executes a task within a coroutine while ensuring that multiple tasks are synchronized
+     * using a mutex, preventing concurrent access.
+     *
+     * @param task The suspendable task to be executed.
+     */
     fun execute(task: suspend () -> Unit) {
         val activeStatus: Boolean? = executorScope?.isActive
         if (activeStatus == null || activeStatus == false) {
@@ -128,6 +150,13 @@ class CoroutineTaskExecutor(
         }
     }
 
+    /**
+     * Executes a task and returns its job instance. Useful for advanced task management
+     * and monitoring.
+     *
+     * @param task The suspendable task to be executed.
+     * @return A [Job] representing the task, or null if execution fails.
+     */
     fun returnJobAndExecute(task: suspend () -> Unit): Job? {
         val activeStatus: Boolean? = executorScope?.isActive
         if (activeStatus == null || activeStatus == false) {
@@ -140,49 +169,12 @@ class CoroutineTaskExecutor(
         }
     }
 
-//    /**
-//     * Launches a suspendable task, optionally on a specified [CoroutineDispatcher].
-//     *
-//     * @param task The suspendable task to be executed.
-//     * @param defaultToCurrentDispatcher If true, uses the current dispatcher if no dispatcher is specified.
-//     * @param dispatcher The dispatcher to use for task execution, or null to use the executor's dispatcher.
-//     */
-//    @OptIn(ExperimentalStdlibApi::class)
-//    fun execute(
-//        task: suspend () -> Unit,
-//        defaultToCurrentDispatcher: Boolean = false,
-//        dispatcher: CoroutineDispatcher? = null
-//    ) {
-//        if (!executorScope?.isActive) {
-//            logger.warn("Can't execute task, scope is already cancelled")
-//            return
-//        }
-//        checkExecutorStarted() ?: return
-//        executorScope?.launch {
-//            if (
-//                (dispatcher == null) ||
-//                defaultToCurrentDispatcher ||
-//                (this.coroutineContext[CoroutineDispatcher] == dispatcher)
-//            ) {
-//                executorMutex.withLock {
-//                    runTaskSafely(task)
-//                }
-//            } else {
-//                withContext(dispatcher) {
-//                    executorMutex.withLock {
-//                        runTaskSafely(task)
-//                    }
-//                }
-//            }
-//        }
-//    }
-
     /**
-     * Schedules a task to be executed after a specified delay.
+     * Schedules a task to run after a specified delay.
      *
      * @param delayMillis Delay in milliseconds before executing the task.
      * @param task The task to execute after the delay.
-     * @return A [CoroutineFutureExecutor] to manage the delayed task future.
+     * @return A [CoroutineFutureHandle] to manage the delayed task.
      */
     fun delay(
         delayMillis: Long,
@@ -196,11 +188,11 @@ class CoroutineTaskExecutor(
     }
 
     /**
-     * Repeatedly executes a task with a specified delay between each execution.
+     * Repeatedly executes a task with a specified delay between executions, until canceled.
      *
-     * @param delayMillis Delay in milliseconds between each execution of the task.
+     * @param delayMillis Delay in milliseconds between each execution.
      * @param task The task to execute repeatedly.
-     * @return A [CoroutineFutureExecutor] to manage the repeated task.
+     * @return A [CoroutineFutureHandle] to manage the repeated task.
      */
     fun repeat(
         delayMillis: Long,
@@ -222,8 +214,10 @@ class CoroutineTaskExecutor(
     }
 
     /**
-     * Cancel the coroutine, running [finalization], if any, as the last operation.
-     * None of the finalization will run if [CoroutineTaskExecutor.start] was not called.
+     * Stops the executor and cancels all active and scheduled tasks. Optionally runs
+     * a finalization task before complete cancellation.
+     *
+     * @param finalization A finalization task to run before stopping the executor.
      */
     suspend fun stop(finalization: (suspend () -> Unit)? = null) = coroutineScope {
         finalization?.let {
@@ -262,7 +256,8 @@ class CoroutineTaskExecutor(
     }
 
     /**
-     * Interface for managing a task handle with controls for execution and cancellation.
+     * Interface representing a managed task executor with methods for delay, repetition,
+     * and cancellation.
      */
     interface CoroutineFutureExecutor {
 
@@ -278,6 +273,10 @@ class CoroutineTaskExecutor(
         fun cancel()
     }
 
+    /**
+     * Interface for handling task management with options for awaiting, running, and
+     * canceling the task.
+     */
     interface CoroutineFutureHandle {
         suspend fun awaitNow()
 
@@ -287,7 +286,8 @@ class CoroutineTaskExecutor(
     }
 
     /**
-     * Internal class for handling task execution and cancellation with mutex support.
+     * Implementation of [CoroutineFutureHandle] that provides locking and job management
+     * features for the associated task.
      */
     inner class CoroutineFutureHandleRef(
         private var job: Job?,
@@ -320,7 +320,8 @@ class CoroutineTaskExecutor(
     }
 
     /**
-     * Internal class representing a scheduled task executor with options for delay and repetition.
+     * Internal class managing delayed and repeated task execution, with cancellation
+     * capabilities.
      */
     inner class CoroutineFutureExecutorRef : CoroutineFutureExecutor {
 
@@ -378,6 +379,11 @@ class CoroutineTaskExecutor(
         }
     }
 
+    /**
+     * Checks if the executor has been started; logs a warning if not.
+     *
+     * @return True if the executor is started, otherwise null.
+     */
     private fun checkExecutorStarted(): Boolean? {
         if (!isStarted.get()) {
             logger.warn("Either executor not started yet or it has already stopped! Please call start() to execute tasks")
