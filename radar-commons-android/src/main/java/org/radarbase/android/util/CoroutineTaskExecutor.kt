@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
@@ -42,7 +43,7 @@ import kotlin.coroutines.suspendCoroutine
  * @param coroutineDispatcher The coroutine dispatcher to use for execution.
  */
 class CoroutineTaskExecutor(
-    private val invokingClassName: String
+    private val invokingClassName: String,
     private val coroutineDispatcher: CoroutineDispatcher,
 ) {
     private var job: Job? = null
@@ -124,6 +125,18 @@ class CoroutineTaskExecutor(
             executorMutex.withLock {
                 runTaskSafely(task)
             }
+        }
+    }
+
+    fun returnJobAndExecute(task: suspend () -> Unit): Job? {
+        val activeStatus: Boolean? = executorScope?.isActive
+        if (activeStatus == null || activeStatus == false) {
+            logger.warn("Can't execute task and return job, scope is already cancelled")
+            return null
+        }
+        checkExecutorStarted() ?: return null
+        return executorScope?.launch {
+            runTaskSafely(task)
         }
     }
 
@@ -212,16 +225,18 @@ class CoroutineTaskExecutor(
      * Cancel the coroutine, running [finalization], if any, as the last operation.
      * None of the finalization will run if [CoroutineTaskExecutor.start] was not called.
      */
-    suspend fun stop(finalization: (suspend () -> Unit)? = null) {
+    suspend fun stop(finalization: (suspend () -> Unit)? = null) = coroutineScope {
         finalization?.let {
-            executorScope?.let { execScope ->
-                checkExecutorStarted() ?: return
+            executorScope?.also { execScope ->
+                checkExecutorStarted() ?: return@let
                 joinAll(
                     execScope.launch {
-                        finalization()
+                        runTaskSafely(it)
                         logger.info("Executed the finalization task")
                     }
                 )
+            } ?: launch {
+                runTaskSafely(it)
             }
         }
         cancelAllFutures()
@@ -315,7 +330,7 @@ class CoroutineTaskExecutor(
             checkNullJob() ?: return
             job = executorScope?.launch {
                 delay(delayMillis)
-                task()
+                runTaskSafely(task)
             }
         }
 
@@ -324,7 +339,7 @@ class CoroutineTaskExecutor(
             job = executorScope?.launch {
                 while (isActive) {
                     delay(delayMillis)
-                    task()
+                    runTaskSafely(task)
                 }
             }
         }
@@ -338,7 +353,11 @@ class CoroutineTaskExecutor(
                 var lastResult = true
                 while (isActive && lastResult) {
                     delay(delayMillis)
-                    lastResult = task()
+                    lastResult = try {
+                        task()
+                    } catch (ex: Exception) {
+                        false
+                    }
                 }
             }
         }
