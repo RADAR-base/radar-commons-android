@@ -36,10 +36,10 @@ interface DataHandler<K: Any, V: Any>: ServerStatusListener {
 
     override val recordsSent: MutableSharedFlow<TopicSendReceipt>
 
-    fun <W: V> registerCache(topic: AvroTopic<K, W>, handler: SafeHandler? = null): DataCache<K, W>
+    suspend fun <W: V> registerCache(topic: AvroTopic<K, W>, handler: SafeHandler? = null): DataCache<K, W>
 
     fun handler(build: DataHandlerConfiguration.() -> Unit)
     fun getCache(topic: String): DataCache<*, *>
-    fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
+    suspend fun flushCaches(successCallback: () -> Unit, errorCallback: () -> Unit)
     val numberOfRecords: SharedFlow<TableDataHandler.CacheSize>
 }

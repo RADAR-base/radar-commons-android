@@ -71,7 +71,7 @@ class TapeCache<K: Any, V: Any>(
 
     private lateinit var queueFile: QueueFile
     private lateinit var queue: BackedObjectQueue<Record<K, V>, Record<Any, Any>>
-    private val queueFileFactory = config.queueFileType
+    private val queueFileFactory: CacheConfiguration.QueueFileFactory = config.queueFileType
 
     private var addMeasurementFuture: Job? = null
     private var configObserverJob: Job? = null
