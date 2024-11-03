@@ -31,11 +31,24 @@ abstract class AuthService : LifecycleService(), LoginListener {
     private var isConnected: Boolean = false
     private val _authState: MutableStateFlow<AppAuthState> = MutableStateFlow(AppAuthState())
     val authState: StateFlow<AppAuthState> = _authState
-    private val _authStateFailures: MutableSharedFlow<AuthStateFailure> = MutableSharedFlow(
+    private val _authStateFailures: MutableSharedFlow<AuthLoginListener.AuthStateFailure> = MutableSharedFlow(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    private val authStateFailures: Flow<AuthStateFailure> = _authStateFailures
+
+    private val _authStateSuccess: MutableSharedFlow<AuthLoginListener.AuthStateSuccess> = MutableSharedFlow(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    private val _authStateLogout: MutableSharedFlow<AuthLoginListener.AuthStateLogout> = MutableSharedFlow(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    private val authStateFailures: Flow<AuthLoginListener.AuthStateFailure> = _authStateFailures
+    private val authStateSuccess: Flow<AuthLoginListener.AuthStateSuccess> = _authStateSuccess
+    private val authStateLogout: Flow<AuthLoginListener.AuthStateLogout> = _authStateLogout
 
     open val authSerialization: AuthSerialization by lazy {
         SharedPreferencesAuthSerialization(this)
@@ -44,6 +57,11 @@ abstract class AuthService : LifecycleService(), LoginListener {
     @Volatile
     private var isInLoginActivity: Boolean = false
 
+    private var loginListenerId: Long = 0L
+    private val listeners: MutableList<LoginListenerRegistry> = mutableListOf()
+
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
 
@@ -68,7 +86,8 @@ abstract class AuthService : LifecycleService(), LoginListener {
                     }
                 }
                 launch(Dispatchers.Default) {
-                    networkConnectedListener.state
+                    networkConnectedListener.monitor()
+                    networkConnectedListener.state!!
                         .map { it != NetworkConnectedReceiver.NetworkState.Disconnected }
                         .distinctUntilChanged()
                         .onEach { isConnected = it }
@@ -103,6 +122,13 @@ abstract class AuthService : LifecycleService(), LoginListener {
                                 refresh()
                             }
                         }
+                }
+                launch(Dispatchers.Default) {
+                    authStateSuccess
+                        .collect {
+
+                        }
+
                 }
             }
         }
@@ -173,7 +199,17 @@ abstract class AuthService : LifecycleService(), LoginListener {
     protected abstract fun showLoginNotification()
 
     override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
-        _authStateFailures.tryEmit(AuthStateFailure(manager, ex))
+        _authStateFailures.tryEmit(AuthLoginListener.AuthStateFailure(manager, ex))
+    }
+
+    override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        _authStateSuccess.tryEmit(AuthLoginListener.AuthStateSuccess(manager))
+        _authState.tryEmit(authState)
+    }
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        _authStateLogout.tryEmit(AuthLoginListener.AuthStateLogout(manager))
+        _authState.tryEmit(authState)
     }
 
     private val AppAuthState.relevantManagers: List<LoginManager>
@@ -236,7 +272,11 @@ abstract class AuthService : LifecycleService(), LoginListener {
         }
     }
 
-    suspend fun registerSource(source: SourceMetadata): SourceMetadata {
+    suspend fun registerSource(
+        source: SourceMetadata,
+        success: (AppAuthState, SourceMetadata) -> Unit,
+        failure: (Exception?) -> Unit
+    ): SourceMetadata {
         return try {
             updateState { state ->
                 checkNotNull(state.manager) { "Missing auth manager for source $source" }
@@ -259,6 +299,12 @@ abstract class AuthService : LifecycleService(), LoginListener {
         val managers: List<LoginManager>
             get() = loginManagers
 
+        val authStateFailures: Flow<AuthLoginListener.AuthStateFailure>
+            get() = this@AuthService.authStateFailures
+
+        val authStateSuccess: Flow<AuthLoginListener.AuthStateSuccess>
+            get() = this@AuthService.authStateSuccess
+
         suspend fun update(manager: LoginManager) = this@AuthService.update(manager)
 
         suspend fun refresh() = this@AuthService.refresh()
@@ -270,8 +316,11 @@ abstract class AuthService : LifecycleService(), LoginListener {
         @Suppress("unused")
         suspend fun <T> updateState(update: AppAuthState.Builder.(AppAuthState) -> T): T = this@AuthService.updateState(update)
 
-        suspend fun registerSource(source: SourceMetadata): SourceMetadata =
-                this@AuthService.registerSource(source)
+        suspend fun registerSource(
+            source: SourceMetadata,
+            success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit
+        ): SourceMetadata =
+            this@AuthService.registerSource(source, success, failure)
 
         fun updateSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) =
                 this@AuthService.updateSource(source, success, failure)
@@ -300,13 +349,28 @@ abstract class AuthService : LifecycleService(), LoginListener {
         }
     }
 
-    data class AuthStateFailure(val loginManager: LoginManager?, val exception: Exception?)
+    sealed interface AuthLoginListener {
+        data class AuthStateFailure(val manager: LoginManager?, val exception: Exception?) :
+            AuthLoginListener
+
+        data class AuthStateSuccess(
+            val manager: LoginManager? = null
+        ) : AuthLoginListener
+
+        data class AuthStateLogout(val manager: LoginManager?) :
+            AuthLoginListener
+    }
 
     private suspend fun unregisterSources(sources: Iterable<SourceMetadata>) {
         updateState {
             sourceMetadata -= sources.toSet()
         }
         doRefresh()
+    }
+
+    inner class LoginListenerRegistry(val listener: LoginListener) {
+        val id = ++loginListenerId
+        val lastUpdated = 0L
     }
 
     companion object {
