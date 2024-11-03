@@ -38,6 +38,7 @@ import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
 import org.radarbase.producer.KafkaTopicSender
 import org.radarbase.producer.rest.ConnectionState
+import org.radarbase.producer.rest.RestKafkaSender
 import org.radarbase.topic.AvroTopic
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -56,7 +57,7 @@ import kotlin.coroutines.CoroutineContext
  */
 class KafkaDataSubmitter(
     private val dataHandler: DataHandler<*, *>,
-    private val sender: KafkaSender,
+    private val sender: RestKafkaSender,
     config: SubmitterConfiguration,
     submitterCoroutineContext: CoroutineContext = Dispatchers.Default
 ) : Closeable {
@@ -126,13 +127,15 @@ class KafkaDataSubmitter(
 
     private suspend fun schedule() {
         val uploadRate = config.uploadRate * config.uploadRateMultiplier * 1000L
-        uploadFuture = uploadFuture?.let {
-            it.cancelAndJoin()
-            null
+
+        uploadFuture?.also {
+            it.cancel()
+            uploadFuture = null
         }
-        uploadIfNeededFuture = uploadIfNeededFuture?.let {
-            it.cancelAndJoin()
-            null
+
+        uploadIfNeededFuture?.also {
+            it.cancel()
+            uploadIfNeededFuture = null
         }
 
         // Get upload frequency from system property
@@ -186,6 +189,15 @@ class KafkaDataSubmitter(
      */
     override fun close() {
         topicSenders.clear()
+        uploadFuture?.also {
+            it.cancel()
+            uploadFuture = null
+        }
+
+        uploadIfNeededFuture?.also {
+            it.cancel()
+            uploadFuture = null
+        }
     }
 
     /** Get a sender for a topic. Per topic, only ONE thread may use this.  */
@@ -295,7 +307,7 @@ class KafkaDataSubmitter(
 
                 try {
                     sender(topic).run {
-                        send(AvroRecordData<Any, Any>(data.topic, data.key, recordsNotNull))
+                        send(AvroRecordData(data.topic, data.key, recordsNotNull))
                     }
                     dataHandler.recordsSent.emit(TopicSendReceipt(topic.name, size.toLong()))
 //                    dataHandler.updateRecordsSent(topic.name, size.toLong())

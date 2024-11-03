@@ -19,31 +19,24 @@ data class RestConfiguration(
     /** Kafka server configuration. If null, no rest sender will be configured. */
     var kafkaConfig: ServerConfig? = null,
     /** Schema registry retriever. */
-    var schemaRetriever: SchemaRetriever? = null,
+    var schemaRetrieverUrl: String? = null,
     /** Connection timeout in seconds. */
     var connectionTimeout: Long = 10L,
     /** Whether to try to use GZIP compression in requests. */
     var useCompression: Boolean = false,
     /** Whether to try to use binary encoding in request. */
     var hasBinaryContent: Boolean = false,
+    /** Unsafe http connections can be used or secure connections are needed*/
+    var unsafeKafka: Boolean = false
 ) {
     fun configure(config: SingleRadarConfiguration) {
-        val unsafeConnection = config.getBoolean(RadarConfiguration.UNSAFE_KAFKA_CONNECTION, false)
+        unsafeKafka = config.getBoolean(RadarConfiguration.UNSAFE_KAFKA_CONNECTION, false)
 
         kafkaConfig = config.optString(RadarConfiguration.KAFKA_REST_PROXY_URL_KEY)
-            ?.toServerConfig(unsafeConnection)
+            ?.toServerConfig(unsafeKafka)
 
-        schemaRetriever = config.optString(RadarConfiguration.SCHEMA_REGISTRY_URL_KEY) { url ->
-            schemaRetriever(url) {
-                schemaTimeout = CacheConfig(refreshDuration = 2.hours, retryDuration = 30.seconds)
-                httpClient {
-                    if (unsafeConnection) {
-                        unsafeSsl()
-                    }
-                    timeout(10.seconds)
-                }
-            }
-        }
+        schemaRetrieverUrl = config.optString(RadarConfiguration.SCHEMA_REGISTRY_URL_KEY)
+
         hasBinaryContent = config.getBoolean(RadarConfiguration.SEND_BINARY_CONTENT, RadarConfiguration.SEND_BINARY_CONTENT_DEFAULT)
         useCompression = config.getBoolean(RadarConfiguration.SEND_WITH_COMPRESSION, false)
         connectionTimeout = config.getLong(RadarConfiguration.SENDER_CONNECTION_TIMEOUT_KEY, connectionTimeout)

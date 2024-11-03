@@ -17,6 +17,8 @@
 package org.radarbase.android.data
 
 import android.content.Context
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -33,8 +35,10 @@ import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.kotlin.coroutines.CacheConfig
 import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.producer.io.timeout
+import org.radarbase.producer.io.unsafeSsl
 import org.radarbase.producer.rest.RestKafkaSender
 import org.radarbase.producer.rest.RestKafkaSender.Companion.GZIP_CONTENT_ENCODING
 import org.radarbase.producer.rest.RestKafkaSender.Companion.KAFKA_REST_BINARY_ENCODING
@@ -49,6 +53,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -192,20 +197,34 @@ class TableDataHandler(
         val kafkaUrl: String = kafkaConfig.urlString
 
         val kafkaSender = restKafkaSender {
+            val currentRestConfig = config.restConfig
             baseUrl = kafkaUrl
-            headers.appendAll(config.restConfig.headers)
+            headers.appendAll(currentRestConfig.headers)
             httpClient {
-                timeout(config.restConfig.connectionTimeout.seconds)
-                contentType = if (config.restConfig.hasBinaryContent) {
+                timeout(currentRestConfig.connectionTimeout.seconds)
+                contentType = if (currentRestConfig.hasBinaryContent) {
                     KAFKA_REST_BINARY_ENCODING
                 } else {
                     KAFKA_REST_JSON_ENCODING
                 }
-                if (config.restConfig.useCompression) {
+                if (currentRestConfig.useCompression) {
                     contentEncoding = GZIP_CONTENT_ENCODING
                 }
+                if (currentRestConfig.unsafeKafka) {
+                    unsafeSsl()
+                }
             }
-            schemaRetriever = config.restConfig.schemaRetriever
+            currentRestConfig.schemaRetrieverUrl?.let { schemaUrl ->
+                schemaRetriever(schemaUrl) {
+                    schemaTimeout = CacheConfig(
+                        refreshDuration = 2.hours,
+                        retryDuration = 30.seconds
+                    )
+                    httpClient = HttpClient(CIO) {
+                        timeout(10.seconds)
+                    }
+                }
+            }
         }.also {
             sender = it
         }
@@ -234,7 +253,6 @@ class TableDataHandler(
             if (isStarted) {
                 pause()
             }
-//            networkConnectedReceiver.unregister()
             networkStateCollectorJob?.cancel()
             batteryLevelReceiver.unregister()
         }
@@ -269,7 +287,9 @@ class TableDataHandler(
         this.submitter = null
         this.sender = null
 
-        tables.values.launchJoin(DataCacheGroup<*, *>::stop)
+        tables.values.launchJoin{
+            it.stop()
+        }
         handlerExecutor.stop()
     }
 
@@ -324,7 +344,7 @@ class TableDataHandler(
             }
 
             if (config.restConfig.kafkaConfig != null
-                && config.restConfig.schemaRetriever != null
+                && config.restConfig.schemaRetrieverUrl != null
                 && config.submitterConfig.userId != null
             ) {
                 enableSubmitter()
@@ -332,7 +352,7 @@ class TableDataHandler(
                 if (config.restConfig.kafkaConfig == null) {
                     logger.info("No kafka configuration given. Disabling submitter")
                 }
-                if (config.restConfig.schemaRetriever == null) {
+                if (config.restConfig.schemaRetrieverUrl == null) {
                     logger.info("No schema registry configuration given. Disabling submitter")
                 }
                 if (config.submitterConfig.userId == null) {
@@ -376,9 +396,23 @@ class TableDataHandler(
                             if (newRest.useCompression) {
                                 contentEncoding = GZIP_CONTENT_ENCODING
                             }
+                            if (newRest.unsafeKafka) {
+                                unsafeSsl()
+                            }
                         }
-                        if (newRest.schemaRetriever != oldConfig.restConfig.schemaRetriever) {
-                            schemaRetriever = newRest.schemaRetriever
+                        val schemaRetrieverUrl = newRest.schemaRetrieverUrl
+                        if (schemaRetrieverUrl != oldConfig.restConfig.schemaRetrieverUrl) {
+                            schemaRetrieverUrl?.let { srUrl ->
+                                schemaRetriever(srUrl) {
+                                    schemaTimeout = CacheConfig(
+                                        refreshDuration = 2.hours,
+                                        retryDuration = 30.seconds
+                                    )
+                                    httpClient = HttpClient(CIO) {
+                                        timeout(10.seconds)
+                                    }
+                                }
+                            }
                         }
                     }
 

@@ -72,6 +72,7 @@ internal class KafkaConnectionChecker(
         checkerCoroutineContext + job + CoroutineName("connection-checker") + checkerExceptionHandler
     )
 
+
     suspend fun initialize() {
         connectionCheckScope.launch {
             logger.runSafeOrNull {
@@ -97,10 +98,8 @@ internal class KafkaConnectionChecker(
                     listener.serverStatus.value = ServerStatus.CONNECTED
                     logger.info("Sender reconnected")
                 } else {
-                    future?.also {
-                        it.cancelAndJoin()
-                        future = null
-                    }
+                    future?.cancel()
+                    future = null
                     retry()
                 }
             } else if (SystemClock.uptimeMillis() - lastConnection > 15_000L) {
@@ -117,8 +116,10 @@ internal class KafkaConnectionChecker(
 
     /** Check the connection as soon as possible.  */
     suspend fun check() {
-        logger.runSafeOrNull {
-            makeCheck()
+        connectionCheckScope.launch {
+            logger.runSafeOrNull {
+                makeCheck()
+            }
         }
     }
 
@@ -139,10 +140,11 @@ internal class KafkaConnectionChecker(
                 lastConnection = SystemClock.uptimeMillis()
                 if (!_isConnected.value) {
                     _isConnected.value = true
-                    future = future?.let {
-                        it.cancelAndJoin()
-                        null
+                    future?.also {
+                        it.cancel()
+                        future = null
                     }
+
                     future = connectionCheckScope.launch {
                         while (isActive) {
                             delay(heartbeatInterval)
@@ -168,9 +170,9 @@ internal class KafkaConnectionChecker(
 
                 if (_isConnected.value) {
                     _isConnected.value = false
-                    future = future?.let {
-                        it.cancelAndJoin()
-                        null
+                    future?.let {
+                        it.cancel()
+                        future = null
                     }
                     future = connectionCheckScope.launch {
                         delay(INCREMENTAL_BACKOFF_MILLISECONDS)
