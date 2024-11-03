@@ -37,6 +37,9 @@ import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Keeps track of whether there is a network connection (e.g., WiFi or Ethernet).
@@ -49,15 +52,24 @@ class NetworkConnectedReceiver(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     ) { "No connectivity manager available" }
 
-    val state: Flow<NetworkState>
+    val isMonitoring: AtomicBoolean = AtomicBoolean(false)
 
-    init {
+    var state: Flow<NetworkState>? = null
+
+    fun monitor() {
+        if (isMonitoring.get()) {
+            logger.info("Network receiver is already being monitored")
+            return
+        }
         state = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             callbackFlow {
                 val callback = createCallback()
                 connectivityManager.registerDefaultNetworkCallback(callback)
+                isMonitoring.set(true)
                 awaitClose {
                     connectivityManager.unregisterNetworkCallback(callback)
+                    state = null
+                    isMonitoring.set(false)
                 }
             }
         } else {
@@ -65,8 +77,11 @@ class NetworkConnectedReceiver(
                 val receiver = createBroadcastReceiver()
                 @Suppress("DEPRECATION")
                 context.registerReceiver(receiver, IntentFilter(CONNECTIVITY_ACTION))
+                isMonitoring.set(true)
                 awaitClose {
                     context.unregisterReceiver(receiver)
+                    state = null
+                    isMonitoring.set(false)
                 }
             }
         }
@@ -144,5 +159,9 @@ class NetworkConnectedReceiver(
 
         object Disconnected : NetworkState(hasWifiOrEthernet = false)
         class Connected(hasWifiOrEthernet: Boolean) : NetworkState(hasWifiOrEthernet)
+    }
+
+    companion object {
+        private val logger: Logger = LoggerFactory.getLogger(NetworkConnectedReceiver::class.java)
     }
 }
