@@ -30,6 +30,8 @@ import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.lifecycle.LifecycleService
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -41,6 +43,7 @@ import org.radarbase.android.data.CacheStore
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.TableDataHandler
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.*
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
 import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
@@ -97,6 +100,13 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private lateinit var serverStatus: ServerStatusListener.Status
 
     private val needsPermissions = LinkedHashSet<String>()
+
+    override val recordsSent: MutableSharedFlow<TopicSendReceipt>
+        get() = TODO("Not yet implemented")
+
+    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        TODO("Not yet implemented")
+    }
 
     protected open val servicePermissions: List<String> = buildList(4) {
         add(ACCESS_NETWORK_STATE)
@@ -578,7 +588,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         dataHandler?.handler {
             logger.info("Setting data submission authentication")
             rest {
-                headers = authState.okHttpHeaders
+                headers = authState.ktorHeaders
             }
             submitter {
                 userId = authState.userId

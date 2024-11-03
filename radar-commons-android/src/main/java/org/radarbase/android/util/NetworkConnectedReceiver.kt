@@ -56,6 +56,15 @@ class NetworkConnectedReceiver(
 
     var state: Flow<NetworkState>? = null
 
+    var latestState: NetworkState = NetworkState.Disconnected
+        get() {
+            if (state == null) {
+                return NetworkState.Disconnected
+            }
+            return field
+        }
+        private set
+
     fun monitor() {
         if (isMonitoring.get()) {
             logger.info("Network receiver is already being monitored")
@@ -136,6 +145,7 @@ class NetworkConnectedReceiver(
             @Synchronized
             private fun transition(transition: (NetworkState) -> NetworkState) {
                 this.state = transition(this.state)
+                latestState = this.state
                 trySendBlocking(this.state)
             }
         }
