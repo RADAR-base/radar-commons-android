@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit
 @Keep
 @Suppress("unused")
 class AppAuthState(builder: Builder) {
-    private val lastUpdate: Long = builder.lastUpdate
+    val lastUpdate: Long = builder.lastUpdate
 
     val projectId: String? = builder.projectId
     val userId: String? = builder.userId

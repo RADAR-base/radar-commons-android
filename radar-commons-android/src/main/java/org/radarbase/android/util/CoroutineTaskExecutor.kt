@@ -219,19 +219,18 @@ class CoroutineTaskExecutor(
      *
      * @param finalization A finalization task to run before stopping the executor.
      */
-    suspend fun stop(finalization: (suspend () -> Unit)? = null) = coroutineScope {
+    fun stop(finalization: (suspend () -> Unit)? = null) {
         finalization?.let {
             executorScope?.also { execScope ->
                 checkExecutorStarted() ?: return@let
-                joinAll(
-                    execScope.launch {
-                        runTaskSafely(it)
-                        logger.info("Executed the finalization task")
-                    }
-                )
-            } ?: launch {
-                runTaskSafely(it)
-            }
+                execScope.launch {
+                    runTaskSafely(it)
+                    logger.info("Executed the finalization task")
+                }
+            } ?:
+                CoroutineScope(coroutineDispatcher).launch {
+                    runTaskSafely(it)
+                }
         }
         cancelAllFutures()
         job?.cancel()

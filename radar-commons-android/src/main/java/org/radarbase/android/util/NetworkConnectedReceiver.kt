@@ -65,7 +65,7 @@ class NetworkConnectedReceiver(
         }
         private set
 
-    fun monitor() {
+    suspend fun monitor() {
         if (isMonitoring.get()) {
             logger.info("Network receiver is already being monitored")
             return

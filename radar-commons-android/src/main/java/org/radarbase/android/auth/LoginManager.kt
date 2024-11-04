@@ -86,8 +86,8 @@ interface LoginManager {
     suspend fun registerSource(
         authState: AppAuthState.Builder,
         source: SourceMetadata,
-        success: (AppAuthState, SourceMetadata) -> Unit,
-        failure: (Exception?) -> Unit
+        success: suspend (AppAuthState, SourceMetadata) -> Unit,
+        failure: suspend (Exception?) -> Unit
     ): Boolean
 
     fun onDestroy()

@@ -156,7 +156,7 @@ class TableDataHandler(
         }
     }
 
-    private fun startMonitoring() {
+    private suspend fun startMonitoring() {
         networkConnectedReceiver.monitor()
     }
 
