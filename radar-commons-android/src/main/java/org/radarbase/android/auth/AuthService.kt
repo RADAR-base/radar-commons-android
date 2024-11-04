@@ -13,17 +13,25 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.NetworkConnectedReceiver
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 @Keep
 abstract class AuthService : LifecycleService(), LoginListener {
+
+    private val latestAppAuth: AppAuthState
+        get() = authState.value
+
     lateinit var loginManagers: List<LoginManager>
     lateinit var config: RadarConfiguration
     private lateinit var networkConnectedListener: NetworkConnectedReceiver
@@ -31,6 +39,11 @@ abstract class AuthService : LifecycleService(), LoginListener {
     private var isConnected: Boolean = false
     private val _authState: MutableStateFlow<AppAuthState> = MutableStateFlow(AppAuthState())
     val authState: StateFlow<AppAuthState> = _authState
+
+    private val executor: CoroutineTaskExecutor =
+        CoroutineTaskExecutor(AuthService::class.simpleName!!, Dispatchers.Default)
+
+    val serviceMutex: Mutex = Mutex(false)
     private val _authStateFailures: MutableSharedFlow<AuthLoginListener.AuthStateFailure> = MutableSharedFlow(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -67,6 +80,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
         networkConnectedListener = NetworkConnectedReceiver(this)
 
+        executor.start()
         lifecycleScope.launch(Dispatchers.Default) {
             val loadedAuth = authSerialization.load() ?: return@launch
             _authState.value = loadedAuth
@@ -141,15 +155,21 @@ abstract class AuthService : LifecycleService(), LoginListener {
      * this opens the login activity.
      */
     suspend fun refresh() {
-        logger.info("Refreshing authentication state")
-        if (!authState.value.isValidFor(5, TimeUnit.MINUTES)) {
-            doRefresh()
+        executor.execute {
+            logger.info("Refreshing authentication state")
+            if (!authState.value.isValidFor(5, TimeUnit.MINUTES)) {
+                doRefresh()
+            } else {
+                callListeners(sinceUpdate = latestAppAuth.lastUpdate) {
+                    it.listener.loginSucceeded(null, latestAppAuth)
+                }
+            }
         }
     }
 
     private suspend fun doRefresh() {
         var canRefresh = false
-        updateState { state ->
+        updateState<Unit> { state ->
             canRefresh = state.relevantManagers.any { it.refresh(this) }
         }
         if (!canRefresh) {
@@ -164,20 +184,30 @@ abstract class AuthService : LifecycleService(), LoginListener {
      * client was online.
      */
     suspend fun refreshIfOnline() {
-        if (isConnected) {
-            refresh()
-        } else {
-            val currentAuthState = authState.value
-            if (currentAuthState.isValid || currentAuthState.relevantManagers.any { it.isRefreshable(currentAuthState) }) {
-                logger.info("Retrieving active authentication state without refreshing")
+        executor.execute {
+            if (isConnected) {
+                refresh()
             } else {
-                logger.error("Failed to retrieve authentication state without refreshing",
-                    IllegalStateException(
-                        "Cannot refresh authentication state $currentAuthState: not online and no" +
-                                "applicable authentication manager."
+                val currentAuthState = authState.value
+                if (currentAuthState.isValid || currentAuthState.relevantManagers.any {
+                        it.isRefreshable(
+                            currentAuthState
+                        )
+                    }) {
+                    logger.info("Retrieving active authentication state without refreshing")
+                    callListeners(sinceUpdate = currentAuthState.lastUpdate) {
+                        it.listener.loginSucceeded(null, currentAuthState)
+                    }
+                } else {
+                    logger.error(
+                        "Failed to retrieve authentication state without refreshing",
+                        IllegalStateException(
+                            "Cannot refresh authentication state $currentAuthState: not online and no" +
+                                    "applicable authentication manager."
+                        )
                     )
-                )
-                startLogin()
+                    startLogin()
+                }
             }
         }
     }
@@ -195,6 +225,56 @@ abstract class AuthService : LifecycleService(), LoginListener {
             }
         }
     }
+
+    private suspend fun callListeners(call: suspend (LoginListenerRegistry) -> Unit) {
+        serviceMutex.withLock {
+            listeners.launchJoin {
+                call(it)
+            }
+        }
+    }
+
+    private suspend fun callListeners(sinceUpdate: Long, call: (LoginListenerRegistry) -> Unit) {
+        serviceMutex.withLock {
+            val obsoleteListeners = listeners.filter { it.lastUpdated < sinceUpdate }
+            obsoleteListeners.launchJoin {
+                it.lastUpdated = sinceUpdate
+                call(it)
+            }
+//                obsoleteListeners.forEach { listener ->
+//                    listener.lastUpdated = sinceUpdate
+//                    call(listener)
+//                }
+        }
+    }
+
+    suspend fun addLoginListener(loginListener: LoginListener): LoginListenerRegistry {
+        executor.execute {
+            updateState { auth ->
+                if (auth.isValid) {
+                    loginListener.loginSucceeded(null, auth)
+                }
+            }
+        }
+
+        return LoginListenerRegistry(loginListener)
+            .also {
+                serviceMutex.withLock { listeners += it }
+            }
+    }
+
+    suspend fun removeLoginListener(registry: LoginListenerRegistry) {
+        serviceMutex.withLock {
+            logger.debug(
+                "Removing login listener #{}: {} (starting with {} listeners)",
+                registry.id,
+                registry.listener,
+                listeners.size
+            )
+            listeners -= listeners.filter { it.id == registry.id }.toSet()
+        }
+    }
+
 
     protected abstract fun showLoginNotification()
 
@@ -245,7 +325,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         do {
             val currentValue = authState.value
             val newValue = currentValue.alter {
-                result = update(currentValue)
+                result = this.update(currentValue)
             }
         } while (!_authState.compareAndSet(currentValue, newValue))
         @Suppress("UNCHECKED_CAST")
@@ -253,7 +333,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
     }
 
     private fun applyState(function: AppAuthState.() -> Unit) {
-        authState.value.apply(function)
+        latestAppAuth.apply(function)
     }
 
     suspend fun invalidate(token: String?, disableRefresh: Boolean) {
@@ -344,7 +424,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         loginManagers
         handler.execute {
             relevantManagers.any { manager ->
-                manager.updateSource(appAuth, source, success, failure)
+                manager.updateSource(latestAppAuth, source, success, failure)
             }
         }
     }
@@ -370,7 +450,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
     inner class LoginListenerRegistry(val listener: LoginListener) {
         val id = ++loginListenerId
-        val lastUpdated = 0L
+        var lastUpdated = 0L
     }
 
     companion object {
