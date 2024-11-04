@@ -1,13 +1,8 @@
 package org.radarbase.android.auth.portal
 
 import android.app.Activity
-import androidx.lifecycle.Observer
 import io.ktor.client.*
-import io.ktor.client.call.*
 import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.auth.providers.*
-import io.ktor.client.request.*
-import io.ktor.client.request.forms.*
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -15,8 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,9 +57,6 @@ class ManagementPortalLoginManager(
     private var ktorClient: HttpClient? = null
     private var clientConfig: ManagementPortalConfig? = null
     private val config = listener.radarConfig
-    private val configUpdateObserver = Observer<SingleRadarConfiguration> {
-        ensureClientConnectivity(it)
-    }
     private val mutex: Mutex = Mutex()
 
     private val mpManagerExceptionHandler = CoroutineExceptionHandler { _, throwable ->
@@ -225,8 +215,8 @@ class ManagementPortalLoginManager(
     override suspend fun registerSource(
         authState: AppAuthState.Builder,
         source: SourceMetadata,
-        success: (AppAuthState, SourceMetadata) -> Unit,
-        failure: (Exception?) -> Unit
+        success: suspend (AppAuthState, SourceMetadata) -> Unit,
+        failure: suspend (Exception?) -> Unit
     ): Boolean {
         logger.debug("Handling source registration")
         val appAuth: AppAuthState = authState.build()
@@ -263,14 +253,14 @@ class ManagementPortalLoginManager(
             }
             success(authState.addSource(updatedSource), updatedSource)
         } catch (ex: UnsupportedOperationException) {
-            logger.warn("ManagementPortal does not support updating the app source.")
+            logger.warn("ManagementPortal does not support updating the app source")
             success(authState.addSource(source),source)
         } catch (ex: ManagementPortalClient.Companion.SourceNotFoundException) {
-            logger.warn("Source no longer exists - removing from auth state")
+            logger.warn("Source no longer exists - removing from auth state.")
             authState.removeSource(source)
             registerSource(authState, source, success, failure)
         } catch (ex: ManagementPortalClient.Companion.UserNotFoundException) {
-            logger.warn("User no longer exists - invalidating auth state")
+            logger.warn("User no longer exists - invalidating auth state.")
             listener.invalidate(authState.token, false)
             failure(ex)
         } catch (ex: ConflictException) {
@@ -278,17 +268,17 @@ class ManagementPortalLoginManager(
                 client.getSubject(authState, GetSubjectParser(authState)).let { appAuthState ->
                     updateSources(appAuthState.build())
                     sources[source.sourceId]?.let { sourceMetadata ->
-                        success(authState.build(), source)
+                        success(authState.build(), sourceMetadata)
                     } ?:
                     failure(IllegalStateException("Source was not added to ManagementPortal, even though conflict was reported."))
                 }
-            } catch (ioex: IOException) {
+            } catch (ioEx: IOException) {
                 logger.error("Failed to register source {} with {}: already registered",
                         source.sourceName, source.type, ex)
                 failure(ex)
             }
         } catch (ex: java.lang.IllegalArgumentException) {
-            logger.error("Source {} is not valid", source)
+            logger.error("Source {} is not valid.", source)
             failure(ex)
         } catch (ex: AuthenticationException) {
             listener.invalidate(authState.token, false)
@@ -311,11 +301,11 @@ class ManagementPortalLoginManager(
 
     private fun updateSources(authState: AppAuthState) {
         authState.sourceMetadata
-                .forEach { sourceMetadata ->
-                    sourceMetadata.sourceId?.let {
-                        sources[it] = sourceMetadata
-                    }
+            .forEach { sourceMetadata ->
+                sourceMetadata.sourceId?.let {
+                    sources[it] = sourceMetadata
                 }
+            }
     }
 
     override fun onDestroy() {

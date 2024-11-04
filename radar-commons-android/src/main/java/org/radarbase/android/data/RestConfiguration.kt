@@ -1,17 +1,11 @@
 package org.radarbase.android.data
 
-import io.ktor.http.*
+import io.ktor.http.Headers
+import io.ktor.http.headersOf
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.config.ServerConfig
-import org.radarbase.kotlin.coroutines.CacheConfig
-import org.radarbase.producer.io.timeout
-import org.radarbase.producer.io.unsafeSsl
-import org.radarbase.producer.schema.SchemaRetriever
-import org.radarbase.producer.schema.SchemaRetriever.Companion.schemaRetriever
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.seconds
 
 data class RestConfiguration(
     /** Request headers. */
