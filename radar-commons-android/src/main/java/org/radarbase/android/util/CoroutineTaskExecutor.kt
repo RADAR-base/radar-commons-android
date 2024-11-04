@@ -19,12 +19,16 @@ package org.radarbase.android.util
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.Logger
@@ -119,6 +123,34 @@ class CoroutineTaskExecutor(
             } catch (ex: Exception) {
                 continuation.resumeWithException(ExecutionException(ex))
             }
+        }
+    }
+
+    /**
+     * Executes a task and returns its non-null result in a blocking manner, making it suitable for non-suspending calls.
+     * If the executor scope is inactive or not started, logs a warning and returns null.
+     *
+     * @param work The suspendable task to be executed.
+     * @param T The return type of the task.
+     * @return The non-null result of the task.
+     * @throws ExecutionException if the task fails during execution.
+     * @throws IllegalStateException if the result is null or if the executor scope is inactive.
+     */
+    @Throws(ExecutionException::class, IllegalStateException::class)
+    fun <T : Any> nonSuspendingCompute(work: suspend () -> T): T {
+        return try {
+            runBlocking(Dispatchers.Default) {
+                async {
+                    try {
+                        work()
+                    } catch (ex: Exception) {
+                        throw ExecutionException(ex)
+                    }
+                }.await()
+            }
+        } catch (ex: ExecutionException) {
+            logger.error("Failed to execute work in nonSuspendingCompute", ex)
+            throw ex
         }
     }
 
@@ -223,14 +255,15 @@ class CoroutineTaskExecutor(
         finalization?.let {
             executorScope?.also { execScope ->
                 checkExecutorStarted() ?: return@let
-                execScope.launch {
-                    runTaskSafely(it)
-                    logger.info("Executed the finalization task")
+                runBlocking(coroutineDispatcher) {
+                    joinAll(execScope.launch {
+                        runTaskSafely(it)
+                        logger.info("Executed the finalization task")
+                    })
                 }
-            } ?:
-                CoroutineScope(coroutineDispatcher).launch {
-                    runTaskSafely(it)
-                }
+            } ?: runBlocking(coroutineDispatcher) {
+                runTaskSafely(it)
+            }
         }
         cancelAllFutures()
         job?.cancel()
