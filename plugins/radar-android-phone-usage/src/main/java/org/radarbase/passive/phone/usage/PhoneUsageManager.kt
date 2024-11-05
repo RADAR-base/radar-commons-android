@@ -21,10 +21,12 @@ import android.app.usage.UsageEvents.Event.*
 import android.app.usage.UsageStatsManager
 import android.content.*
 import android.os.Build
+import kotlinx.coroutines.SupervisorJob
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneInteractionState
@@ -52,6 +54,8 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     private var lastTimestamp: Long = 0
     private var lastEventType: Int = 0
     private var lastEventIsSent: Boolean = false
+
+    private val usagesTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     init {
         name = service.getString(R.string.phoneUsageServiceDisplayName)
@@ -101,7 +105,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         })
 
         phoneUsageProcessor.start()
-
+        usagesTaskExecutor.start(SupervisorJob())
         status = SourceStatusListener.Status.CONNECTED
     }
 
@@ -115,8 +119,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         }
 
         val time = currentTime
-        send(userInteractionTopic, PhoneUserInteraction(time, time, state))
-
+        usagesTaskExecutor.execute {
+            send(userInteractionTopic, PhoneUserInteraction(time, time, state))
+        }
         // Save the last user interaction state. Value shutdown is used to register boot.
         preferences.edit()
                 .putString(LAST_USER_INTERACTION, action)
@@ -133,7 +138,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         logger.info("Usage event alarm activated and set to a period of {} seconds", interval)
     }
 
-    private fun processUsageEvents() {
+    private suspend fun processUsageEvents() {
         usageStatsManager ?: return
 
         // Get events from previous event to now or from a fixed history
@@ -182,7 +187,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
         val time = lastTimestamp / 1000.0
         val value = PhoneUsageEvent(time, currentTime, lastPackageName, null, null, usageEventType)
-        send(usageEventTopic, value)
+        usagesTaskExecutor.execute {
+            send(usageEventTopic, value)
+        }
 
         if (logger.isDebugEnabled) {
             logger.debug("Event: [{}] {}\n\t{}", lastEventType, lastPackageName, Date(lastTimestamp))
@@ -218,7 +225,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     override fun onClose() {
         if (phoneUsageProcessor.isStarted) {
-            phoneUsageProcessor.stop()
+            usagesTaskExecutor.stop {
+                phoneUsageProcessor.stop()
+            }
             service.unregisterReceiver(phoneStateReceiver)
         }
     }

@@ -39,6 +39,7 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import android.os.Bundle
+import org.radarbase.android.util.CoroutineTaskExecutor
 
 class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLogService, BaseSourceState>(context) {
     private val callTopic: DataCache<ObservationKey, PhoneCall> = createCache(
@@ -59,6 +60,8 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     private val logProcessor: OfflineProcessor
     private var lastSmsTimestamp: Long = 0
     private var lastCallTimestamp: Long = 0
+
+    private val logsExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     init {
         name = service.getString(R.string.phoneLogServiceDisplayName)
@@ -91,6 +94,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
                     .apply()
             }
         }
+        logsExecutor.start()
 
         status = SourceStatusListener.Status.CONNECTED
     }
@@ -101,7 +105,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         logger.info("Call and SMS log: listener activated and set to a period of {} {}", period, unit)
     }
 
-    private fun processSmsLog() {
+    private suspend fun processSmsLog() {
         val newSmsTimestamp = processDb(Telephony.Sms.CONTENT_URI, SMS_COLUMNS, Telephony.Sms.DATE, lastSmsTimestamp) {
             val date = getLong(getColumnIndexOrThrow(Telephony.Sms.DATE))
 
@@ -126,7 +130,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         }
     }
 
-    private fun processCallLog() {
+    private suspend fun processCallLog() {
         val newLastCallTimestamp = processDb(CallLog.Calls.CONTENT_URI, CALL_COLUMNS, CallLog.Calls.DATE, lastCallTimestamp) {
             val date = getLong(getColumnIndexOrThrow(CallLog.Calls.DATE))
 
@@ -203,7 +207,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         return lastTimestamp
     }
 
-    private fun processNumberUnreadSms() {
+    private suspend fun processNumberUnreadSms() {
         val where = Telephony.Sms.READ + " = 0"
         try {
             db.query(Telephony.Sms.CONTENT_URI, ID_COLUMNS, where, null, null)?.use { c ->
@@ -225,16 +229,20 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
             CallLog.Calls.MISSED_TYPE -> PhoneCallType.MISSED
             else -> PhoneCallType.UNKNOWN
         }
-
-        send(callTopic, PhoneCall(
-                eventTimestamp,
-                currentTime,
-                duration,
-                targetKey,
-                type,
-                targetIsContact,
-                phoneNumber == null,
-                target.length))
+        logsExecutor.execute {
+            send(
+                callTopic, PhoneCall(
+                    eventTimestamp,
+                    currentTime,
+                    duration,
+                    targetKey,
+                    type,
+                    targetIsContact,
+                    phoneNumber == null,
+                    target.length
+                )
+            )
+        }
     }
 
     private fun sendPhoneSms(eventTimestamp: Double, target: String, typeCode: Int, message: String, targetIsContact: Boolean) {
@@ -255,21 +263,27 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
 
         // Only incoming messages are associated with a contact. For outgoing we don't know
         val sendFromContact: Boolean? = if (type == PhoneSmsType.INCOMING) targetIsContact else null
-
-        send(smsTopic, PhoneSms(
-                eventTimestamp,
-                currentTime,
-                targetKey,
-                type,
-                length,
-                sendFromContact,
-                phoneNumber == null,
-                target.length))
+        logsExecutor.execute {
+            send(
+                smsTopic, PhoneSms(
+                    eventTimestamp,
+                    currentTime,
+                    targetKey,
+                    type,
+                    length,
+                    sendFromContact,
+                    phoneNumber == null,
+                    target.length
+                )
+            )
+        }
     }
 
     private fun sendNumberUnreadSms(numberUnread: Int) {
         val time = currentTime
-        send(smsUnreadTopic, PhoneSmsUnread(time, time, numberUnread))
+        logsExecutor.execute {
+            send(smsUnreadTopic, PhoneSmsUnread(time, time, numberUnread))
+        }
     }
 
     /**
@@ -307,7 +321,9 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     }
 
     override fun onClose() {
-        logProcessor.stop()
+        logsExecutor.stop {
+            logProcessor.stop()
+        }
     }
 
     companion object {

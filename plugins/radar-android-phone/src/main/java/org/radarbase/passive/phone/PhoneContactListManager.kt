@@ -27,6 +27,7 @@ import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneContactList
@@ -43,6 +44,8 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
     private val db: ContentResolver = service.contentResolver
     private var savedContactLookups: Set<String> = emptySet()
 
+    private val contactsTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
+
     init {
         name = service.getString(R.string.contact_list)
         processor = OfflineProcessor(service) {
@@ -51,6 +54,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
             requestName = ACTION_UPDATE_CONTACTS_LIST
             wake = false
         }
+        contactsTaskExecutor.start()
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -112,7 +116,9 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
     }
 
     override fun onClose() {
-        processor.stop()
+        contactsTaskExecutor.stop {
+            processor.stop()
+        }
     }
 
     private fun makeQuery(
@@ -136,7 +142,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
         }
     }
 
-    private fun processContacts() {
+    private suspend fun processContacts() {
         val newContactLookups = queryContacts() ?: return
 
         var added: Int? = null
