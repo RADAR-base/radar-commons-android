@@ -52,7 +52,7 @@ class NetworkConnectedReceiver(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     ) { "No connectivity manager available" }
 
-    val isMonitoring: AtomicBoolean = AtomicBoolean(false)
+    private val isMonitoring: AtomicBoolean = AtomicBoolean(false)
 
     var state: Flow<NetworkState>? = null
 

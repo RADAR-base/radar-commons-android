@@ -120,7 +120,7 @@ class ManagementPortalLoginManager(
     override suspend fun refresh(authState: AppAuthState.Builder): Boolean {
         authState.attributes[MP_REFRESH_TOKEN_PROPERTY] ?: return false
         val client = client ?: return true
-        if (mutex.tryLock()) {
+        mutex.withLock {
             try {
                 val subjectParser = SubjectTokenParser(client, authState)
 
@@ -134,8 +134,6 @@ class ManagementPortalLoginManager(
             } catch (exception: Exception) {
                 logger.error("Failed to receive access token", exception)
                 throw exception
-            } finally {
-                mutex.unlock()
             }
         }
         return true
