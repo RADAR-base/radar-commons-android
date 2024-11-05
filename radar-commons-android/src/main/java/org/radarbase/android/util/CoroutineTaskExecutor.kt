@@ -33,6 +33,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -64,9 +65,12 @@ class CoroutineTaskExecutor(
 
     private val nullValue: Any = Any()
     val isStarted: AtomicBoolean = AtomicBoolean(executorScope != null)
-    private val executorMutex: Mutex = Mutex()
+    private val executeMutex: Mutex = Mutex(false)
+    private val jobExecuteMutex: Mutex = Mutex(false)
+    private val computeMutex: Mutex = Mutex(false)
 
-    private val activeTasks = mutableListOf<CoroutineFutureExecutor>()
+    private val activeTasks: ConcurrentLinkedQueue<CoroutineFutureExecutor> =
+        ConcurrentLinkedQueue<CoroutineFutureExecutor>()
 
     /**
      * Starts the executor, initializing the coroutine scope with a specified [Job],
@@ -140,13 +144,15 @@ class CoroutineTaskExecutor(
     fun <T : Any> nonSuspendingCompute(work: suspend () -> T): T {
         return try {
             runBlocking(Dispatchers.Default) {
-                async {
-                    try {
-                        work()
-                    } catch (ex: Exception) {
-                        throw ExecutionException(ex)
-                    }
-                }.await()
+                computeMutex.withLock {
+                    async {
+                        try {
+                            work()
+                        } catch (ex: Exception) {
+                            throw ExecutionException(ex)
+                        }
+                    }.await()
+                }
             }
         } catch (ex: ExecutionException) {
             logger.error("Failed to execute work in nonSuspendingCompute", ex)
@@ -176,7 +182,7 @@ class CoroutineTaskExecutor(
         checkExecutorStarted() ?: return
 
         executorScope?.launch {
-            executorMutex.withLock {
+            executeMutex.withLock {
                 runTaskSafely(task)
             }
         }
@@ -197,7 +203,9 @@ class CoroutineTaskExecutor(
         }
         checkExecutorStarted() ?: return null
         return executorScope?.launch {
-            runTaskSafely(task)
+            jobExecuteMutex.withLock {
+                runTaskSafely(task)
+            }
         }
     }
 

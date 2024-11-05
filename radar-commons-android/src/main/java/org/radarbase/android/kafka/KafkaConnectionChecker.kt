@@ -23,9 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -189,6 +187,11 @@ internal class KafkaConnectionChecker(
                 }
             }
         }
+    }
+
+    fun stopHeartbeats() {
+        future?.cancel()
+        future = null
     }
 
     companion object {

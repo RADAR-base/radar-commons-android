@@ -266,7 +266,7 @@ class TableDataHandler(
         }
     }
 
-    private fun doEnableSubmitter() {
+    private suspend fun doEnableSubmitter() {
         logger.info("Submitter is enabled")
         serverStatus.value = ServerStatus.READY
         startMonitoring()

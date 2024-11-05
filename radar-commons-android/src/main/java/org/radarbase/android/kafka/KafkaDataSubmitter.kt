@@ -22,7 +22,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -35,7 +34,6 @@ import org.radarbase.android.data.ReadableDataCache
 import org.radarbase.data.AvroRecordData
 import org.radarbase.data.RecordData
 import org.radarbase.producer.AuthenticationException
-import org.radarbase.producer.KafkaSender
 import org.radarbase.producer.KafkaTopicSender
 import org.radarbase.producer.rest.ConnectionState
 import org.radarbase.producer.rest.RestKafkaSender
@@ -46,7 +44,6 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.HashSet
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -63,10 +60,7 @@ class KafkaDataSubmitter(
 ) : Closeable {
 
     private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>> = ConcurrentHashMap()
-    private val connection: KafkaConnectionChecker
-
-//    private val _serverStatus: MutableStateFlow<ServerStatus> = MutableStateFlow(ServerStatus.DISCONNECTED)
-//    val serverStatus: StateFlow<ServerStatus> = _serverStatus
+    private val connectionChecker: KafkaConnectionChecker
 
     private val submitterExceptionHandler: CoroutineExceptionHandler = CoroutineExceptionHandler{ _, throwable ->
         logger.error("CoroutineExceptionHandler - Error in KafkaDataSubmitter: ", throwable)
@@ -96,7 +90,7 @@ class KafkaDataSubmitter(
 
         logger.debug("Started data submission executor")
 
-        connection = KafkaConnectionChecker(sender, dataHandler, config.uploadRate * 5)
+        connectionChecker = KafkaConnectionChecker(sender, dataHandler, config.uploadRate * 5)
 
         submitterScope.launch {
             uploadFuture = null
@@ -104,17 +98,17 @@ class KafkaDataSubmitter(
 
             try {
                 submitterScope.launch {
-                    connection.initialize()
+                    connectionChecker.initialize()
                     if (sender.connectionState.first() == ConnectionState.State.CONNECTED) {
                         dataHandler.serverStatus.value = ServerStatus.CONNECTED
-                        connection.didConnect()
+                        connectionChecker.didConnect()
                     } else {
                         dataHandler.serverStatus.value = ServerStatus.DISCONNECTED
-                        connection.didDisconnect(null)
+                        connectionChecker.didDisconnect(null)
                     }
                 }
             } catch (ex: AuthenticationException) {
-                connection.didDisconnect(ex)
+                connectionChecker.didDisconnect(ex)
             }
 
             schedule()
@@ -152,13 +146,11 @@ class KafkaDataSubmitter(
                 uploadFullCaches()
             }
         }
-//        uploadFuture = this.submitHandler.repeat(uploadRate, ::uploadAllCaches)
-//        uploadIfNeededFuture = this.submitHandler.repeat(uploadRate / 5, ::uploadFullCaches)
     }
 
     private suspend fun uploadAllCaches() {
         val topicsToSend = dataHandler.activeCaches.mapTo(HashSet()) { it.topicName }
-        while (connection.isConnected.value && topicsToSend.isNotEmpty()) {
+        while (connectionChecker.isConnected.value && topicsToSend.isNotEmpty()) {
             logger.debug("Uploading topics {}", topicsToSend)
             uploadCaches(topicsToSend)
         }
@@ -166,14 +158,13 @@ class KafkaDataSubmitter(
 
     private suspend fun uploadFullCaches() {
         var sendAgain = true
-        while (connection.isConnected.value && sendAgain) {
+        while (connectionChecker.isConnected.value && sendAgain) {
             logger.debug("Uploading full topics")
             sendAgain = uploadCachesIfNeeded()
         }
     }
 
     suspend fun flush(successCallback: () -> Unit, errorCallback: () -> Unit) {
-        uploadAllCaches()
         this.submitterScope.launch {
             uploadAllCaches()
             if (dataHandler.serverStatus.value == ServerStatus.CONNECTED) {
@@ -198,6 +189,8 @@ class KafkaDataSubmitter(
             it.cancel()
             uploadFuture = null
         }
+
+        connectionChecker.stopHeartbeats()
     }
 
     /** Get a sender for a topic. Per topic, only ONE thread may use this.  */
@@ -216,7 +209,7 @@ class KafkaDataSubmitter(
      * Check the connection status eventually.
      */
     suspend fun checkConnection() {
-        connection.check()
+        connectionChecker.check()
     }
 
     /**
@@ -239,10 +232,10 @@ class KafkaDataSubmitter(
             }
             if (uploadingNotified.get()) {
                 dataHandler.serverStatus.value = ServerStatus.CONNECTED
-                connection.didConnect()
+                connectionChecker.didConnect()
             }
         } catch (ex: Exception) {
-            connection.didDisconnect(ex)
+            connectionChecker.didDisconnect(ex)
             sendAgain = false
         }
 
@@ -272,10 +265,10 @@ class KafkaDataSubmitter(
 
             if (uploadingNotified.get()) {
                 dataHandler.serverStatus.value = ServerStatus.CONNECTED
-                connection.didConnect()
+                connectionChecker.didConnect()
             }
         } catch (ex: Exception) {
-            connection.didDisconnect(ex)
+            connectionChecker.didDisconnect(ex)
         }
     }
 
@@ -310,10 +303,8 @@ class KafkaDataSubmitter(
                         send(AvroRecordData(data.topic, data.key, recordsNotNull))
                     }
                     dataHandler.recordsSent.emit(TopicSendReceipt(topic.name, size.toLong()))
-//                    dataHandler.updateRecordsSent(topic.name, size.toLong())
                 } catch (ex: AuthenticationException) {
                     dataHandler.recordsSent.emit(TopicSendReceipt(topic.name, -1))
-//                    dataHandler.updateRecordsSent(topic.name, -1)
                     throw ex
                 } catch (e: Exception) {
                     dataHandler.serverStatus.value = ServerStatus.UPLOADING_FAILED
