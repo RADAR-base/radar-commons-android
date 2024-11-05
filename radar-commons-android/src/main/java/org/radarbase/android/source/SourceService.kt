@@ -18,7 +18,6 @@ package org.radarbase.android.source
 
 import android.content.Intent
 import android.os.Bundle
-import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
@@ -42,9 +41,9 @@ import org.radarbase.android.source.SourceProvider.Companion.PLUGIN_NAME_KEY
 import org.radarbase.android.source.SourceProvider.Companion.PRODUCER_KEY
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.radarbase.android.util.BundleSerialization
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
-import org.radarbase.android.util.SafeHandler
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -61,7 +60,7 @@ import java.util.*
 abstract class SourceService<T : BaseSourceState> :
     LifecycleService(), SourceStatusListener, LoginListener
 {
-    private var registrationFuture: SafeHandler.HandlerFuture? = null
+    private var registrationFuture: CoroutineTaskExecutor.CoroutineFutureHandle? = null
     val key = ObservationKey()
 
     @get:Synchronized
@@ -95,8 +94,8 @@ abstract class SourceService<T : BaseSourceState> :
     private lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
-    private lateinit var handler: SafeHandler
-    private var startFuture: SafeHandler.HandlerFuture? = null
+    private lateinit var sourceServiceExecutor: CoroutineTaskExecutor
+    private var startFuture: CoroutineTaskExecutor.CoroutineFutureHandle? = null
     private var needsRegisteredSources: Boolean = true
     private lateinit var pluginName: String
     private lateinit var sourceModel: String
@@ -109,9 +108,9 @@ abstract class SourceService<T : BaseSourceState> :
     private var authConnectionBinder: AuthService.AuthServiceBinder? = null
 
     var registeredSource: SourceMetadata?
-        get() = handler.compute { _registeredSource }
+        get() = _registeredSource
         private set(value) {
-            handler.execute { _registeredSource = value }
+            sourceServiceExecutor.execute { _registeredSource = value }
         }
 
     var manualAttributes: Map<String, String> = emptyMap()
@@ -121,7 +120,7 @@ abstract class SourceService<T : BaseSourceState> :
             field = value
             // if the new manual attributes would change something about the old manual
             // attributes and a source is already assigned, then update the registration
-            handler.executeReentrant {
+            sourceServiceExecutor.executeReentrant {
                 val currentSource = registeredSource ?: return@executeReentrant
                 val bareAttributes = if (oldValue.isEmpty()) {
                     currentSource.attributes
@@ -198,7 +197,7 @@ abstract class SourceService<T : BaseSourceState> :
             }
             radarConnection.bind()
         }
-        handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
+        sourceServiceExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
         config = radarConfig
 
@@ -264,7 +263,7 @@ abstract class SourceService<T : BaseSourceState> :
 
     override fun sourceStatusUpdated(manager: SourceManager<*>, status: SourceStatusListener.Status) {
         if (status == SourceStatusListener.Status.DISCONNECTING) {
-            handler.execute(true) {
+            sourceServiceExecutor.execute {
                 if (this.sourceManager === manager) {
                     this.sourceManager = null
                 }
@@ -302,8 +301,8 @@ abstract class SourceService<T : BaseSourceState> :
     protected open fun onManualAttributesUpdate(value: Map<String, String>) {}
 
     fun startRecording(acceptableIds: Set<String>) {
-        if (!handler.isStarted) handler.start()
-        handler.execute {
+        if (!sourceServiceExecutor.isStarted.get()) sourceServiceExecutor.start()
+        sourceServiceExecutor.execute {
             if (key.userId == null) {
                 logger.error("Cannot start recording with service {}: user ID is not set.", this)
                 delayedStart = acceptableIds
@@ -348,10 +347,10 @@ abstract class SourceService<T : BaseSourceState> :
         }
     }
 
-    private fun startAfterDelay(acceptableIds: Set<String>) = handler.executeReentrant {
+    private fun startAfterDelay(acceptableIds: Set<String>) = sourceServiceExecutor.executeReentrant {
         if (startFuture == null) {
             logger.warn("Starting recording soon for {}", name)
-            startFuture = handler.delay(100) {
+            startFuture = sourceServiceExecutor.delay(100) {
                 startFuture?.let {
                     startFuture = null
                     doStart(acceptableIds)
@@ -360,12 +359,12 @@ abstract class SourceService<T : BaseSourceState> :
         }
     }
 
-    fun restartRecording(acceptableIds: Set<String>) = handler.execute {
+    fun restartRecording(acceptableIds: Set<String>) = sourceServiceExecutor.execute {
         doStop()
         doStart(acceptableIds)
     }
 
-    fun stopRecording() = handler.stop { doStop() }
+    fun stopRecording() = sourceServiceExecutor.stop { doStop() }
 
     private fun doStop() {
         delayedStart = null
@@ -382,10 +381,10 @@ abstract class SourceService<T : BaseSourceState> :
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
-        if (!handler.isStarted) {
-            handler.start()
+        if (!sourceServiceExecutor.isStarted.get()) {
+            sourceServiceExecutor.start()
         }
-        handler.execute {
+        sourceServiceExecutor.execute {
             key.projectId = authState.projectId
             key.userId = authState.userId
             needsRegisteredSources = authState.needsRegisteredSources
@@ -438,7 +437,7 @@ abstract class SourceService<T : BaseSourceState> :
         val onFail: (Exception?) -> Unit = {
             logger.warn("Failed to register source: {}", it.toString())
             if (registrationFuture == null) {
-                registrationFuture = handler.delay(300_000L) {
+                registrationFuture = sourceServiceExecutor.delay(300_000L) {
                     registrationFuture ?: return@delay
                     registrationFuture = null
                     registerSource(existingSource, type, attributes)
@@ -462,7 +461,7 @@ abstract class SourceService<T : BaseSourceState> :
     }
 
     open fun ensureRegistration(id: String?, name: String?, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
-        handler.executeReentrant {
+        sourceServiceExecutor.executeReentrant {
             if (!needsRegisteredSources) {
                 onMapping(SourceMetadata(SourceType(0, sourceProducer, sourceModel, "UNKNOWN", true)).apply {
                     sourceId = id
@@ -473,7 +472,7 @@ abstract class SourceService<T : BaseSourceState> :
             }
             if (!isAuthorizedForSource) {
                 logger.warn("Cannot register source {} yet: allowed source types are empty", id)
-                registrationFuture = handler.delay(100L) {
+                registrationFuture = sourceServiceExecutor.delay(100L) {
                     registrationFuture ?: return@delay
                     registrationFuture = null
                     ensureRegistration(id, name, attributes, onMapping)

@@ -22,6 +22,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
@@ -57,6 +59,9 @@ class ApplicationStatusManager(
     private val sntpClient: SntpClient = SntpClient()
     private val prefs: SharedPreferences = service.getSharedPreferences(ApplicationStatusManager::class.java.name, Context.MODE_PRIVATE)
     private var tzProcessor: OfflineProcessor? = null
+
+    private val applicationStatusExecutor: CoroutineTaskExecutor =
+        CoroutineTaskExecutor(this::class.simpleName!!)
 
     @get:Synchronized
     @set:Synchronized
@@ -97,6 +102,7 @@ class ApplicationStatusManager(
     override fun start(acceptableIds: Set<String>) {
         status = SourceStatusListener.Status.READY
 
+        applicationStatusExecutor.start()
         processor.start {
             val osVersionCode: Int = this.prefs.getInt("operatingSystemVersionCode", -1)
             val appVersionCode: Int = this.prefs.getInt("appVersionCode", -1)
@@ -171,34 +177,37 @@ class ApplicationStatusManager(
         }
 
     // using versionCode
-    private fun processDeviceInfo() {
+    private suspend fun processDeviceInfo() {
         deviceInfoCache.applyIfChanged(currentApplicationInfo) { deviceInfo ->
-            send(
-                deviceInfoTopic,
-                ApplicationDeviceInfo(
-                    currentTime,
-                    deviceInfo.manufacturer,
-                    deviceInfo.model,
-                    OperatingSystem.ANDROID,
-                    deviceInfo.osVersion,
-                    deviceInfo.osVersionCode,
-                    deviceInfo.appVersion,
-                    deviceInfo.appVersionCode,
-                ),
-            )
-
-            prefs.edit().apply {
-                putString("manufacturer", deviceInfo.manufacturer)
-                putString("model", deviceInfo.model)
-                putString("operatingSystemVersion", deviceInfo.osVersion)
-                putInt("operatingSystemVersionCode", deviceInfo.osVersionCode ?: -1)
-                putString("appVersion", deviceInfo.appVersion)
-                putInt("appVersionCode", deviceInfo.appVersionCode ?: -1)
-            }.apply()
+            applicationStatusExecutor.execute {
+                send(
+                    deviceInfoTopic,
+                    ApplicationDeviceInfo(
+                        currentTime,
+                        deviceInfo.manufacturer,
+                        deviceInfo.model,
+                        OperatingSystem.ANDROID,
+                        deviceInfo.osVersion,
+                        deviceInfo.osVersionCode,
+                        deviceInfo.appVersion,
+                        deviceInfo.appVersionCode,
+                    ),
+                )
+                withContext(Dispatchers.IO) {
+                    prefs.edit().apply {
+                        putString("manufacturer", deviceInfo.manufacturer)
+                        putString("model", deviceInfo.model)
+                        putString("operatingSystemVersion", deviceInfo.osVersion)
+                        putInt("operatingSystemVersionCode", deviceInfo.osVersionCode ?: -1)
+                        putString("appVersion", deviceInfo.appVersion)
+                        putInt("appVersionCode", deviceInfo.appVersionCode ?: -1)
+                    }.apply()
+                }
+            }
         }
     }
 
-    private fun processReferenceTime() {
+    private suspend fun processReferenceTime() {
         val ntpServer = ntpServer ?: return
         if (sntpClient.requestTime(ntpServer, 5000)) {
             val delay = sntpClient.roundTripTime / 1000.0
@@ -218,7 +227,7 @@ class ApplicationStatusManager(
         }
     }
 
-    private fun processServerStatus() {
+    private suspend fun processServerStatus() {
         val time = currentTime
 
         val status: ServerStatus = state.serverStatus.toServerStatus()
@@ -244,12 +253,12 @@ class ApplicationStatusManager(
         return previousInetAddress?.hostAddress
     }
 
-    private fun processUptime() {
+    private suspend fun processUptime() {
         val uptime = (SystemClock.elapsedRealtime() - creationTimeStamp) / 1000.0
         send(uptimeTopic, ApplicationUptime(currentTime, uptime))
     }
 
-    private fun processRecordsSent() {
+    private suspend fun processRecordsSent() {
         val time = currentTime
 
         val recordsCached = state.cachedRecords.values
@@ -264,26 +273,32 @@ class ApplicationStatusManager(
     }
 
     override fun onClose() {
-        this.processor.stop()
+        applicationStatusExecutor.stop {
+            this.processor.stop()
+        }
         cacheReceiver?.unregister()
         serverRecordsReceiver?.unregister()
         serverStatusReceiver?.unregister()
     }
 
-    private fun processTimeZone() {
+    private suspend fun processTimeZone() {
         val now = System.currentTimeMillis()
         val tzOffset = TimeZone.getDefault().getOffset(now)
         tzOffsetCache.applyIfChanged(tzOffset / 1000) { offset ->
-            send(
-                timeZoneTopic,
-                ApplicationTimeZone(
-                    now / 1000.0,
-                    offset,
-                ),
-            )
-            prefs.edit()
-                .putInt("timeZoneOffset", offset)
-                .apply()
+            applicationStatusExecutor.execute {
+                send(
+                    timeZoneTopic,
+                    ApplicationTimeZone(
+                        now / 1000.0,
+                        offset,
+                    ),
+                )
+                withContext(Dispatchers.IO) {
+                    prefs.edit()
+                        .putInt("timeZoneOffset", offset)
+                        .apply()
+                }
+            }
         }
     }
 
@@ -293,7 +308,7 @@ class ApplicationStatusManager(
             var processor = this.tzProcessor
             if (processor == null) {
                 processor = OfflineProcessor(service) {
-                    process = listOf(this@ApplicationStatusManager::processTimeZone)
+                    process = listOf { this@ApplicationStatusManager.processTimeZone() }
                     requestCode = APPLICATION_TZ_PROCESSOR_REQUEST_CODE
                     requestName = APPLICATION_TZ_PROCESSOR_REQUEST_NAME
                     interval(tzUpdateRate, unit)
@@ -309,7 +324,9 @@ class ApplicationStatusManager(
             }
         } else { // disable timezone processor
             this.tzProcessor?.let {
-                it.stop()
+                applicationStatusExecutor.execute {
+                    it.stop()
+                }
                 this.tzProcessor = null
             }
         }

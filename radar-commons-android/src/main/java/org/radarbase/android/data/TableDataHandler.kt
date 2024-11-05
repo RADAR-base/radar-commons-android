@@ -20,21 +20,16 @@ import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.kafka.*
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.NetworkConnectedReceiver
-import org.radarbase.android.util.SafeHandler
 import org.radarbase.kotlin.coroutines.CacheConfig
 import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.producer.io.timeout
@@ -51,8 +46,6 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
@@ -339,7 +332,6 @@ class TableDataHandler(
     @Throws(IOException::class)
     override suspend fun <V : SpecificRecord> registerCache(
         topic: AvroTopic<ObservationKey, V>,
-        handler: SafeHandler?,
     ): DataCache<ObservationKey, V> {
         return cacheStore
             .getOrCreateCaches(context.applicationContext, topic, config.cacheConfig)

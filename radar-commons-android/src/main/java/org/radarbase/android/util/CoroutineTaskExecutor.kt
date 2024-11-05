@@ -52,7 +52,7 @@ import kotlin.coroutines.suspendCoroutine
  */
 class CoroutineTaskExecutor(
     private val invokingClassName: String,
-    private val coroutineDispatcher: CoroutineDispatcher,
+    private val coroutineDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private var job: Job? = null
     private val executorExceptionHandler: CoroutineExceptionHandler =

@@ -38,7 +38,10 @@ import java.util.concurrent.TimeUnit
 class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<PhoneUsageService, BaseSourceState>(context) {
 
     private val usageEventTopic: DataCache<ObservationKey, PhoneUsageEvent>?
-    private val userInteractionTopic: DataCache<ObservationKey, PhoneUserInteraction> = createCache("android_phone_user_interaction", PhoneUserInteraction())
+    private val userInteractionTopic: DataCache<ObservationKey, PhoneUserInteraction> = createCache(
+        "android_phone_user_interaction",
+        PhoneUserInteraction()
+    )
 
     private val phoneStateReceiver: BroadcastReceiver
     private val usageStatsManager: UsageStatsManager?

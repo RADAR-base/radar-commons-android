@@ -35,7 +35,10 @@ import kotlin.collections.LinkedHashSet
 
 class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourceManager<PhoneContactsListService, BaseSourceState>(service) {
     private val preferences: SharedPreferences = service.getSharedPreferences(PhoneContactListManager::class.java.name, Context.MODE_PRIVATE)
-    private val contactsTopic: DataCache<ObservationKey, PhoneContactList> = createCache("android_phone_contacts", PhoneContactList())
+    private val contactsTopic: DataCache<ObservationKey, PhoneContactList> = createCache(
+        "android_phone_contacts",
+        PhoneContactList()
+    )
     private val processor: OfflineProcessor
     private val db: ContentResolver = service.contentResolver
     private var savedContactLookups: Set<String> = emptySet()
