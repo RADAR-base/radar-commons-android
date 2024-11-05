@@ -28,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.apache.avro.SchemaValidationException
 import org.apache.avro.generic.IndexedRecord
+import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.data.DataCacheGroup
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.ReadableDataCache
@@ -38,6 +39,7 @@ import org.radarbase.producer.KafkaTopicSender
 import org.radarbase.producer.rest.ConnectionState
 import org.radarbase.producer.rest.RestKafkaSender
 import org.radarbase.topic.AvroTopic
+import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
@@ -53,7 +55,7 @@ import kotlin.coroutines.CoroutineContext
  * It uses a set of timers to addMeasurement data and clean the databases.
  */
 class KafkaDataSubmitter(
-    private val dataHandler: DataHandler<*, *>,
+    private val dataHandler: DataHandler<ObservationKey, SpecificRecord>,
     private val sender: RestKafkaSender,
     config: SubmitterConfiguration,
     submitterCoroutineContext: CoroutineContext = Dispatchers.Default

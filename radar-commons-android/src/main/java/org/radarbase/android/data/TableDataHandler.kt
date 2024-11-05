@@ -125,6 +125,19 @@ class TableDataHandler(
                 }
             }
 
+        handlerExecutor.execute {
+            caches.launchJoin { cache ->
+                cache.numberOfRecords.collect {
+                    numberOfRecords.emit(
+                        CacheSize(
+                            cache.readTopic.name,
+                            cache.numberOfRecords.value
+                        )
+                    )
+                }
+            }
+        }
+
         submitter = null
         sender = null
 
