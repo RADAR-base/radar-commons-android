@@ -22,9 +22,12 @@ import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.radarbase.android.R
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.util.BindState
@@ -33,7 +36,7 @@ import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
 import org.slf4j.LoggerFactory
 
-typealias AuthServiceStateReactor = (AuthService.AuthServiceBinder) -> Unit
+typealias AuthServiceStateReactor = suspend (AuthService.AuthServiceBinder) -> Unit
 
 /** Activity to log in using a variety of login managers.  */
 @Keep
@@ -44,17 +47,29 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
     protected lateinit var authServiceConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     private var authServiceActionBinder: AuthService.AuthServiceBinder? = null
 
+    private var listenerRegistry: AuthService.LoginListenerRegistry? = null
+
     private val serviceBoundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
         { it.isInLoginActivity = true },
         { binder ->
             binder.managers
                 .find { it.onActivityCreate(this@LoginActivity) }
                 ?.let { binder.update(it) }
+        },
+        {binder: AuthService.AuthServiceBinder ->
+            logger.debug("Bound AuthService to ${this::class.simpleName!!}")
+            listenerRegistry = binder.addLoginListener(this)
+            binder.refreshIfOnline()
         }
     )
 
     private val serviceUnboundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
-        {it.isInLoginActivity = false}
+        {it.isInLoginActivity = false},
+        {binder: AuthService.AuthServiceBinder -> listenerRegistry?.let {
+            logger.debug("Unbound AuthService from ${this::class.simpleName!!}")
+            binder.removeLoginListener(it)
+            listenerRegistry = null
+        }}
     )
 
     override fun onCreate(savedInstanceBundle: Bundle?) {
@@ -100,8 +115,9 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
                     }
                 }.launchIn(this)
         }
-
-        authServiceConnection.bind()
+        lifecycleScope.launch {
+            authServiceConnection.bind()
+        }
     }
 
     override fun onDestroy() {

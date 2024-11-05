@@ -19,7 +19,6 @@ package org.radarbase.android
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.os.Process
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -27,8 +26,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.flow.StateFlow
 import com.google.firebase.analytics.FirebaseAnalytics
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -42,6 +42,8 @@ import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.*
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.util.*
+import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -57,7 +59,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     private var uiRefreshRate: Long = 0
 
     /** Hander in the background. It is set to null whenever the activity is not running.  */
-    private lateinit var mHandler: SafeHandler
+    private lateinit var mainExecutor: CoroutineTaskExecutor
 
     /** The UI to show the service data.  */
     @get:Synchronized
@@ -74,7 +76,10 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
-    private var serviceActionBinder: IRadarBinder? = null
+    private var radarServiceActionBinder: IRadarBinder? = null
+    private var authServiceActionBinder: AuthService.AuthServiceBinder? = null
+
+    private var mainAuthRegistry: AuthService.LoginListenerRegistry? = null
 
     protected open val requestPermissionTimeout: Duration
         get() = REQUEST_PERMISSION_TIMEOUT
@@ -88,12 +93,46 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     val projectId: String?
         get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
 
-    private val serviceBoundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
+    private var radarConnectionJob: Job? = null
+    private var authConnectionJob: Job? = null
+
+    private val radarServiceBoundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
         IRadarBinder::startScanning,
         {binder -> view?.onRadarServiceBound(binder)},
+        {
+            logger.debug("Radar Service bound to {}", this::class.simpleName)
+        }
     )
-    private val serviceUnboundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
-        IRadarBinder::stopScanning
+    private val radarServiceUnboundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
+        IRadarBinder::stopScanning,
+        {
+            logger.debug("Radar Service unbound from {}", this::class.simpleName)
+        }
+    )
+
+    private val authServiceBoundActions: MutableList<AuthServiceStateReactor> =
+        mutableListOf({ binder ->
+            mainAuthRegistry = binder.addLoginListener(this)
+            binder.refreshIfOnline()
+        }, { binder ->
+            binder.applyState {
+                if (userId == null) {
+                    this@MainActivity.logoutSucceeded(null, this)
+                }
+            }
+        }, {
+            logger.debug("Auth Service bound to {}", this::class.simpleName)
+        }
+        )
+
+    private val authServiceUnboundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
+        { binder ->
+            mainAuthRegistry?.let {
+                binder.removeLoginListener(it)
+            }
+        }, {
+            logger.debug("Auth Service unbound from {}", this::class.simpleName)
+        }
     )
 
     @CallSuper
@@ -106,10 +145,11 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
-        mHandler = SafeHandler.getInstance("Main background handler", Process.THREAD_PRIORITY_BACKGROUND)
-        permissionHandler = PermissionHandler(this, mHandler, requestPermissionTimeout) { permissions, grantResults ->
-            radarService.value.applyBinder { permissionGranted(permissions, grantResults) }
-        }
+        mainExecutor = CoroutineTaskExecutor(this::class.simpleName!!, Dispatchers.Default)
+        permissionHandler = PermissionHandler(this, mainExecutor, requestPermissionTimeout.inWholeMilliseconds)
+//        { permissions, grantResults ->
+//            radarService.value.applyBinder { permissionGranted(permissions, grantResults) }
+//        }
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
@@ -121,43 +161,59 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             bindFlags = Context.BIND_AUTO_CREATE or Context.BIND_ABOVE_CLIENT
         }
 
-        lifecycleScope.launch {
-//            repeatOnLifecycle(Lifecycle.State.CREATED)
-            radarConnection.state
-                .onEach { bindState: BindState<IRadarBinder> ->
-                    when (bindState) {
-                        is ManagedServiceConnection.BoundService -> {
-                            serviceActionBinder = bindState.binder
-                                .also { binder ->
-                                    serviceBoundActions.forEach { action ->
+        with(lifecycleScope) {
+            radarConnectionJob = launch(start = CoroutineStart.LAZY) {
+                radarConnection.state
+                    .collect { bindState: BindState<IRadarBinder> ->
+                        when (bindState) {
+                            is ManagedServiceConnection.BoundService -> {
+                                radarServiceActionBinder = bindState.binder
+                                    .also { binder ->
+                                        radarServiceBoundActions.launchJoin { action ->
+                                            action(binder)
+                                        }
+                                    }
+                            }
+
+                            is ManagedServiceConnection.Unbound -> {
+                                radarServiceActionBinder?.also { binder ->
+                                    radarServiceUnboundActions.launchJoin { action ->
                                         action(binder)
                                     }
+                                    radarServiceActionBinder = null
                                 }
-                        }
-
-                        is ManagedServiceConnection.Unbound -> {
-                            serviceActionBinder?.also { binder ->
-                                serviceUnboundActions.forEach { action ->
-                                    action(binder)
-                                }
-                                serviceActionBinder = null
                             }
                         }
                     }
-                }.launchIn(this)
-        }
+            }
 
+            authConnectionJob = launch(start = CoroutineStart.LAZY) {
+                authConnection.state
+                    .collect { bindState ->
+                        when (bindState) {
+                            is ManagedServiceConnection.BoundService -> {
+                                authServiceActionBinder = bindState.binder.also { binder ->
+                                    authServiceBoundActions.launchJoin {
+                                        it(binder)
+                                    }
+                                }
+                            }
 
-        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, serviceBoundActions)
-        authConnection = AuthServiceConnection(this, this).apply {
-            onBoundListeners += { binder ->
-                binder.applyState {
-                    if (userId == null) {
-                        this@MainActivity.logoutSucceeded(null, this)
+                            is ManagedServiceConnection.Unbound -> {
+                                authServiceActionBinder?.also { binder ->
+                                    authServiceUnboundActions.launchJoin {
+                                        it(binder)
+                                    }
+                                    authServiceActionBinder = null
+                                }
+                            }
+                        }
                     }
-                }
             }
         }
+
+        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, radarServiceBoundActions)
+        authConnection = serviceConnection(AuthService::class.java)
         create()
     }
 
@@ -192,11 +248,11 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     /** Create a view to show the data of this activity.  */
     protected abstract fun createView(): MainActivityView
 
-    private var uiUpdater: SafeHandler.HandlerFuture? = null
+    private var uiUpdater: CoroutineTaskExecutor.CoroutineFutureHandle? = null
 
     override fun onResume() {
         super.onResume()
-        uiUpdater = mHandler.repeat(uiRefreshRate) {
+        uiUpdater = mainExecutor.repeat(uiRefreshRate) {
             try {
                 // Update all rows in the UI with the data from the connections
                 view?.update()
@@ -217,8 +273,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     @CallSuper
     public override fun onStart() {
         super.onStart()
-        mHandler.start()
-        authConnection.bind()
+        mainExecutor.start()
+
         bluetoothEnforcer.start()
 
         val radarServiceCls = radarApp.radarService
@@ -229,7 +285,12 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             logger.error("Failed to start RadarService: activity is in background.", ex)
         }
 
-        radarConnection.bind()
+        lifecycleScope.launch {
+            radarConnection.bind()
+            authConnection.bind()
+        }
+        radarConnectionJob?.start()
+        authConnectionJob?.start()
 
         LocalBroadcastManager.getInstance(this).apply {
             connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
@@ -255,12 +316,16 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     public override fun onStop() {
         super.onStop()
 
-        mHandler.stop { view = null }
+        mainExecutor.stop { view = null }
 
         radarConnection.unbind()
         authConnection.unbind()
         bluetoothEnforcer.stop()
 
+        radarConnectionJob?.cancel()
+        authConnectionJob?.cancel()
+        radarConnectionJob = null
+        authConnectionJob = null
         connectionsUpdatedReceiver?.unregister()
     }
 
@@ -276,7 +341,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
      * the access token but allow the same user to automatically log in again if it is
      * still valid.
      */
-    protected fun logout(disableRefresh: Boolean) {
+    protected suspend fun logout(disableRefresh: Boolean) {
         authConnection.applyBinder { invalidate(null, disableRefresh) }
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
