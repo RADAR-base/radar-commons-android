@@ -182,9 +182,7 @@ class CoroutineTaskExecutor(
         checkExecutorStarted() ?: return
 
         executorScope?.launch {
-            executeMutex.withLock {
-                runTaskSafely(task)
-            }
+            runTaskSafely(task)
         }
     }
 

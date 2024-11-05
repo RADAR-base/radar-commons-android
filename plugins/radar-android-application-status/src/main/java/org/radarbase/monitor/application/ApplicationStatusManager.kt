@@ -21,26 +21,34 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.radarbase.android.data.DataCache
+import org.radarbase.android.data.TableDataHandler
+import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.AbstractSourceManager
-import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
-import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
-import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
-import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
-import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.util.*
+import org.radarbase.android.util.BroadcastRegistration
+import org.radarbase.android.util.ChangeRunner
+import org.radarbase.android.util.CoroutineTaskExecutor
+import org.radarbase.android.util.OfflineProcessor
+import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.monitor.application.ApplicationStatusService.Companion.UPDATE_RATE_DEFAULT
 import org.radarcns.kafka.ObservationKey
-import org.radarcns.monitor.application.*
+import org.radarcns.monitor.application.ApplicationDeviceInfo
+import org.radarcns.monitor.application.ApplicationExternalTime
+import org.radarcns.monitor.application.ApplicationRecordCounts
+import org.radarcns.monitor.application.ApplicationServerStatus
+import org.radarcns.monitor.application.ApplicationTimeZone
+import org.radarcns.monitor.application.ApplicationUptime
+import org.radarcns.monitor.application.ExternalTimeProtocol
+import org.radarcns.monitor.application.OperatingSystem
+import org.radarcns.monitor.application.ServerStatus
 import org.slf4j.LoggerFactory
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.SocketException
-import java.util.*
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 
@@ -138,20 +146,33 @@ class ApplicationStatusManager(
         tzProcessor?.start()
 
         logger.info("Starting ApplicationStatusManager")
-        LocalBroadcastManager.getInstance(service).apply {
-            serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
-                state.serverStatus = org.radarbase.android.kafka.ServerStatus.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
+            with(applicationStatusExecutor) {
+                service.dataHandler?.let { handler ->
+                    execute {
+                        handler.numberOfRecords
+                            .collect { records: TableDataHandler.CacheSize ->
+                                val topic = records.topicName
+                                val noOfRecords = records.numberOfRecords
+                                logger.trace("Topic {} has {} records in cache", topic, noOfRecords)
+                                state.cachedRecords[topic] = noOfRecords.coerceAtLeast(0)
+                            }
+                        }
+
+                    execute {
+                        handler.recordsSent.collect { sent: TopicSendReceipt ->
+                            logger.trace("Topic {} sent {} records", sent.topic, sent.numberOfRecords)
+                            state.addRecordsSent(sent.numberOfRecords)
+                        }
+                    }
+
+                    execute {
+                        handler.serverStatus.collect {
+                            state.serverStatus = it
+                            logger.trace("Updated Server Status to {}", it)
+                        }
+                    }
+                }
             }
-            serverRecordsReceiver = register(SERVER_RECORDS_SENT_TOPIC) { _, intent ->
-                val numberOfRecordsSent = intent.getLongExtra(SERVER_RECORDS_SENT_NUMBER, 0)
-                state.addRecordsSent(numberOfRecordsSent.coerceAtLeast(0))
-            }
-            cacheReceiver = register(CACHE_TOPIC) { _, intent ->
-                val topic = intent.getStringExtra(CACHE_TOPIC) ?: return@register
-                val records = intent.getLongExtra(CACHE_RECORDS_UNSENT_NUMBER, 0)
-                state.cachedRecords[topic] = records.coerceAtLeast(0)
-            }
-        }
 
         status = SourceStatusListener.Status.CONNECTED
     }

@@ -44,6 +44,7 @@ import org.radarbase.android.util.BundleSerialization
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -92,6 +93,22 @@ abstract class SourceService<T : BaseSourceState> :
         get() = !needsRegisteredSources || acceptableSources.isNotEmpty()
 
     private lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
+    private var authListenerRegistry: AuthService.LoginListenerRegistry? = null
+    private val authBoundTasks: MutableList<suspend (AuthService.AuthServiceBinder) -> Unit> = mutableListOf(
+        { binder ->
+            authListenerRegistry = binder.addLoginListener(this)
+            binder.refreshIfOnline()
+        }
+    )
+
+    private val authUnboundTasks: MutableList<AuthServiceStateReactor> = mutableListOf(
+        { binder ->
+            authListenerRegistry?.let {
+                binder.removeLoginListener(it)
+            }
+        }
+    )
+    
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
     private lateinit var sourceServiceExecutor: CoroutineTaskExecutor
@@ -183,9 +200,22 @@ abstract class SourceService<T : BaseSourceState> :
             launch {
                 authConnection.state
                     .onEach { bindState ->
-                        authConnectionBinder = when (bindState) {
-                            is ManagedServiceConnection.BoundService -> bindState.binder
-                            is ManagedServiceConnection.Unbound -> null
+                        when (bindState) {
+                            is ManagedServiceConnection.BoundService -> {
+                                authConnectionBinder = bindState.binder.also { binder ->
+                                    authBoundTasks.launchJoin {
+                                        it(binder)
+                                    }
+                                }
+                            }
+                            is ManagedServiceConnection.Unbound -> {
+                                authConnectionBinder?.also { binder ->
+                                    authUnboundTasks.launchJoin {
+                                        it(binder)
+                                    }
+                                }
+                                authConnectionBinder = null
+                            }
                         }
                     }.launchIn(this)
             }
