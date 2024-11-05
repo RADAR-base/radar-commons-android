@@ -2,7 +2,10 @@ package org.radarbase.android.splash
 
 import android.app.Activity
 import android.content.Intent
-import android.content.Intent.*
+import android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+import android.content.Intent.FLAG_ACTIVITY_TASK_ON_HOME
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,18 +14,25 @@ import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.Observer
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
+import org.radarbase.android.auth.AuthServiceStateReactor
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
-import org.radarbase.android.config.SingleRadarConfiguration
+import org.radarbase.android.util.BindState
 import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
 import org.radarbase.android.util.NetworkConnectedReceiver
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -46,12 +56,29 @@ abstract class SplashActivity : AppCompatActivity() {
     protected var waitForFullFetchMs = 0L
 
     protected lateinit var handler: Handler
-    protected var startActivityFuture: Runnable? = null
-    private val configObserver: Observer<SingleRadarConfiguration> = Observer { config ->
-        updateConfig(config.status, allowPartialConfiguration = false)
-    }
+    protected var startActivityFuture: Job? = null
+    private var listenerRegistry: AuthService.LoginListenerRegistry? = null
+    private var authSplashBinder: AuthService.AuthServiceBinder? = null
 
-    private fun updateConfig(status: RadarConfiguration.RemoteConfigStatus, allowPartialConfiguration: Boolean) {
+    private val splashServiceBoundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
+        {binder -> binder.refreshIfOnline()},
+        { binder ->
+            listenerRegistry = binder.addLoginListener(loginListener)
+        }
+    )
+
+    private val splashUnboundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
+        { binder ->
+            listenerRegistry?.let {
+                binder.removeLoginListener(it)
+                listenerRegistry = null
+            }
+        }
+    )
+
+    private var configCollectorJob: Job? = null
+
+    private suspend fun updateConfig(status: RadarConfiguration.RemoteConfigStatus, allowPartialConfiguration: Boolean) {
         if (enable
             && (lifecycle.currentState == Lifecycle.State.RESUMED
                     || lifecycle.currentState == Lifecycle.State.STARTED)
@@ -66,9 +93,11 @@ abstract class SplashActivity : AppCompatActivity() {
                 stopConfigListener()
                 startAuthConnection()
             } else if (status == RadarConfiguration.RemoteConfigStatus.PARTIALLY_FETCHED) {
-                handler.postDelayed({
-                    updateConfig(radarConfig.status, allowPartialConfiguration = true)
-                }, waitForFullFetchMs)
+
+                lifecycleScope.launch {
+                    delay(waitForFullFetchMs)
+                    updateConfig(radarConfig.status.value, allowPartialConfiguration = true)
+                }
             }
         }
     }
@@ -80,7 +109,7 @@ abstract class SplashActivity : AppCompatActivity() {
         if (!enable) {
             return
         }
-        networkReceiver = NetworkConnectedReceiver(this, null)
+        networkReceiver = NetworkConnectedReceiver(this)
 
         loginListener = createLoginListener()
         authServiceConnection = serviceConnection(radarApp.authService)
@@ -90,6 +119,47 @@ abstract class SplashActivity : AppCompatActivity() {
         startedAt = SystemClock.elapsedRealtime()
 
         createView()
+
+        lifecycleScope.launch {
+            launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    networkReceiver.monitor()
+                }
+            }
+            configCollectorJob = launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    config.config.
+                    collect {
+                        updateConfig(config.status.value, allowPartialConfiguration = false)
+                    }
+                }
+            }
+
+            launch {
+                authServiceConnection.state
+                    .collect { bindState: BindState<AuthService.AuthServiceBinder> ->
+                        when (bindState) {
+                            is ManagedServiceConnection.BoundService -> {
+                                bindState.binder.also {
+                                    authSplashBinder = it
+                                    splashServiceBoundActions.launchJoin { action ->
+                                        action(it)
+                                    }
+                                }
+                            }
+
+                            is ManagedServiceConnection.Unbound -> {
+                                authSplashBinder?.let { binder ->
+                                    splashUnboundActions.launchJoin { action ->
+                                        action(binder)
+                                    }
+                                }
+                                authSplashBinder = null
+                            }
+                        }
+                    }
+            }
+        }
     }
 
     protected abstract fun createView()
@@ -101,24 +171,28 @@ abstract class SplashActivity : AppCompatActivity() {
             return
         }
 
-        logger.info("Starting SplashActivity")
-        networkReceiver.register()
+        logger.info("Starting SplashActivity.")
 
-        when (config.status.value) {
-            RadarConfiguration.RemoteConfigStatus.UNAVAILABLE -> {
-                logger.info("Firebase unavailable")
-                updateState(STATE_FIREBASE_UNAVAILABLE)
-            }
-            RadarConfiguration.RemoteConfigStatus.FETCHED -> {
-                logger.info("Firebase fetched, starting AuthService")
-                startAuthConnection()
-            }
-            else -> {
-                logger.info("Starting listening for configuration updates")
-                if (!networkReceiver.state.isConnected) {
-                    updateState(STATE_DISCONNECTED)
+
+        lifecycleScope.launch(Dispatchers.Default) {
+            when (config.status.value) {
+                RadarConfiguration.RemoteConfigStatus.UNAVAILABLE -> {
+                    logger.info("Firebase unavailable")
+                    updateState(STATE_FIREBASE_UNAVAILABLE)
                 }
-                startConfigReceiver()
+
+                RadarConfiguration.RemoteConfigStatus.FETCHED -> {
+                    logger.info("Firebase fetched, starting AuthService")
+                    startAuthConnection()
+                }
+
+                else -> {
+                    logger.info("Starting listening for configuration updates")
+                    if (networkReceiver.latestState !is NetworkConnectedReceiver.NetworkState.Connected) {
+                        updateState(STATE_DISCONNECTED)
+                    }
+                    startConfigReceiver()
+                }
             }
         }
     }
@@ -131,15 +205,13 @@ abstract class SplashActivity : AppCompatActivity() {
         logger.info("Stopping splash")
         stopConfigListener()
         stopAuthConnection()
-
-        networkReceiver.unregister()
     }
 
     protected open fun updateState(newState: Int) {
         if (newState != state) {
             state = newState
 
-            runOnUiThread {
+            lifecycleScope.launch(Dispatchers.Main.immediate) {
                 updateView()
             }
         }
@@ -169,14 +241,12 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun startActivity(activity: Class<out Activity>) {
         logger.debug("Scheduling start of SplashActivity")
-        handler.post {
+        lifecycleScope.launch {
             if (state == STATE_FINISHED) {
-                return@post
+                return@launch
             }
             updateState(STATE_STARTING)
-            startActivityFuture?.also {
-                handler.removeCallbacks(it)
-            }
+            startActivityFuture?.cancel()
             Runnable {
                 updateState(STATE_FINISHED)
 
@@ -189,9 +259,12 @@ abstract class SplashActivity : AppCompatActivity() {
                 }
                 finish()
             }.also { runnable ->
-                startActivityFuture = runnable
+//                startActivityFuture = runnable
                 val delayRemaining = delayMs - (SystemClock.elapsedRealtime() - startedAt)
-                handler.postDelayed(runnable, delayRemaining.coerceAtLeast(0))
+                startActivityFuture = lifecycleScope.launch {
+                    delay(delayRemaining.coerceAtLeast(0))
+                    runnable.run()
+                }
             }
         }
     }
@@ -200,14 +273,15 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun onDidStartActivity() {}
 
-    protected open fun startConfigReceiver() {
+    protected open suspend fun startConfigReceiver() {
         updateState(STATE_FETCHING_CONFIG)
         config.forceFetch()
-        radarConfig.config.observe(this, configObserver)
-        configReceiver = true
+        if (configCollectorJob != null) {
+            configReceiver = true
+        }
     }
 
-    protected open fun startAuthConnection() {
+    protected open suspend fun startAuthConnection() {
         if (authServiceConnection.state.value !is ManagedServiceConnection.BoundService) {
             updateState(STATE_AUTHORIZING)
             authServiceConnection.bind()
@@ -216,7 +290,8 @@ abstract class SplashActivity : AppCompatActivity() {
 
     protected open fun stopConfigListener() {
         if (configReceiver) {
-            radarConfig.config.removeObserver(configObserver)
+            configCollectorJob?.cancel()
+            configCollectorJob = null
             configReceiver = false
         }
     }
