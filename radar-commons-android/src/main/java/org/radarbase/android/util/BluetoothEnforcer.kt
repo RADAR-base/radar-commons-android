@@ -7,7 +7,9 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.launch
 import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.ENABLE_BLUETOOTH_REQUESTS
@@ -36,7 +38,9 @@ class BluetoothEnforcer(
         set(value) {
             enableBluetoothRequests.applyIfChanged(value) { enableRequests ->
                 config.put(ENABLE_BLUETOOTH_REQUESTS, enableRequests)
-                config.persistChanges()
+                context.lifecycleScope.launch {
+                    config.persistChanges()
+                }
                 if (bluetoothIsNeeded.value) {
                     bluetoothStateReceiver.register()
                 } else {
@@ -54,7 +58,9 @@ class BluetoothEnforcer(
             latestConfig.getLong(BLUETOOTH_REQUEST_COOLDOWN, TimeUnit.DAYS.toSeconds(3))
         )
         if (lastRequest + cooldown < System.currentTimeMillis()) {
-            config.reset(ENABLE_BLUETOOTH_REQUESTS)
+            context.lifecycleScope.launch {
+                config.reset(ENABLE_BLUETOOTH_REQUESTS)
+            }
         }
 
         serviceBoundActions += {
@@ -98,8 +104,10 @@ class BluetoothEnforcer(
     }
 
     private fun testBindBluetooth() {
-        radarConnection.applyBinder {
-            updateNeedsBluetooth(needsBluetooth())
+        context.lifecycleScope.launch {
+            radarConnection.applyBinder {
+                updateNeedsBluetooth(needsBluetooth())
+            }
         }
     }
 
