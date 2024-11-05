@@ -20,6 +20,7 @@ import android.os.Bundle
 import androidx.lifecycle.LiveData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.kafka.TopicSendResult
@@ -66,6 +67,6 @@ interface SourceBinder<T : BaseSourceState> {
     fun needsBluetooth(): Boolean
 
     fun shouldRemainInBackground(): Boolean
-    val sourceStatus: LiveData<SourceStatusListener.Status>
+    val sourceStatus: StateFlow<SourceStatusListener.Status>
     val sourceConnectFailed: SharedFlow<SourceConnectFailed>
 }

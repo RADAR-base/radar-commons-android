@@ -19,7 +19,7 @@ import java.io.IOException
 import java.util.*
 
 class SourceServiceBinder<T : BaseSourceState>(private val sourceService: SourceService<T>) : Binder(), SourceBinder<T> {
-    override val sourceStatus: LiveData<SourceStatusListener.Status>
+    override val sourceStatus: StateFlow<SourceStatusListener.Status>
         get() = sourceService.status
 
     override val sourceConnectFailed: SharedFlow<SourceService.SourceConnectFailed>

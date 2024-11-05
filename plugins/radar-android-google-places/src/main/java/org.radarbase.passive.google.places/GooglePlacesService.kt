@@ -94,10 +94,7 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
                 val currentManager = sourceManager
                 (currentManager as? GooglePlacesManager)?.reScan()
                 if (currentManager == null) {
-                    broadcaster?.send(SOURCE_STATUS_CHANGED) {
-                        putExtra(SOURCE_STATUS_CHANGED, SourceStatusListener.Status.DISCONNECTED.ordinal)
-                        putExtra(SOURCE_SERVICE_CLASS, this@GooglePlacesService.javaClass.name)
-                    }
+                    super.status.value = SourceStatusListener.Status.DISCONNECTED
                 }
                 stopRecording()
             }

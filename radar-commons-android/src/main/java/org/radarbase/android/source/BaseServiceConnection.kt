@@ -23,6 +23,7 @@ import android.os.IBinder
 import androidx.lifecycle.LiveData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.kafka.TopicSendResult
@@ -32,7 +33,7 @@ import org.radarbase.util.Strings
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
-open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassName: String) : ServiceConnection {
+open class BaseServiceConnection<S : BaseSourceState>(protected val serviceClassName: String) : ServiceConnection {
     @get:Synchronized
     protected var serviceBinder: SourceBinder<S>? = null
         private set
@@ -62,7 +63,7 @@ open class BaseServiceConnection<S : BaseSourceState>(private val serviceClassNa
             serviceBinder?.manualAttributes = value
         }
 
-    val sourceStatus: LiveData<SourceStatusListener.Status>?
+    val sourceStatus: StateFlow<SourceStatusListener.Status>?
         get() = serviceBinder?.sourceStatus
 
     val sourceConnectFailed: SharedFlow<SourceService.SourceConnectFailed>?

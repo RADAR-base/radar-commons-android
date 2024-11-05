@@ -19,6 +19,7 @@ package org.radarbase.android
 import android.Manifest.permission.*
 import android.app.Notification
 import android.app.PendingIntent
+import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -488,12 +489,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             startScanning()
         }
         if (showSourceStatus) {
-            mainHandler.post {
+            lifecycleScope.launch(Dispatchers.Main.immediate) {
                 val showRes = when (status) {
                     SourceStatusListener.Status.READY -> R.string.device_ready
                     SourceStatusListener.Status.CONNECTED -> R.string.device_connected
                     SourceStatusListener.Status.CONNECTING -> R.string.device_connecting
-                    SourceStatusListener.Status.DISCONNECTING -> return@post  // do not show toast
+                    SourceStatusListener.Status.DISCONNECTING -> return@launch  // do not show toast
                     SourceStatusListener.Status.DISCONNECTED -> R.string.device_disconnected
                     SourceStatusListener.Status.UNAVAILABLE -> R.string.device_unavailable
                 }
@@ -672,20 +673,21 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 failedSourceObserverJob = lifecycleScope.launch {
                     mConnections.forEach {
                         it.connection.sourceConnectFailed
-                            ?.onEach { reason: SourceService.SourceConnectFailed ->
-                                ensureActive()
-                                if (isScanningEnabled) {
-                                    Boast.makeText(this@RadarService,
-                                        getString(R.string.cannot_connect_device,
-                                            reason.sourceName),
-                                        Toast.LENGTH_SHORT).show()
-                                }
-                            }?.launchIn(this)
+                            ?.onEach { }?.launchIn(this)
                     }
                 }
 
                 broadcaster.send(ACTION_PROVIDERS_UPDATED)
             }
+        }
+    }
+
+    fun sourceFailedToConnect(sourceName: String, serviceClass: Class<in SourceService<*>>) {
+        logger.info("Source {} of service class {} failed to connect", sourceName, serviceClass)
+        if (isScanningEnabled) {
+            Boast.makeText(this@RadarService,
+                getString(R.string.cannot_connect_device, sourceName),
+                Toast.LENGTH_SHORT).show()
         }
     }
 

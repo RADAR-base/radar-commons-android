@@ -24,6 +24,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -76,9 +77,9 @@ abstract class SourceService<T : BaseSourceState> :
     var sourceTypes: Set<SourceType> = emptySet()
     var sourceConnectFailed: MutableSharedFlow<SourceConnectFailed> = MutableSharedFlow()
 
-    val status: MutableLiveData<SourceStatusListener.Status> by lazy {
-        MutableLiveData(SourceStatusListener.Status.DISCONNECTED)
-    }
+    val status: MutableStateFlow<SourceStatusListener.Status> =
+        MutableStateFlow(SourceStatusListener.Status.DISCONNECTED)
+
 
     private val acceptableSourceTypes: Set<SourceType>
         get() = sourceTypes.filterTo(HashSet()) {
@@ -288,7 +289,7 @@ abstract class SourceService<T : BaseSourceState> :
     }
 
     private fun broadcastSourceStatus(status: SourceStatusListener.Status) {
-        this.status.postValue(status)
+        this.status.value = status
     }
 
     override fun sourceStatusUpdated(manager: SourceManager<*>, status: SourceStatusListener.Status) {
