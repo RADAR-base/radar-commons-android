@@ -65,6 +65,8 @@ dependencies {
 
     implementation("io.ktor:ktor-client-content-negotiation")
     implementation("io.ktor:ktor-serialization-kotlinx-json")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
 }
 
 apply from: "$rootDir/gradle/test.gradle"

@@ -1,5 +1,6 @@
 package org.radarbase.android.auth
 
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -45,7 +46,7 @@ class AppAuthStateTest {
     }
 
     @Test
-    fun newBuilder() {
+    fun newBuilder() = runTest{
         val builtState = state.alter {
             attributes[ManagementPortalClient.MP_REFRESH_TOKEN_PROPERTY] = "else"
         }

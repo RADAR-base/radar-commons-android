@@ -1,5 +1,8 @@
 package org.radarbase.android.auth.portal
 
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONArray
@@ -80,7 +83,7 @@ class ManagementPortalClientTest {
 
     @Test
     @Throws(IOException::class)
-    fun requestSubject() {
+    fun requestSubject() = runTest {
         MockWebServer().use { server ->
 
             // Schedule some responses.
@@ -93,8 +96,8 @@ class ManagementPortalClientTest {
 
             val serverConfig = ServerConfig(server.url("/").toUrl())
 
-            val client = ManagementPortalClient(serverConfig, "pRMT", "")
-            val authState = AppAuthState {
+            val client = ManagementPortalClient(serverConfig, "pRMT", "", HttpClient(CIO))
+            val authState = AppAuthState.Builder().apply {
                 userId = "sub-1"
             }
             val retAuthState = client.getSubject(authState, GetSubjectParser(authState))
