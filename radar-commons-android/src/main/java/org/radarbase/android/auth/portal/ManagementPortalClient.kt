@@ -232,7 +232,7 @@ class ManagementPortalClient(
     @Throws(IOException::class)
     private suspend fun <T> handleRequest(request: HttpStatement, parser: Parser<JSONObject, T>): T {
         return request.execute { response ->
-            val body: JSONObject = response.body()
+            val body: JSONObject = JSONObject(response.bodyAsText())
 
             if (response.status == HttpStatusCode.Unauthorized) {
                 throw AuthenticationException("QR code is invalid: $body")
