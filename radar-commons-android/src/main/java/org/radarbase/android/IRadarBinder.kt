@@ -17,6 +17,7 @@
 package org.radarbase.android
 
 import android.os.IBinder
+import kotlinx.coroutines.flow.StateFlow
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.kafka.ServerStatus
@@ -26,7 +27,7 @@ import org.radarbase.android.util.TimedLong
 import org.radarcns.kafka.ObservationKey
 
 interface IRadarBinder : IBinder {
-    val serverStatus: ServerStatus
+    val serverStatus: StateFlow<ServerStatus>
 
     val latestNumberOfRecordsSent: TimedLong
 

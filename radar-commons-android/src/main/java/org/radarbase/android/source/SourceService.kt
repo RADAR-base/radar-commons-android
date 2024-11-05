@@ -25,6 +25,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -189,11 +190,16 @@ abstract class SourceService<T : BaseSourceState> :
                         }
                     }.launchIn(this)
             }
+            launch {
+                radarConfig.config
+                    .collectLatest {
+                        configure(it)
+                    }
+            }
             radarConnection.bind()
         }
         handler = SafeHandler.getInstance("SourceService-$name", THREAD_PRIORITY_BACKGROUND)
 
-        radarConfig.config.observe(this, ::configure)
         config = radarConfig
 
         sourceManager = null

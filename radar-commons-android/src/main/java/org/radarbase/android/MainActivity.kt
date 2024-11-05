@@ -289,6 +289,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             radarConnection.bind()
             authConnection.bind()
         }
+        permissionHandler.invalidateCache()
         radarConnectionJob?.start()
         authConnectionJob?.start()
 

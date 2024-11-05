@@ -5,6 +5,9 @@ import android.os.Bundle
 import android.os.Parcel
 import androidx.lifecycle.LiveData
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.zip
@@ -19,8 +22,11 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
     override val sourceStatus: LiveData<SourceStatusListener.Status>
         get() = sourceService.status
 
+    override val sourceConnectFailed: SharedFlow<SourceService.SourceConnectFailed>
+        get() = sourceService.sourceConnectFailed
+
     @Throws(IOException::class)
-    override fun getRecords(topic: String, limit: Int): RecordData<Any, Any>? {
+    override suspend fun getRecords(topic: String, limit: Int): RecordData<Any, Any>? {
         val localDataHandler = sourceService.dataHandler ?: return null
         return localDataHandler.getCache(topic).getRecords(limit)
     }
@@ -64,9 +70,11 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
 
     override val numberOfRecords: Flow<Long>?
         get() = sourceService.dataHandler?.let { data ->
-            data.caches.map { it.numberOfRecords }
-                .zip()
-                .map { it.sum() }
+            val numbers: List<StateFlow<Long>> = data.caches.map { it.numberOfRecords }
+
+                combine(numbers) { records ->
+                    records.sum()
+                }
         }
 
     override fun needsBluetooth(): Boolean = sourceService.isBluetoothConnectionRequired

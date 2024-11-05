@@ -19,9 +19,11 @@ package org.radarbase.android.source
 import android.os.Bundle
 import androidx.lifecycle.LiveData
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.kafka.TopicSendResult
+import org.radarbase.android.source.SourceService.SourceConnectFailed
 import org.radarbase.data.RecordData
 import java.io.IOException
 
@@ -53,7 +55,7 @@ interface SourceBinder<T : BaseSourceState> {
     fun stopRecording()
 
     @Throws(IOException::class)
-    fun getRecords(topic: String, limit: Int): RecordData<Any, Any>?
+    suspend fun getRecords(topic: String, limit: Int): RecordData<Any, Any>?
 
     /** Update the configuration of the service  */
     fun updateConfiguration(bundle: Bundle)
@@ -65,4 +67,5 @@ interface SourceBinder<T : BaseSourceState> {
 
     fun shouldRemainInBackground(): Boolean
     val sourceStatus: LiveData<SourceStatusListener.Status>
+    val sourceConnectFailed: SharedFlow<SourceConnectFailed>
 }
