@@ -147,9 +147,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         configuration = radarConfig
         mainExecutor = CoroutineTaskExecutor(this::class.simpleName!!, Dispatchers.Default)
         permissionHandler = PermissionHandler(this, mainExecutor, requestPermissionTimeout.inWholeMilliseconds)
-//        { permissions, grantResults ->
-//            radarService.value.applyBinder { permissionGranted(permissions, grantResults) }
-//        }
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 

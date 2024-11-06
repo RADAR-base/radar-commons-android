@@ -72,7 +72,6 @@ public class SpecificRecordTest {
         AvroEncoder encoder = new RemoteSchemaEncoder(true);
         ParsedSchemaMetadata schemaMetadata = new ParsedSchemaMetadata(1, 1, new Schema.Parser().parse("{\"name\":\"Test\",\"type\":\"record\",\"fields\":[{\"name\":\"time\",\"type\":\"double\"},{\"name\":\"timeReceived\",\"type\":\"double\"},{\"name\":\"x\",\"type\":\"float\"},{\"name\":\"y\",\"type\":\"float\"},{\"name\":\"z\",\"type\":\"float\"},{\"name\":\"def\",\"type\":[\"null\",\"string\"],\"default\":null}]}"));
         AvroEncoder.AvroWriter<PhoneAcceleration> accelerationWriter = encoder.writer(PhoneAcceleration.getClassSchema(), PhoneAcceleration.class, schemaMetadata.getSchema());
-//        accelerationWriter.setReaderSchema(schemaMetadata);
         byte[] result = accelerationWriter.encode(record.getValue());
 
         AvroDecoder decoder = new AvroDatumDecoder(SpecificData.get(), true);
@@ -86,7 +85,6 @@ public class SpecificRecordTest {
         AvroEncoder encoder = new RemoteSchemaEncoder(false);
         ParsedSchemaMetadata schemaMetadata = new ParsedSchemaMetadata(1, 1, Questionnaire.getClassSchema());
         AvroEncoder.AvroWriter<GenericRecord> accelerationWriter = encoder.writer(Questionnaire.getClassSchema(), GenericRecord.class, schemaMetadata.getSchema());
-//        accelerationWriter.setReaderSchema(schemaMetadata);
         List<Answer> list = new ArrayList<>(2);
         list.add(new Answer("qid1", 1, 0.4, 0.5));
         list.add(new Answer("qid2", "a", 0.6, 0.7));
@@ -108,7 +106,6 @@ public class SpecificRecordTest {
         Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[{\"name\":\"bytes\",\"type\":\"bytes\"},{\"name\":\"bool\",\"type\":\"boolean\"},{\"name\":\"unionFixed\",\"type\":[\"null\",{\"type\":\"fixed\",\"size\":4,\"name\":\"four\"}],\"default\":null},{\"name\":\"map\",\"type\":{\"type\":\"map\", \"values\":{\"type\":\"int\"}}}]}");
         ParsedSchemaMetadata schemaMetadata = new ParsedSchemaMetadata(1, 1, schema);
         AvroEncoder.AvroWriter<GenericRecord> accelerationWriter = encoder.writer(schema, GenericRecord.class, schemaMetadata.getSchema());
-//        accelerationWriter.setReaderSchema(schemaMetadata);
         GenericRecordBuilder record = new GenericRecordBuilder(schema);
         record.set("bytes", ByteBuffer.wrap(new byte[] {1, 2, 3, 4}));
         Map<String, Integer> map = new HashMap<>();
