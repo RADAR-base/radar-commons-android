@@ -34,6 +34,7 @@ import android.os.Looper
 import android.os.Process
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -97,6 +98,26 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     private var payloadSize: Int = 0
     @Volatile
     private var currentlyRecording: Boolean = false
+
+    private val connectedMicrophonesObserver: Observer<List<AudioDeviceInfo>> = Observer { connectedMicrophones ->
+        audioRecordingHandler.execute {
+            if (connectedMicrophones?.size == 0) {
+                logger.warn("No connected microphone")
+            }
+            if (state.microphonePrioritized && state.finalizedMicrophone.value !in connectedMicrophones) {
+                state.microphonePrioritized = false
+                logger.info("Microphone prioritized: false")
+            }
+            logger.info("PhoneAudioInputManager: Connected microphones: {}",
+                connectedMicrophones.map { it.productName })
+
+            if (!state.microphonePrioritized) {
+                connectedMicrophones.also(::runDeviceSelectionLogic)
+            } else {
+                state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
+            }
+        }
+    }
 
     init {
         name = service.getString(R.string.phone_audio_input_display_name)
@@ -239,25 +260,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     }
 
     private fun observeMicrophones() {
-        state.connectedMicrophones.observe(service) { connectedMicrophones ->
-            audioRecordingHandler.execute {
-                if (connectedMicrophones?.size == 0) {
-                    logger.warn("No connected microphone")
-                }
-                if (state.microphonePrioritized && state.finalizedMicrophone.value !in connectedMicrophones) {
-                    state.microphonePrioritized = false
-                    logger.info("Microphone prioritized: false")
-                }
-                logger.info(
-                    "PhoneAudioInputManager: Connected microphones: {}",
-                    connectedMicrophones.map { it.productName })
-
-                if (!state.microphonePrioritized) {
-                    connectedMicrophones.also(::runDeviceSelectionLogic)
-                } else {
-                    state.finalizedMicrophone.value?.let(setPreferredDeviceAndUpdate)
-                }
-            }
+        if (!state.connectedMicrophones.hasActiveObservers()) {
+            state.connectedMicrophones.observeForever(connectedMicrophonesObserver)
         }
     }
 
@@ -408,6 +412,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
             audioRecord?.release()
             clearAudioDirectory()
         }
+        mainHandler.post { state.connectedMicrophones.removeObserver(connectedMicrophonesObserver) }
         recordProcessingHandler.stop()
     }
     companion object {
