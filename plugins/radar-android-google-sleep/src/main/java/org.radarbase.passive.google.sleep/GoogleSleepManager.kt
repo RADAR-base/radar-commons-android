@@ -19,9 +19,13 @@ package org.radarbase.passive.google.sleep
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.Context.RECEIVER_NOT_EXPORTED
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Build.VERSION.SDK_INT
+import android.os.Build.VERSION_CODES
 import android.os.Process
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognition
@@ -69,7 +73,9 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
 
     private fun registerSleepReceiver() {
         val filter = IntentFilter(ACTION_SLEEP_DATA)
-        service.registerReceiver(sleepBroadcastReceiver, filter)
+        ContextCompat.registerReceiver(service, sleepBroadcastReceiver, filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         logger.info("registering for the sleep receiver.")
     }
 
@@ -124,7 +130,9 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
     }
 
     private fun createSleepPendingIntent(): PendingIntent {
-        val intent = Intent(ACTION_SLEEP_DATA)
+        val intent = Intent(ACTION_SLEEP_DATA).apply {
+            `package` = service.packageName
+        }
         logger.info("Sleep pending intent created")
         return PendingIntent.getBroadcast(service, SLEEP_DATA_REQUEST_CODE, intent,
             PendingIntent.FLAG_CANCEL_CURRENT.toPendingIntentFlag(true))
