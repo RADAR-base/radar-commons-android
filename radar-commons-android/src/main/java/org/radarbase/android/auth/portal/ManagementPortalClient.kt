@@ -77,7 +77,7 @@ class ManagementPortalClient(
      */
     @Throws(IOException::class)
     suspend fun getRefreshToken(metaTokenUrl: String, parser: AuthStringParser): AppAuthState.Builder {
-        val request = client.prepareRequest(metaTokenUrl) {
+        val request = client.prepareGet(metaTokenUrl) {
             logger.debug("Requesting refreshToken with token-url {}", metaTokenUrl)
         }
 
@@ -100,7 +100,7 @@ class ManagementPortalClient(
             state.headers.forEach { (k, v) -> append(k, v) }
         }
 
-        val request = client.prepareRequest("api/subjects/${state.userId}") {
+        val request = client.prepareGet("api/subjects/${state.userId}") {
             headers {
                 appendAll(ktorHeaders)
                 append(HttpHeaders.Accept, APPLICATION_JSON)
@@ -206,10 +206,11 @@ class ManagementPortalClient(
             }
 
             val request = client.preparePost("oauth/token") {
-                setBody(formData {
+                setBody(FormDataContent( Parameters.build {
                     append("grant_type", "refresh_token")
                     append("refresh_token", refreshToken)
-                })
+
+                }))
                 basicAuth(clientId, clientSecret)
             }
 
@@ -232,7 +233,7 @@ class ManagementPortalClient(
     @Throws(IOException::class)
     private suspend fun <T> handleRequest(request: HttpStatement, parser: Parser<JSONObject, T>): T {
         return request.execute { response ->
-            val body: JSONObject = JSONObject(response.bodyAsText())
+            val body = JSONObject(response.bodyAsText())
 
             if (response.status == HttpStatusCode.Unauthorized) {
                 throw AuthenticationException("QR code is invalid: $body")
