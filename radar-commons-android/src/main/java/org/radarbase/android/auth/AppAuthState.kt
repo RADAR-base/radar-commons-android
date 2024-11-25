@@ -18,15 +18,14 @@ package org.radarbase.android.auth
 
 import android.os.SystemClock
 import androidx.annotation.Keep
-import io.ktor.http.*
-import kotlinx.serialization.decodeFromString
+import io.ktor.http.Headers
 import kotlinx.serialization.json.Json
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
 import org.radarbase.android.util.buildJsonArray
 import org.radarbase.android.util.equalTo
 import org.slf4j.LoggerFactory
-import java.util.*
+import java.util.Objects
 import java.util.concurrent.TimeUnit
 
 /** Authentication state of the application.  */
@@ -124,20 +123,20 @@ class AppAuthState(builder: Builder) {
     class Builder(val original: AppAuthState? = null) {
         val lastUpdate = SystemClock.elapsedRealtime()
 
-        val headers: MutableCollection<Pair<String, String>> = mutableListOf()
-        val sourceMetadata: MutableCollection<SourceMetadata> = mutableListOf()
-        val attributes: MutableMap<String, String> = mutableMapOf()
+        val headers: MutableCollection<Pair<String, String>> = original?.headers?.toMutableList() ?: mutableListOf()
+        val sourceMetadata: MutableCollection<SourceMetadata> = original?.sourceMetadata?.toMutableList() ?: mutableListOf()
+        val attributes: MutableMap<String, String> = original?.attributes?.toMutableMap() ?: mutableMapOf()
 
         var needsRegisteredSources = true
 
-        var projectId: String? = null
-        var userId: String? = null
-        var token: String? = null
-        var authenticationSource: String? = null
-        var tokenType = AUTH_TYPE_UNKNOWN
-        var expiration: Long = 0
-        var isPrivacyPolicyAccepted = false
-        val sourceTypes: MutableCollection<SourceType> = mutableListOf()
+        var projectId: String? = original?.projectId
+        var userId: String? = original?.userId
+        var token: String? = original?.token
+        var authenticationSource: String? = original?.authenticationSource
+        var tokenType = original?.tokenType ?: AUTH_TYPE_UNKNOWN
+        var expiration: Long = original?.expiration ?: 0
+        var isPrivacyPolicyAccepted = original?.isPrivacyPolicyAccepted ?: false
+        val sourceTypes: MutableCollection<SourceType> = original?.sourceTypes?.toMutableList() ?: mutableListOf()
 
         fun clear() {
             headers.clear()

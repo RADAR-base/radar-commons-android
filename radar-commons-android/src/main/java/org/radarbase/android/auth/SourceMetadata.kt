@@ -1,17 +1,10 @@
 package org.radarbase.android.auth
 
 import kotlinx.serialization.Serializable
-import org.json.JSONException
-import org.json.JSONObject
 import org.radarbase.android.RadarService.Companion.sanitizeIds
 import org.radarbase.android.util.*
-import org.radarbase.android.util.optNonEmptyString
-import org.radarbase.android.util.toJson
-import org.radarbase.android.util.toStringMap
-import org.radarbase.util.Strings
 import org.slf4j.LoggerFactory
 import java.util.*
-import java.util.regex.Pattern
 
 @Serializable(with = SourceMetadataSerializer::class)
 data class SourceMetadata(
@@ -25,7 +18,7 @@ data class SourceMetadata(
         val currentType = type ?: return this
         val storedType = types.find { it.id == currentType.id }
         return if (storedType != null) {
-            copy(type = storedType)
+            apply { type = storedType }
         } else {
             types += currentType
             this
