@@ -102,30 +102,17 @@ class AppAuthState(builder: Builder) {
     }
 
     suspend fun alter(changes: suspend Builder.() -> Unit): AppAuthState {
-        return Builder(this).also {
-            it.projectId = projectId
-            it.userId = userId
-            it.token = token
-            it.tokenType = tokenType
-            it.expiration = expiration
-            it.authenticationSource = authenticationSource
-            it.isPrivacyPolicyAccepted = isPrivacyPolicyAccepted
-            it.needsRegisteredSources = needsRegisteredSources
-
-            it.attributes += attributes
-            it.sourceMetadata += sourceMetadata
-            it.sourceTypes += sourceTypes
-            it.headers += headers
-            it.changes()
+        return Builder(this).apply {
+            changes()
         }.build()
     }
 
     class Builder(val original: AppAuthState? = null) {
         val lastUpdate = SystemClock.elapsedRealtime()
 
-        val headers: MutableCollection<Pair<String, String>> = original?.headers?.toMutableList() ?: mutableListOf()
-        val sourceMetadata: MutableCollection<SourceMetadata> = original?.sourceMetadata?.toMutableList() ?: mutableListOf()
-        val attributes: MutableMap<String, String> = original?.attributes?.toMutableMap() ?: mutableMapOf()
+        val headers: MutableCollection<Pair<String, String>> = mutableListOf()
+        val sourceMetadata: MutableCollection<SourceMetadata> =  mutableListOf()
+        val attributes: MutableMap<String, String> =  mutableMapOf()
 
         var needsRegisteredSources = true
 
@@ -133,10 +120,19 @@ class AppAuthState(builder: Builder) {
         var userId: String? = original?.userId
         var token: String? = original?.token
         var authenticationSource: String? = original?.authenticationSource
-        var tokenType = original?.tokenType ?: AUTH_TYPE_UNKNOWN
+        var tokenType: Int = original?.tokenType ?: AUTH_TYPE_UNKNOWN
         var expiration: Long = original?.expiration ?: 0
         var isPrivacyPolicyAccepted = original?.isPrivacyPolicyAccepted ?: false
-        val sourceTypes: MutableCollection<SourceType> = original?.sourceTypes?.toMutableList() ?: mutableListOf()
+        val sourceTypes: MutableCollection<SourceType> =  mutableListOf()
+
+        init {
+            original?.let { authState ->
+                headers += authState.headers
+                sourceTypes += authState.sourceTypes
+                sourceMetadata += authState.sourceMetadata
+                attributes += authState.attributes
+            }
+        }
 
         fun clear() {
             headers.clear()
