@@ -22,7 +22,10 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -45,10 +48,12 @@ import java.math.BigDecimal
 import java.util.concurrent.ThreadLocalRandom
 
 class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManager<PhoneLocationService, BaseSourceState>(context), LocationListener {
-    private val locationTopic: DataCache<ObservationKey, PhoneRelativeLocation> = createCache(
-        "android_phone_relative_location",
-        PhoneRelativeLocation()
-    )
+    private val locationTopic: Deferred<DataCache<ObservationKey, PhoneRelativeLocation>> = context.lifecycleScope.async {
+        createCache(
+            "android_phone_relative_location",
+            PhoneRelativeLocation()
+        )
+    }
     private val locationManager = service.getSystemService(Context.LOCATION_SERVICE) as LocationManager?
     private val locationExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
     private val batteryLevelReceiver = BatteryStageReceiver(context, StageLevels(0.1f, 0.3f), ::onBatteryLevelChanged)
@@ -146,7 +151,7 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
                 latitude.normalize(), longitude.normalize(),
                 altitude?.normalize(), accuracy?.normalize(), speed?.normalize(), bearing?.normalize())
         locationExecutor.execute {
-            send(locationTopic, value)
+            send(locationTopic.await(), value)
         }
 
         broadcaster.send(DEVICE_LOCATION_CHANGED)

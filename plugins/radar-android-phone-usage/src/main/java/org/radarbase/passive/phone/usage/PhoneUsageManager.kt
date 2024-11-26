@@ -21,7 +21,10 @@ import android.app.usage.UsageEvents.Event.*
 import android.app.usage.UsageStatsManager
 import android.content.*
 import android.os.Build
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -39,11 +42,13 @@ import java.util.concurrent.TimeUnit
 
 class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<PhoneUsageService, BaseSourceState>(context) {
 
-    private val usageEventTopic: DataCache<ObservationKey, PhoneUsageEvent>?
-    private val userInteractionTopic: DataCache<ObservationKey, PhoneUserInteraction> = createCache(
-        "android_phone_user_interaction",
-        PhoneUserInteraction()
-    )
+    private val usageEventTopic: Deferred<DataCache<ObservationKey, PhoneUsageEvent>>?
+    private val userInteractionTopic: Deferred<DataCache<ObservationKey, PhoneUserInteraction>> = context.lifecycleScope.async {
+        createCache(
+            "android_phone_user_interaction",
+            PhoneUserInteraction()
+        )
+    }
 
     private val phoneStateReceiver: BroadcastReceiver
     private val usageStatsManager: UsageStatsManager?
@@ -62,7 +67,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         this.usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
 
         usageEventTopic = if (usageStatsManager != null) {
-            createCache("android_phone_usage_event", PhoneUsageEvent())
+            context.lifecycleScope.async {
+                createCache("android_phone_usage_event", PhoneUsageEvent())
+            }
         } else {
             logger.warn("Usage statistics are not available.")
             null
@@ -120,7 +127,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
         val time = currentTime
         usagesTaskExecutor.execute {
-            send(userInteractionTopic, PhoneUserInteraction(time, time, state))
+            send(userInteractionTopic.await(), PhoneUserInteraction(time, time, state))
         }
         // Save the last user interaction state. Value shutdown is used to register boot.
         preferences.edit()
@@ -188,7 +195,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         val time = lastTimestamp / 1000.0
         val value = PhoneUsageEvent(time, currentTime, lastPackageName, null, null, usageEventType)
         usagesTaskExecutor.execute {
-            send(usageEventTopic, value)
+            send(usageEventTopic.await(), value)
         }
 
         if (logger.isDebugEnabled) {

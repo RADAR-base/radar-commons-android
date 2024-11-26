@@ -38,6 +38,9 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.util.SparseArray
 import android.util.SparseIntArray
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -56,12 +59,24 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
-    private val accelerationTopic: DataCache<ObservationKey, PhoneAcceleration> = createCache("android_phone_acceleration", PhoneAcceleration())
-    private val lightTopic: DataCache<ObservationKey, PhoneLight> = createCache("android_phone_light", PhoneLight())
-    private val stepCountTopic: DataCache<ObservationKey, PhoneStepCount> = createCache("android_phone_step_count", PhoneStepCount())
-    private val gyroscopeTopic: DataCache<ObservationKey, PhoneGyroscope> = createCache("android_phone_gyroscope", PhoneGyroscope())
-    private val magneticFieldTopic: DataCache<ObservationKey, PhoneMagneticField> = createCache("android_phone_magnetic_field", PhoneMagneticField())
-    private val batteryTopic: DataCache<ObservationKey, PhoneBatteryLevel> = createCache("android_phone_battery_level", PhoneBatteryLevel())
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, PhoneAcceleration>> = context.lifecycleScope.async {
+        createCache("android_phone_acceleration", PhoneAcceleration())
+    }
+    private val lightTopic: Deferred<DataCache<ObservationKey, PhoneLight>> = context.lifecycleScope.async {
+        createCache("android_phone_light", PhoneLight())
+    }
+    private val stepCountTopic: Deferred<DataCache<ObservationKey, PhoneStepCount>> = context.lifecycleScope.async {
+        createCache("android_phone_step_count", PhoneStepCount())
+    }
+    private val gyroscopeTopic: Deferred<DataCache<ObservationKey, PhoneGyroscope>> = context.lifecycleScope.async {
+        createCache("android_phone_gyroscope", PhoneGyroscope())
+    }
+    private val magneticFieldTopic: Deferred<DataCache<ObservationKey, PhoneMagneticField>> = context.lifecycleScope.async {
+        createCache("android_phone_magnetic_field", PhoneMagneticField())
+    }
+    private val batteryTopic: Deferred<DataCache<ObservationKey, PhoneBatteryLevel>> = context.lifecycleScope.async {
+        createCache("android_phone_battery_level", PhoneBatteryLevel())
+    }
 
     var sensorDelays: SparseIntArray = SparseIntArray()
         set(value) {
@@ -214,13 +229,13 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         val z = event.values[2] / SensorManager.GRAVITY_EARTH
         state.setAcceleration(x, y, z)
 
-        send(accelerationTopic, PhoneAcceleration(time, time, x, y, z))
+        send(accelerationTopic.await(), PhoneAcceleration(time, time, x, y, z))
     }
 
     private suspend fun processLight(time: Double, event: SensorEvent) {
         val lightValue = event.values[0]
 
-        send(lightTopic, PhoneLight(time, time, lightValue))
+        send(lightTopic.await(), PhoneLight(time, time, lightValue))
     }
 
     private suspend fun processGyroscope(time: Double, event: SensorEvent) {
@@ -229,7 +244,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         val axisY = event.values[1]
         val axisZ = event.values[2]
 
-        send(gyroscopeTopic, PhoneGyroscope(time, time, axisX, axisY, axisZ))
+        send(gyroscopeTopic.await(), PhoneGyroscope(time, time, axisX, axisY, axisZ))
     }
 
     private suspend fun processMagneticField(time: Double, event: SensorEvent) {
@@ -238,7 +253,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         val axisY = event.values[1]
         val axisZ = event.values[2]
 
-        send(magneticFieldTopic, PhoneMagneticField(time, time, axisX, axisY, axisZ))
+        send(magneticFieldTopic.await(), PhoneMagneticField(time, time, axisX, axisY, axisZ))
     }
 
     private suspend fun processStep(time: Double, event: SensorEvent) {
@@ -253,7 +268,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             stepCount - lastStepCount
         }
         lastStepCount = stepCount
-        send(stepCountTopic, PhoneStepCount(time, time, stepsSinceLastUpdate))
+        send(stepCountTopic.await(), PhoneStepCount(time, time, stepsSinceLastUpdate))
 
         logger.info("Steps taken: {}", stepsSinceLastUpdate)
     }
@@ -275,7 +290,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         state.batteryLevel = batteryPct
 
         val time = currentTime
-        send(batteryTopic, PhoneBatteryLevel(time, time, batteryPct, isPlugged, batteryStatus))
+        send(batteryTopic.await(), PhoneBatteryLevel(time, time, batteryPct, isPlugged, batteryStatus))
     }
 
     override fun onClose() {

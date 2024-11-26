@@ -23,6 +23,7 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AddressComponent
@@ -33,6 +34,8 @@ import com.google.android.libraries.places.api.net.FetchPlaceResponse
 import com.google.android.libraries.places.api.net.FindCurrentPlaceRequest
 import com.google.android.libraries.places.api.net.FindCurrentPlaceResponse
 import com.google.android.libraries.places.api.net.PlacesClient
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -49,10 +52,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized private var apiKey: String, private val placeExecutor: CoroutineTaskExecutor) : AbstractSourceManager<GooglePlacesService, GooglePlacesState>(service) {
-    private val placesInfoTopic: DataCache<ObservationKey, GooglePlacesInfo> = createCache(
-        "android_google_places_info",
-        GooglePlacesInfo()
-    )
+    private val placesInfoTopic: Deferred<DataCache<ObservationKey, GooglePlacesInfo>> = service.lifecycleScope.async {
+        createCache(
+            "android_google_places_info",
+            GooglePlacesInfo()
+        )
+    }
 
     private val placesProcessor: OfflineProcessor
     // Delay in seconds for exponential backoff
@@ -243,7 +248,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                 val state = findComponent(addressComponents, STATE_KEY)
                                 val country = findComponent(addressComponents, COUNTRY_KEY)
                                 placeExecutor.execute {
-                                    send(placesInfoTopic, placesInfoBuilder.apply {
+                                    send(placesInfoTopic.await(), placesInfoBuilder.apply {
                                         this.city = city
                                         this.state = state
                                         this.country = country
@@ -261,7 +266,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                                     }
                                     else -> {
                                         placeExecutor.execute {
-                                            send(placesInfoTopic,
+                                            send(placesInfoTopic.await(),
                                                 placesInfoBuilder.apply { this.placeId = it }
                                                     .build()
                                             )
@@ -273,7 +278,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                 }
             } else {
                 placeExecutor.execute {
-                    send(placesInfoTopic, placesInfoBuilder.build())
+                    send(placesInfoTopic.await(), placesInfoBuilder.build())
                 }
             }
         }

@@ -33,6 +33,9 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -52,10 +55,12 @@ import java.io.RandomAccessFile
 
 class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceManager<PhoneAudioInputService,
         PhoneAudioInputState>(service), PhoneAudioInputState.AudioRecordManager, PhoneAudioInputState.AudioRecordingManager {
-    private val audioInputTopic: DataCache<ObservationKey, PhoneAudioInput> = createCache(
-        "android_phone_audio_input",
-        PhoneAudioInput()
-    )
+    private val audioInputTopic: Deferred<DataCache<ObservationKey, PhoneAudioInput>> = service.lifecycleScope.async {
+        createCache(
+            "android_phone_audio_input",
+            PhoneAudioInput()
+        )
+    }
 
     private var audioRecord: AudioRecord? = null
     private var randomAccessWriter: RandomAccessFile? = null
@@ -214,7 +219,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                 }
                 recordProcessingHandler.execute {
                     send(
-                        audioInputTopic, PhoneAudioInput(
+                        audioInputTopic.await(), PhoneAudioInput(
                             currentTime,
                             currentTime,
                             "will be set after s3 functionality is added",

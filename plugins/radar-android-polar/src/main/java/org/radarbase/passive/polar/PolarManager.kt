@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context.POWER_SERVICE
 import android.os.PowerManager
 import android.util.Log
+import androidx.lifecycle.lifecycleScope
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl.defaultImplementation
@@ -13,6 +14,8 @@ import com.polar.sdk.api.model.*
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Flowable
 import io.reactivex.rxjava3.disposables.Disposable
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -27,18 +30,24 @@ class PolarManager(
     polarService: PolarService,
 ) : AbstractSourceManager<PolarService, PolarState>(polarService) {
 
-    private val accelerationTopic: DataCache<ObservationKey, PolarAcceleration> =
-        createCache("android_polar_acceleration", PolarAcceleration())
-    private val batteryLevelTopic: DataCache<ObservationKey, PolarBatteryLevel> =
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, PolarAcceleration>> = polarService.lifecycleScope.async {
+            createCache("android_polar_acceleration", PolarAcceleration())
+        }
+    private val batteryLevelTopic: Deferred<DataCache<ObservationKey, PolarBatteryLevel>> = polarService.lifecycleScope.async {
         createCache("android_polar_battery_level", PolarBatteryLevel())
-    private val ecgTopic: DataCache<ObservationKey, PolarEcg> =
+    }
+    private val ecgTopic: Deferred<DataCache<ObservationKey, PolarEcg>> = polarService.lifecycleScope.async {
         createCache("android_polar_ecg", PolarEcg())
-    private val heartRateTopic: DataCache<ObservationKey, PolarHeartRate> =
+    }
+    private val heartRateTopic: Deferred<DataCache<ObservationKey, PolarHeartRate>> = polarService.lifecycleScope.async {
         createCache("android_polar_heart_rate", PolarHeartRate())
-    private val ppIntervalTopic: DataCache<ObservationKey, PolarPpInterval> =
+    }
+    private val ppIntervalTopic: Deferred<DataCache<ObservationKey, PolarPpInterval>> = polarService.lifecycleScope.async {
         createCache("android_polar_pulse_to_pulse_interval", PolarPpInterval())
-    private val ppgTopic: DataCache<ObservationKey, PolarPpg> =
+    }
+    private val ppgTopic: Deferred<DataCache<ObservationKey, PolarPpg>> = polarService.lifecycleScope.async {
         createCache("android_polar_ppg", PolarPpg())
+    }
 
     private val polarExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
     private var wakeLock: PowerManager.WakeLock? = null
@@ -165,7 +174,7 @@ class PolarManager(
                 logger.debug("Battery level $level%, which is $batteryLevel at $currentTime")
                 polarExecutor.execute {
                     send(
-                        batteryLevelTopic,
+                        batteryLevelTopic.await(),
                         PolarBatteryLevel(name, currentTime, currentTime, batteryLevel)
                     )
                 }
@@ -304,7 +313,7 @@ class PolarManager(
                                 )
                                 polarExecutor.execute {
                                     send(
-                                        heartRateTopic,
+                                        heartRateTopic.await(),
                                         PolarHeartRate(
                                             name,
                                             getTimeNano(),
@@ -355,7 +364,7 @@ class PolarManager(
                                 )
                                 polarExecutor.execute {
                                     send(
-                                        ecgTopic,
+                                        ecgTopic.await(),
                                         PolarEcg(
                                             name,
                                             PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
@@ -398,7 +407,7 @@ class PolarManager(
                                 )
                                 polarExecutor.execute {
                                     send(
-                                        accelerationTopic,
+                                        accelerationTopic.await(),
                                         PolarAcceleration(
                                             name,
                                             PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
@@ -447,7 +456,7 @@ class PolarManager(
                                     )
                                     polarExecutor.execute {
                                         send(
-                                            ppgTopic,
+                                            ppgTopic.await(),
                                             PolarPpg(
                                                 name,
                                                 PolarUtils.convertEpochPolarToUnixEpoch(data.timeStamp),
@@ -488,7 +497,7 @@ class PolarManager(
                                 )
                                 polarExecutor.execute {
                                     send(
-                                        ppIntervalTopic,
+                                        ppIntervalTopic.await(),
                                         PolarPpInterval(
                                             name,
                                             currentTime,

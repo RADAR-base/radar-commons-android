@@ -28,7 +28,10 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -49,14 +52,18 @@ import java.util.concurrent.TimeUnit
 
 class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceManager<PhoneBluetoothService, BaseSourceState>(service) {
     private val processor: OfflineProcessor
-    private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache(
-        "android_phone_bluetooth_devices",
-        PhoneBluetoothDevices()
-    )
-    private val bluetoothScannedTopic: DataCache<ObservationKey, PhoneBluetoothDeviceScanned> = createCache(
-        "android_phone_bluetooth_device_scanned",
-        PhoneBluetoothDeviceScanned()
-    )
+    private val bluetoothDevicesTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDevices>> = service.lifecycleScope.async {
+        createCache(
+            "android_phone_bluetooth_devices",
+            PhoneBluetoothDevices()
+        )
+    }
+    private val bluetoothScannedTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDeviceScanned>> = service.lifecycleScope.async {
+        createCache(
+            "android_phone_bluetooth_device_scanned",
+            PhoneBluetoothDeviceScanned()
+        )
+    }
 
     private val bluetoothTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
@@ -148,7 +155,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                                     hashGenerator.createHashByteBuffer(mac + "$hashSaltReference")
 
                                 bluetoothTaskExecutor.execute {
-                                    send(bluetoothScannedTopic, scannedTopicBuilder.apply {
+                                    send(bluetoothScannedTopic.await(), scannedTopicBuilder.apply {
                                         this.macAddressHash = hash
                                         this.pairedState = bd.bondState.toPairedState()
                                         this.hashSaltReference = hashSaltReference
@@ -156,7 +163,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                                 }
                             }
                             bluetoothTaskExecutor.execute {
-                                send(bluetoothScannedTopic, scannedTopicBuilder.apply {
+                                send(bluetoothScannedTopic.await(), scannedTopicBuilder.apply {
                                     this.macAddressHash = macAddressHash
                                     this.pairedState = device.bondState.toPairedState()
                                     this.hashSaltReference = hashSaltReference
@@ -174,7 +181,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                                 val time = currentTime
                                 bluetoothTaskExecutor.execute {
                                     send(
-                                        bluetoothDevicesTopic, PhoneBluetoothDevices(
+                                        bluetoothDevicesTopic.await(), PhoneBluetoothDevices(
                                             time, time, bondedDevices, numberOfDevices, true
                                         )
                                     )
@@ -189,7 +196,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
             bluetoothAdapter.startDiscovery()
         } else {
             val time = currentTime
-            send(bluetoothDevicesTopic, PhoneBluetoothDevices(
+            send(bluetoothDevicesTopic.await(), PhoneBluetoothDevices(
                     time, time, null, null, false))
         }
     }

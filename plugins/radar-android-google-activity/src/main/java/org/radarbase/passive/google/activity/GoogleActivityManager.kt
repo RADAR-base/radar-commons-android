@@ -23,10 +23,13 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionResult
 import com.google.android.gms.location.DetectedActivity
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -41,10 +44,12 @@ import org.radarcns.passive.google.TransitionType
 import org.slf4j.LoggerFactory
 
 class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceManager<GoogleActivityService, BaseSourceState>(context) {
-    private val activityTransitionEventTopic: DataCache<ObservationKey, GoogleActivityTransitionEvent> = createCache(
-        "android_google_activity_transition_event",
-        GoogleActivityTransitionEvent()
-    )
+    private val activityTransitionEventTopic: Deferred<DataCache<ObservationKey, GoogleActivityTransitionEvent>> = context.lifecycleScope.async {
+        createCache(
+            "android_google_activity_transition_event",
+            GoogleActivityTransitionEvent()
+        )
+    }
 
     private val activityTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
     private val activityPendingIntent: PendingIntent
@@ -112,7 +117,7 @@ class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceMana
                 val activity = event.activityType.toActivityType()
                 val transition = event.transitionType.toTransitionType()
                 send(
-                    activityTransitionEventTopic,
+                    activityTransitionEventTopic.await(),
                     GoogleActivityTransitionEvent(time, currentTime, activity, transition)
                 )
             }

@@ -124,7 +124,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
      * @param <V> topic value type
      * @return created topic
      */
-    protected fun <V : SpecificRecord> createCache(
+    protected suspend fun <V : SpecificRecord> createCache(
         name: String, valueClass: V,
     ): DataCache<ObservationKey, V> {
         try {
@@ -135,8 +135,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
                 ObservationKey::class.java,
                 valueClass::class.java,
             )
-            val cache = runBlocking{  dataHandler.registerCache(topic) }
-            return cache
+            return dataHandler.registerCache(topic)
         } catch (e: ReflectiveOperationException) {
             logger.error("Error creating topic {}", name, e)
             throw RuntimeException(e)

@@ -39,21 +39,30 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.util.CoroutineTaskExecutor
 
 class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLogService, BaseSourceState>(context) {
-    private val callTopic: DataCache<ObservationKey, PhoneCall> = createCache(
-        "android_phone_call",
-        PhoneCall()
-    )
-    private val smsTopic: DataCache<ObservationKey, PhoneSms> = createCache(
-        "android_phone_sms",
-        PhoneSms()
-    )
-    private val smsUnreadTopic: DataCache<ObservationKey, PhoneSmsUnread> = createCache(
-        "android_phone_sms_unread",
-        PhoneSmsUnread()
-    )
+    private val callTopic: Deferred<DataCache<ObservationKey, PhoneCall>> = context.lifecycleScope.async {
+        createCache(
+            "android_phone_call",
+            PhoneCall()
+        )
+    }
+    private val smsTopic: Deferred<DataCache<ObservationKey, PhoneSms>> = context.lifecycleScope.async {
+        createCache(
+            "android_phone_sms",
+            PhoneSms()
+        )
+    }
+    private val smsUnreadTopic: Deferred<DataCache<ObservationKey, PhoneSmsUnread>> = context.lifecycleScope.async {
+        createCache(
+            "android_phone_sms_unread",
+            PhoneSmsUnread()
+        )
+    }
     private val preferences: SharedPreferences = context.getSharedPreferences(PhoneLogService::class.java.name, Context.MODE_PRIVATE)
     private val hashGenerator = HashGenerator(context, PhoneLogService::class.java.name)
     private val db: ContentResolver = context.contentResolver
@@ -231,7 +240,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         }
         logsExecutor.execute {
             send(
-                callTopic, PhoneCall(
+                callTopic.await(), PhoneCall(
                     eventTimestamp,
                     currentTime,
                     duration,
@@ -265,7 +274,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         val sendFromContact: Boolean? = if (type == PhoneSmsType.INCOMING) targetIsContact else null
         logsExecutor.execute {
             send(
-                smsTopic, PhoneSms(
+                smsTopic.await(), PhoneSms(
                     eventTimestamp,
                     currentTime,
                     targetKey,
@@ -282,7 +291,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     private fun sendNumberUnreadSms(numberUnread: Int) {
         val time = currentTime
         logsExecutor.execute {
-            send(smsUnreadTopic, PhoneSmsUnread(time, time, numberUnread))
+            send(smsUnreadTopic.await(), PhoneSmsUnread(time, time, numberUnread))
         }
     }
 

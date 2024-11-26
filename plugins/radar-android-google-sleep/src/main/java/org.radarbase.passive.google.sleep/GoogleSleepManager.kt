@@ -23,10 +23,13 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.SleepClassifyEvent
 import com.google.android.gms.location.SleepSegmentEvent
 import com.google.android.gms.location.SleepSegmentRequest
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -41,14 +44,18 @@ import org.radarcns.passive.google.SleepClassificationStatus
 import org.slf4j.LoggerFactory
 
 class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<GoogleSleepService, BaseSourceState>(context) {
-    private val segmentEventTopic: DataCache<ObservationKey, GoogleSleepSegmentEvent> = createCache(
-        "android_google_sleep_segment_event",
-        GoogleSleepSegmentEvent()
-    )
-    private val classifyEventTopic: DataCache<ObservationKey, GoogleSleepClassifyEvent> = createCache(
-        "android_google_sleep_classify_event",
-        GoogleSleepClassifyEvent()
-    )
+    private val segmentEventTopic: Deferred<DataCache<ObservationKey, GoogleSleepSegmentEvent>> = context.lifecycleScope.async {
+        createCache(
+            "android_google_sleep_segment_event",
+            GoogleSleepSegmentEvent()
+        )
+    }
+    private val classifyEventTopic: Deferred<DataCache<ObservationKey, GoogleSleepClassifyEvent>> = context.lifecycleScope.async {
+        createCache(
+            "android_google_sleep_classify_event",
+            GoogleSleepClassifyEvent()
+        )
+    }
 
     private val sleepBroadcastReceiver: BroadcastReceiver
     private val sleepTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
@@ -87,7 +94,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
             val endTime: Double = sleepSegmentEvent.endTimeMillis / 1000.0
             val status: SleepClassificationStatus = sleepSegmentEvent.status.toSleepClassificationStatus()
 
-            send(segmentEventTopic, GoogleSleepSegmentEvent(startTime, time, endTime, status))
+            send(segmentEventTopic.await(), GoogleSleepSegmentEvent(startTime, time, endTime, status))
         }
     }
 
@@ -100,7 +107,7 @@ class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<Go
             val light = sleepClassifyEvent.light
             val motion = sleepClassifyEvent.motion
 
-            send(classifyEventTopic, GoogleSleepClassifyEvent(time, currentTime, sleepConfidence, light, motion))
+            send(classifyEventTopic.await(), GoogleSleepClassifyEvent(time, currentTime, sleepConfidence, light, motion))
         }
     }
 

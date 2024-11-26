@@ -21,7 +21,10 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.data.TableDataHandler
@@ -55,12 +58,24 @@ import java.util.concurrent.TimeUnit.SECONDS
 class ApplicationStatusManager(
     service: ApplicationStatusService
 ) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
-    private val serverTopic: DataCache<ObservationKey, ApplicationServerStatus> = createCache("application_server_status", ApplicationServerStatus())
-    private val recordCountsTopic: DataCache<ObservationKey, ApplicationRecordCounts> = createCache("application_record_counts", ApplicationRecordCounts())
-    private val uptimeTopic: DataCache<ObservationKey, ApplicationUptime> = createCache("application_uptime", ApplicationUptime())
-    private val ntpTopic: DataCache<ObservationKey, ApplicationExternalTime> = createCache("application_external_time", ApplicationExternalTime())
-    private val timeZoneTopic: DataCache<ObservationKey, ApplicationTimeZone> = createCache("application_time_zone", ApplicationTimeZone())
-    private val deviceInfoTopic: DataCache<ObservationKey, ApplicationDeviceInfo> = createCache("application_device_info", ApplicationDeviceInfo())
+    private val serverTopic: Deferred<DataCache<ObservationKey, ApplicationServerStatus>> = service.lifecycleScope.async {
+            createCache("application_server_status", ApplicationServerStatus())
+        }
+    private val recordCountsTopic: Deferred<DataCache<ObservationKey, ApplicationRecordCounts>> = service.lifecycleScope.async {
+        createCache("application_record_counts", ApplicationRecordCounts())
+    }
+    private val uptimeTopic: Deferred<DataCache<ObservationKey, ApplicationUptime>> = service.lifecycleScope.async {
+        createCache("application_uptime", ApplicationUptime())
+    }
+    private val ntpTopic: Deferred<DataCache<ObservationKey, ApplicationExternalTime>> = service.lifecycleScope.async {
+        createCache("application_external_time", ApplicationExternalTime())
+    }
+    private val timeZoneTopic: Deferred<DataCache<ObservationKey, ApplicationTimeZone>> = service.lifecycleScope.async {
+        createCache("application_time_zone", ApplicationTimeZone())
+    }
+    private val deviceInfoTopic: Deferred<DataCache<ObservationKey, ApplicationDeviceInfo>> = service.lifecycleScope.async {
+        createCache("application_device_info", ApplicationDeviceInfo())
+    }
 
     private val processor: OfflineProcessor
     private val creationTimeStamp: Long = SystemClock.elapsedRealtime()
@@ -202,7 +217,7 @@ class ApplicationStatusManager(
         deviceInfoCache.applyIfChanged(currentApplicationInfo) { deviceInfo ->
             applicationStatusExecutor.execute {
                 send(
-                    deviceInfoTopic,
+                    deviceInfoTopic.await(),
                     ApplicationDeviceInfo(
                         currentTime,
                         deviceInfo.manufacturer,
@@ -236,7 +251,7 @@ class ApplicationStatusManager(
             val ntpTime = (sntpClient.ntpTime + SystemClock.elapsedRealtime() - sntpClient.ntpTimeReference) / 1000.0
 
             send(
-                ntpTopic,
+                ntpTopic.await(),
                 ApplicationExternalTime(
                     time,
                     ntpTime,
@@ -255,7 +270,7 @@ class ApplicationStatusManager(
         val ipAddress = if (isProcessingIp) lookupIpAddress() else null
         logger.info("Server Status: {}; Device IP: {}", status, ipAddress)
 
-        send(serverTopic, ApplicationServerStatus(time, status, ipAddress))
+        send(serverTopic.await(), ApplicationServerStatus(time, status, ipAddress))
     }
 
     // Find Ip via NetworkInterfaces. Works via wifi, ethernet and mobile network
@@ -276,7 +291,7 @@ class ApplicationStatusManager(
 
     private suspend fun processUptime() {
         val uptime = (SystemClock.elapsedRealtime() - creationTimeStamp) / 1000.0
-        send(uptimeTopic, ApplicationUptime(currentTime, uptime))
+        send(uptimeTopic.await(), ApplicationUptime(currentTime, uptime))
     }
 
     private suspend fun processRecordsSent() {
@@ -289,7 +304,7 @@ class ApplicationStatusManager(
 
         logger.info("Number of records: {sent: {}, unsent: {}, cached: {}}",
             recordsSent, recordsCached, recordsCached)
-        send(recordCountsTopic, ApplicationRecordCounts(time,
+        send(recordCountsTopic.await(), ApplicationRecordCounts(time,
             recordsCached, recordsSent, recordsCached.toIntCapped()))
     }
 
@@ -308,7 +323,7 @@ class ApplicationStatusManager(
         tzOffsetCache.applyIfChanged(tzOffset / 1000) { offset ->
             applicationStatusExecutor.execute {
                 send(
-                    timeZoneTopic,
+                    timeZoneTopic.await(),
                     ApplicationTimeZone(
                         now / 1000.0,
                         offset,

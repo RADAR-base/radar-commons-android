@@ -21,8 +21,12 @@ import android.location.Location
 import android.location.LocationManager
 import android.location.LocationManager.GPS_PROVIDER
 import android.location.LocationManager.NETWORK_PROVIDER
+import androidx.lifecycle.lifecycleScope
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
@@ -30,6 +34,7 @@ import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.OfflineProcessor
 import org.radarbase.passive.weather.WeatherApiService.Companion.WEATHER_QUERY_INTERVAL_DEFAULT
+import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.weather.LocalWeather
 import org.radarcns.passive.weather.LocationType
 import org.slf4j.LoggerFactory
@@ -39,7 +44,9 @@ import java.util.concurrent.TimeUnit
 class WeatherApiManager(service: WeatherApiService, private val client: HttpClient) : AbstractSourceManager<WeatherApiService, BaseSourceState>(service) {
 
     private val processor: OfflineProcessor
-    private val weatherTopic = createCache("android_local_weather", LocalWeather())
+    private val weatherTopic: Deferred<DataCache<ObservationKey, LocalWeather>> = service.lifecycleScope.async {
+        createCache("android_local_weather", LocalWeather())
+    }
     private val networkReceiver: NetworkConnectedReceiver
 
     private val weatherTaskExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
@@ -131,7 +138,7 @@ class WeatherApiManager(service: WeatherApiService, private val client: HttpClie
             )
 
             logger.info("Weather: {} {} {}", result, result.sunRise, result.sunSet)
-            send(weatherTopic, weatherData)
+            send(weatherTopic.await(), weatherData)
         } catch (e: IOException) {
             logger.error("Could not get weather from {} API.", api)
         }
