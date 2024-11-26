@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -78,7 +79,7 @@ class CoroutineTaskExecutor(
      *
      * @param job The root job for this executor's coroutine scope. Defaults to a new [Job].
      */
-    fun start(job: Job = Job())  {
+    fun start(job: Job = SupervisorJob())  {
         if (isStarted.get()) {
             logger.warn("Tried to start executor multiple times.")
             return
