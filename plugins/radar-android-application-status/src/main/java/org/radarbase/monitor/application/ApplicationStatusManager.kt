@@ -58,22 +58,22 @@ import java.util.concurrent.TimeUnit.SECONDS
 class ApplicationStatusManager(
     service: ApplicationStatusService
 ) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
-    private val serverTopic: Deferred<DataCache<ObservationKey, ApplicationServerStatus>> = service.lifecycleScope.async {
+    private val serverTopic: Deferred<DataCache<ObservationKey, ApplicationServerStatus>> = service.lifecycleScope.async(Dispatchers.Default) {
             createCache("application_server_status", ApplicationServerStatus())
         }
-    private val recordCountsTopic: Deferred<DataCache<ObservationKey, ApplicationRecordCounts>> = service.lifecycleScope.async {
+    private val recordCountsTopic: Deferred<DataCache<ObservationKey, ApplicationRecordCounts>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("application_record_counts", ApplicationRecordCounts())
     }
-    private val uptimeTopic: Deferred<DataCache<ObservationKey, ApplicationUptime>> = service.lifecycleScope.async {
+    private val uptimeTopic: Deferred<DataCache<ObservationKey, ApplicationUptime>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("application_uptime", ApplicationUptime())
     }
-    private val ntpTopic: Deferred<DataCache<ObservationKey, ApplicationExternalTime>> = service.lifecycleScope.async {
+    private val ntpTopic: Deferred<DataCache<ObservationKey, ApplicationExternalTime>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("application_external_time", ApplicationExternalTime())
     }
-    private val timeZoneTopic: Deferred<DataCache<ObservationKey, ApplicationTimeZone>> = service.lifecycleScope.async {
+    private val timeZoneTopic: Deferred<DataCache<ObservationKey, ApplicationTimeZone>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("application_time_zone", ApplicationTimeZone())
     }
-    private val deviceInfoTopic: Deferred<DataCache<ObservationKey, ApplicationDeviceInfo>> = service.lifecycleScope.async {
+    private val deviceInfoTopic: Deferred<DataCache<ObservationKey, ApplicationDeviceInfo>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("application_device_info", ApplicationDeviceInfo())
     }
 

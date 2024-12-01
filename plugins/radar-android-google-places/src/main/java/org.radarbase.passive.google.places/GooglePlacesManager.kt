@@ -35,6 +35,7 @@ import com.google.android.libraries.places.api.net.FindCurrentPlaceRequest
 import com.google.android.libraries.places.api.net.FindCurrentPlaceResponse
 import com.google.android.libraries.places.api.net.PlacesClient
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -52,7 +53,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized private var apiKey: String, private val placeExecutor: CoroutineTaskExecutor) : AbstractSourceManager<GooglePlacesService, GooglePlacesState>(service) {
-    private val placesInfoTopic: Deferred<DataCache<ObservationKey, GooglePlacesInfo>> = service.lifecycleScope.async {
+    private val placesInfoTopic: Deferred<DataCache<ObservationKey, GooglePlacesInfo>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_google_places_info",
             GooglePlacesInfo()

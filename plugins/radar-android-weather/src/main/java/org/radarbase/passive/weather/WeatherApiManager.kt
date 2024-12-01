@@ -24,6 +24,7 @@ import android.location.LocationManager.NETWORK_PROVIDER
 import androidx.lifecycle.lifecycleScope
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
@@ -44,7 +45,8 @@ import java.util.concurrent.TimeUnit
 class WeatherApiManager(service: WeatherApiService, private val client: HttpClient) : AbstractSourceManager<WeatherApiService, BaseSourceState>(service) {
 
     private val processor: OfflineProcessor
-    private val weatherTopic: Deferred<DataCache<ObservationKey, LocalWeather>> = service.lifecycleScope.async {
+    private val weatherTopic: Deferred<DataCache<ObservationKey, LocalWeather>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_local_weather", LocalWeather())
     }
     private val networkReceiver: NetworkConnectedReceiver

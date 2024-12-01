@@ -19,6 +19,7 @@ package org.radarbase.passive.audio
 import android.util.Base64
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -37,7 +38,8 @@ import java.util.concurrent.TimeUnit
 
 /** Manages Phone sensors  */
 class OpensmileAudioManager(service: OpenSmileAudioService) : AbstractSourceManager<OpenSmileAudioService, BaseSourceState>(service) {
-    private val audioTopic: Deferred<DataCache<ObservationKey, OpenSmile2PhoneAudio>> = service.lifecycleScope.async {
+    private val audioTopic: Deferred<DataCache<ObservationKey, OpenSmile2PhoneAudio>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_processed_audio", OpenSmile2PhoneAudio())
     }
 

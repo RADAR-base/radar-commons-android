@@ -41,7 +41,8 @@ import kotlin.collections.LinkedHashSet
 
 class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourceManager<PhoneContactsListService, BaseSourceState>(service) {
     private val preferences: SharedPreferences = service.getSharedPreferences(PhoneContactListManager::class.java.name, Context.MODE_PRIVATE)
-    private val contactsTopic: Deferred<DataCache<ObservationKey, PhoneContactList>> = service.lifecycleScope.async {
+    private val contactsTopic: Deferred<DataCache<ObservationKey, PhoneContactList>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_phone_contacts",
             PhoneContactList()

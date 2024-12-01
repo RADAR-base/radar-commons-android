@@ -29,6 +29,7 @@ import com.google.android.gms.location.SleepClassifyEvent
 import com.google.android.gms.location.SleepSegmentEvent
 import com.google.android.gms.location.SleepSegmentRequest
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -44,13 +45,15 @@ import org.radarcns.passive.google.SleepClassificationStatus
 import org.slf4j.LoggerFactory
 
 class GoogleSleepManager(context: GoogleSleepService) : AbstractSourceManager<GoogleSleepService, BaseSourceState>(context) {
-    private val segmentEventTopic: Deferred<DataCache<ObservationKey, GoogleSleepSegmentEvent>> = context.lifecycleScope.async {
+    private val segmentEventTopic: Deferred<DataCache<ObservationKey, GoogleSleepSegmentEvent>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_google_sleep_segment_event",
             GoogleSleepSegmentEvent()
         )
     }
-    private val classifyEventTopic: Deferred<DataCache<ObservationKey, GoogleSleepClassifyEvent>> = context.lifecycleScope.async {
+    private val classifyEventTopic: Deferred<DataCache<ObservationKey, GoogleSleepClassifyEvent>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_google_sleep_classify_event",
             GoogleSleepClassifyEvent()

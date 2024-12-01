@@ -28,6 +28,7 @@ import com.empatica.empalink.delegate.EmpaDataDelegate
 import com.empatica.empalink.delegate.EmpaSessionManagerDelegate
 import com.empatica.empalink.delegate.EmpaStatusDelegate
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -55,28 +56,29 @@ class E4Manager(
         NotificationHandler(service)
     }
     private var doNotify: Boolean = false
-    private val accelerationTopic: Deferred<DataCache<ObservationKey, EmpaticaE4Acceleration>> = e4Service.lifecycleScope.async {
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, EmpaticaE4Acceleration>> = e4Service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_empatica_e4_acceleration", EmpaticaE4Acceleration())
     }
-    private val batteryLevelTopic: Deferred<DataCache<ObservationKey, EmpaticaE4BatteryLevel>> = e4Service.lifecycleScope.async {
+    private val batteryLevelTopic: Deferred<DataCache<ObservationKey, EmpaticaE4BatteryLevel>> = e4Service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_empatica_e4_battery_level", EmpaticaE4BatteryLevel())
     }
-    private val bloodVolumePulseTopic: Deferred<DataCache<ObservationKey, EmpaticaE4BloodVolumePulse>> = e4Service.lifecycleScope.async {
+    private val bloodVolumePulseTopic: Deferred<DataCache<ObservationKey, EmpaticaE4BloodVolumePulse>> = e4Service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_empatica_e4_blood_volume_pulse", EmpaticaE4BloodVolumePulse())
     }
-    private val edaTopic: Deferred<DataCache<ObservationKey, EmpaticaE4ElectroDermalActivity>> = e4Service.lifecycleScope.async {
+    private val edaTopic: Deferred<DataCache<ObservationKey, EmpaticaE4ElectroDermalActivity>> = e4Service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_empatica_e4_electrodermal_activity", EmpaticaE4ElectroDermalActivity())
     }
-    private val interBeatIntervalTopic: Deferred<DataCache<ObservationKey, EmpaticaE4InterBeatInterval>> = e4Service.lifecycleScope.async {
+    private val interBeatIntervalTopic: Deferred<DataCache<ObservationKey, EmpaticaE4InterBeatInterval>> = e4Service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_empatica_e4_inter_beat_interval", EmpaticaE4InterBeatInterval())
     }
-    private val temperatureTopic: Deferred<DataCache<ObservationKey, EmpaticaE4Temperature>> = e4Service.lifecycleScope.async {
+    private val temperatureTopic: Deferred<DataCache<ObservationKey, EmpaticaE4Temperature>> = e4Service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_empatica_e4_temperature", EmpaticaE4Temperature())
     }
-    private val sensorStatusTopic: Deferred<DataCache<ObservationKey, EmpaticaE4SensorStatus>> = e4Service.lifecycleScope.async {
+    private val sensorStatusTopic: Deferred<DataCache<ObservationKey, EmpaticaE4SensorStatus>> = e4Service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_empatica_e4_sensor_status", EmpaticaE4SensorStatus())
     }
-    private val tagTopic: Deferred<DataCache<ObservationKey, EmpaticaE4Tag>> = e4Service.lifecycleScope.async {
+    private val tagTopic: Deferred<DataCache<ObservationKey, EmpaticaE4Tag>> = e4Service.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_empatica_e4_tag", EmpaticaE4Tag())
     }
 

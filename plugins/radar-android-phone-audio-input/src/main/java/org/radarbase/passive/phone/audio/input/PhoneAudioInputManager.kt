@@ -35,6 +35,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -55,7 +56,8 @@ import java.io.RandomAccessFile
 
 class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceManager<PhoneAudioInputService,
         PhoneAudioInputState>(service), PhoneAudioInputState.AudioRecordManager, PhoneAudioInputState.AudioRecordingManager {
-    private val audioInputTopic: Deferred<DataCache<ObservationKey, PhoneAudioInput>> = service.lifecycleScope.async {
+    private val audioInputTopic: Deferred<DataCache<ObservationKey, PhoneAudioInput>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_phone_audio_input",
             PhoneAudioInput()

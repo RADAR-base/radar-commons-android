@@ -41,23 +41,27 @@ import java.util.regex.Pattern
 import android.os.Bundle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.util.CoroutineTaskExecutor
 
 class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLogService, BaseSourceState>(context) {
-    private val callTopic: Deferred<DataCache<ObservationKey, PhoneCall>> = context.lifecycleScope.async {
+    private val callTopic: Deferred<DataCache<ObservationKey, PhoneCall>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_phone_call",
             PhoneCall()
         )
     }
-    private val smsTopic: Deferred<DataCache<ObservationKey, PhoneSms>> = context.lifecycleScope.async {
+    private val smsTopic: Deferred<DataCache<ObservationKey, PhoneSms>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_phone_sms",
             PhoneSms()
         )
     }
-    private val smsUnreadTopic: Deferred<DataCache<ObservationKey, PhoneSmsUnread>> = context.lifecycleScope.async {
+    private val smsUnreadTopic: Deferred<DataCache<ObservationKey, PhoneSmsUnread>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_phone_sms_unread",
             PhoneSmsUnread()

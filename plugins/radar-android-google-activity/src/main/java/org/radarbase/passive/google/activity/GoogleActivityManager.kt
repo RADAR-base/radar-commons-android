@@ -29,6 +29,7 @@ import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionResult
 import com.google.android.gms.location.DetectedActivity
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -44,7 +45,8 @@ import org.radarcns.passive.google.TransitionType
 import org.slf4j.LoggerFactory
 
 class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceManager<GoogleActivityService, BaseSourceState>(context) {
-    private val activityTransitionEventTopic: Deferred<DataCache<ObservationKey, GoogleActivityTransitionEvent>> = context.lifecycleScope.async {
+    private val activityTransitionEventTopic: Deferred<DataCache<ObservationKey, GoogleActivityTransitionEvent>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_google_activity_transition_event",
             GoogleActivityTransitionEvent()

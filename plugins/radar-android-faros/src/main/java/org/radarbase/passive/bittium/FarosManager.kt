@@ -18,6 +18,7 @@ package org.radarbase.passive.bittium
 
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -42,19 +43,20 @@ class FarosManager internal constructor(
         NotificationHandler(this.service)
     }
     private var doNotify: Boolean = false
-    private val accelerationTopic: Deferred<DataCache<ObservationKey, BittiumFarosAcceleration>> = service.lifecycleScope.async {
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, BittiumFarosAcceleration>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_bittium_faros_acceleration", BittiumFarosAcceleration())
     }
-    private val ecgTopic: Deferred<DataCache<ObservationKey, BittiumFarosEcg>> = service.lifecycleScope.async {
+    private val ecgTopic: Deferred<DataCache<ObservationKey, BittiumFarosEcg>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_bittium_faros_ecg", BittiumFarosEcg())
     }
-    private val ibiTopic: Deferred<DataCache<ObservationKey, BittiumFarosInterBeatInterval>> = service.lifecycleScope.async {
+    private val ibiTopic: Deferred<DataCache<ObservationKey, BittiumFarosInterBeatInterval>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_bittium_faros_inter_beat_interval", BittiumFarosInterBeatInterval())
     }
-    private val temperatureTopic: Deferred<DataCache<ObservationKey, BittiumFarosTemperature>> = service.lifecycleScope.async {
+    private val temperatureTopic: Deferred<DataCache<ObservationKey, BittiumFarosTemperature>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("android_bittium_faros_temperature", BittiumFarosTemperature())
     }
-    private val batteryTopic: Deferred<DataCache<ObservationKey, BittiumFarosBatteryLevel>> = service.lifecycleScope.async {
+    private val batteryTopic: Deferred<DataCache<ObservationKey, BittiumFarosBatteryLevel>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_bittium_faros_battery_level", BittiumFarosBatteryLevel())
     }
 

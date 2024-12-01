@@ -25,6 +25,7 @@ import android.os.Bundle
 import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -48,7 +49,8 @@ import java.math.BigDecimal
 import java.util.concurrent.ThreadLocalRandom
 
 class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManager<PhoneLocationService, BaseSourceState>(context), LocationListener {
-    private val locationTopic: Deferred<DataCache<ObservationKey, PhoneRelativeLocation>> = context.lifecycleScope.async {
+    private val locationTopic: Deferred<DataCache<ObservationKey, PhoneRelativeLocation>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_phone_relative_location",
             PhoneRelativeLocation()

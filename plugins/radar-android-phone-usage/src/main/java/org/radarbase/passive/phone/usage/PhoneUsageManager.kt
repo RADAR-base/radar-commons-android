@@ -23,6 +23,7 @@ import android.content.*
 import android.os.Build
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
@@ -43,7 +44,8 @@ import java.util.concurrent.TimeUnit
 class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<PhoneUsageService, BaseSourceState>(context) {
 
     private val usageEventTopic: Deferred<DataCache<ObservationKey, PhoneUsageEvent>>?
-    private val userInteractionTopic: Deferred<DataCache<ObservationKey, PhoneUserInteraction>> = context.lifecycleScope.async {
+    private val userInteractionTopic: Deferred<DataCache<ObservationKey, PhoneUserInteraction>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache(
             "android_phone_user_interaction",
             PhoneUserInteraction()
@@ -67,7 +69,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         this.usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
 
         usageEventTopic = if (usageStatsManager != null) {
-            context.lifecycleScope.async {
+            context.lifecycleScope.async(Dispatchers.Default) {
                 createCache("android_phone_usage_event", PhoneUsageEvent())
             }
         } else {

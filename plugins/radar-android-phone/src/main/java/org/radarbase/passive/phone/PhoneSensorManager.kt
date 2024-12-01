@@ -40,6 +40,7 @@ import android.util.SparseArray
 import android.util.SparseIntArray
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -59,22 +60,28 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
-    private val accelerationTopic: Deferred<DataCache<ObservationKey, PhoneAcceleration>> = context.lifecycleScope.async {
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, PhoneAcceleration>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_phone_acceleration", PhoneAcceleration())
     }
-    private val lightTopic: Deferred<DataCache<ObservationKey, PhoneLight>> = context.lifecycleScope.async {
+    private val lightTopic: Deferred<DataCache<ObservationKey, PhoneLight>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_phone_light", PhoneLight())
     }
-    private val stepCountTopic: Deferred<DataCache<ObservationKey, PhoneStepCount>> = context.lifecycleScope.async {
+    private val stepCountTopic: Deferred<DataCache<ObservationKey, PhoneStepCount>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_phone_step_count", PhoneStepCount())
     }
-    private val gyroscopeTopic: Deferred<DataCache<ObservationKey, PhoneGyroscope>> = context.lifecycleScope.async {
+    private val gyroscopeTopic: Deferred<DataCache<ObservationKey, PhoneGyroscope>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_phone_gyroscope", PhoneGyroscope())
     }
-    private val magneticFieldTopic: Deferred<DataCache<ObservationKey, PhoneMagneticField>> = context.lifecycleScope.async {
+    private val magneticFieldTopic: Deferred<DataCache<ObservationKey, PhoneMagneticField>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_phone_magnetic_field", PhoneMagneticField())
     }
-    private val batteryTopic: Deferred<DataCache<ObservationKey, PhoneBatteryLevel>> = context.lifecycleScope.async {
+    private val batteryTopic: Deferred<DataCache<ObservationKey, PhoneBatteryLevel>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_phone_battery_level", PhoneBatteryLevel())
     }
 

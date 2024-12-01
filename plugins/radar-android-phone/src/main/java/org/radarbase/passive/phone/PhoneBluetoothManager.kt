@@ -30,6 +30,7 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
@@ -52,18 +53,24 @@ import java.util.concurrent.TimeUnit
 
 class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceManager<PhoneBluetoothService, BaseSourceState>(service) {
     private val processor: OfflineProcessor
-    private val bluetoothDevicesTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDevices>> = service.lifecycleScope.async {
-        createCache(
-            "android_phone_bluetooth_devices",
-            PhoneBluetoothDevices()
-        )
-    }
-    private val bluetoothScannedTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDeviceScanned>> = service.lifecycleScope.async {
-        createCache(
-            "android_phone_bluetooth_device_scanned",
-            PhoneBluetoothDeviceScanned()
-        )
-    }
+    private val bluetoothDevicesTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDevices>> =
+        service.lifecycleScope.async(
+            Dispatchers.Default
+        ) {
+            createCache(
+                "android_phone_bluetooth_devices",
+                PhoneBluetoothDevices()
+            )
+        }
+    private val bluetoothScannedTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDeviceScanned>> =
+        service.lifecycleScope.async(
+            Dispatchers.Default
+        ) {
+            createCache(
+                "android_phone_bluetooth_device_scanned",
+                PhoneBluetoothDeviceScanned()
+            )
+        }
 
     private val bluetoothTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 

@@ -15,6 +15,7 @@ import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Flowable
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
@@ -30,22 +31,28 @@ class PolarManager(
     polarService: PolarService,
 ) : AbstractSourceManager<PolarService, PolarState>(polarService) {
 
-    private val accelerationTopic: Deferred<DataCache<ObservationKey, PolarAcceleration>> = polarService.lifecycleScope.async {
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, PolarAcceleration>> = polarService.lifecycleScope.async(
+        Dispatchers.Default) {
             createCache("android_polar_acceleration", PolarAcceleration())
         }
-    private val batteryLevelTopic: Deferred<DataCache<ObservationKey, PolarBatteryLevel>> = polarService.lifecycleScope.async {
+    private val batteryLevelTopic: Deferred<DataCache<ObservationKey, PolarBatteryLevel>> = polarService.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_polar_battery_level", PolarBatteryLevel())
     }
-    private val ecgTopic: Deferred<DataCache<ObservationKey, PolarEcg>> = polarService.lifecycleScope.async {
+    private val ecgTopic: Deferred<DataCache<ObservationKey, PolarEcg>> = polarService.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_polar_ecg", PolarEcg())
     }
-    private val heartRateTopic: Deferred<DataCache<ObservationKey, PolarHeartRate>> = polarService.lifecycleScope.async {
+    private val heartRateTopic: Deferred<DataCache<ObservationKey, PolarHeartRate>> = polarService.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_polar_heart_rate", PolarHeartRate())
     }
-    private val ppIntervalTopic: Deferred<DataCache<ObservationKey, PolarPpInterval>> = polarService.lifecycleScope.async {
+    private val ppIntervalTopic: Deferred<DataCache<ObservationKey, PolarPpInterval>> = polarService.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_polar_pulse_to_pulse_interval", PolarPpInterval())
     }
-    private val ppgTopic: Deferred<DataCache<ObservationKey, PolarPpg>> = polarService.lifecycleScope.async {
+    private val ppgTopic: Deferred<DataCache<ObservationKey, PolarPpg>> = polarService.lifecycleScope.async(
+        Dispatchers.Default) {
         createCache("android_polar_ppg", PolarPpg())
     }
 
