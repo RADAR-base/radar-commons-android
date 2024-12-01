@@ -21,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import org.apache.avro.Schema
 import org.apache.avro.specific.SpecificRecord
@@ -44,7 +43,6 @@ class CacheStore(
     private val serializationFactories: List<SerializationFactory> = listOf(TapeAvroSerializationFactory())
 ) {
     private val tables: MutableMap<String, SynchronizedReference<DataCacheGroup<*, *>>> = HashMap()
-    private val mutex = Mutex()
 
     init {
         require(serializationFactories.isNotEmpty()) { "Need to specify at least one serialization method" }

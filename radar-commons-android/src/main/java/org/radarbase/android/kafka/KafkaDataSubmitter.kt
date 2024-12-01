@@ -22,10 +22,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.apache.avro.Schema
 import org.apache.avro.SchemaValidationException
 import org.apache.avro.generic.IndexedRecord
 import org.apache.avro.specific.SpecificRecord
@@ -71,15 +75,17 @@ class KafkaDataSubmitter(
     private val submitterScope: CoroutineScope = CoroutineScope(
         submitterCoroutineContext + submitterJob + submitterExceptionHandler + CoroutineName("data-submitter")
     )
+    private val setConfigMutex: Mutex = Mutex()
 
     var config: SubmitterConfiguration = config
         set(newValue) {
             submitterScope.launch {
                 if (newValue == field) return@launch
-
-                validate(newValue)
-                field = newValue.copy()
-                schedule()
+                setConfigMutex.withLock {
+                    validate(newValue)
+                    field = newValue.copy()
+                    schedule()
+                }
             }
         }
 
@@ -99,15 +105,13 @@ class KafkaDataSubmitter(
             uploadIfNeededFuture = null
 
             try {
-                submitterScope.launch {
-                    connectionChecker.initialize()
-                    if (sender.connectionState.first() == ConnectionState.State.CONNECTED) {
-                        dataHandler.serverStatus.value = ServerStatus.CONNECTED
-                        connectionChecker.didConnect()
-                    } else {
-                        dataHandler.serverStatus.value = ServerStatus.DISCONNECTED
-                        connectionChecker.didDisconnect(null)
-                    }
+                connectionChecker.initialize()
+                if (sender.connectionState.first() == ConnectionState.State.CONNECTED) {
+                    dataHandler.serverStatus.value = ServerStatus.CONNECTED
+                    connectionChecker.didConnect()
+                } else {
+                    dataHandler.serverStatus.value = ServerStatus.DISCONNECTED
+                    connectionChecker.didDisconnect(null)
                 }
             } catch (ex: AuthenticationException) {
                 connectionChecker.didDisconnect(ex)
@@ -125,12 +129,12 @@ class KafkaDataSubmitter(
         val uploadRate = config.uploadRate * config.uploadRateMultiplier * 1000L
 
         uploadFuture?.also {
-            it.cancel()
+            it.cancelAndJoin()
             uploadFuture = null
         }
 
         uploadIfNeededFuture?.also {
-            it.cancel()
+            it.cancelAndJoin()
             uploadIfNeededFuture = null
         }
 
@@ -280,7 +284,7 @@ class KafkaDataSubmitter(
      */
     @Throws(IOException::class, SchemaValidationException::class)
     private suspend fun uploadCache(cache: ReadableDataCache, uploadingNotified: AtomicBoolean): Int {
-        val data = cache.getUnsentRecords(config.amountLimit, config.sizeLimit)
+        val data: RecordData<Any, Any> = cache.getUnsentRecords(config.amountLimit, config.sizeLimit)
             ?: return 0
 
         val size = data.size()
@@ -333,8 +337,8 @@ class KafkaDataSubmitter(
         private val logger = LoggerFactory.getLogger(KafkaDataSubmitter::class.java)
 
         private fun RecordData<*, *>.userId(cache: ReadableDataCache): String? {
-            val userIdField = cache.readUserIdField ?: return null
-            val recordKey = (key as? IndexedRecord) ?: return null
+            val userIdField: Schema.Field = cache.readUserIdField ?: return null
+            val recordKey: IndexedRecord = (key as? IndexedRecord) ?: return null
             return recordKey.get(userIdField.pos()).toString()
         }
     }
