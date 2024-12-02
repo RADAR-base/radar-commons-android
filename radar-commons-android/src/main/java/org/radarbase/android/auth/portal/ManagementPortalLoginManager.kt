@@ -45,11 +45,11 @@ import kotlin.time.Duration.Companion.seconds
  * token refreshes or client interaction.
  *
  * @property listener the AuthService that listens for login and authentication state changes
- * @property authState a StateFlow object that represents the current authentication state
+ * @param authState a StateFlow object that represents the current authentication state
  */
 class ManagementPortalLoginManager(
     private val listener: AuthService,
-    private val authState: StateFlow<AppAuthState>
+    authState: StateFlow<AppAuthState>
 ) : LoginManager {
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
 
@@ -94,33 +94,31 @@ class ManagementPortalLoginManager(
      */
     suspend fun setTokenFromUrl(authState: AppAuthState.Builder, refreshTokenUrl: String) {
         client?.let { client ->
-            mutex.withLock {
-                try {
-                    // create parser
-                    val parser = MetaTokenParser(authState)
+            try {
+                // create parser
+                val parser = MetaTokenParser(authState)
 
-                    // retrieve token and update authState
-                    client.getRefreshToken(refreshTokenUrl, parser).let { authState ->
-                        // update radarConfig
-                        config.updateWithAuthState(listener, authState.build())
-                        // refresh client
-                        ensureClientConnectivity(config.latestConfig)
-                        logger.info("Retrieved refreshToken from url")
-                        // refresh token
-                        refresh(authState)
-                    }
-                } catch (ex: Exception) {
-                    logger.error("Failed to get meta token", ex)
-                    listener.loginFailed(this, ex)
+                // retrieve token and update authState
+                client.getRefreshToken(refreshTokenUrl, parser).let { authState ->
+                    // update radarConfig
+                    config.updateWithAuthState(listener, authState.build())
+                    // refresh client
+                    ensureClientConnectivity(config.latestConfig)
+                    logger.info("Retrieved refreshToken from url")
+                    // refresh token
+                    refresh(authState)
                 }
+            } catch (ex: Exception) {
+                logger.error("Failed to get meta token", ex)
+                listener.loginFailed(this, ex)
             }
         }
     }
 
     override suspend fun refresh(authState: AppAuthState.Builder): Boolean {
         authState.attributes[MP_REFRESH_TOKEN_PROPERTY] ?: return false
-        val client = client ?: return true
         mutex.withLock {
+            val client = client ?: return true
             try {
                 val subjectParser = SubjectTokenParser(client, authState)
 
@@ -135,8 +133,8 @@ class ManagementPortalLoginManager(
                 logger.error("Failed to receive access token", exception)
                 throw exception
             }
+            return true
         }
-        return true
     }
 
     override fun isRefreshable(authState: AppAuthState): Boolean {
@@ -154,9 +152,10 @@ class ManagementPortalLoginManager(
     }
 
     override suspend fun invalidate(authState: AppAuthState.Builder, disableRefresh: Boolean) {
+        if (authState.authenticationSource != SOURCE_TYPE) return
         if (disableRefresh) {
             authState.clear()
-        }
+        } else authState.invalidate()
     }
 
     override val sourceTypes: Set<String> = sourceTypeList
@@ -296,7 +295,6 @@ class ManagementPortalLoginManager(
         return true
     }
 
-
     private fun updateSources(authState: AppAuthState) {
         authState.sourceMetadata
             .forEach { sourceMetadata ->
@@ -307,10 +305,13 @@ class ManagementPortalLoginManager(
     }
 
     override fun onDestroy() {
-        configObserverJob?.cancel()
-        ktorClient = ktorClient?.let {
+        configObserverJob?.also {
+            it.cancel()
+            configObserverJob = null
+        }
+        ktorClient = ktorClient?.also {
             it.close()
-            null
+            ktorClient = null
         }
         managerScope.cancel()
     }

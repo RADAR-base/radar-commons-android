@@ -93,7 +93,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
 
         lifecycleScope.launch {
             authServiceConnection.state
-                .onEach { bindState: BindState<AuthService.AuthServiceBinder> ->
+                .collect { bindState: BindState<AuthService.AuthServiceBinder> ->
                     when (bindState) {
                         is ManagedServiceConnection.BoundService -> {
                             authServiceActionBinder = bindState.binder
@@ -113,7 +113,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
                             }
                         }
                     }
-                }.launchIn(this)
+                }
         }
         lifecycleScope.launch {
             authServiceConnection.bind()

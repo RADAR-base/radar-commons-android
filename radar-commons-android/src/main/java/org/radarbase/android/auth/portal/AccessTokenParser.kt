@@ -26,6 +26,7 @@ class AccessTokenParser(private val state: AppAuthState.Builder) : AuthStringPar
                 attributes.apply {
                     put(MP_REFRESH_TOKEN_PROPERTY, refreshToken)
                     put(SOURCE_IDS_PROPERTY, value.optJSONArray("sources")?.join(",") ?: "")
+                }
                     setHeader("Authorization", "Bearer $accessToken")
                     token = accessToken
                     tokenType = AUTH_TYPE_BEARER
@@ -38,7 +39,6 @@ class AccessTokenParser(private val state: AppAuthState.Builder) : AuthStringPar
                     ) + System.currentTimeMillis()
                     needsRegisteredSources = true
                     authenticationSource = SOURCE_TYPE
-                }
             }
         } catch (ex: JSONException) {
             throw IOException("Failed to parse json string $value", ex)

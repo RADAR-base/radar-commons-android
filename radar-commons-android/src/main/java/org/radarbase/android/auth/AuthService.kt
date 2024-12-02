@@ -39,10 +39,9 @@ abstract class AuthService : LifecycleService(), LoginListener {
     private var refreshDelay = DelayedRetry(RETRY_MIN_DELAY, RETRY_MAX_DELAY)
     private var isConnected: Boolean = false
     private val _authState: MutableStateFlow<AppAuthState> = MutableStateFlow(AppAuthState())
-    val authState: StateFlow<AppAuthState> = _authState
+    val authState: StateFlow<AppAuthState> = _authState.asStateFlow()
 
-    private val executor: CoroutineTaskExecutor =
-        CoroutineTaskExecutor(AuthService::class.simpleName!!, Dispatchers.Default)
+    private val executor: CoroutineTaskExecutor = CoroutineTaskExecutor(AuthService::class.simpleName!!, Dispatchers.Default)
 
     private val serviceMutex: Mutex = Mutex(false)
     private val registryTweakMutex: Mutex = Mutex(false)
@@ -81,7 +80,6 @@ abstract class AuthService : LifecycleService(), LoginListener {
     private val listeners: MutableList<LoginListenerRegistry> = mutableListOf()
 
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
 
@@ -179,7 +177,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
     private suspend fun doRefresh() {
         var canRefresh = false
-        updateState<Unit> { state ->
+        updateState { state ->
             canRefresh = state.relevantManagers.any { it.refresh(this) }
         }
         if (!canRefresh) {
@@ -198,26 +196,25 @@ abstract class AuthService : LifecycleService(), LoginListener {
             if (isConnected) {
                 refresh()
             } else {
-                updateState { appAuth ->
-                    if (appAuth.isValid || appAuth.relevantManagers.any {
-                            it.isRefreshable(
-                                appAuth
-                            )
-                        }) {
-                        logger.info("Retrieving active authentication state without refreshing")
-                        callListeners(sinceUpdate = appAuth.lastUpdate) {
-                            it.listener.loginSucceeded(null, appAuth)
-                        }
-                    } else {
-                        logger.error(
-                            "Failed to retrieve authentication state without refreshing",
-                            IllegalStateException(
-                                "Cannot refresh authentication state $appAuth: not online and no" +
-                                        "applicable authentication manager."
-                            )
+                val appAuth = latestAppAuth
+                if (appAuth.isValid || appAuth.relevantManagers.any {
+                        it.isRefreshable(
+                            appAuth
                         )
-                        startLogin()
+                    }) {
+                    logger.info("Retrieving active authentication state without refreshing")
+                    callListeners(sinceUpdate = appAuth.lastUpdate) {
+                        it.listener.loginSucceeded(null, appAuth)
                     }
+                } else {
+                    logger.error(
+                        "Failed to retrieve authentication state without refreshing",
+                        IllegalStateException(
+                            "Cannot refresh authentication state $appAuth: not online and no" +
+                                    "applicable authentication manager."
+                        )
+                    )
+                    startLogin()
                 }
             }
         }
@@ -257,10 +254,9 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
     suspend fun addLoginListener(loginListener: LoginListener): LoginListenerRegistry {
         executor.execute {
-            updateState { auth ->
-                if (auth.isValid) {
-                    loginListener.loginSucceeded(null, auth)
-                }
+            val auth = latestAppAuth
+            if (auth.isValid) {
+                loginListener.loginSucceeded(null, auth)
             }
         }
 
@@ -286,16 +282,22 @@ abstract class AuthService : LifecycleService(), LoginListener {
     protected abstract fun showLoginNotification()
 
     override fun loginFailed(manager: LoginManager?, ex: java.lang.Exception?) {
-        _authStateFailures.tryEmit(AuthLoginListener.AuthStateFailure(manager, ex))
+        lifecycleScope.launch {
+            _authStateFailures.emit(AuthLoginListener.AuthStateFailure(manager, ex))
+        }
     }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
-        _authStateSuccess.tryEmit(AuthLoginListener.AuthStateSuccess(manager))
+        lifecycleScope.launch {
+            _authStateSuccess.emit(AuthLoginListener.AuthStateSuccess(manager))
+        }
         _authState.value = authState
     }
 
     override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
-        _authStateLogout.tryEmit(AuthLoginListener.AuthStateLogout(manager))
+        lifecycleScope.launch {
+            _authStateLogout.emit(AuthLoginListener.AuthStateLogout(manager, authState))
+        }
         _authState.value = authState
     }
 
@@ -378,15 +380,17 @@ abstract class AuthService : LifecycleService(), LoginListener {
             source.sourceId
         )
 
+        var appAuthAfterRegistration: AppAuthState? = null
         updateState { auth ->
             auth.relevantManagers.any { manager ->
                 manager.registerSource(
                     this,
                     source,
                     { newAppAuth, newSource ->
-                        if (newAppAuth != auth) {
-                            _authState.value = newAppAuth
-                        }
+//                        if (newAppAuth != auth) {
+//                            _authState.value = newAppAuth
+//                        }
+                        appAuthAfterRegistration = newAppAuth
                         successHandlers += { success(newAppAuth, newSource) }
                         if (!sourceRegistrationStarted) {
                             executor.delay(1_000L) {
@@ -399,12 +403,21 @@ abstract class AuthService : LifecycleService(), LoginListener {
                         }
                     },
                     { ex ->
-                        updateState {
-                            sourceMetadata.removeAll(source::matches)
-                        }
-                        authSerialization.store(auth)
+                        this.sourceMetadata.removeAll(source::matches)
                         failure(ex)
                     })
+            }
+        }
+        if (appAuthAfterRegistration == null) {
+            logger.trace("AppAuthRegistrationTrace: Auth state is null")
+        } else {
+            if (appAuthAfterRegistration == latestAppAuth) {
+                logger.trace("AppAuthRegistrationTrace: Already updated")
+            } else {
+                logger.trace("AppAuthRegistrationTrace: Not updated now updating...")
+                appAuthAfterRegistration?.also {
+                    _authState.value = it
+                }
             }
         }
     }
@@ -430,6 +443,9 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
         val authStateSuccess: Flow<AuthLoginListener.AuthStateSuccess>
             get() = this@AuthService.authStateSuccess
+
+        val authStateLogouts: Flow<AuthLoginListener.AuthStateLogout>
+            get() = this@AuthService.authStateLogout
 
         suspend fun update(manager: LoginManager) = this@AuthService.update(manager)
 
@@ -478,6 +494,10 @@ abstract class AuthService : LifecycleService(), LoginListener {
         loginManagers
     }
 
+    /**
+     * Representation of possible states, whether the login succeeded, failed, or the logout occurred.
+     * This class will replace the LoginListener callbacks in the future
+     */
     sealed interface AuthLoginListener {
         data class AuthStateFailure(val manager: LoginManager?, val exception: Exception?) :
             AuthLoginListener
@@ -486,7 +506,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
             val manager: LoginManager? = null
         ) : AuthLoginListener
 
-        data class AuthStateLogout(val manager: LoginManager?) :
+        data class AuthStateLogout(val manager: LoginManager?, val authState: AppAuthState) :
             AuthLoginListener
     }
 

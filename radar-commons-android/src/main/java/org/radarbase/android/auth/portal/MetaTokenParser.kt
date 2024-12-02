@@ -24,9 +24,9 @@ class MetaTokenParser(private val currentState: AppAuthState.Builder) : AuthStri
                     put(MP_REFRESH_TOKEN_PROPERTY, value.getString("refreshToken"))
                     put(PRIVACY_POLICY_URL_PROPERTY, value.getString("privacyPolicyUrl"))
                     put(BASE_URL_PROPERTY, value.getString("baseUrl"))
+                }
                     needsRegisteredSources = true
                     authenticationSource = SOURCE_TYPE
-                }
             }
         } catch (ex: JSONException) {
             throw IOException("Failed to parse json string $value", ex)
