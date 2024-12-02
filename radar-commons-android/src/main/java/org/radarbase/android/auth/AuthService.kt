@@ -75,6 +75,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
     @Volatile
     private var isInLoginActivity: Boolean = false
+    private var isNetworkStatusReceived: Boolean = false
 
     private var loginListenerId: Long = 0L
     private val listeners: MutableList<LoginListenerRegistry> = mutableListOf()
@@ -87,20 +88,26 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
         executor.start()
         lifecycleScope.launch(Dispatchers.Default) {
-            val loadedAuth = authSerialization.load() ?: return@launch
+            val loadedAuth = authSerialization.load()
+            logger.debug("Loading auth state from auth serialization: {}", loadedAuth)
+            loadedAuth ?: return@launch
             _authState.value = loadedAuth
-            loginManagers = createLoginManagers(loadedAuth)
         }
 
+        lifecycleScope.launch {
+            loginManagers = createLoginManagers(_authState)
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch(Dispatchers.Default) {
                     authState.collectLatest { state ->
                         authSerialization.store(state)
+                        logger.trace("Stored auth state to auth serialization: {}", state)
                     }
                 }
                 launch(Dispatchers.Default) {
                     authState.collectLatest { state ->
+                        logger.trace("Collected AppAuth: {}", state)
                         radarConfig.updateWithAuthState(this@AuthService, state)
                     }
                 }
@@ -110,11 +117,9 @@ abstract class AuthService : LifecycleService(), LoginListener {
                         .map { it != NetworkConnectedReceiver.NetworkState.Disconnected }
                         .distinctUntilChanged()
                         .onEach { isConnected = it }
-                        .combine(authState) { isConnected, authState ->
-                            Pair(isConnected, authState)
-                        }
-                        .collectLatest { (isConnected, authState) ->
-                            if (isConnected && !authState.isValidFor(5, TimeUnit.MINUTES)) {
+                        .collectLatest { isConnected ->
+                            isNetworkStatusReceived = true
+                            if (isConnected && !latestAppAuth.isValidFor(5, TimeUnit.MINUTES)) {
                                 refresh()
                             } else {
                                 refreshDelay.reset()
@@ -148,6 +153,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
                             isConnected = true
                             refreshDelay.reset()
                             callListeners(sinceUpdate = latestAppAuth.lastUpdate) {
+                                logger.trace("Login succeeded (AuthService:: CallListener {} with state): AppAuthState: {}",it, authState.value)
                                 it.listener.loginSucceeded(successState.manager, latestAppAuth)
                             }
                         }
@@ -193,9 +199,16 @@ abstract class AuthService : LifecycleService(), LoginListener {
      */
     suspend fun refreshIfOnline() {
         executor.execute {
+            for (i in 1..3) {
+                if (!isNetworkStatusReceived) {
+                    delay(100)
+                }
+            }
             if (isConnected) {
+                logger.trace("Network is available, now refreshing")
                 refresh()
             } else {
+                logger.trace("Network is not available, proceeding with other way")
                 val appAuth = latestAppAuth
                 if (appAuth.isValid || appAuth.relevantManagers.any {
                         it.isRefreshable(
@@ -263,6 +276,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         return LoginListenerRegistry(loginListener)
             .also {
                 registryTweakMutex.withLock { listeners += it }
+                logger.debug("Added login listener {} to registry ", it)
             }
     }
 
@@ -291,6 +305,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         lifecycleScope.launch {
             _authStateSuccess.emit(AuthLoginListener.AuthStateSuccess(manager))
         }
+        logger.trace("Login succeeded (AuthService): AppAuthState: {}", authState)
         _authState.value = authState
     }
 
@@ -326,7 +341,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
      * @param appAuth previous invalid authentication
      * @return non-empty list of login managers to use
      */
-    protected abstract suspend fun createLoginManagers(appAuth: AppAuthState): List<LoginManager>
+    protected abstract suspend fun createLoginManagers(appAuth: StateFlow<AppAuthState>): List<LoginManager>
 
     private suspend fun <T> updateState(
         update: suspend AppAuthState.Builder.(AppAuthState) -> T
@@ -346,9 +361,10 @@ abstract class AuthService : LifecycleService(), LoginListener {
         }
     }
 
-    private fun applyState(function: AppAuthState.() -> Unit) {
-        val updatedState = latestAppAuth.apply(function)
-        _authState.value = updatedState
+    private suspend fun applyState(function: suspend AppAuthState.() -> Unit) {
+        latestAppAuth.apply {
+            function()
+        }
     }
 
     suspend fun invalidate(token: String?, disableRefresh: Boolean) {
@@ -453,7 +469,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
         suspend fun refreshIfOnline() = this@AuthService.refreshIfOnline()
 
-        fun applyState(apply: AppAuthState.() -> Unit) = this@AuthService.applyState(apply)
+        suspend fun applyState(apply: suspend AppAuthState.() -> Unit) = this@AuthService.applyState(apply)
 
         @Suppress("unused")
         suspend fun <T> updateState(update: AppAuthState.Builder.(AppAuthState) -> T): T = this@AuthService.updateState(update)
