@@ -7,7 +7,7 @@ class DelayedRetry(
     private val minDelay: Long,
     private val maxDelay: Long,
 ) {
-    private val startValue = CurrentDelay(minDelay, (minDelay / 2).coerceAtLeast(1L))
+    private val startValue = CurrentDelay(minDelay, (minDelay * 2).coerceAtLeast(1L))
 
     private val _currentDelay: AtomicReference<CurrentDelay> = AtomicReference(startValue)
 

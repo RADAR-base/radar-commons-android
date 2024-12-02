@@ -22,12 +22,7 @@ import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.radarbase.android.R
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.util.BindState
@@ -45,7 +40,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
     private var refreshOnly: Boolean = false
 
     protected lateinit var authServiceConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
-    private var authServiceActionBinder: AuthService.AuthServiceBinder? = null
+    protected var authServiceBinder: AuthService.AuthServiceBinder? = null
 
     private var listenerRegistry: AuthService.LoginListenerRegistry? = null
 
@@ -96,8 +91,8 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
                 .collect { bindState: BindState<AuthService.AuthServiceBinder> ->
                     when (bindState) {
                         is ManagedServiceConnection.BoundService -> {
-                            authServiceActionBinder = bindState.binder
-                            authServiceActionBinder?.also { binder ->
+                            authServiceBinder = bindState.binder
+                            authServiceBinder?.also { binder ->
                                 serviceBoundActions.forEach { action ->
                                     action(binder)
                                 }
@@ -105,7 +100,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
                         }
 
                         is ManagedServiceConnection.Unbound -> {
-                            authServiceActionBinder = authServiceActionBinder?.let { binder ->
+                            authServiceBinder = authServiceBinder?.let { binder ->
                                 serviceUnboundActions.forEach { action ->
                                     action(binder)
                                 }

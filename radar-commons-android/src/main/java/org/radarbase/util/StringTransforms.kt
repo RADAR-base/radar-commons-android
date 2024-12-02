@@ -9,7 +9,7 @@ import java.util.regex.Pattern
  * character encoding conversion. This class has been adapted from the
  * `radar-commons` library version 0.x.x for compatibility with the current code.
  */
-object Strings {
+object StringTransforms {
     private val UTF_8: Charset = StandardCharsets.UTF_8
     private val HEX_ARRAY = "0123456789ABCDEF".toCharArray()
 

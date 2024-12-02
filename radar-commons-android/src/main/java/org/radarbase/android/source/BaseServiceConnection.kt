@@ -20,7 +20,6 @@ import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
-import androidx.lifecycle.LiveData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,11 +28,11 @@ import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.kafka.TopicSendResult
 import org.radarbase.android.util.equalTo
 import org.radarbase.data.RecordData
-import org.radarbase.util.Strings
+import org.radarbase.util.StringTransforms
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
-open class BaseServiceConnection<S : BaseSourceState>(protected val serviceClassName: String) : ServiceConnection {
+open class BaseServiceConnection<S : BaseSourceState>(val serviceClassName: String) : ServiceConnection {
     @get:Synchronized
     protected var serviceBinder: SourceBinder<S>? = null
         private set
@@ -146,7 +145,7 @@ open class BaseServiceConnection<S : BaseSourceState>(protected val serviceClass
         )
 
         return idOptions.isNotEmpty() && values
-            .map(Strings::containsIgnoreCasePattern)
+            .map(StringTransforms::containsIgnoreCasePattern)
             .any { pattern -> idOptions.any { pattern.matcher(it).find() } }
     }
 

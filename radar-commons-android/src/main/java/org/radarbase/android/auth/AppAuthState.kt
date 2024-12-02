@@ -212,7 +212,6 @@ class AppAuthState(builder: Builder) {
 
     override fun equals(other: Any?) = equalTo(
         other,
-        AppAuthState::lastUpdate,
         AppAuthState::projectId,
         AppAuthState::userId,
         AppAuthState::token,

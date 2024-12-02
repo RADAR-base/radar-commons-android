@@ -39,8 +39,6 @@ interface RadarApplication {
     val radarService: Class<out Service>
         get() = RadarService::class.java
 
-    var radarServiceImplementation: RadarService?
-
     fun configureProvider(bundle: Bundle)
     fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean)
     fun onSourceServiceDestroy(service: SourceService<*>)

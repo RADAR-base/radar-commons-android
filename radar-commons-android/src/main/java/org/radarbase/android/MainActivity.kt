@@ -76,8 +76,13 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     protected lateinit var configuration: RadarConfiguration
     private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
-    private var radarServiceActionBinder: IRadarBinder? = null
-    private var authServiceActionBinder: AuthService.AuthServiceBinder? = null
+    protected var radarServiceBinder: IRadarBinder? = null
+        private set
+    protected var authServiceBinder: AuthService.AuthServiceBinder? = null
+        private set
+
+    val radarBinder: IRadarBinder?
+        get() = radarServiceBinder
 
     private var mainAuthRegistry: AuthService.LoginListenerRegistry? = null
 
@@ -164,7 +169,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
                     .collect { bindState: BindState<IRadarBinder> ->
                         when (bindState) {
                             is ManagedServiceConnection.BoundService -> {
-                                radarServiceActionBinder = bindState.binder
+                                radarServiceBinder = bindState.binder
                                     .also { binder ->
                                         radarServiceBoundActions.launchJoin { action ->
                                             action(binder)
@@ -173,11 +178,11 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
                             }
 
                             is ManagedServiceConnection.Unbound -> {
-                                radarServiceActionBinder?.also { binder ->
+                                radarServiceBinder?.also { binder ->
                                     radarServiceUnboundActions.launchJoin { action ->
                                         action(binder)
                                     }
-                                    radarServiceActionBinder = null
+                                    radarServiceBinder = null
                                 }
                             }
                         }
@@ -189,7 +194,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
                     .collect { bindState ->
                         when (bindState) {
                             is ManagedServiceConnection.BoundService -> {
-                                authServiceActionBinder = bindState.binder.also { binder ->
+                                authServiceBinder = bindState.binder.also { binder ->
                                     authServiceBoundActions.launchJoin {
                                         it(binder)
                                     }
@@ -197,11 +202,11 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
                             }
 
                             is ManagedServiceConnection.Unbound -> {
-                                authServiceActionBinder?.also { binder ->
+                                authServiceBinder?.also { binder ->
                                     authServiceUnboundActions.launchJoin {
                                         it(binder)
                                     }
-                                    authServiceActionBinder = null
+                                    authServiceBinder = null
                                 }
                             }
                         }
@@ -210,7 +215,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         }
 
         bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, radarServiceBoundActions)
-        authConnection = serviceConnection(AuthService::class.java)
+        authConnection = serviceConnection(radarApp.authService)
         create()
     }
 
@@ -282,9 +287,13 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             logger.error("Failed to start RadarService: activity is in background.", ex)
         }
 
-        lifecycleScope.launch {
-            radarConnection.bind()
-            authConnection.bind()
+        with(lifecycleScope) {
+            launch {
+                authConnection.bind()
+            }
+            launch {
+                radarConnection.bind()
+            }
         }
         permissionHandler.invalidateCache()
         radarConnectionJob?.start()

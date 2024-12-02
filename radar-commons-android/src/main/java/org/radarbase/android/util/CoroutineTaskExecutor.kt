@@ -192,15 +192,15 @@ class CoroutineTaskExecutor(
      * @param task The suspendable task to be executed.
      * @return A [Job] representing the task, or null if execution fails.
      */
-    fun returnJobAndExecute(task: suspend () -> Unit): Job? {
+    suspend fun returnJobAndExecute(task: suspend () -> Unit): Job? {
         val activeStatus: Boolean? = executorScope?.isActive
         if (activeStatus == null || activeStatus == false) {
             logger.warn("Can't execute task and return job, scope is already cancelled")
             return null
         }
         checkExecutorStarted() ?: return null
-        return executorScope?.launch {
-            jobExecuteMutex.withLock {
+        return jobExecuteMutex.withLock {
+            executorScope?.launch {
                 runTaskSafely(task)
             }
         }

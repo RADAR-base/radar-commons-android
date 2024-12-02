@@ -10,6 +10,8 @@ import android.os.IBinder
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.radarbase.android.util.ManagedServiceConnection.BoundService.Companion.unbind
 import org.slf4j.LoggerFactory
 import kotlin.coroutines.resume
@@ -26,25 +28,37 @@ open class ManagedServiceConnection<T: IBinder>(
         get() = _state
 
     var bindFlags = BIND_AUTO_CREATE
+    val bindMutex: Mutex = Mutex()
 
-    suspend fun bind(): BoundService<T> = coroutineScope {
-        val service = suspendCoroutine { continuation ->
-            val connection: ServiceConnection = object : ServiceConnection {
-                override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                    continuation.resume(BoundService(name, checkNotNull(binderCls.cast(service)), this))
+    suspend fun bind(): BoundService<T> = bindMutex.withLock {
+        coroutineScope {
+            val service = suspendCoroutine { continuation ->
+                val connection: ServiceConnection = object : ServiceConnection {
+                    override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                        continuation.resume(
+                            BoundService(
+                                name,
+                                checkNotNull(binderCls.cast(service)),
+                                this
+                            )
+                        )
+                    }
+
+                    override fun onServiceDisconnected(name: ComponentName?) {
+                        _state.value = unbound
+                    }
                 }
 
-                override fun onServiceDisconnected(name: ComponentName?) {
-                    _state.value = unbound
+                val boundResult: Boolean = context.bindService(Intent(context, cls), connection, bindFlags)
+                if (!boundResult) {
+                    throw IllegalStateException("Cannot bind ${context.javaClass.simpleName} to service $cls. Bind Service returned: $boundResult ")
+                } else {
+                    logger.debug("{} successfully bound to {}", context.javaClass.simpleName, cls)
                 }
             }
-
-            if (!context.bindService(Intent(context, cls), connection, bindFlags)) {
-                throw IllegalStateException("Cannot bind to service $cls")
-            }
+            _state.value = service
+            service
         }
-        _state.value = service
-        service
     }
 
     open suspend fun applyBinder(callback: suspend T.() -> Unit) {

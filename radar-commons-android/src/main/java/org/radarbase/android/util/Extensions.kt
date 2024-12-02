@@ -16,7 +16,6 @@ fun Int.toPendingIntentFlag(mutable: Boolean = false) = this or when {
     else -> 0
 }
 
-@Suppress("UNCHECKED_CAST")
 inline fun <reified T> Context.applySystemService(
     type: String,
     callback: (T) -> Boolean

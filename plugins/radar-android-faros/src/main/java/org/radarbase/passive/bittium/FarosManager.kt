@@ -26,7 +26,7 @@ import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.util.Strings
+import org.radarbase.util.StringTransforms
 import org.radarcns.bittium.faros.*
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.bittium.*
@@ -75,7 +75,7 @@ class FarosManager internal constructor(
         handler.start()
         farosTaskExecutor.start()
         farosTaskExecutor.execute {
-            this.acceptableIds = Strings.containsPatterns(acceptableIds)
+            this.acceptableIds = StringTransforms.containsPatterns(acceptableIds)
 
             apiManager = farosFactory.createSdkManager(service)
             try {
@@ -133,7 +133,7 @@ class FarosManager internal constructor(
                         else -> "unknown"
                     }))
 
-            if ((acceptableIds.isEmpty() || Strings.findAny(acceptableIds, device.name))) {
+            if ((acceptableIds.isEmpty() || StringTransforms.findAny(acceptableIds, device.name))) {
                 register(device.name, device.name, attributes) {
                     if (it != null) {
                         farosTaskExecutor.executeReentrant {
