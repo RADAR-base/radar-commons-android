@@ -213,7 +213,6 @@ class TapeCache<K: Any, V: Any>(
 
         mutex.withLock {
             measurementsToAdd += record
-            logger.debug("Added record to local map")
             if (addMeasurementFuture == null) {
                 addMeasurementFuture = cacheScope.launch {
                     try {

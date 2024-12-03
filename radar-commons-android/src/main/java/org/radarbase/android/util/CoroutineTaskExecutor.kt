@@ -175,7 +175,7 @@ class CoroutineTaskExecutor(
     fun execute(task: suspend () -> Unit) {
         val activeStatus: Boolean? = executorScope?.isActive
         if (activeStatus == null || activeStatus == false) {
-            logger.warn("Can't execute task, scope is already cancelled")
+            logger.warn("Can't execute task, scope is already cancelled for {}", invokingClassName)
             return
         }
         checkExecutorStarted() ?: return
