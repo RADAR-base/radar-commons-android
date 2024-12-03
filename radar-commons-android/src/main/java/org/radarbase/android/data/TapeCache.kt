@@ -44,6 +44,7 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.ExecutionException
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Caches measurement on a BackedObjectQueue. Internally, all data is first cached on a local queue,
@@ -110,6 +111,11 @@ class TapeCache<K: Any, V: Any>(
 
         configObserverJob = cacheScope.launch {
             this@TapeCache.config.collect {
+                for (i in 1..2) {
+                    if (!::queueFile.isInitialized) {
+                        delay(100)
+                    }
+                }
                 ensureActive()
                 queueFile.maximumFileSize = it.maximumSize
             }
@@ -207,10 +213,16 @@ class TapeCache<K: Any, V: Any>(
 
         mutex.withLock {
             measurementsToAdd += record
+            logger.debug("Added record to local map")
             if (addMeasurementFuture == null) {
                 addMeasurementFuture = cacheScope.launch {
-                    delay(config.value.commitRate)
-                    doFlush()
+                    try {
+                        delay(config.value.commitRate)
+                        doFlush()
+                    } catch (e: CancellationException) {
+                        logger.warn("Coroutine for addMeasurementFuture was canceled: ${e.message}")
+                        throw e
+                    }
                 }
             }
         }
@@ -261,7 +273,7 @@ class TapeCache<K: Any, V: Any>(
             return
         }
         try {
-            logger.info("Writing {} records to file in topic {}.", measurementsToAdd.size, topic.name)
+            logger.info("Writing {} record(s) to file in topic {}.", measurementsToAdd.size, topic.name)
             withContext(Dispatchers.IO) {
                 queue += measurementsToAdd
                 numberOfRecords.value += measurementsToAdd.size

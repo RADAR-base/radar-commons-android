@@ -91,57 +91,57 @@ class TapeCacheTestDirect {
 
     fun addMultipleMeasurements() = runTest {
         assertNull(tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT))
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
         assertNull(tapeCache.getRecords(100))
 
         repeat(50) {
             tapeCache.addMeasurement(key, value)
         }
 
-        Thread.sleep(100)
+        Thread.sleep(150)
 
-        assertEquals(50L, tapeCache.numberOfRecords)
+        assertEquals(50L, tapeCache.numberOfRecords.value)
         var unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
         assertEquals(50, unsent.size().toLong())
         tapeCache.remove(50)
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
 
         repeat(50) {
             tapeCache.addMeasurement(key, value)
         }
         tapeCache.flush()
-        assertEquals(50L, tapeCache.numberOfRecords)
+        assertEquals(50L, tapeCache.numberOfRecords.value)
         unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
         assertEquals(50, unsent.size().toLong())
         tapeCache.remove(50)
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
     }
 
     @Test
     @Throws(Exception::class)
     fun addMeasurement() = runTest {
         assertNull(tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT))
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
         assertNull(tapeCache.getRecords(100))
 
         tapeCache.addMeasurement(key, value)
 
         assertNull(tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT))
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
 
-        Thread.sleep(100)
+        Thread.sleep(150)
 
         var unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
         assertEquals(1, unsent.size().toLong())
-        assertEquals(1L, tapeCache.numberOfRecords)
+        assertEquals(1L, tapeCache.numberOfRecords.value)
         unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
         assertEquals(1, unsent.size().toLong())
-        assertEquals(1L, tapeCache.numberOfRecords)
+        assertEquals(1L, tapeCache.numberOfRecords.value)
         val actualValue = unsent.iterator().next() as GenericRecord
         assertEquals(key.getSourceId(), (unsent.key as GenericRecord).get("sourceId"))
         assertEquals(value.getUptime(), actualValue.get("uptime"))
         tapeCache.remove(1)
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
         val emptyRecords = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)
         if (emptyRecords != null) {
             assertTrue("Contains ${emptyRecords.key}-${emptyRecords.toList()}", false)
@@ -150,11 +150,11 @@ class TapeCacheTestDirect {
         tapeCache.addMeasurement(key, value)
         tapeCache.addMeasurement(key, value)
 
-        Thread.sleep(100)
+        Thread.sleep(150)
 
         unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)!!
         assertEquals(2, unsent.size().toLong())
-        assertEquals(2L, tapeCache.numberOfRecords)
+        assertEquals(2L, tapeCache.numberOfRecords.value)
     }
 
     @Test
@@ -207,20 +207,20 @@ class TapeCacheTestDirect {
     @Throws(Exception::class)
     fun flush() = runTest {
         assertNull(tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT))
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
         assertNull(tapeCache.getRecords(100))
 
         tapeCache.addMeasurement(key, value)
 
         assertNull(tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT))
-        assertEquals(0L, tapeCache.numberOfRecords)
+        assertEquals(0L, tapeCache.numberOfRecords.value)
 
         tapeCache.flush()
 
         val unsent = tapeCache.getUnsentRecords(100, SIZE_LIMIT_DEFAULT)
         assertNotNull(unsent)
         assertEquals(1, unsent?.size())
-        assertEquals(1L, tapeCache.numberOfRecords)
+        assertEquals(1L, tapeCache.numberOfRecords.value)
     }
 
     companion object {
