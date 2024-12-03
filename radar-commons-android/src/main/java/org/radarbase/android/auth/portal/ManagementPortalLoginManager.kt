@@ -166,7 +166,7 @@ class ManagementPortalLoginManager(
         success: (AppAuthState, SourceMetadata) -> Unit,
         failure: (Exception?) -> Unit
     ): Boolean {
-        logger.debug("Handling source update")
+        logger.debug("Handling source update for source {} with type {}", source, source.type)
 
         val client = client
 

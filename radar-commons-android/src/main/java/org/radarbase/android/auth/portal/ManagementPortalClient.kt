@@ -17,10 +17,12 @@ import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
+import org.radarbase.android.auth.entities.source.PostSourceBody
+import org.radarbase.android.auth.entities.source.SourceRegistrationBody
+import org.radarbase.android.auth.entities.source.SourceUpdateBody
 import org.radarbase.android.util.*
 import org.radarbase.android.util.buildJson
 import org.radarbase.android.util.optNonEmptyString
-import org.radarbase.android.util.toJson
 import org.radarbase.android.util.toStringMap
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.AuthenticationException
@@ -152,7 +154,7 @@ class ManagementPortalClient(
     private suspend fun handleSourceUpdateRequest(
         auth: AppAuthState,
         relativePath: String,
-        requestBody: JSONObject,
+        requestBody: PostSourceBody,
         source: SourceMetadata,
     ): SourceMetadata {
         val response = client.post(relativePath) {
@@ -255,30 +257,22 @@ class ManagementPortalClient(
         private const val APPLICATION_JSON = "application/json"
         private val illegalSourceCharacters = "[^_'.@A-Za-z0-9- ]+".toRegex()
 
-        @Throws(JSONException::class)
-        internal fun sourceRegistrationBody(source: SourceMetadata): JSONObject {
-            val requestBody = JSONObject()
-
+        fun sourceRegistrationBody(source: SourceMetadata): SourceRegistrationBody {
             val typeId = requireNotNull(source.type?.id) { "Cannot register source without a type" }
-            requestBody.put("sourceTypeId", typeId)
+            val sourceName = source.sourceName?.replace(illegalSourceCharacters, "-")
+            val attributes = source.attributes.ifEmpty { null }
 
-            source.sourceName?.let {
-                val sourceName = it.replace(illegalSourceCharacters, "-")
-                requestBody.put("sourceName", sourceName)
-                logger.info("Add {} as sourceName", sourceName)
-            }
-            val sourceAttributes = source.attributes
-            if (sourceAttributes.isNotEmpty()) {
-                requestBody.put("attributes", sourceAttributes.toJson())
-            }
-            return requestBody
+            return SourceRegistrationBody(
+                sourceTypeId = typeId,
+                sourceName = sourceName,
+                attributes = attributes
+            )
         }
 
         @Throws(JSONException::class)
-        internal fun sourceUpdateBody(source: SourceMetadata): JSONObject = buildJson {
-            putAll(source.attributes)
+        internal fun sourceUpdateBody(source: SourceMetadata): SourceUpdateBody {
+            return SourceUpdateBody(source.attributes)
         }
-
         /**
          * Parse the response of a subject/source registration.
          * @param body registration response body

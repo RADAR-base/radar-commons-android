@@ -6,7 +6,7 @@ import org.radarbase.android.util.*
 import org.slf4j.LoggerFactory
 import java.util.*
 
-@Serializable(with = SourceMetadataSerializer::class)
+@Serializable
 data class SourceMetadata(
     var type: SourceType? = null,
     var sourceId: String? = null,

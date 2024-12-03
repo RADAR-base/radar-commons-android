@@ -5,4 +5,4 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class SourceUpdateBody(
     val attributes: Map<String, String>
-): PostSourceBody
+): PostSourceBody()

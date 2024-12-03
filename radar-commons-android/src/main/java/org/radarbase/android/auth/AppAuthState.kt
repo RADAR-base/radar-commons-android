@@ -20,6 +20,8 @@ import android.os.SystemClock
 import androidx.annotation.Keep
 import io.ktor.http.Headers
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_UNKNOWN
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
 import org.radarbase.android.util.buildJsonArray
@@ -122,7 +124,7 @@ class AppAuthState(builder: Builder) {
         var authenticationSource: String? = original?.authenticationSource
         var tokenType: Int = original?.tokenType ?: AUTH_TYPE_UNKNOWN
         var expiration: Long = original?.expiration ?: 0
-        var isPrivacyPolicyAccepted = original?.isPrivacyPolicyAccepted ?: false
+        var isPrivacyPolicyAccepted: Boolean = original?.isPrivacyPolicyAccepted ?: false
         val sourceTypes: MutableCollection<SourceType> =  mutableListOf()
 
         init {
@@ -152,9 +154,12 @@ class AppAuthState(builder: Builder) {
 
         fun parseAttributes(jsonString: String?) {
             jsonString ?: return
-            Json.decodeFromString<Sequence<String>>(jsonString)
+            val attributeList = Json.parseToJsonElement(jsonString)
+                .jsonArray
+                .map { it.jsonPrimitive.content }
+            attributeList.asSequence()
                 .zipWithNext()
-                .filterIndexed { i, _ -> i % 2 == 0 }
+                .filterIndexed { index, _ -> index % 2 == 0 }
                 .toMap(attributes)
         }
 
@@ -173,7 +178,11 @@ class AppAuthState(builder: Builder) {
 
         fun parseHeaders(jsonString: String?) {
             jsonString ?: return
-            Json.decodeFromString<Sequence<String>>(jsonString)
+            val headerList = Json.parseToJsonElement(jsonString)
+                .jsonArray
+                .map { it.jsonPrimitive.content }
+
+            headerList.asSequence()
                 .zipWithNext()
                 .filterIndexedTo(this.headers) { i, _ -> i % 2 == 0 }
         }

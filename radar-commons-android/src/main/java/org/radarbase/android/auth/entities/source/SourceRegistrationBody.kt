@@ -7,4 +7,4 @@ data class SourceRegistrationBody(
     val sourceTypeId: Int,
     val sourceName: String? = null,
     val attributes: Map<String, String>? = null
-): PostSourceBody
+): PostSourceBody()
