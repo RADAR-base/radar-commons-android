@@ -48,6 +48,7 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
+import kotlin.collections.HashSet
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
@@ -84,6 +85,7 @@ class TableDataHandler(
 
     private var job: Job? = null
     private var networkStateCollectorJob: Job? = null
+    private val observedCaches: MutableSet<String> = HashSet()
 
     private val isStarted: Boolean
         get() = submitter != null
@@ -91,7 +93,9 @@ class TableDataHandler(
     private val startMutex: Mutex = Mutex()
 
     init {
-        job = SupervisorJob().also(handlerExecutor::start)
+        job = SupervisorJob().also {
+            handlerExecutor.start(it)
+        }
 
         this.batteryLevelReceiver = BatteryStageReceiver(context, config.batteryStageLevels) { stage ->
                 when (stage) {
@@ -120,19 +124,6 @@ class TableDataHandler(
                     }
                 }
             }
-
-        handlerExecutor.execute {
-            caches.launchJoin { cache ->
-                cache.numberOfRecords.collect {
-                    numberOfRecords.emit(
-                        CacheSize(
-                            cache.readTopic.name,
-                            it
-                        )
-                    )
-                }
-            }
-        }
 
         submitter?.close()
         submitter = null
@@ -165,6 +156,25 @@ class TableDataHandler(
                 }
             }
         }
+    }
+
+    private fun observerRecordsForCache(cache: ReadableDataCache) {
+        if (observedCaches.contains(cache.readTopic.name)) {
+            logger.debug("Records for cache are already being observed")
+            return
+        }
+        handlerExecutor.execute {
+            cache.numberOfRecords.collect {
+                logger.trace("{} records are cached for topic: {}", it, cache.readTopic.name)
+                numberOfRecords.emit(
+                    CacheSize(
+                        cache.readTopic.name,
+                        it
+                    )
+                )
+            }
+        }
+        observedCaches.add(cache.readTopic.name)
     }
 
     private suspend fun startNetworkMonitoring() {
@@ -209,41 +219,52 @@ class TableDataHandler(
             serverStatus.value = ServerStatus.CONNECTING
 
             val kafkaUrl: String = kafkaConfig.urlString
-
-            val kafkaSender = restKafkaSender {
-                val currentRestConfig = config.restConfig
-                baseUrl = kafkaUrl
-                headers.appendAll(currentRestConfig.headers)
-                httpClient {
-                    timeout(currentRestConfig.connectionTimeout.seconds)
-                    contentType = if (currentRestConfig.hasBinaryContent) {
-                        KAFKA_REST_BINARY_ENCODING
-                    } else {
-                        KAFKA_REST_JSON_ENCODING
-                    }
-                    if (currentRestConfig.useCompression) {
-                        contentEncoding = GZIP_CONTENT_ENCODING
-                    }
-                    if (currentRestConfig.unsafeKafka) {
-                        unsafeSsl()
-                    }
-                }
-                currentRestConfig.schemaRetrieverUrl?.let { schemaUrl ->
-                    schemaRetriever(schemaUrl) {
-                        schemaTimeout = CacheConfig(
-                            refreshDuration = 2.hours,
-                            retryDuration = 30.seconds
-                        )
-                        httpClient = HttpClient(CIO) {
-                            timeout(10.seconds)
+            logger.trace("KafkaSenderTrace: Initializing RestKafkaSender in TableDataHandler::start")
+            try {
+                val kafkaSender = restKafkaSender {
+                    try {
+                        val currentRestConfig = config.restConfig
+                        baseUrl = kafkaUrl
+                        headers.appendAll(currentRestConfig.headers)
+                        httpClient {
+                            timeout(currentRestConfig.connectionTimeout.seconds)
+                            contentType = if (currentRestConfig.hasBinaryContent) {
+                                KAFKA_REST_BINARY_ENCODING
+                            } else {
+                                KAFKA_REST_JSON_ENCODING
+                            }
+                            if (currentRestConfig.useCompression) {
+                                contentEncoding = GZIP_CONTENT_ENCODING
+                            }
+                            if (currentRestConfig.unsafeKafka) {
+                                unsafeSsl()
+                            }
                         }
+                        currentRestConfig.schemaRetrieverUrl?.let { schemaUrl ->
+                            schemaRetriever(schemaUrl) {
+                                schemaTimeout = CacheConfig(
+                                    refreshDuration = 2.hours,
+                                    retryDuration = 30.seconds
+                                )
+                                httpClient = HttpClient(CIO) {
+                                    timeout(10.seconds)
+                                }
+                            }
+                        }
+                    } catch (ex: Exception) {
+                        logger.trace("KafkaSenderTrace: Error when setting configs for RestKafkaSender in TableDataHandler::start")
                     }
+                }.also {
+                    sender = it
                 }
-            }.also {
-                sender = it
-            }
 
-            this.submitter = KafkaDataSubmitter(this@TableDataHandler, kafkaSender, config.submitterConfig)
+                this.submitter = KafkaDataSubmitter(this@TableDataHandler, kafkaSender, config.submitterConfig)
+            } catch (e: Exception) {
+                logger.trace(
+                    "KafkaSenderTrace:  Exception when tweaking RestKafkaSender in TableDataHandler::start: ",
+                    e
+                )
+            }
         }
     }
 
@@ -344,10 +365,13 @@ class TableDataHandler(
     override suspend fun <V : SpecificRecord> registerCache(
         topic: AvroTopic<ObservationKey, V>,
     ): DataCache<ObservationKey, V> {
-        return cacheStore
+        val cache = cacheStore
             .getOrCreateCaches(context.applicationContext, topic, config.cacheConfig)
             .also { tables[topic.name] = it }
             .activeDataCache
+
+        observerRecordsForCache(cache)
+        return cache
     }
 
     override fun handler(build: DataHandlerConfiguration.() -> Unit) = handlerExecutor.execute {
@@ -394,39 +418,51 @@ class TableDataHandler(
 
                     val contentTypeChanged: Boolean =
                         oldConfig.restConfig.hasBinaryContent != newRest.hasBinaryContent
+                    logger.trace(
+                        "KafkaSenderTrace: Tweaking  RestKafkaSender in TableDataHandler::handler: Is sender null? {}.",
+                        sender == null
+                    )
 
-                    sender = sender?.config {
-                        baseUrl = kafkaConfig.urlString
-                        headers.appendAll(newRest.headers)
+                    try {
+                        sender = sender?.config {
+                            baseUrl = kafkaConfig.urlString
+                            headers.appendAll(newRest.headers)
 
-                        httpClient {
-                            timeout(newRest.connectionTimeout.seconds)
-                            contentType = if (newRest.hasBinaryContent) {
-                                KAFKA_REST_BINARY_ENCODING
-                            } else {
-                                KAFKA_REST_JSON_ENCODING
+                            httpClient {
+                                timeout(newRest.connectionTimeout.seconds)
+                                contentType = if (newRest.hasBinaryContent) {
+                                    KAFKA_REST_BINARY_ENCODING
+                                } else {
+                                    KAFKA_REST_JSON_ENCODING
+                                }
+                                if (newRest.useCompression) {
+                                    contentEncoding = GZIP_CONTENT_ENCODING
+                                }
+                                if (newRest.unsafeKafka) {
+                                    unsafeSsl()
+                                }
                             }
-                            if (newRest.useCompression) {
-                                contentEncoding = GZIP_CONTENT_ENCODING
-                            }
-                            if (newRest.unsafeKafka) {
-                                unsafeSsl()
-                            }
-                        }
-                        val schemaRetrieverUrl = newRest.schemaRetrieverUrl
-                        if (schemaRetrieverUrl != oldConfig.restConfig.schemaRetrieverUrl) {
-                            schemaRetrieverUrl?.let { srUrl ->
-                                schemaRetriever(srUrl) {
-                                    schemaTimeout = CacheConfig(
-                                        refreshDuration = 2.hours,
-                                        retryDuration = 30.seconds
-                                    )
-                                    httpClient = HttpClient(CIO) {
-                                        timeout(10.seconds)
+                            val schemaRetrieverUrl = newRest.schemaRetrieverUrl
+                            if (schemaRetrieverUrl != oldConfig.restConfig.schemaRetrieverUrl) {
+                                schemaRetrieverUrl?.let { srUrl ->
+                                    schemaRetriever(srUrl) {
+                                        schemaTimeout = CacheConfig(
+                                            refreshDuration = 2.hours,
+                                            retryDuration = 30.seconds
+                                        )
+                                        httpClient = HttpClient(CIO) {
+                                            timeout(10.seconds)
+                                        }
                                     }
                                 }
                             }
                         }
+                        logger.trace("KafkaSenderTrace: Completed Initializing RestKafkaSender in TableDataHandler::handler")
+                    } catch (e: Exception) {
+                        logger.trace(
+                            "KafkaSenderTrace:  Exception when tweaking RestKafkaSender in TableDataHandler::handler: ",
+                            e
+                        )
                     }
 
                     sender?.resetConnection()

@@ -43,6 +43,7 @@ import java.io.File
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.ExecutionException
+import kotlin.collections.ArrayList
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -111,9 +112,13 @@ class TapeCache<K: Any, V: Any>(
 
         configObserverJob = cacheScope.launch {
             this@TapeCache.config.collect {
-                for (i in 1..2) {
-                    if (!::queueFile.isInitialized) {
-                        delay(100)
+                if (!::queueFile.isInitialized) {
+                    for (i in 1..3) {
+                        if (!::queueFile.isInitialized) {
+                            delay(100)
+                        } else {
+                            break
+                        }
                     }
                 }
                 ensureActive()
@@ -217,7 +222,9 @@ class TapeCache<K: Any, V: Any>(
                 addMeasurementFuture = cacheScope.launch {
                     try {
                         delay(config.value.commitRate)
-                        doFlush()
+                        mutex.withLock {
+                            doFlush()
+                        }
                     } catch (e: CancellationException) {
                         logger.warn("Coroutine for addMeasurementFuture was canceled: ${e.message}")
                         throw e
@@ -274,7 +281,7 @@ class TapeCache<K: Any, V: Any>(
         try {
             logger.info("Writing {} record(s) to file in topic {}.", measurementsToAdd.size, topic.name)
             withContext(Dispatchers.IO) {
-                queue += measurementsToAdd
+                queue += ArrayList(measurementsToAdd)
                 numberOfRecords.value += measurementsToAdd.size
             }
         } catch (ex: IOException) {
@@ -286,7 +293,8 @@ class TapeCache<K: Any, V: Any>(
             logger.error("Failed to validate all records; adding individual records instead", ex)
             try {
                 logger.info("Writing {} records to file in topic {}", measurementsToAdd.size, topic.name)
-                for (record in measurementsToAdd) {
+                val measurements = ArrayList(measurementsToAdd)
+                for (record in measurements) {
                     try {
                         queue += record
                     } catch (ex2: IllegalArgumentException) {

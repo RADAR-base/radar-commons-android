@@ -27,7 +27,6 @@ import org.radarbase.android.source.SourceService
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.CoroutineTaskExecutor
-import org.radarbase.android.util.send
 import org.radarbase.passive.google.places.GooglePlacesManager.Companion.NUMBER_OF_ATTEMPTS_KEY
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
@@ -94,7 +93,7 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
                 val currentManager = sourceManager
                 (currentManager as? GooglePlacesManager)?.reScan()
                 if (currentManager == null) {
-                    super.status.value = SourceStatusListener.Status.DISCONNECTED
+                    super._status.value = SourceStatusListener.Status.DISCONNECTED
                 }
                 stopRecording()
             }
