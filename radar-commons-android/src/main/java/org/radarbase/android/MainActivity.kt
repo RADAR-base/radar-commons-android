@@ -26,7 +26,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.flow.StateFlow
 import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.CoroutineStart
@@ -39,11 +38,9 @@ import kotlinx.coroutines.sync.withLock
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
-import org.radarbase.android.RadarConfiguration.Companion.RADAR_CONFIGURATION_CHANGED
 import org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
-import org.radarbase.android.RadarService.Companion.ACTION_PROVIDERS_UPDATED
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.*
 import org.radarbase.android.auth.AuthService
@@ -72,7 +69,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     var view: MainActivityView? = null
         private set
 
-    private var configurationBroadcastReceiver: BroadcastRegistration? = null
     private lateinit var permissionHandler: PermissionHandler
     protected lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
     protected lateinit var radarConnection: ManagedServiceConnection<IRadarBinder>
@@ -80,7 +76,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     private lateinit var bluetoothEnforcer: BluetoothEnforcer
 
     protected lateinit var configuration: RadarConfiguration
-    private var connectionsUpdatedReceiver: BroadcastRegistration? = null
 
     protected var radarServiceBinder: IRadarBinder? = null
         private set
@@ -181,9 +176,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         logger.info("RADAR configuration at create: {}", configuration)
         onConfigChanged()
 
-        configurationBroadcastReceiver = LocalBroadcastManager.getInstance(this)
-                .register(RADAR_CONFIGURATION_CHANGED) { _, _ -> onConfigChanged() }
-
         // Start the UI thread
         uiRefreshRate = configuration.latestConfig.getLong(UI_REFRESH_RATE_KEY, 250L)
 
@@ -198,13 +190,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             }
         }
 
-    }
-
-    @CallSuper
-    override fun onDestroy() {
-        super.onDestroy()
-
-        configurationBroadcastReceiver?.unregister()
     }
 
     /**
@@ -354,7 +339,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         authConnectionJob?.cancel()
         radarConnectionJob = null
         authConnectionJob = null
-        connectionsUpdatedReceiver?.unregister()
     }
 
     @Deprecated("Super was deprecated in favor of Activity Result API")

@@ -31,7 +31,6 @@ import org.radarbase.android.data.TableDataHandler
 import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.OfflineProcessor
@@ -101,9 +100,6 @@ class ApplicationStatusManager(
 
     private lateinit var tzOffsetCache: ChangeRunner<Int>
     private lateinit var deviceInfoCache: ChangeRunner<ApplicationInfo>
-    private var serverStatusReceiver: BroadcastRegistration? = null
-    private var serverRecordsReceiver: BroadcastRegistration? = null
-    private var cacheReceiver: BroadcastRegistration? = null
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
@@ -312,9 +308,6 @@ class ApplicationStatusManager(
         applicationStatusExecutor.stop {
             this.processor.stop()
         }
-        cacheReceiver?.unregister()
-        serverRecordsReceiver?.unregister()
-        serverStatusReceiver?.unregister()
     }
 
     private suspend fun processTimeZone() {

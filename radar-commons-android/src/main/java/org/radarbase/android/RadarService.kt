@@ -93,8 +93,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private lateinit var providerLoader: SourceProviderLoader
     private lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
-    private lateinit var sourceFailedReceiver: BroadcastRegistration
-    private lateinit var serverStatusReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
     private val configuredProviders = ChangeRunner<List<SourceProvider<*>>>()
 
@@ -295,8 +293,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         if (needsBluetooth.value) {
             bluetoothReceiver.unregister()
         }
-        sourceFailedReceiver.unregister()
-        serverStatusReceiver.unregister()
 
         radarExecutor.stop {
             sourceRegistrar?.let {
