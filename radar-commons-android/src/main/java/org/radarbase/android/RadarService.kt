@@ -58,6 +58,7 @@ import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.*
 import org.radarbase.android.util.*
+import org.radarbase.android.util.BluetoothEnforcer.Companion
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
@@ -192,12 +193,18 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         lifecycleScope.launch {
             permissionsBroadcastReceiver.collect { permissions: PermissionBroadcast? ->
                 permissions ?: return@collect
+                logger.trace(
+                    "NewBroadcastTrace: onPermissionUpdated: permissions: {}, grants: {}",
+                    permissions.extraPermissions,
+                    permissions.extraGrants
+                )
                 val extraPermissions = permissions.extraPermissions
                 val extraGrants = permissions.extraGrants
 
                 onPermissionsGranted(extraPermissions, extraGrants)
             }
         }
+
         authConnection = serviceConnection<AuthService.AuthServiceBinder>(radarApp.authService)
 
         with(lifecycleScope) {

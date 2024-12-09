@@ -58,6 +58,7 @@ open class PermissionHandler(
             "location_request",
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
+            logger.trace("NewBroadcastTrace: LocationRequestResult: {}", result.resultCode == Activity.RESULT_OK)
             onPermissionRequestResult(
                 LOCATION_SERVICE,
                 result.resultCode == Activity.RESULT_OK
@@ -68,6 +69,7 @@ open class PermissionHandler(
             "usage_request",
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
+            logger.trace("NewBroadcastTrace: UsageRequestResult: {}", result.resultCode == Activity.RESULT_OK)
             onPermissionRequestResult(
                 PACKAGE_USAGE_STATS,
                 result.resultCode == Activity.RESULT_OK
@@ -78,6 +80,7 @@ open class PermissionHandler(
             "battery_opt_request",
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
+            logger.trace("NewBroadcastTrace: BatteryOptimization: {}", result.resultCode == Activity.RESULT_OK)
             val powerManager = activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
             val granted = result.resultCode == Activity.RESULT_OK || powerManager?.isIgnoringBatteryOptimizations(activity.packageName) == true
             onPermissionRequestResult(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, granted)
@@ -87,6 +90,7 @@ open class PermissionHandler(
             "overlay_request",
             ActivityResultContracts.StartActivityForResult()
         ) {
+            logger.trace("NewBroadcastTrace: OverlayResult: {}", Settings.canDrawOverlays(activity))
             onPermissionRequestResult(
                 SYSTEM_ALERT_WINDOW,
                 Settings.canDrawOverlays(activity)

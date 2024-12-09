@@ -26,14 +26,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.flow.StateFlow
 import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,10 +43,18 @@ import org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
-import org.radarbase.android.auth.*
+import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
-import org.radarbase.android.util.*
+import org.radarbase.android.auth.AuthServiceStateReactor
+import org.radarbase.android.auth.LoginListener
+import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.util.BindState
+import org.radarbase.android.util.BluetoothEnforcer
+import org.radarbase.android.util.CoroutineTaskExecutor
+import org.radarbase.android.util.ManagedServiceConnection
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
+import org.radarbase.android.util.PermissionBroadcast
+import org.radarbase.android.util.PermissionHandler
 import org.radarbase.kotlin.coroutines.launchJoin
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration
@@ -190,6 +197,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 (application as RadarApplication).radarServiceImpl.actionProvidersUpdated.collect {
+                    logger.trace("NewBroadcastTrace: ActionProviderUpdated: {}", it)
                     mutexCreateView.withLock {
                         logger.debug("Source providers updated, creating a new view")
                         view = createView()

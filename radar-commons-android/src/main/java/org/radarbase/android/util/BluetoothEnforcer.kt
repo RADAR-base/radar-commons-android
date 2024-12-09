@@ -1,6 +1,5 @@
 package org.radarbase.android.util
 
-import android.app.Activity
 import android.app.Activity.RESULT_OK
 import android.bluetooth.BluetoothAdapter
 import android.content.Context.MODE_PRIVATE
@@ -46,6 +45,7 @@ class BluetoothEnforcer(
             "enableBluetoothRequest",
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
+            logger.trace("NewBroadcastTrace: IsBluetoothEnabled: {}", result.resultCode == RESULT_OK)
             if (result.resultCode == RESULT_OK) {
                 isEnabled = true
                 logger.info("Bluetooth has been enabled successfully")
@@ -105,7 +105,8 @@ class BluetoothEnforcer(
         testBindBluetooth()
 
         bluetoothNeededRegistration = context.lifecycleScope.launch(Dispatchers.Default) {
-            (context as RadarApplication).radarServiceImpl.actionBluetoothNeeded.collectLatest {
+            (context.applicationContext as RadarApplication).radarServiceImpl.actionBluetoothNeeded.collectLatest {
+                logger.trace("NewBroadcastTrace: ActionBluetoothNeeded: {}", it)
                 testBindBluetooth()
             }
         }
@@ -168,14 +169,7 @@ class BluetoothEnforcer(
         }
     }
 
-    fun onActivityResult(requestCode: Int, resultCode: Int) {
-        if (requestCode == REQUEST_ENABLE_BT) {
-            isEnabled = resultCode == RESULT_OK
-        }
-    }
-
     companion object {
-        const val REQUEST_ENABLE_BT: Int = 6944
         private const val LAST_REQUEST: String = "lastRequest"
         private const val BLUETOOTH_REQUEST_COOLDOWN = "bluetooth_request_cooldown"
 
