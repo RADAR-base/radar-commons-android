@@ -7,10 +7,18 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.radarbase.android.IRadarBinder
+import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.ENABLE_BLUETOOTH_REQUESTS
 import org.radarbase.android.RadarService
@@ -24,12 +32,11 @@ class BluetoothEnforcer(
     private val radarConnection: ManagedServiceConnection<IRadarBinder>,
     private val serviceBoundActions: MutableList<RadarServiceStateReactor>
 ) {
-    private val handler = Handler(Looper.getMainLooper())
     private var isRequestingBluetooth = false
     private val config = context.radarConfig
     private val enableBluetoothRequests: ChangeRunner<Boolean>
     private val bluetoothIsNeeded = ChangeRunner(false)
-    private lateinit var bluetoothNeededRegistration: BroadcastRegistration
+    private lateinit var bluetoothNeededRegistration: Job
 
     private val bluetoothStateReceiver: BluetoothStateReceiver
 
@@ -49,7 +56,8 @@ class BluetoothEnforcer(
             }
         }
 
-    private val prefs = context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
+    private val prefs =
+        context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
 
     init {
         val latestConfig = config.latestConfig
@@ -78,15 +86,17 @@ class BluetoothEnforcer(
     fun start() {
         testBindBluetooth()
 
-        LocalBroadcastManager.getInstance(context).apply {
-            bluetoothNeededRegistration = register(RadarService.ACTION_BLUETOOTH_NEEDED_CHANGED) { _, _ ->
-                testBindBluetooth()
+        context.lifecycleScope.launch {
+            context.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                (context as RadarApplication).radarServiceImpl.actionBluetoothNeeded.collectLatest {
+                    testBindBluetooth()
+                }
             }
         }
     }
 
     fun stop() {
-        bluetoothNeededRegistration.unregister()
+        bluetoothNeededRegistration.cancel()
         bluetoothIsNeeded.applyIfChanged(false) {
             bluetoothStateReceiver.unregister()
         }
@@ -115,16 +125,19 @@ class BluetoothEnforcer(
      * Sends an intent to request bluetooth to be turned on.
      */
     private fun requestEnableBt() {
-        handler.post {
+        context.lifecycleScope.launch {
             if (isRequestingBluetooth) {
-                return@post
+                return@launch
             }
-            isRequestingBluetooth = handler.postDelayed({
+            context.lifecycleScope.launch {
+                isRequestingBluetooth = true
+                delay(1000)
                 if (isEnabled && !context.bluetoothIsEnabled) {
-                    prefs.edit()
-                        .putLong(LAST_REQUEST, System.currentTimeMillis())
-                        .apply()
-
+                    withContext(Dispatchers.IO) {
+                        prefs.edit()
+                            .putLong(LAST_REQUEST, System.currentTimeMillis())
+                            .commit()
+                    }
                     try {
                         context.startActivityForResult(Intent().apply {
                             action = BluetoothAdapter.ACTION_REQUEST_ENABLE
@@ -135,7 +148,7 @@ class BluetoothEnforcer(
                     }
                 }
                 isRequestingBluetooth = false
-            }, 1000L)
+            }
         }
     }
 

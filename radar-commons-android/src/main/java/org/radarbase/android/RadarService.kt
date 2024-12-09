@@ -155,6 +155,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     override val recordsSent: SharedFlow<TopicSendReceipt> = _recordsSent.asSharedFlow()
     override val serverStatus: StateFlow<ServerStatus> = _serverStatus
 
+    private var _actionBluetoothNeeded: MutableStateFlow<NeedsBluetoothState> = MutableStateFlow(BluetoothNeeded)
+    val actionBluetoothNeeded: StateFlow<NeedsBluetoothState> = _actionBluetoothNeeded
+
 
     protected open val servicePermissions: List<String> = buildList(4) {
         add(ACCESS_NETWORK_STATE)
@@ -439,16 +442,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         needsBluetooth.applyIfChanged(newValue) {
             if (newValue) {
                 bluetoothReceiver.register()
-
-                broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
-                    putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NEEDED)
-                }
+                _actionBluetoothNeeded.value = BluetoothNeeded
             } else {
                 bluetoothReceiver.unregister()
-
-                broadcaster.send(ACTION_BLUETOOTH_NEEDED_CHANGED) {
-                    putExtra(ACTION_BLUETOOTH_NEEDED_CHANGED, BLUETOOTH_NOT_NEEDED)
-                }
+                _actionBluetoothNeeded.value = BluetoothNotNeeded
             }
         }
     }
@@ -771,10 +768,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         private const val RADAR_PACKAGE = "org.radarbase.android"
 
         const val ACTION_PROVIDERS_UPDATED = "$RADAR_PACKAGE.ACTION_PROVIDERS_UPDATED"
-
-        const val ACTION_BLUETOOTH_NEEDED_CHANGED = "$RADAR_PACKAGE.BLUETOOTH_NEEDED_CHANGED"
-        const val BLUETOOTH_NEEDED = 1
-        const val BLUETOOTH_NOT_NEEDED = 2
 
         const val ACTION_CHECK_PERMISSIONS = "$RADAR_PACKAGE.ACTION_CHECK_PERMISSIONS"
         const val EXTRA_PERMISSIONS = "$RADAR_PACKAGE.EXTRA_PERMISSIONS"
