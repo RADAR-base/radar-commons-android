@@ -25,10 +25,13 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
@@ -77,9 +80,9 @@ abstract class SourceService<T : BaseSourceState> :
     var sourceTypes: Set<SourceType> = emptySet()
     var sourceConnectFailed: MutableSharedFlow<SourceConnectFailed> = MutableSharedFlow()
 
-    val status: MutableStateFlow<SourceStatusListener.Status> =
-        MutableStateFlow(SourceStatusListener.Status.DISCONNECTED)
-
+    protected val _status: MutableStateFlow<SourceStatusListener.Status> = MutableStateFlow(SourceStatusListener.Status.DISCONNECTED)
+    val status: StateFlow<SourceStatusListener.Status> = _status
+    private val managerStartMutex: Mutex = Mutex()
 
     private val acceptableSourceTypes: Set<SourceType>
         get() = sourceTypes.filterTo(HashSet()) {
@@ -289,7 +292,7 @@ abstract class SourceService<T : BaseSourceState> :
     }
 
     private fun broadcastSourceStatus(status: SourceStatusListener.Status) {
-        this.status.value = status
+        this._status.value = status
     }
 
     override fun sourceStatusUpdated(manager: SourceManager<*>, status: SourceStatusListener.Status) {
@@ -343,37 +346,39 @@ abstract class SourceService<T : BaseSourceState> :
         }
     }
 
-    private fun doStart(acceptableIds: Set<String>) {
-        val expectedNames = expectedSourceNames
-        val actualIds = expectedNames.ifEmpty { acceptableIds }
+    private suspend fun doStart(acceptableIds: Set<String>)  {
+        managerStartMutex.withLock {
+            val expectedNames = expectedSourceNames
+            val actualIds = expectedNames.ifEmpty { acceptableIds }
 
-        when {
-            sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED -> {
-                logger.warn("A disconnected SourceManager is still registered for {}. Retrying later.", name)
-                startAfterDelay(acceptableIds)
-            }
-            !isAuthorizedForSource -> {
-                logger.warn("Sources have not been registered {}. Retrying later.", name)
-                startAfterDelay(acceptableIds)
-            }
-            sourceManager != null ->
-                logger.warn("A SourceManager is already registered for {}", name)
-            isBluetoothConnectionRequired && !bluetoothIsEnabled ->
-                logger.error("Cannot start recording for {} without Bluetooth", name)
-            dataHandler != null -> {
-                logger.info("Starting recording now for {}", name)
-                val manager = createSourceManager()
-                sourceManager = manager
-                configureSourceManager(manager, radarConfig.latestConfig)
-                if (state.status == SourceStatusListener.Status.UNAVAILABLE) {
-                    logger.info("Status is unavailable. Not starting manager yet.")
-                } else {
-                    manager.start(actualIds)
+            when {
+                sourceManager?.state?.status == SourceStatusListener.Status.DISCONNECTED -> {
+                    logger.warn("A disconnected SourceManager is still registered for {}. Retrying later.", name)
+                    startAfterDelay(acceptableIds)
                 }
-            }
-            else -> {
-                logger.info("DataHandler is not ready. Retrying later")
-                startAfterDelay(acceptableIds)
+                !isAuthorizedForSource -> {
+                    logger.warn("Sources have not been registered {}. Retrying later.", name)
+                    startAfterDelay(acceptableIds)
+                }
+                sourceManager != null ->
+                    logger.warn("A SourceManager is already registered for {}", name)
+                isBluetoothConnectionRequired && !bluetoothIsEnabled ->
+                    logger.error("Cannot start recording for {} without Bluetooth", name)
+                dataHandler != null -> {
+                    logger.info("Starting recording now for {}", name)
+                    val manager = createSourceManager()
+                    sourceManager = manager
+                    configureSourceManager(manager, radarConfig.latestConfig)
+                    if (state.status == SourceStatusListener.Status.UNAVAILABLE) {
+                        logger.info("Status is unavailable. Not starting manager yet.")
+                    } else {
+                        manager.start(actualIds)
+                    }
+                }
+                else -> {
+                    logger.info("DataHandler is not ready. Retrying later")
+                    startAfterDelay(acceptableIds)
+                }
             }
         }
     }

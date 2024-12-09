@@ -25,7 +25,11 @@ class SourceProviderRegistrar(
     private val retry: MutableMap<SourceProvider<*>, Pair<DelayedRetry, CoroutineTaskExecutor.CoroutineFutureHandle>> = mutableMapOf()
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        if (isClosed) {
+            return
+        }
         executor.execute {
+            logger.debug("Received login succeeded callback in registrar")
             resetRetry()
 
             val (legalProviders, illegalProviders) = providers.partition { it.canRegisterFor(authState, false) }
@@ -40,10 +44,11 @@ class SourceProviderRegistrar(
                     unregisteredSourceMetadata += unregistered
                 }
             }
+            logger.trace("Unregistered SourceMetadata: {}", unregisteredSourceMetadata.map { it.sourceName } )
             if (unregisteredSourceMetadata.isNotEmpty()) {
                 authServiceBinder.unregisterSources(unregisteredSourceMetadata)
             }
-
+            logger.debug("Updating caller about providers")
             onUpdate(illegalProviders + unregisteredProviders, registeredProviders)
         }
     }
@@ -52,6 +57,7 @@ class SourceProviderRegistrar(
         if (isClosed) {
             return
         }
+        logger.debug("Registering provider: {}", provider.pluginName)
         val sourceType = authState.sourceTypes.first { provider.matches(it, false) }
         authServiceBinder.registerSource(SourceMetadata(sourceType), { _, _ ->
             retry -= provider

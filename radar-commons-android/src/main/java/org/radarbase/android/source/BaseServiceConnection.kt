@@ -97,7 +97,7 @@ open class BaseServiceConnection<S : BaseSourceState>(val serviceClassName: Stri
      * Start looking for sources to record.
      * @param acceptableIds case insensitive parts of source ID's that are allowed to connect.
      */
-    fun startRecording(acceptableIds: Set<String>) {
+    suspend fun startRecording(acceptableIds: Set<String>) {
         try {
             serviceBinder?.startRecording(acceptableIds)
         } catch (ex: IllegalStateException) {

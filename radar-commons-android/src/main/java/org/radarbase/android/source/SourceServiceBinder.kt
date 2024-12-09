@@ -46,7 +46,7 @@ class SourceServiceBinder<T : BaseSourceState>(private val sourceService: Source
     override val sourceName: String?
         get() = sourceService.sourceManager?.name
 
-    override fun startRecording(acceptableIds: Set<String>) {
+    override suspend fun startRecording(acceptableIds: Set<String>) {
         sourceService.startRecording(acceptableIds)
     }
 

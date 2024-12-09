@@ -37,11 +37,15 @@ class SourceServiceConnection<S : BaseSourceState>(
     private var sourceFailedJob: Job? = null
 
     override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
+        if (!hasService()) {
+            super.onServiceConnected(className, service)
+        }
+
         radarService.run {
             serviceJob = lifecycleScope.launch {
                 sourceStatus
                     ?.collect {
-                        logger.info("Source status changed of service: $serviceClassName")
+                        logger.info("Source status changed of source: $sourceName with service class: {}", serviceClassName)
                         radarService.sourceStatusUpdated(this@SourceServiceConnection, it)
                     }
             }
@@ -52,11 +56,8 @@ class SourceServiceConnection<S : BaseSourceState>(
             }
         }
 
-        if (!hasService()) {
-            super.onServiceConnected(className, service)
-            if (hasService()) {
-                radarService.serviceConnected(this)
-            }
+        if (hasService()) {
+            radarService.serviceConnected(this)
         }
     }
 

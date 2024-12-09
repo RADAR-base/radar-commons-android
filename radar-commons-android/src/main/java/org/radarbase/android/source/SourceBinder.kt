@@ -47,7 +47,7 @@ interface SourceBinder<T : BaseSourceState> {
      * @param acceptableIds a set of source IDs that may be connected to.
      * If empty, no selection is made.
      */
-    fun startRecording(acceptableIds: Set<String>)
+    suspend fun startRecording(acceptableIds: Set<String>)
 
     /** Stop recording and immediately start recording after that */
     fun restartRecording(acceptableIds: Set<String>)
