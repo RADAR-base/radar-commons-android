@@ -31,7 +31,9 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -154,7 +156,13 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
         mainExecutor = CoroutineTaskExecutor(this::class.simpleName!!, Dispatchers.Default)
-        permissionHandler = PermissionHandler(this, mainExecutor, _permissionsBroadcastReceiver, requestPermissionTimeout.inWholeMilliseconds)
+        permissionHandler = PermissionHandler(
+            this,
+            mainExecutor,
+            _permissionsBroadcastReceiver,
+            requestPermissionTimeout.inWholeMilliseconds,
+            activityResultRegistry
+        )
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
@@ -166,7 +174,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             bindFlags = Context.BIND_AUTO_CREATE or Context.BIND_ABOVE_CLIENT
         }
 
-        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, radarServiceBoundActions)
+        bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, radarServiceBoundActions, activityResultRegistry)
         authConnection = serviceConnection(radarApp.authService)
         create()
     }
@@ -341,13 +349,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         authConnectionJob = null
     }
 
-    @Deprecated("Super was deprecated in favor of Activity Result API")
-    public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
-        super.onActivityResult(requestCode, resultCode, result)
-        bluetoothEnforcer.onActivityResult(requestCode, resultCode)
-        permissionHandler.onActivityResult(requestCode, resultCode)
-    }
-
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -385,9 +386,9 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
         private val REQUEST_PERMISSION_TIMEOUT = 86_400_000.milliseconds // 1 day
 
-        private var _permissionsBroadcastReceiver: MutableStateFlow<PermissionBroadcast?> = MutableStateFlow(null)
+        private var _permissionsBroadcastReceiver: MutableSharedFlow<PermissionBroadcast> = MutableSharedFlow()
 
-        val LifecycleService.permissionsBroadcastReceiver: StateFlow<PermissionBroadcast?>
+        val LifecycleService.permissionsBroadcastReceiver: SharedFlow<PermissionBroadcast>
             get() = _permissionsBroadcastReceiver
     }
 }

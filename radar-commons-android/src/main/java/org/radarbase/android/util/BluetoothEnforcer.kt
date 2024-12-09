@@ -1,13 +1,15 @@
 package org.radarbase.android.util
 
+import android.app.Activity
 import android.app.Activity.RESULT_OK
 import android.bluetooth.BluetoothAdapter
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import androidx.activity.ComponentActivity
-import androidx.lifecycle.Lifecycle
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,7 +28,8 @@ import java.util.concurrent.TimeUnit
 class BluetoothEnforcer(
     private val context: ComponentActivity,
     private val radarConnection: ManagedServiceConnection<IRadarBinder>,
-    private val serviceBoundActions: MutableList<RadarServiceStateReactor>
+    private val serviceBoundActions: MutableList<RadarServiceStateReactor>,
+    private val activityResultRegistry: ActivityResultRegistry
 ) {
     private var isRequestingBluetooth = false
     private val config = context.radarConfig
@@ -35,6 +38,23 @@ class BluetoothEnforcer(
     private lateinit var bluetoothNeededRegistration: Job
 
     private val bluetoothStateReceiver: BluetoothStateReceiver
+    private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
+
+
+    private fun initializeActivityResultLauncher() {
+        enableBluetoothLauncher = activityResultRegistry.register(
+            "enableBluetoothRequest",
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            if (result.resultCode == RESULT_OK) {
+                isEnabled = true
+                logger.info("Bluetooth has been enabled successfully")
+            } else {
+                isEnabled = false
+                logger.warn("Bluetooth enabling request was denied")
+            }
+        }
+    }
 
     var isEnabled: Boolean
         get() = enableBluetoothRequests.value
@@ -52,8 +72,8 @@ class BluetoothEnforcer(
             }
         }
 
-    private val prefs =
-        context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("org.radarbase.android.util.BluetoothEnforcer", MODE_PRIVATE)
+
 
     init {
         val latestConfig = config.latestConfig
@@ -77,16 +97,16 @@ class BluetoothEnforcer(
         bluetoothStateReceiver = BluetoothStateReceiver(context) { enabled ->
             if (!enabled) requestEnableBt()
         }
+
+        initializeActivityResultLauncher()
     }
 
     fun start() {
         testBindBluetooth()
 
-        context.lifecycleScope.launch(Dispatchers.Default) {
-            context.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                (context as RadarApplication).radarServiceImpl.actionBluetoothNeeded.collectLatest {
-                    testBindBluetooth()
-                }
+        bluetoothNeededRegistration = context.lifecycleScope.launch(Dispatchers.Default) {
+            (context as RadarApplication).radarServiceImpl.actionBluetoothNeeded.collectLatest {
+                testBindBluetooth()
             }
         }
     }
@@ -135,10 +155,10 @@ class BluetoothEnforcer(
                             .commit()
                     }
                     try {
-                        context.startActivityForResult(Intent().apply {
-                            action = BluetoothAdapter.ACTION_REQUEST_ENABLE
+                        val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }, REQUEST_ENABLE_BT)
+                        }
+                        enableBluetoothLauncher.launch(intent)
                     } catch (ex: SecurityException) {
                         logger.warn("Cannot request Bluetooth to be enabled - no permission")
                     }

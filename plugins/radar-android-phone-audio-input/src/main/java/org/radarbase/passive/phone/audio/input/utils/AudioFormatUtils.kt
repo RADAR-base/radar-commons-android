@@ -48,7 +48,7 @@ object AudioTypeFormatUtil {
         AudioFormat.ENCODING_MPEGH_BL_L4 -> "ENCODING_MPEGH_BL_L4"
         AudioFormat.ENCODING_MPEGH_LC_L3 -> "ENCODING_MPEGH_LC_L3"
         AudioFormat.ENCODING_MPEGH_LC_L4 -> "ENCODING_MPEGH_LC_L4"
-        AudioFormat.ENCODING_DTS_UHD -> "ENCODING_DTS_UHD"
+        AudioFormat.ENCODING_DTS_UHD_P1 -> "ENCODING_DTS_UHD_P1"
         AudioFormat.ENCODING_DRA -> "ENCODING_DRA"
         else -> "invalid encoding $enc"
     }

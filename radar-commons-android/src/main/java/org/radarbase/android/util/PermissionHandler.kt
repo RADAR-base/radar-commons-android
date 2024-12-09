@@ -9,7 +9,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.AppOpsManager
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Context.LOCATION_SERVICE
 import android.content.Intent
@@ -21,13 +20,16 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.withContext
 import org.radarbase.android.R
-import org.radarbase.android.RadarApplication
-import org.radarbase.android.RadarService
 import org.radarbase.android.RadarService.Companion.ACCESS_BACKGROUND_LOCATION_COMPAT
 import org.slf4j.LoggerFactory
 
@@ -35,8 +37,9 @@ import org.slf4j.LoggerFactory
 open class PermissionHandler(
     private val activity: AppCompatActivity,
     private val mHandler: CoroutineTaskExecutor,
-    private val permissionsBroadcast: MutableStateFlow<PermissionBroadcast?>,
+    private val permissionsBroadcast: MutableSharedFlow<PermissionBroadcast>,
     private val requestPermissionTimeoutMs: Long,
+    private val activityResultRegistry: ActivityResultRegistry
 ) {
 
     private val needsPermissions: MutableSet<String> = HashSet()
@@ -44,7 +47,52 @@ open class PermissionHandler(
     private var isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
     private var requestFuture: CoroutineTaskExecutor.CoroutineFutureHandle? = null
 
-    private val radarService = (activity as RadarApplication).radarServiceImpl
+    private val activityResultLauncherMap = mutableMapOf<Int, ActivityResultLauncher<Intent>>()
+
+    init {
+        registerLaunchers()
+    }
+
+    private fun registerLaunchers() {
+        activityResultLauncherMap[LOCATION_REQUEST_CODE] = activityResultRegistry.register(
+            "location_request",
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            onPermissionRequestResult(
+                LOCATION_SERVICE,
+                result.resultCode == Activity.RESULT_OK
+            )
+        }
+
+        activityResultLauncherMap[USAGE_REQUEST_CODE] = activityResultRegistry.register(
+            "usage_request",
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            onPermissionRequestResult(
+                PACKAGE_USAGE_STATS,
+                result.resultCode == Activity.RESULT_OK
+            )
+        }
+
+        activityResultLauncherMap[BATTERY_OPT_CODE] = activityResultRegistry.register(
+            "battery_opt_request",
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            val powerManager = activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
+            val granted = result.resultCode == Activity.RESULT_OK || powerManager?.isIgnoringBatteryOptimizations(activity.packageName) == true
+            onPermissionRequestResult(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, granted)
+        }
+
+        activityResultLauncherMap[ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE] = activityResultRegistry.register(
+            "overlay_request",
+            ActivityResultContracts.StartActivityForResult()
+        ) {
+            onPermissionRequestResult(
+                SYSTEM_ALERT_WINDOW,
+                Settings.canDrawOverlays(activity)
+            )
+        }
+    }
 
     private fun onPermissionRequestResult(permission: String, granted: Boolean) {
         mHandler.execute {
@@ -52,10 +100,10 @@ open class PermissionHandler(
 
             val result = if (granted) PERMISSION_GRANTED else PERMISSION_DENIED
 
-            permissionsBroadcast.value = PermissionBroadcast(
+            permissionsBroadcast.emit(PermissionBroadcast(
                 arrayOf(permission),
                 intArrayOf(result)
-            )
+            ))
 
             isRequestingPermissions.remove(permission)
             requestPermissions()
@@ -76,10 +124,15 @@ open class PermissionHandler(
         val externallyGrantedPermissions = needsPermissions.filterTo(HashSet()) { activity.isPermissionGranted(it) }
 
         if (externallyGrantedPermissions.isNotEmpty()) {
-            permissionsBroadcast.value = PermissionBroadcast(
-                externallyGrantedPermissions.toTypedArray(),
-                IntArray(externallyGrantedPermissions.size) { PERMISSION_GRANTED }
-            )
+            mHandler.execute {
+                withContext(Dispatchers.Default) {
+                    permissionsBroadcast.emit(PermissionBroadcast(
+                        externallyGrantedPermissions.toTypedArray(),
+                        IntArray(externallyGrantedPermissions.size) { PERMISSION_GRANTED }
+                    ))
+                }
+            }
+
             isRequestingPermissions -= externallyGrantedPermissions
             needsPermissions -= externallyGrantedPermissions
         }
@@ -88,7 +141,7 @@ open class PermissionHandler(
             addAll(needsPermissions)
             removeAll(isRequestingPermissions)
             if (contains(ACCESS_COARSE_LOCATION) || contains(ACCESS_FINE_LOCATION)) {
-                remove(RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT)
+                remove(ACCESS_BACKGROUND_LOCATION_COMPAT)
             }
         }
 
@@ -202,7 +255,7 @@ open class PermissionHandler(
             setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.dismiss()
                 Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                    .startActivityForResult(LOCATION_REQUEST_CODE)
+                    .launchActivityForResult(LOCATION_REQUEST_CODE)
             }
             setNegativeButton(android.R.string.cancel) { dialog, _ ->
                 dialog.cancel()
@@ -221,7 +274,7 @@ open class PermissionHandler(
                 Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + activity.packageName)
-                ).startActivityForResult(ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
+                ).launchActivityForResult(ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
             }
             setNegativeButton(android.R.string.cancel) { dialog, _ ->
                 dialog.cancel()
@@ -230,14 +283,11 @@ open class PermissionHandler(
         }
     }
 
-    private fun Intent.startActivityForResult(code: Int) {
-        resolveActivity(activity.packageManager) ?: return
-        try {
-            activity.startActivityForResult(this, code)
-        } catch (ex: ActivityNotFoundException) {
-            logger.error("Failed to ask for usage code", ex)
-        } catch (ex: IllegalStateException) {
-            logger.warn("Cannot start activity on closed app")
+    private fun Intent.launchActivityForResult(requestCode: Int) {
+        resolveActivity(activity.packageManager)?.let {
+            activityResultLauncherMap[requestCode]?.launch(this)
+        } ?: run {
+            logger.error("Failed to resolve activity for request code: $requestCode")
         }
     }
 
@@ -250,7 +300,7 @@ open class PermissionHandler(
                 Intent(
                     Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                     Uri.parse("package:" + activity.packageName)
-                ).startActivityForResult(BATTERY_OPT_CODE)
+                ).launchActivityForResult(BATTERY_OPT_CODE)
             }
             setNegativeButton(android.R.string.cancel) { dialog, _ ->
                 dialog.cancel()
@@ -268,39 +318,12 @@ open class PermissionHandler(
                 if (intent.resolveActivity(activity.packageManager) == null) {
                     intent = Intent(Settings.ACTION_SETTINGS)
                 }
-                intent.startActivityForResult(USAGE_REQUEST_CODE)
+                intent.launchActivityForResult(USAGE_REQUEST_CODE)
             }
             setNegativeButton(android.R.string.cancel) { dialog, _ ->
                 dialog.cancel()
                 requestPermissions()
             }
-        }
-    }
-
-    fun onActivityResult(requestCode: Int, resultCode: Int) {
-        when (requestCode) {
-            LOCATION_REQUEST_CODE -> onPermissionRequestResult(
-                LOCATION_SERVICE,
-                resultCode == Activity.RESULT_OK
-            )
-            USAGE_REQUEST_CODE -> onPermissionRequestResult(
-                PACKAGE_USAGE_STATS,
-                resultCode == Activity.RESULT_OK
-            )
-            BATTERY_OPT_CODE -> {
-                val powerManager =
-                    activity.getSystemService(Context.POWER_SERVICE) as PowerManager?
-                val granted = resultCode == Activity.RESULT_OK
-                        || powerManager?.isIgnoringBatteryOptimizations(activity.applicationContext.packageName) != false
-                onPermissionRequestResult(
-                    REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    granted
-                )
-            }
-            ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE -> onPermissionRequestResult(
-                SYSTEM_ALERT_WINDOW,
-                resultCode == Activity.RESULT_OK
-            )
         }
     }
 
@@ -336,10 +359,14 @@ open class PermissionHandler(
 
     fun permissionsGranted(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         if (requestCode == REQUEST_ENABLE_PERMISSIONS) {
-            permissionsBroadcast.value = PermissionBroadcast(
-                permissions,
-                grantResults
-            )
+            mHandler.execute {
+                permissionsBroadcast.emit(
+                    PermissionBroadcast(
+                        permissions,
+                        grantResults
+                    )
+                )
+            }
         }
     }
 
