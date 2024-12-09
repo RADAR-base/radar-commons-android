@@ -26,6 +26,8 @@ import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.log
 
 @Keep
 abstract class AuthService : LifecycleService(), LoginListener {
@@ -46,6 +48,8 @@ abstract class AuthService : LifecycleService(), LoginListener {
     private val serviceMutex: Mutex = Mutex(false)
     private val registryTweakMutex: Mutex = Mutex(false)
     private val authUpdateMutex: Mutex = Mutex(false)
+
+    private var needLoadedState: AtomicBoolean = AtomicBoolean(true)
 
     private val _authStateFailures: MutableSharedFlow<AuthLoginListener.AuthStateFailure> = MutableSharedFlow(
         extraBufferCapacity = 1,
@@ -88,10 +92,14 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
         executor.start()
         lifecycleScope.launch(Dispatchers.Default) {
+            needLoadedState.set(true)
             val loadedAuth = authSerialization.load()
-            logger.debug("Loading auth state from auth serialization: {}", loadedAuth)
-            loadedAuth ?: return@launch
+            loadedAuth ?: run {
+                needLoadedState.set(false)
+                return@launch
+            }
             _authState.value = loadedAuth
+            needLoadedState.set(false)
         }
 
         lifecycleScope.launch {
@@ -101,12 +109,20 @@ abstract class AuthService : LifecycleService(), LoginListener {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch(Dispatchers.Default) {
                     authState.collectLatest { state ->
+                        if (needLoadedState.get()) {
+                            for (i in 1..4) {
+                                if (needLoadedState.get()) {
+                                    logger.trace("Storing auth state -- waiting for state to load")
+                                    delay(50)
+                                }
+                            }
+                        }
                         authSerialization.store(state)
-                        logger.trace("Stored auth state to auth serialization: {}", state)
                     }
                 }
                 launch(Dispatchers.Default) {
-                    authState.collectLatest { state ->
+                    authState
+                        .collectLatest { state ->
                         logger.trace("Collected AppAuth: {}", state)
                         radarConfig.updateWithAuthState(this@AuthService, state)
                     }
@@ -171,6 +187,14 @@ abstract class AuthService : LifecycleService(), LoginListener {
     suspend fun refresh() {
         executor.execute {
             logger.info("Refreshing authentication state")
+            if (needLoadedState.get()) {
+                for (i in 1..4) {
+                    if (needLoadedState.get()) {
+                        logger.trace("Refreshing auth state -- waiting for state to load")
+                        delay(50)
+                    }
+                }
+            }
             if (!authState.value.isValidFor(5, TimeUnit.MINUTES)) {
                 doRefresh()
             } else {
@@ -199,6 +223,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
      */
     suspend fun refreshIfOnline() {
         executor.execute {
+            logger.debug("Refreshing if online")
             for (i in 1..3) {
                 if (!isNetworkStatusReceived) {
                     delay(100)
@@ -259,6 +284,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         serviceMutex.withLock {
             val obsoleteListeners = listeners.filter { it.lastUpdated < sinceUpdate }
             obsoleteListeners.launchJoin {
+                logger.debug("Sending login succeeded to {}", it.listener)
                 it.lastUpdated = sinceUpdate
                 call(it)
             }
@@ -276,7 +302,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         return LoginListenerRegistry(loginListener)
             .also {
                 registryTweakMutex.withLock { listeners += it }
-                logger.debug("Added login listener {} to registry ", it)
+                logger.debug("Added login listener {} to registry ", it.listener)
             }
     }
 
@@ -305,7 +331,6 @@ abstract class AuthService : LifecycleService(), LoginListener {
         lifecycleScope.launch {
             _authStateSuccess.emit(AuthLoginListener.AuthStateSuccess(manager))
         }
-        logger.trace("Login succeeded (AuthService): AppAuthState: {}", authState)
         _authState.value = authState
     }
 

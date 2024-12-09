@@ -12,6 +12,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.json.JSONException
 import org.json.JSONObject
 import org.radarbase.android.auth.AppAuthState
@@ -21,7 +23,6 @@ import org.radarbase.android.auth.entities.source.PostSourceBody
 import org.radarbase.android.auth.entities.source.SourceRegistrationBody
 import org.radarbase.android.auth.entities.source.SourceUpdateBody
 import org.radarbase.android.util.*
-import org.radarbase.android.util.buildJson
 import org.radarbase.android.util.optNonEmptyString
 import org.radarbase.android.util.toStringMap
 import org.radarbase.config.ServerConfig
@@ -157,6 +158,12 @@ class ManagementPortalClient(
         requestBody: PostSourceBody,
         source: SourceMetadata,
     ): SourceMetadata {
+        val jsonBody: String = when(requestBody) {
+            is SourceRegistrationBody -> Json.encodeToString(SourceRegistrationBody.serializer(), requestBody)
+            is SourceUpdateBody -> JsonObject(requestBody.attributes.mapValues { JsonPrimitive(it.value) }).toString()
+        }
+
+        logger.trace("Updating source with body: $jsonBody")
         val response = client.post(relativePath) {
             contentType(ContentType.Application.Json)
             headers {
@@ -164,7 +171,7 @@ class ManagementPortalClient(
                 append(HttpHeaders.ContentType, APPLICATION_JSON)
                 append(HttpHeaders.Accept, APPLICATION_JSON)
             }
-            setBody(requestBody)
+            setBody(jsonBody)
         }
         val responseBody = response.bodyAsText()
         if (responseBody.isEmpty()) {
@@ -184,7 +191,7 @@ class ManagementPortalClient(
                     }
                 }
                 HttpStatusCode.Conflict -> throw ConflictException("Source registration conflicts with existing source registration: $responseBody")
-                else -> throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $requestBody")
+                else -> throw IOException("Cannot complete source registration with the ManagementPortal: $responseBody, using request $jsonBody")
             }
         }
 

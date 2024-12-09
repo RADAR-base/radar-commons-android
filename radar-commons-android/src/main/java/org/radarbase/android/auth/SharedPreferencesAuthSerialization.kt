@@ -43,6 +43,7 @@ class SharedPreferencesAuthSerialization(context: Context): AuthSerialization {
                 parseHeaders(prefs.getString(LOGIN_HEADERS_LIST, null))
                 isPrivacyPolicyAccepted = prefs.getBoolean(LOGIN_PRIVACY_POLICY_ACCEPTED, false)
                 needsRegisteredSources = prefs.getBoolean(LOGIN_NEEDS_REGISTERD_SOURCES, true)
+                authenticationSource = prefs.getString(LOGIN_AUTHENTICATION_SOURCE, null)
             }
         }
         return builder.build()

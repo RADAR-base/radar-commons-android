@@ -30,6 +30,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
@@ -98,6 +100,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     val projectId: String?
         get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
 
+    private val mutexCreateView: Mutex = Mutex()
+
     private var radarConnectionJob: Job? = null
     private var authConnectionJob: Job? = null
 
@@ -161,57 +165,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             IRadarBinder::class.java
         ).apply {
             bindFlags = Context.BIND_AUTO_CREATE or Context.BIND_ABOVE_CLIENT
-        }
-
-        with(lifecycleScope) {
-            radarConnectionJob = launch(start = CoroutineStart.LAZY) {
-                radarConnection.state
-                    .collect { bindState: BindState<IRadarBinder> ->
-                        when (bindState) {
-                            is ManagedServiceConnection.BoundService -> {
-                                radarServiceBinder = bindState.binder
-                                    .also { binder ->
-                                        radarServiceBoundActions.launchJoin { action ->
-                                            action(binder)
-                                        }
-                                    }
-                            }
-
-                            is ManagedServiceConnection.Unbound -> {
-                                radarServiceBinder?.also { binder ->
-                                    radarServiceUnboundActions.launchJoin { action ->
-                                        action(binder)
-                                    }
-                                    radarServiceBinder = null
-                                }
-                            }
-                        }
-                    }
-            }
-
-            authConnectionJob = launch(start = CoroutineStart.LAZY) {
-                authConnection.state
-                    .collect { bindState ->
-                        when (bindState) {
-                            is ManagedServiceConnection.BoundService -> {
-                                authServiceBinder = bindState.binder.also { binder ->
-                                    authServiceBoundActions.launchJoin {
-                                        it(binder)
-                                    }
-                                }
-                            }
-
-                            is ManagedServiceConnection.Unbound -> {
-                                authServiceBinder?.also { binder ->
-                                    authServiceUnboundActions.launchJoin {
-                                        it(binder)
-                                    }
-                                    authServiceBinder = null
-                                }
-                            }
-                        }
-                    }
-            }
         }
 
         bluetoothEnforcer = BluetoothEnforcer(this, radarConnection, radarServiceBoundActions)
@@ -287,6 +240,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             logger.error("Failed to start RadarService: activity is in background.", ex)
         }
 
+        setUpConnectionJobs()
+
         with(lifecycleScope) {
             launch {
                 authConnection.bind()
@@ -301,14 +256,74 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
         LocalBroadcastManager.getInstance(this).apply {
             connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
-                synchronized(this@MainActivity) {
-                    view = createView()
+                lifecycleScope.launch {
+                    mutexCreateView.withLock {
+                        logger.debug("Source providers updated, creating a new view")
+                        view = createView()
+                    }
                 }
             }
         }
-        synchronized(this@MainActivity) {
-            view = createView()
+        lifecycleScope.launch {
+            mutexCreateView.withLock {
+                logger.trace("Creating a new view")
+                view = createView()
+            }
         }
+    }
+
+    private fun setUpConnectionJobs() {
+        with(lifecycleScope) {
+            radarConnectionJob = launch(start = CoroutineStart.LAZY) {
+                radarConnection.state
+                    .collect { bindState: BindState<IRadarBinder> ->
+                        when (bindState) {
+                            is ManagedServiceConnection.BoundService -> {
+                                radarServiceBinder = bindState.binder
+                                    .also { binder ->
+                                        radarServiceBoundActions.launchJoin { action ->
+                                            action(binder)
+                                        }
+                                    }
+                            }
+
+                            is ManagedServiceConnection.Unbound -> {
+                                radarServiceBinder?.also { binder ->
+                                    radarServiceUnboundActions.launchJoin { action ->
+                                        action(binder)
+                                    }
+                                    radarServiceBinder = null
+                                }
+                            }
+                        }
+                    }
+            }
+
+            authConnectionJob = launch(start = CoroutineStart.LAZY) {
+                authConnection.state
+                    .collect { bindState ->
+                        when (bindState) {
+                            is ManagedServiceConnection.BoundService -> {
+                                authServiceBinder = bindState.binder.also { binder ->
+                                    authServiceBoundActions.launchJoin {
+                                        it(binder)
+                                    }
+                                }
+                            }
+
+                            is ManagedServiceConnection.Unbound -> {
+                                authServiceBinder?.also { binder ->
+                                    authServiceUnboundActions.launchJoin {
+                                        it(binder)
+                                    }
+                                    authServiceBinder = null
+                                }
+                            }
+                        }
+                    }
+            }
+        }
+
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -340,6 +355,16 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         super.onActivityResult(requestCode, resultCode, result)
         bluetoothEnforcer.onActivityResult(requestCode, resultCode)
+        permissionHandler.onActivityResult(requestCode, resultCode)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionHandler.permissionsGranted(requestCode, permissions, grantResults)
     }
 
     /**

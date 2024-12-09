@@ -19,7 +19,6 @@ package org.radarbase.android
 import android.Manifest.permission.*
 import android.app.Notification
 import android.app.PendingIntent
-import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -33,11 +32,11 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -58,8 +57,6 @@ import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.*
-import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
-import org.radarbase.android.source.SourceService.Companion.SOURCE_CONNECT_FAILED
 import org.radarbase.android.util.*
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
@@ -127,6 +124,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     )
 
+    private val startServiceMutex: Mutex = Mutex()
+    private val providerUpdateMutex: Mutex = Mutex()
+
     private val authConnectionUnboundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
         {
             radarExecutor.execute {
@@ -152,7 +152,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private val _serverStatus: MutableStateFlow<ServerStatus> =
         MutableStateFlow(ServerStatus.DISCONNECTED)
 
-    override val recordsSent: SharedFlow<TopicSendReceipt> = _recordsSent
+    override val recordsSent: SharedFlow<TopicSendReceipt> = _recordsSent.asSharedFlow()
     override val serverStatus: StateFlow<ServerStatus> = _serverStatus
 
 
@@ -330,6 +330,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     @CallSuper
     protected open suspend fun doConfigure(config: SingleRadarConfiguration) {
+        val prevDataHandler = dataHandler
         radarConfigureMutex.withLock {
             dataHandler ?: TableDataHandler(this, cacheStore)
                 .also {
@@ -339,38 +340,38 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             configure(config)
         }
 
-        with(lifecycleScope) {
-            recordTrackerJob?.cancel()
-            recordTrackerJob = launch {
-                dataHandler?.let { handler ->
-                    handler.recordsSent
-                        .collect {
-                            this@RadarService._recordsSent.emit(it)
-                        }
+        if (prevDataHandler != dataHandler) {
+            with(lifecycleScope) {
+                recordTrackerJob?.cancel()
+                recordTrackerJob = launch {
+                    dataHandler?.let { handler ->
+                        handler.recordsSent
+                            .collect {
+                                this@RadarService._recordsSent.emit(it)
+                            }
+                    }
                 }
-            }
 
-            statusTrackerJob?.cancel()
-            statusTrackerJob = launch {
-                dataHandler?.let { handler ->
-                    handler.serverStatus
-                        .collectLatest {
-                            _serverStatus.value = it
-                            if (it == ServerStatus.UNAUTHORIZED) {
-                                logger.debug("Status unauthorized")
-                                authConnection.applyBinder {
-                                    if (isMakingAuthRequest.compareAndSet(false, true)) {
-                                        invalidate(null, false)
-                                        refresh()
+                statusTrackerJob?.cancel()
+                statusTrackerJob = launch {
+                    dataHandler?.let { handler ->
+                        handler.serverStatus
+                            .collectLatest {
+                                _serverStatus.value = it
+                                if (it == ServerStatus.UNAUTHORIZED) {
+                                    logger.debug("Status unauthorized")
+                                    authConnection.applyBinder {
+                                        if (isMakingAuthRequest.compareAndSet(false, true)) {
+                                            invalidate(null, false)
+                                            refresh()
+                                        }
                                     }
                                 }
                             }
-                        }
+                    }
                 }
             }
         }
-
-
 
         authConnection.applyBinder {
             applyState {
@@ -509,18 +510,21 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     protected fun startScanning() {
         radarExecutor.executeReentrant {
-            mConnections
-                .asSequence()
-                .filter { it.isBound &&
-                        it.connection.hasService() &&
-                        !it.connection.isRecording &&
-                        it.checkPermissions()
-                }
-                .forEach { provider ->
-                    val connection = provider.connection
-                    logger.info("Starting recording on connection {}", connection)
-                    connection.startRecording(sourceFilters[connection] ?: emptySet())
-                }
+            startServiceMutex.withLock {
+                mConnections
+                    .asSequence()
+                    .filter {
+                        it.isBound &&
+                                it.connection.hasService() &&
+                                !it.connection.isRecording &&
+                                it.checkPermissions()
+                    }
+                    .forEach { provider ->
+                        val connection = provider.connection
+                        logger.info("Starting recording on connection {}", connection)
+                        connection.startRecording(sourceFilters[connection] ?: emptySet())
+                    }
+            }
         }
     }
 
@@ -588,7 +592,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         isMakingAuthRequest.set(false)
         radarExecutor.execute {
-            updateProviders(authState, configuration.latestConfig)
+            providerUpdateMutex.withLock {
+                updateProviders(authState, configuration.latestConfig)
+            }
         }
     }
 
@@ -664,10 +670,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 it.close()
                 sourceRegistrar = null
             }
-            radarExecutor.nonSuspendingCompute {
-                authConnection.applyBinder { createRegistrar(this, providers) }
+            lifecycleScope.launch {
+                authConnection.applyBinder {
+                    createRegistrar(this, providers)
+                }
             }
-            if (mConnections != previousConnections) {
+            if (failedSourceObserverJob == null || mConnections != previousConnections) {
                 failedSourceObserverJob?.cancel()
 
                 failedSourceObserverJob = lifecycleScope.launch {
