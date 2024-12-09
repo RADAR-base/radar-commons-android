@@ -111,6 +111,8 @@ abstract class SourceService<T : BaseSourceState> :
             }
         }
     )
+
+    val locationChangedBroadcast: MutableStateFlow<String?> = MutableStateFlow(null)
     
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
@@ -561,6 +563,7 @@ abstract class SourceService<T : BaseSourceState> :
     override fun toString() = "$name<${sourceManager?.name}>"
 
     companion object {
+        const val DEVICE_LOCATION_CHANGED = "org.radarbase.passive.source.SourceService.DEVICE_LOCATION_CHANGED"
         private val logger = LoggerFactory.getLogger(SourceService::class.java)
     }
 

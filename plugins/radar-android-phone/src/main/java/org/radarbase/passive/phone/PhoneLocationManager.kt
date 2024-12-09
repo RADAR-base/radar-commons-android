@@ -23,20 +23,18 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import androidx.lifecycle.lifecycleScope
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.source.SourceService.Companion.DEVICE_LOCATION_CHANGED
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.StageLevels
-import org.radarbase.android.util.send
-import org.radarbase.passive.google.places.GooglePlacesManager.Companion.DEVICE_LOCATION_CHANGED
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_GPS_INTERVAL_REDUCED_DEFAULT
 import org.radarbase.passive.phone.PhoneLocationService.Companion.LOCATION_NETWORK_INTERVAL_DEFAULT
@@ -66,7 +64,6 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     private val intervals = ChangeRunner(LocationPollingIntervals())
     private var isStarted: Boolean = false
     private var referenceId: Int = 0
-    private lateinit var broadcaster: LocalBroadcastManager
     @Volatile
     var isAbsoluteLocation: Boolean = false
 
@@ -118,7 +115,6 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
         }
 
         status = SourceStatusListener.Status.READY
-        broadcaster = LocalBroadcastManager.getInstance(service)
 
         locationExecutor.execute {
             isStarted = true
@@ -156,7 +152,8 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
             send(locationTopic.await(), value)
         }
 
-        broadcaster.send(DEVICE_LOCATION_CHANGED)
+        service.locationChangedBroadcast.value = DEVICE_LOCATION_CHANGED
+
         logger.info("Location: {} {} {} {} {} {} {} {} {}", provider, eventTimestamp, latitude,
                 longitude, accuracy, altitude, speed, bearing, timestamp)
     }

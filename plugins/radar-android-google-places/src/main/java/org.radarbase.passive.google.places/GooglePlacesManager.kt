@@ -36,14 +36,16 @@ import com.google.android.libraries.places.api.net.FindCurrentPlaceResponse
 import com.google.android.libraries.places.api.net.PlacesClient
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
+import org.radarbase.android.source.SourceService.Companion.DEVICE_LOCATION_CHANGED
 import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.util.BroadcastRegistration
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.OfflineProcessor
-import org.radarbase.android.util.register
 import org.radarbase.passive.google.places.GooglePlacesService.Companion.GOOGLE_PLACES_API_KEY_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.google.GooglePlacesInfo
@@ -93,7 +95,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         get() = if (shouldFetchPlaceId||shouldFetchAdditionalInfo) listOf(Place.Field.TYPES, Place.Field.ID) else listOf(Place.Field.TYPES)
     private val detailsPlaceFields: List<Place.Field> =  listOf(Place.Field.ADDRESS_COMPONENTS)
 
-    private var placesBroadcastReceiver: BroadcastRegistration? = null
+    private var placesBroadcastReceiver: Job? = null
     private var isRecentlySent: AtomicBoolean = AtomicBoolean(false)
 
     private lateinit var currentPlaceRequest:FindCurrentPlaceRequest
@@ -124,16 +126,21 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
             updateApiKey(apiKey)
         } }
         updateConnected()
-        placesBroadcastReceiver = service.broadcaster?.register(DEVICE_LOCATION_CHANGED) { _, _ ->
-            if (placesClientCreated) {
-                placeExecutor.execute {
-                    state.fromBroadcast.set(true)
-                    processPlacesData()
-                    state.fromBroadcast.set(false)
+
+        placesBroadcastReceiver = service.lifecycleScope.launch(Dispatchers.Default) {
+            service.locationChangedBroadcast.collectLatest { status ->
+                if (status != null && status == DEVICE_LOCATION_CHANGED) {
+                    if (placesClientCreated) {
+                        placeExecutor.execute {
+                            state.fromBroadcast.set(true)
+                            processPlacesData()
+                            state.fromBroadcast.set(false)
+                        }
+                    }
                 }
             }
         }
-    }
+     }
 
     fun updateApiKey(apiKey: String) {
         when (apiKey) {
@@ -342,7 +349,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
                         .putInt(NUMBER_OF_ATTEMPTS_KEY, service.numOfAttempts).apply()
                 }
                 try {
-                    placesBroadcastReceiver?.unregister()
+                    placesBroadcastReceiver?.cancel()
                 } catch (ex: IllegalStateException) {
                     logger.warn("Places receiver already unregistered in broadcast")
                 }
@@ -364,6 +371,5 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
         private const val STATE_KEY = "administrative_area_level_1"
         private const val COUNTRY_KEY = "country"
         const val NUMBER_OF_ATTEMPTS_KEY = "number_of_attempts_key"
-        const val DEVICE_LOCATION_CHANGED = "org.radarbase.passive.google.places.GooglePlacesManager.DEVICE_LOCATION_CHANGED"
     }
 }

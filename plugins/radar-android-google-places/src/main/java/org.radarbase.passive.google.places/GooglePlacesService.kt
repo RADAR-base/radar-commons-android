@@ -18,7 +18,6 @@ package org.radarbase.passive.google.places
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.net.PlacesClient
 import org.radarbase.android.config.SingleRadarConfiguration
@@ -37,8 +36,6 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
     private val apiKey: ChangeRunner<String> = ChangeRunner()
     lateinit var preferences: SharedPreferences
     val placesClientCreated = AtomicBoolean(false)
-    var broadcaster: LocalBroadcastManager? = null
-        private set
     private lateinit var placeHandler: CoroutineTaskExecutor
     var placesClient: PlacesClient? = null
         @Synchronized get() = if (placesClientCreated.get()) field else null
@@ -55,7 +52,6 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
             start()
         }
         preferences = getSharedPreferences(GooglePlacesService::class.java.name, Context.MODE_PRIVATE)
-        broadcaster = LocalBroadcastManager.getInstance(this)
     }
 
     override fun configureSourceManager(manager: SourceManager<GooglePlacesState>, config: SingleRadarConfiguration) {
