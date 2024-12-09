@@ -2,10 +2,8 @@ package org.radarbase.android.data
 
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import org.radarbase.kotlin.coroutines.launchJoin
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.io.Closeable
 import java.io.File
 import java.io.IOException
 

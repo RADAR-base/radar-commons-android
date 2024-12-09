@@ -64,7 +64,6 @@ class CoroutineTaskExecutor(
 
     private val nullValue: Any = Any()
     val isStarted: AtomicBoolean = AtomicBoolean(executorScope != null)
-    private val executeMutex: Mutex = Mutex(false)
     private val jobExecuteMutex: Mutex = Mutex(false)
     private val computeMutex: Mutex = Mutex(false)
 

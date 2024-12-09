@@ -21,7 +21,6 @@ import android.os.Bundle
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -562,15 +561,6 @@ abstract class SourceService<T : BaseSourceState> :
     override fun toString() = "$name<${sourceManager?.name}>"
 
     companion object {
-        private const val PREFIX = "org.radarcns.android."
-        const val SERVER_STATUS_CHANGED = PREFIX + "ServerStatusListener.Status"
-        const val SERVER_RECORDS_SENT_TOPIC = PREFIX + "ServerStatusListener.topic"
-        const val SERVER_RECORDS_SENT_NUMBER = PREFIX + "ServerStatusListener.lastNumberOfRecordsSent"
-        const val CACHE_TOPIC = PREFIX + "DataCache.topic"
-        const val CACHE_RECORDS_UNSENT_NUMBER = PREFIX + "DataCache.numberOfRecords.first"
-        const val SOURCE_STATUS_NAME = PREFIX + "SourceManager.getName"
-        const val SOURCE_CONNECT_FAILED = PREFIX + "SourceStatusListener.sourceFailedToConnect"
-
         private val logger = LoggerFactory.getLogger(SourceService::class.java)
     }
 

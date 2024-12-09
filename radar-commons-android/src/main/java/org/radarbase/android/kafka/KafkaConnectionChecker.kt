@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataHandler
-import org.radarbase.android.kafka.KafkaDataSubmitter.Companion
 import org.radarbase.android.util.DelayedRetry
 import org.radarbase.android.util.runSafeOrNull
 import org.radarbase.producer.AuthenticationException

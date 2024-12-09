@@ -4,13 +4,10 @@ import android.app.Activity.RESULT_OK
 import android.bluetooth.BluetoothAdapter
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,7 +18,6 @@ import org.radarbase.android.IRadarBinder
 import org.radarbase.android.RadarApplication
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.ENABLE_BLUETOOTH_REQUESTS
-import org.radarbase.android.RadarService
 import org.radarbase.android.RadarServiceStateReactor
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothIsEnabled
 import org.slf4j.LoggerFactory

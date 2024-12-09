@@ -19,7 +19,6 @@ package org.radarbase.android.auth
 import androidx.annotation.Keep
 import org.json.JSONObject
 import org.radarbase.android.util.Parser
-import java.io.IOException
 
 /** AuthStringProcessor to parse a string with some form of authentication and parse it to a
  * proper state.  */

@@ -1,6 +1,10 @@
 package org.radarbase.android.util
 
-import android.Manifest.permission.*
+import android.Manifest.permission.ACCESS_COARSE_LOCATION
+import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.Manifest.permission.PACKAGE_USAGE_STATS
+import android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+import android.Manifest.permission.SYSTEM_ALERT_WINDOW
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -25,7 +29,6 @@ import org.radarbase.android.R
 import org.radarbase.android.RadarService
 import org.radarbase.android.RadarService.Companion.ACCESS_BACKGROUND_LOCATION_COMPAT
 import org.slf4j.LoggerFactory
-import kotlin.time.Duration
 
 
 open class PermissionHandler(

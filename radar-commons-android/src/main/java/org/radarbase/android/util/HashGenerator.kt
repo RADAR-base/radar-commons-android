@@ -18,14 +18,12 @@ package org.radarbase.android.util
 
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
-import android.os.Build
 import android.security.keystore.KeyProperties.PURPOSE_SIGN
 import android.util.Base64
 import java.nio.ByteBuffer
 import java.security.InvalidKeyException
 import java.security.Key
 import java.security.NoSuchAlgorithmException
-import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 

@@ -18,16 +18,12 @@ package org.radarbase.android.source
 
 import androidx.annotation.CallSuper
 import androidx.annotation.Keep
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarConfiguration.Companion.SOURCE_ID_KEY
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.util.ChangeRunner
-import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.topic.AvroTopic
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
@@ -156,7 +152,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
 
                 dataCache.addMeasurement(key, value)
             } catch (ex: IllegalArgumentException) {
-                logger.error("Cannot send for {} to dataCache {}: {}", state.id, dataCache.topic.name, ex)
+                logger.error("Cannot send for {} to dataCache {}: ", state.id, dataCache.topic.name, ex)
             }
         } else if (!didWarn) {
             logger.warn("Cannot send data without a source ID to topic {}", dataCache.topic.name)
