@@ -16,7 +16,7 @@ class SourceProviderRegistrar(
     private val authServiceBinder: AuthService.AuthServiceBinder,
     private val executor: CoroutineTaskExecutor,
     private val providers: List<SourceProvider<*>>,
-    val onUpdate: (unregisteredProviders: List<SourceProvider<*>>, registeredProviders: List<SourceProvider<*>>) -> Unit
+    val onUpdate: suspend (unregisteredProviders: List<SourceProvider<*>>, registeredProviders: List<SourceProvider<*>>) -> Unit
 ): LoginListener, Closeable {
     private val authRegistration: AuthService.LoginListenerRegistry = executor.nonSuspendingCompute {
         authServiceBinder.addLoginListener(this)

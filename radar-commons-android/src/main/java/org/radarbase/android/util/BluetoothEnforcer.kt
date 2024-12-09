@@ -82,7 +82,7 @@ class BluetoothEnforcer(
     fun start() {
         testBindBluetooth()
 
-        context.lifecycleScope.launch {
+        context.lifecycleScope.launch(Dispatchers.Default) {
             context.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 (context as RadarApplication).radarServiceImpl.actionBluetoothNeeded.collectLatest {
                     testBindBluetooth()

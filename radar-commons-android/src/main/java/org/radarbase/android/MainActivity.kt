@@ -22,13 +22,17 @@ import android.os.Bundle
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.flow.StateFlow
 import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -155,7 +159,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         super.onCreate(savedInstanceState)
         configuration = radarConfig
         mainExecutor = CoroutineTaskExecutor(this::class.simpleName!!, Dispatchers.Default)
-        permissionHandler = PermissionHandler(this, mainExecutor, requestPermissionTimeout.inWholeMilliseconds)
+        permissionHandler = PermissionHandler(this, mainExecutor, _permissionsBroadcastReceiver, requestPermissionTimeout.inWholeMilliseconds)
 
         savedInstanceState?.also { permissionHandler.restoreInstanceState(it) }
 
@@ -182,6 +186,18 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
         // Start the UI thread
         uiRefreshRate = configuration.latestConfig.getLong(UI_REFRESH_RATE_KEY, 250L)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                (application as RadarApplication).radarServiceImpl.actionProvidersUpdated.collect {
+                    mutexCreateView.withLock {
+                        logger.debug("Source providers updated, creating a new view")
+                        view = createView()
+                    }
+                }
+            }
+        }
+
     }
 
     @CallSuper
@@ -254,16 +270,6 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         radarConnectionJob?.start()
         authConnectionJob?.start()
 
-        LocalBroadcastManager.getInstance(this).apply {
-            connectionsUpdatedReceiver = register(ACTION_PROVIDERS_UPDATED) { _, _ ->
-                lifecycleScope.launch {
-                    mutexCreateView.withLock {
-                        logger.debug("Source providers updated, creating a new view")
-                        view = createView()
-                    }
-                }
-            }
-        }
         lifecycleScope.launch {
             mutexCreateView.withLock {
                 logger.trace("Creating a new view")
@@ -394,5 +400,10 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         private val logger = LoggerFactory.getLogger(MainActivity::class.java)
 
         private val REQUEST_PERMISSION_TIMEOUT = 86_400_000.milliseconds // 1 day
+
+        private var _permissionsBroadcastReceiver: MutableStateFlow<PermissionBroadcast?> = MutableStateFlow(null)
+
+        val LifecycleService.permissionsBroadcastReceiver: StateFlow<PermissionBroadcast?>
+            get() = _permissionsBroadcastReceiver
     }
 }

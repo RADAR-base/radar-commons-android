@@ -112,7 +112,7 @@ abstract class SourceService<T : BaseSourceState> :
         }
     )
 
-    val locationChangedBroadcast: MutableStateFlow<String?> = MutableStateFlow(null)
+    val locationChangedBroadcast: MutableSharedFlow<String> = MutableSharedFlow()
     
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>

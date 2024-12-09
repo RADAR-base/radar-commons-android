@@ -152,7 +152,9 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
             send(locationTopic.await(), value)
         }
 
-        service.locationChangedBroadcast.value = DEVICE_LOCATION_CHANGED
+        locationExecutor.execute {
+            service.locationChangedBroadcast.emit(DEVICE_LOCATION_CHANGED)
+        }
 
         logger.info("Location: {} {} {} {} {} {} {} {} {}", provider, eventTimestamp, latitude,
                 longitude, accuracy, altitude, speed, bearing, timestamp)

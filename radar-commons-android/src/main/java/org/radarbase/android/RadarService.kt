@@ -28,7 +28,6 @@ import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -44,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.MainActivity.Companion.permissionsBroadcastReceiver
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.FETCH_TIMEOUT_MS_DEFAULT
@@ -93,7 +93,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private lateinit var providerLoader: SourceProviderLoader
     private lateinit var authConnection: ManagedServiceConnection<AuthService.AuthServiceBinder>
-    private lateinit var permissionsBroadcastReceiver: BroadcastRegistration
     private lateinit var sourceFailedReceiver: BroadcastRegistration
     private lateinit var serverStatusReceiver: BroadcastRegistration
     private var sourceRegistrar: SourceProviderRegistrar? = null
@@ -114,8 +113,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private var authListenerRegitry: AuthService.LoginListenerRegistry? = null
     private var authServiceBinder: AuthService.AuthServiceBinder? = null
-
-    private lateinit var broadcaster: LocalBroadcastManager
 
     private val authConnectionBoundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
         {
@@ -158,6 +155,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private var _actionBluetoothNeeded: MutableStateFlow<NeedsBluetoothState> = MutableStateFlow(BluetoothNeeded)
     val actionBluetoothNeeded: StateFlow<NeedsBluetoothState> = _actionBluetoothNeeded
 
+    private var _actionProvidersUpdated: MutableSharedFlow<Boolean> = MutableStateFlow(false)
+    val actionProvidersUpdated: SharedFlow<Boolean> = _actionProvidersUpdated
 
     protected open val servicePermissions: List<String> = buildList(4) {
         add(ACCESS_NETWORK_STATE)
@@ -192,15 +191,15 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         configuration = radarConfig
         providerLoader = SourceProviderLoader(plugins)
-        broadcaster = LocalBroadcastManager.getInstance(this)
-        broadcaster.run {
-            permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
-                val extraPermissions = intent.getStringArrayExtra(EXTRA_PERMISSIONS) ?: return@register
-                val extraGrants = intent.getIntArrayExtra(EXTRA_GRANT_RESULTS) ?: return@register
+        lifecycleScope.launch {
+            permissionsBroadcastReceiver.collect { permissions: PermissionBroadcast? ->
+                permissions ?: return@collect
+                val extraPermissions = permissions.extraPermissions
+                val extraGrants = permissions.extraGrants
+
                 onPermissionsGranted(extraPermissions, extraGrants)
             }
         }
-
         authConnection = serviceConnection<AuthService.AuthServiceBinder>(radarApp.authService)
 
         with(lifecycleScope) {
@@ -296,7 +295,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         if (needsBluetooth.value) {
             bluetoothReceiver.unregister()
         }
-        permissionsBroadcastReceiver.unregister()
         sourceFailedReceiver.unregister()
         serverStatusReceiver.unregister()
 
@@ -638,7 +636,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             removeProviders(unregisteredProviders.intersect(oldConnections))
             addProviders(registeredProviders - oldConnections)
             if (mConnections.toSet() != oldConnections) {
-                broadcaster.send(ACTION_PROVIDERS_UPDATED)
+                _actionProvidersUpdated.emit(true)
             }
         }
     }
@@ -682,7 +680,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     }
                 }
 
-                broadcaster.send(ACTION_PROVIDERS_UPDATED)
+                lifecycleScope.launch {
+                    _actionProvidersUpdated.emit(true)
+                }
             }
         }
     }
@@ -771,9 +771,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         const val ACTION_CHECK_PERMISSIONS = "$RADAR_PACKAGE.ACTION_CHECK_PERMISSIONS"
         const val EXTRA_PERMISSIONS = "$RADAR_PACKAGE.EXTRA_PERMISSIONS"
-
-        const val ACTION_PERMISSIONS_GRANTED = "$RADAR_PACKAGE.ACTION_PERMISSIONS_GRANTED"
-        const val EXTRA_GRANT_RESULTS = "$RADAR_PACKAGE.EXTRA_GRANT_RESULTS"
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 

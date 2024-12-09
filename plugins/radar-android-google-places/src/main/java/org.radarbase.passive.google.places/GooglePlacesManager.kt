@@ -129,7 +129,7 @@ class GooglePlacesManager(service: GooglePlacesService, @get: Synchronized priva
 
         placesBroadcastReceiver = service.lifecycleScope.launch(Dispatchers.Default) {
             service.locationChangedBroadcast.collectLatest { status ->
-                if (status != null && status == DEVICE_LOCATION_CHANGED) {
+                if (status == DEVICE_LOCATION_CHANGED) {
                     if (placesClientCreated) {
                         placeExecutor.execute {
                             state.fromBroadcast.set(true)
