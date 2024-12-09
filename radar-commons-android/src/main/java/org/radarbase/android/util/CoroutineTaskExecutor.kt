@@ -56,7 +56,7 @@ class CoroutineTaskExecutor(
     private var job: Job? = null
     private val executorExceptionHandler: CoroutineExceptionHandler =
         CoroutineExceptionHandler { _, ex ->
-            logger.error("Failed to run task", ex)
+            logger.error("Failed to run task for {}. Exception:", invokingClassName, ex)
             throw ex
         }
 
@@ -79,7 +79,7 @@ class CoroutineTaskExecutor(
      */
     fun start(job: Job = SupervisorJob())  {
         if (isStarted.get()) {
-            logger.warn("Tried to start executor multiple times.")
+            logger.warn("Tried to start executor multiple times for {}.", invokingClassName)
             return
         }
         this.job = job
@@ -109,7 +109,7 @@ class CoroutineTaskExecutor(
     suspend fun <T> computeResult(work: suspend () -> T?): T? = suspendCoroutine { continuation ->
         val activeStatus: Boolean? = executorScope?.isActive
         if (activeStatus == null || activeStatus == false) {
-            logger.warn("Scope is already cancelled")
+            logger.warn("Scope is already cancelled for {}", invokingClassName)
             continuation.resume(null)
             return@suspendCoroutine
         }
@@ -154,7 +154,7 @@ class CoroutineTaskExecutor(
                 }
             }
         } catch (ex: ExecutionException) {
-            logger.error("Failed to execute work in nonSuspendingCompute", ex)
+            logger.error("Failed to execute work in nonSuspendingCompute for {}", invokingClassName, ex)
             throw ex
         }
     }
@@ -288,7 +288,7 @@ class CoroutineTaskExecutor(
             task()
         }
         if (executionResult.isFailure) {
-            logger.error("Failed to execute task: {}", executionResult.toString())
+            logger.error("Failed to execute task: {} for class {}", executionResult.exceptionOrNull().toString(), invokingClassName)
         }
     }
 
@@ -423,7 +423,7 @@ class CoroutineTaskExecutor(
      */
     private fun checkExecutorStarted(): Boolean? {
         if (!isStarted.get()) {
-            logger.warn("Either executor not started yet or it has already stopped! Please call start() to execute tasks")
+            logger.warn("Either executor not started yet or it has already stopped! Please call start() to execute tasks for class: {}", invokingClassName)
         }
         return if (isStarted.get()) return true else null
     }
