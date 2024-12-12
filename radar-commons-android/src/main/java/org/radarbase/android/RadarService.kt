@@ -305,6 +305,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 it.close()
                 sourceRegistrar = null
             }
+            (dataHandler as TableDataHandler).stop()
+            dataHandler = null
         }
         recordTrackerJob?.cancel()
         statusTrackerJob?.cancel()

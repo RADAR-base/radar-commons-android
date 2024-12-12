@@ -311,6 +311,7 @@ class ApplicationStatusManager(
     override fun onClose() {
         applicationStatusExecutor.stop {
             this.processor.stop()
+            tzProcessor?.stop()
         }
     }
 
