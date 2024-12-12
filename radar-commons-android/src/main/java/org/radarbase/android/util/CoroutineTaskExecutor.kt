@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -66,9 +67,17 @@ class CoroutineTaskExecutor(
     val isStarted: AtomicBoolean = AtomicBoolean(executorScope != null)
     private val jobExecuteMutex: Mutex = Mutex(false)
     private val computeMutex: Mutex = Mutex(false)
+    private var performingStart: Boolean = false
 
     private val activeTasks: ConcurrentLinkedQueue<CoroutineFutureExecutor> =
         ConcurrentLinkedQueue<CoroutineFutureExecutor>()
+
+    private val verifyNotStarted: Boolean
+        get() {
+            val isActiveStatus = executorScope?.isActive
+            val currentJob = job
+            return (isActiveStatus == null && currentJob == null && performingStart)
+        }
 
     /**
      * Starts the executor, initializing the coroutine scope with a specified [Job],
@@ -77,13 +86,18 @@ class CoroutineTaskExecutor(
      * @param job The root job for this executor's coroutine scope. Defaults to a new [Job].
      */
     fun start(job: Job = SupervisorJob())  {
+        performingStart = true
         if (isStarted.get()) {
             logger.warn("Tried to start executor multiple times for {}.", invokingClassName)
+            performingStart = false
             return
         }
+        logger.trace("CoroutineTaskExecutor has been starting for {}", invokingClassName)
         this.job = job
         executorScope = CoroutineScope(coroutineDispatcher + job + executorExceptionHandler)
+        performingStart = false
         isStarted.set(true)
+        logger.debug("CoroutineTaskExecutor is started for {}", invokingClassName)
     }
     /**
      * Executes a suspendable task and suspends until it completes. If an exception occurs,
@@ -173,6 +187,32 @@ class CoroutineTaskExecutor(
      */
     fun execute(task: suspend () -> Unit) {
         val activeStatus: Boolean? = executorScope?.isActive
+        if (verifyNotStarted) {
+            logger.trace(
+                "Coroutine has not started yet, this task will be handled by retryScope {} for {}",
+                retryScope, invokingClassName
+            )
+            retryScope?.launch {
+                repeat(3) { attempt ->
+                    if (verifyNotStarted) {
+                        delay(100L)
+                    } else {
+                        logger.info("Task executed after $attempt retries.")
+                        executorScope?.launch {
+                            runTaskSafely(task)
+                        }
+                        return@launch
+                    }
+                }
+                logger.warn("Task could not be executed after 3 retries.")
+            }
+            if (retryScope == null) {
+                logger.warn("RetryScope is also null for {}", invokingClassName)
+            } else {
+                return
+            }
+        }
+
         if (activeStatus == null || activeStatus == false) {
             logger.warn("Can't execute task, scope is already cancelled for {}", invokingClassName)
             return
@@ -271,6 +311,7 @@ class CoroutineTaskExecutor(
         }
         cancelAllFutures()
         job?.cancel()
+        logger.debug("CoroutineTaskExecutor has been closed for {}", invokingClassName)
         isStarted.set(false)
         job = null
         executorScope = null
@@ -429,5 +470,18 @@ class CoroutineTaskExecutor(
 
     companion object {
         private val logger: Logger = LoggerFactory.getLogger(CoroutineTaskExecutor::class.java)
+        private var retryScope: CoroutineScope? = null
+
+        fun startRetryScope() {
+            logger.trace("Started retry scope")
+            retryScope = CoroutineScope(Job() + Dispatchers.Default)
+        }
+        fun shutdownRetryScope() {
+            retryScope?.let{
+                logger.trace("Closing the retry scope")
+                it.coroutineContext[Job]?.cancel()
+            }
+        }
+
     }
 }

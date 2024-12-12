@@ -87,6 +87,7 @@ class CombinedRadarConfig(
                     INITIAL in allStatus -> INITIAL
                     else -> UNAVAILABLE
                 }
+                logger.trace("Status for remote configs: {}",allStatus )
             }
     }
 

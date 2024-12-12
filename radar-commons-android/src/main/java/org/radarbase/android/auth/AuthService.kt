@@ -100,7 +100,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         super.onCreate()
 
         networkConnectedListener = NetworkConnectedReceiver(this)
-
+        CoroutineTaskExecutor.startRetryScope()
         executor.start()
         lifecycleScope.launch(Dispatchers.Default) {
             needLoadedState.set(true)
@@ -362,6 +362,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         super.onDestroy()
         loginManagers.forEach { it.onDestroy() }
         executor.stop()
+        CoroutineTaskExecutor.shutdownRetryScope()
     }
 
     suspend fun update(manager: LoginManager) {
