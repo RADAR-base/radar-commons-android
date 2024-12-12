@@ -42,6 +42,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -87,9 +88,9 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
 
     var sensorDelays: SparseIntArray = SparseIntArray()
         set(value) {
-            sensorTaskExecutor.execute {
+            service.lifecycleScope.launch(Dispatchers.Default) {
                 if (field.contentsEquals(value)) {
-                    return@execute
+                    return@launch
                 }
 
                 field = value
@@ -128,7 +129,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     override fun start(acceptableIds: Set<String>) {
         register()
         sensorTaskExecutor.start()
-        sensorTaskExecutor.execute {
+        service.lifecycleScope.launch(Dispatchers.Default) {
             wakeLock = (service.getSystemService(POWER_SERVICE) as PowerManager?)?.let { pm ->
                 pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "org.radarcns.phone:PhoneSensorManager")
                     .also { it.acquire() }

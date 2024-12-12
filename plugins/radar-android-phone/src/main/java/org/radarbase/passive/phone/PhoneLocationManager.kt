@@ -26,6 +26,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
@@ -306,13 +307,13 @@ class PhoneLocationManager(context: PhoneLocationService) : AbstractSourceManage
     }
 
     fun setBatteryLevels(stageLevels: StageLevels) {
-        locationExecutor.execute {
+        service.lifecycleScope.launch(Dispatchers.Default) {
             batteryLevelReceiver.stageLevels = stageLevels
         }
     }
 
     fun setIntervals(value: LocationPollingIntervals) {
-        locationExecutor.execute {
+        service.lifecycleScope.launch(Dispatchers.Default) {
             intervals.applyIfChanged(value) { resetPollingIntervals() }
         }
     }

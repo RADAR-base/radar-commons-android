@@ -20,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
@@ -213,8 +214,8 @@ class FarosManager internal constructor(
     }
 
     internal fun applySettings(settings: FarosSettings) {
-        farosTaskExecutor.executeReentrant {
-            this.settings = settings
+        service.lifecycleScope.launch(Dispatchers.Default) {
+            this@FarosManager.settings = settings
             faros?.run {
                 if (isMeasuring) {
                     logger.info("Device is measuring. Stopping device before applying settings.")

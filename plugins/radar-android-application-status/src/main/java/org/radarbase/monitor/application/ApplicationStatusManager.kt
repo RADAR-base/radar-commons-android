@@ -25,6 +25,9 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.data.TableDataHandler
@@ -81,6 +84,7 @@ class ApplicationStatusManager(
     private val sntpClient: SntpClient = SntpClient()
     private val prefs: SharedPreferences = service.getSharedPreferences(ApplicationStatusManager::class.java.name, Context.MODE_PRIVATE)
     private var tzProcessor: OfflineProcessor? = null
+    private val tzIntervalMutex: Mutex = Mutex()
 
     private val applicationStatusExecutor: CoroutineTaskExecutor =
         CoroutineTaskExecutor(this::class.simpleName!!)
@@ -331,32 +335,35 @@ class ApplicationStatusManager(
         }
     }
 
-    @Synchronized
     fun setTzUpdateRate(tzUpdateRate: Long, unit: TimeUnit) {
-        if (tzUpdateRate > 0) { // enable timezone processor
-            var processor = this.tzProcessor
-            if (processor == null) {
-                processor = OfflineProcessor(service) {
-                    process = listOf { this@ApplicationStatusManager.processTimeZone() }
-                    requestCode = APPLICATION_TZ_PROCESSOR_REQUEST_CODE
-                    requestName = APPLICATION_TZ_PROCESSOR_REQUEST_NAME
-                    interval(tzUpdateRate, unit)
-                    wake = false
-                }
-                this.tzProcessor = processor
+        service.lifecycleScope.launch(Dispatchers.Default) {
+            tzIntervalMutex.withLock {
+                if (tzUpdateRate > 0) { // enable timezone processor
+                    var processor = this@ApplicationStatusManager.tzProcessor
+                    if (processor == null) {
+                        processor = OfflineProcessor(service) {
+                            process = listOf { this@ApplicationStatusManager.processTimeZone() }
+                            requestCode = APPLICATION_TZ_PROCESSOR_REQUEST_CODE
+                            requestName = APPLICATION_TZ_PROCESSOR_REQUEST_NAME
+                            interval(tzUpdateRate, unit)
+                            wake = false
+                        }
+                        this@ApplicationStatusManager.tzProcessor = processor
 
-                if (this.state.status == SourceStatusListener.Status.CONNECTED) {
-                    processor.start()
+                        if (this@ApplicationStatusManager.state.status == SourceStatusListener.Status.CONNECTED) {
+                            processor.start()
+                        }
+                    } else {
+                        processor.interval(tzUpdateRate, unit)
+                    }
+                } else { // disable timezone processor
+                    this@ApplicationStatusManager.tzProcessor?.let {
+                        service.lifecycleScope.launch(Dispatchers.Default) {
+                            it.stop()
+                        }
+                        this@ApplicationStatusManager.tzProcessor = null
+                    }
                 }
-            } else {
-                processor.interval(tzUpdateRate, unit)
-            }
-        } else { // disable timezone processor
-            this.tzProcessor?.let {
-                applicationStatusExecutor.execute {
-                    it.stop()
-                }
-                this.tzProcessor = null
             }
         }
     }

@@ -74,9 +74,9 @@ class CoroutineTaskExecutor(
 
     private val verifyNotStarted: Boolean
         get() {
-            val isActiveStatus = executorScope?.isActive
+            val scope = executorScope
             val currentJob = job
-            return (isActiveStatus == null && currentJob == null && performingStart)
+            return (scope == null && currentJob == null && performingStart)
         }
 
     /**
@@ -93,8 +93,8 @@ class CoroutineTaskExecutor(
             return
         }
         logger.trace("CoroutineTaskExecutor has been starting for {}", invokingClassName)
-        this.job = job
         executorScope = CoroutineScope(coroutineDispatcher + job + executorExceptionHandler)
+        this.job = job
         performingStart = false
         isStarted.set(true)
         logger.debug("CoroutineTaskExecutor is started for {}", invokingClassName)
