@@ -67,6 +67,7 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.ArrayList
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
     private var configurationUpdateFuture: CoroutineTaskExecutor.CoroutineFutureHandle? = null
@@ -179,6 +180,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     /** Defines callbacks for service binding, passed to bindService()  */
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
 
+    private val bluetoothRequiredValues: MutableList<Boolean> = mutableListOf()
+
     override fun onCreate() {
         super.onCreate()
         notificationHandler = NotificationHandler(this)
@@ -234,12 +237,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                         }
                     }
             }
-
             launch {
                 configuration.config.collect(::configure)
-            }
-            launch {
-
             }
         }
 
@@ -427,14 +426,17 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     fun serviceConnected(connection: SourceServiceConnection<*>) {
         radarExecutor.execute {
+            val connectionProvider = getConnectionProvider(connection)
             if (!isScanningEnabled) {
-                getConnectionProvider(connection)?.also { provider ->
+                connectionProvider?.also { provider ->
                     if (!provider.mayBeConnectedInBackground) {
                         provider.unbind()
                     }
                 }
             }
-            updateBluetoothNeeded(needsBluetooth.value || connection.needsBluetooth())
+            val providerRequiresBluetooth = connectionProvider?.doesRequireBluetooth() ?: false
+            bluetoothRequiredValues.add(providerRequiresBluetooth)
+            updateBluetoothNeeded(needsBluetooth.value || bluetoothRequiredValues.any { it })
             startScanning()
         }
     }
@@ -604,6 +606,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         logger.info("Removing plugins {}", sourceProviders.map { it.pluginName })
         mConnections = mConnections - sourceProviders
+        sourceProviders.forEach {
+            bluetoothRequiredValues -= it.doesRequireBluetooth()
+        }
         updateBluetoothNeeded(mConnections.any { it.isConnected && it.connection.needsBluetooth() })
         sourceProviders.forEach(SourceProvider<*>::unbind)
     }

@@ -77,7 +77,6 @@ class TableDataHandler(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
-    private val lastNumberOfRecordsSent = TreeMap<String, Long>()
     private var submitter: KafkaDataSubmitter? = null
     private var sender: RestKafkaSender? = null
 

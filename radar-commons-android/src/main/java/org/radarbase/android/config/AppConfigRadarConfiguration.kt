@@ -88,7 +88,7 @@ class AppConfigRadarConfiguration(
         }
     }
 
-    override suspend fun doFetch(maxCacheAge: Long) {
+    override suspend fun doFetch(maxCacheAgeMillis: Long) {
         val (client, appConfig) = configMutex.withLock {
             Pair(client, appConfig)
         }
