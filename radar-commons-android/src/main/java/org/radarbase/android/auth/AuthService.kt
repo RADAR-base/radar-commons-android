@@ -345,7 +345,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
         _authState.value = authState
     }
 
-    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+    override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
         lifecycleScope.launch {
             _authStateLogout.emit(AuthLoginListener.AuthStateLogout(manager, authState))
         }

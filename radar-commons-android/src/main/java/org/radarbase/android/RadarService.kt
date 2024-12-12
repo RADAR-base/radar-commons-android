@@ -598,7 +598,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
-    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+    override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 
     private fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
         if (sourceProviders.isEmpty()) {

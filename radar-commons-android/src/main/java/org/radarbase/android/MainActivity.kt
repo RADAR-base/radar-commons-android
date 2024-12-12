@@ -380,7 +380,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 
-    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+    override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
         logger.info("Starting SplashActivity")
         val intent = packageManager.getLaunchIntentForPackage(BuildConfig.LIBRARY_PACKAGE_NAME) ?: return
         startActivity(intent.apply {

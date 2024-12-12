@@ -227,7 +227,7 @@ abstract class SplashActivity : AppCompatActivity() {
                 }
             }
 
-            override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+            override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 
             override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
                 if (authState.isPrivacyPolicyAccepted) {

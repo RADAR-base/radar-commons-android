@@ -42,5 +42,5 @@ interface LoginListener {
      */
     fun loginFailed(manager: LoginManager?, ex: Exception?)
 
-    fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState)
+    suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState)
 }

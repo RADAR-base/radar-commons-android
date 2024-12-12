@@ -79,7 +79,7 @@ class SourceProviderRegistrar(
     override fun loginFailed(manager: LoginManager?, ex: Exception?) {
     }
 
-    override fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+    override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 
     private fun resetRetry() {
         retry.values.forEach { (_, future) ->
