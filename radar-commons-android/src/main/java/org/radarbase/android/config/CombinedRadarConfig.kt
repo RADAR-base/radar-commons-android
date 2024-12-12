@@ -1,7 +1,6 @@
 package org.radarbase.android.config
 
 import android.content.Context
-import androidx.lifecycle.MutableLiveData
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.CoroutineName
@@ -10,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -29,7 +29,6 @@ import org.radarbase.android.RadarConfiguration.RemoteConfigStatus.UNAVAILABLE
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.portal.GetSubjectParser.Companion.externalUserId
 import org.radarbase.android.auth.portal.GetSubjectParser.Companion.humanReadableUserId
-import org.radarbase.kotlin.coroutines.flow.zipAll
 import org.radarbase.kotlin.coroutines.launchJoin
 import org.slf4j.LoggerFactory
 import kotlin.coroutines.CoroutineContext
@@ -75,8 +74,9 @@ class CombinedRadarConfig(
     }
 
     private suspend fun collectStatus() {
-        remoteConfigs.map { it.status }
-            .zipAll()
+            combine(remoteConfigs.map { it.status }) {
+                it.toList()
+            }
             .collect { allStatus ->
                 status.value = when {
                     FETCHING in allStatus -> FETCHING

@@ -16,6 +16,8 @@
 
 package org.radarbase.passive.phone
 
+import android.Manifest
+import android.os.Build
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
@@ -36,7 +38,7 @@ open class PhoneSensorProvider(radarService: RadarService) : SourceProvider<Phon
     override val displayName: String
         get() = radarService.getString(R.string.phoneServiceDisplayName)
 
-    override val permissionsNeeded: List<String> = emptyList()
+    override val permissionsNeeded: List<String> = listOf(SENSOR_ACTIVITY_RECOGNITION_COMPAT)
 
     override val sourceProducer: String = PRODUCER
 
@@ -47,5 +49,7 @@ open class PhoneSensorProvider(radarService: RadarService) : SourceProvider<Phon
     companion object {
         const val PRODUCER = "ANDROID"
         const val MODEL = "PHONE"
+        private val SENSOR_ACTIVITY_RECOGNITION_COMPAT = if ( Build.VERSION.SDK_INT >= 29 ) Manifest.permission.ACTIVITY_RECOGNITION
+        else "com.google.android.gms.permission.ACTIVITY_RECOGNITION"
     }
 }
