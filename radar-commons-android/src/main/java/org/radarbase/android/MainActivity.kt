@@ -119,6 +119,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     private var radarConnectionJob: Job? = null
     private var authConnectionJob: Job? = null
 
+    protected var mainActivityView: MainActivityView? = null
+
     private val radarServiceBoundActions: MutableList<RadarServiceStateReactor> = mutableListOf(
         IRadarBinder::startScanning,
         {binder -> view?.onRadarServiceBound(binder)},
@@ -255,6 +257,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         super.onStart()
         mainExecutor.start()
 
+        mainActivityView?.stopLogoutProgress()
         bluetoothEnforcer.start()
 
         val radarServiceCls = radarApp.radarService
@@ -387,6 +390,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
      * still valid.
      */
     protected suspend fun logout(disableRefresh: Boolean) {
+        mainActivityView?.showLogoutProgress()
         lifecycleScope.launch {
             authConnection.applyBinder { invalidate(null, disableRefresh) }
         }
@@ -407,6 +411,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         logger.trace("Configurations reset")
         logger.info("Starting SplashActivity")
         val applicationPackage = packageName
+        mainActivityView?.stopLogoutProgress()
         val intent = packageManager.getLaunchIntentForPackage(applicationPackage) ?: return
         logger.debug("Starting splash activity with intent {}", intent)
         startActivity(intent.apply {
