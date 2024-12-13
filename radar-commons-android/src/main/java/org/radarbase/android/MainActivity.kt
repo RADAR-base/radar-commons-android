@@ -411,7 +411,9 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         logger.trace("Configurations reset")
         logger.info("Starting SplashActivity")
         val applicationPackage = packageName
-        mainActivityView?.stopLogoutProgress()
+        withContext(Dispatchers.Main) {
+            mainActivityView?.stopLogoutProgress()
+        }
         val intent = packageManager.getLaunchIntentForPackage(applicationPackage) ?: return
         logger.debug("Starting splash activity with intent {}", intent)
         startActivity(intent.apply {
