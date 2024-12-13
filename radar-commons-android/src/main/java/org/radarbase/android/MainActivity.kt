@@ -30,17 +30,20 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.PROJECT_ID_KEY
 import org.radarbase.android.RadarConfiguration.Companion.UI_REFRESH_RATE_KEY
 import org.radarbase.android.RadarConfiguration.Companion.USER_ID_KEY
+import org.radarbase.android.RadarConfiguration.RemoteConfigStatus.INITIAL
 import org.radarbase.android.RadarService.Companion.ACTION_CHECK_PERMISSIONS
 import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AppAuthState
@@ -48,6 +51,7 @@ import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.AuthServiceStateReactor
 import org.radarbase.android.auth.LoginListener
 import org.radarbase.android.auth.LoginManager
+import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.BindState
 import org.radarbase.android.util.BluetoothEnforcer
 import org.radarbase.android.util.CoroutineTaskExecutor
@@ -57,10 +61,11 @@ import org.radarbase.android.util.PermissionBroadcast
 import org.radarbase.android.util.PermissionHandler
 import org.radarbase.kotlin.coroutines.launchJoin
 import org.slf4j.LoggerFactory
+import java.io.File
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-typealias RadarServiceStateReactor = (IRadarBinder) -> Unit
+typealias RadarServiceStateReactor = suspend (IRadarBinder) -> Unit
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
  * create an application, extend this class and override the abstract methods.  */
@@ -109,6 +114,7 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         get() = configuration.latestConfig.optString(PROJECT_ID_KEY)
 
     private val mutexCreateView: Mutex = Mutex()
+    private var connectionBound: Boolean = false
 
     private var radarConnectionJob: Job? = null
     private var authConnectionJob: Job? = null
@@ -191,6 +197,8 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
         logger.info("RADAR configuration at create: {}", configuration)
         onConfigChanged()
 
+        connectionBound = false
+
         // Start the UI thread
         uiRefreshRate = configuration.latestConfig.getLong(UI_REFRESH_RATE_KEY, 250L)
 
@@ -261,10 +269,14 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
         with(lifecycleScope) {
             launch {
-                authConnection.bind()
-            }
-            launch {
-                radarConnection.bind()
+                try {
+                    connectionBound = true
+                    authConnection.bind()
+                    radarConnection.bind()
+                } catch (ex: Exception) {
+                    connectionBound = false
+                    throw  ex
+                }
             }
         }
         permissionHandler.invalidateCache()
@@ -343,18 +355,20 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
 
     @CallSuper
     public override fun onStop() {
-        super.onStop()
-
         mainExecutor.stop { view = null }
 
-        radarConnection.unbind()
-        authConnection.unbind()
+        if (connectionBound) {
+            connectionBound = false
+            radarConnection.unbind()
+            authConnection.unbind()
+        }
         bluetoothEnforcer.stop()
 
         radarConnectionJob?.cancel()
         authConnectionJob?.cancel()
         radarConnectionJob = null
         authConnectionJob = null
+        super.onStop()
     }
 
     override fun onRequestPermissionsResult(
@@ -373,7 +387,9 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
      * still valid.
      */
     protected suspend fun logout(disableRefresh: Boolean) {
-        authConnection.applyBinder { invalidate(null, disableRefresh) }
+        lifecycleScope.launch {
+            authConnection.applyBinder { invalidate(null, disableRefresh) }
+        }
         logger.debug("Disabling Firebase Analytics")
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
     }
@@ -381,12 +397,50 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 
     override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+        if (!connectionBound) {
+            connectionBound = false
+            radarConnection.unbind()
+            authConnection.unbind()
+        }
+        clearAppData(this)
+        delay(300)
+        logger.trace("Configurations reset")
         logger.info("Starting SplashActivity")
-        val intent = packageManager.getLaunchIntentForPackage(BuildConfig.LIBRARY_PACKAGE_NAME) ?: return
+        val applicationPackage = packageName
+        val intent = packageManager.getLaunchIntentForPackage(applicationPackage) ?: return
+        logger.debug("Starting splash activity with intent {}", intent)
         startActivity(intent.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         })
         finish()
+    }
+
+    private fun clearAppData(context: Context) {
+        clearCache(context)
+        clearFilesDir(context)
+    }
+
+    private fun clearFilesDir(context: Context) {
+        val filesDir = context.filesDir
+        deleteFilesInDirectory(filesDir)
+    }
+
+    private fun clearCache(context: Context) {
+        val cacheDir = context.cacheDir
+        deleteFilesInDirectory(cacheDir)
+    }
+
+    private fun deleteFilesInDirectory(directory: File) {
+        if (directory.isDirectory) {
+            val children = directory.listFiles()
+            if (children != null) {
+                for (child in children) {
+                    if (child.absolutePath.toString().contains("firebase")) return
+                    deleteFilesInDirectory(child)
+                }
+            }
+        }
+        directory.delete()
     }
 
     companion object {

@@ -6,8 +6,10 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
@@ -41,6 +43,8 @@ class CombinedRadarConfig(
     coroutineContext: CoroutineContext = EmptyCoroutineContext + Dispatchers.Default,
 ): RadarConfiguration {
     private val defaults = defaults.filterValues { it.isNotEmpty() }
+    private var postLogoutCall: Boolean = false
+    private var resetCallJob: Job? = null
 
     override val status: MutableStateFlow<RadarConfiguration.RemoteConfigStatus> = MutableStateFlow(INITIAL)
     override var latestConfig: SingleRadarConfiguration
@@ -120,6 +124,11 @@ class CombinedRadarConfig(
             }
             latestConfig = newConfig
         } else {
+            if (postLogoutCall) {
+                logger.info("No change to config, but still emitting it")
+                latestConfig = newConfig
+                return
+            }
             logger.info("No change to config. Skipping.")
         }
     }
@@ -149,13 +158,25 @@ class CombinedRadarConfig(
         it.fetch(latestConfig.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT))
     }
 
-    override suspend fun forceFetch() = remoteConfigs.forEach {
+    override suspend fun forceFetch(callAfterLogout: Boolean) = remoteConfigs.forEach {
+        if (callAfterLogout) {
+            postLogoutCall = true
+            resetPostLogoutAfterDelay()
+        }
         it.forceFetch()
+    }
+
+    private fun resetPostLogoutAfterDelay() {
+        resetCallJob?.cancel()
+        resetCallJob = configScope.launch {
+            delay(4000)
+            postLogoutCall = false
+        }
     }
 
     override fun toString(): String = latestConfig.toString()
 
-    override suspend fun updateWithAuthState(context: Context, appAuthState: AppAuthState?) {
+    override suspend fun updateWithAuthState(context: Context, appAuthState: AppAuthState?, isLogoutCall: Boolean) {
         val enableAnalytics = appAuthState?.isPrivacyPolicyAccepted == true
         logger.debug("Setting Firebase Analytics enabled: {}", enableAnalytics)
         FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(enableAnalytics)
@@ -190,10 +211,17 @@ class CombinedRadarConfig(
         }
 
         persistChanges()
+
+        if (isLogoutCall) return
+
         remoteConfigs.forEach {
             it.updateWithAuthState(appAuthState)
         }
         forceFetch()
+    }
+
+    override suspend fun resetConfigs() {
+        latestConfig = SingleRadarConfiguration(INITIAL, mapOf())
     }
 
     suspend fun stop() {

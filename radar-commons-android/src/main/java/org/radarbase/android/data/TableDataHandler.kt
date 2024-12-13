@@ -82,6 +82,7 @@ class TableDataHandler(
 
     private val handlerExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(TableDataHandler::class.simpleName!!, handlerDispatcher)
 
+    private var cachedRecordObserverJob: Job? = null
     private var job: Job? = null
     private var networkStateCollectorJob: Job? = null
     private val observedCaches: MutableSet<String> = HashSet()
@@ -157,12 +158,12 @@ class TableDataHandler(
         }
     }
 
-    private fun observerRecordsForCache(cache: ReadableDataCache) {
+    private suspend fun observerRecordsForCache(cache: ReadableDataCache) {
         if (observedCaches.contains(cache.readTopic.name)) {
             logger.debug("Records for cache are already being observed")
             return
         }
-        handlerExecutor.execute {
+        cachedRecordObserverJob = handlerExecutor.returnJobAndExecute {
             cache.numberOfRecords.collect {
                 logger.trace("{} records are cached for topic: {}", it, cache.readTopic.name)
                 numberOfRecords.emit(
@@ -320,13 +321,14 @@ class TableDataHandler(
             networkStateCollectorJob = null
             batteryLevelReceiver.unregister()
         }
+        tables.values.forEach{
+            it.stop()
+        }
         this.submitter?.close()
         this.submitter = null
         this.sender = null
 
-        tables.values.launchJoin{
-            it.stop()
-        }
+        cachedRecordObserverJob?.cancel()
         handlerExecutor.stop()
     }
 
@@ -415,8 +417,7 @@ class TableDataHandler(
                 val newRest = config.restConfig
                 newRest.kafkaConfig?.let { kafkaConfig ->
 
-                    val contentTypeChanged: Boolean =
-                        oldConfig.restConfig.hasBinaryContent != newRest.hasBinaryContent
+                    oldConfig.restConfig.hasBinaryContent != newRest.hasBinaryContent
                     logger.trace(
                         "KafkaSenderTrace: Tweaking  RestKafkaSender in TableDataHandler::handler: Is sender null? {}.",
                         sender == null

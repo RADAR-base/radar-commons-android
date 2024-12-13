@@ -21,6 +21,7 @@ interface RemoteConfig {
     }
 
     suspend fun forceFetch() {
+        logger.trace("Force fetching remote configs")
         lastFetch = 0
         doFetch(0)
     }

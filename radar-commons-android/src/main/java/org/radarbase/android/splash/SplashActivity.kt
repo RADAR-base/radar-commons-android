@@ -20,6 +20,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration
@@ -54,11 +56,13 @@ abstract class SplashActivity : AppCompatActivity() {
     protected var startedAt: Long = 0
     protected var enable = true
     protected var waitForFullFetchMs = 0L
+    private var isAuthBound = false
 
     protected lateinit var handler: Handler
     protected var startActivityFuture: Job? = null
     private var listenerRegistry: AuthService.LoginListenerRegistry? = null
     private var authSplashBinder: AuthService.AuthServiceBinder? = null
+    private val authConnectionMutex: Mutex = Mutex()
 
     private val splashServiceBoundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
         {binder -> binder.refreshIfOnline()},
@@ -128,6 +132,7 @@ abstract class SplashActivity : AppCompatActivity() {
             }
             configCollectorJob = launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    logger.trace("Started collecting config updates to splashActivity")
                     config.config.
                     collect {
                         updateConfig(config.status.value, allowPartialConfiguration = false)
@@ -204,7 +209,9 @@ abstract class SplashActivity : AppCompatActivity() {
         }
         logger.info("Stopping splash")
         stopConfigListener()
-        stopAuthConnection()
+        lifecycleScope.launch {
+            stopAuthConnection()
+        }
     }
 
     protected open fun updateState(newState: Int) {
@@ -240,7 +247,7 @@ abstract class SplashActivity : AppCompatActivity() {
     }
 
     protected open fun startActivity(activity: Class<out Activity>) {
-        logger.debug("Scheduling start of SplashActivity")
+        logger.debug("Scheduling start of activity: {}", activity.simpleName)
         lifecycleScope.launch {
             if (state == STATE_FINISHED) {
                 return@launch
@@ -250,7 +257,7 @@ abstract class SplashActivity : AppCompatActivity() {
             Runnable {
                 updateState(STATE_FINISHED)
 
-                logger.info("Starting SplashActivity")
+                logger.info("Starting Activity: {}", activity.simpleName)
                 Intent(this@SplashActivity, activity).also {
                     it.flags = FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_TASK_ON_HOME or FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP
                     onWillStartActivity()
@@ -274,21 +281,27 @@ abstract class SplashActivity : AppCompatActivity() {
     protected open fun onDidStartActivity() {}
 
     protected open suspend fun startConfigReceiver() {
+        logger.trace("Starting config receiver for splash activity")
         updateState(STATE_FETCHING_CONFIG)
-        config.forceFetch()
+        config.forceFetch(true)
         if (configCollectorJob != null) {
             configReceiver = true
         }
     }
 
     protected open suspend fun startAuthConnection() {
-        if (authServiceConnection.state.value !is ManagedServiceConnection.BoundService) {
-            updateState(STATE_AUTHORIZING)
-            authServiceConnection.bind()
+        logger.trace("Starting auth updates receiver for splash activity")
+        authConnectionMutex.withLock {
+            if (!isAuthBound) {
+                isAuthBound = true
+                updateState(STATE_AUTHORIZING)
+                authServiceConnection.bind()
+            }
         }
     }
 
     protected open fun stopConfigListener() {
+        logger.trace("Stopping config listener")
         if (configReceiver) {
             configCollectorJob?.cancel()
             configCollectorJob = null
@@ -296,8 +309,11 @@ abstract class SplashActivity : AppCompatActivity() {
         }
     }
 
-    protected open fun stopAuthConnection() {
-        authServiceConnection.unbind()
+    protected open suspend fun stopAuthConnection() {
+        authConnectionMutex.withLock {
+            isAuthBound = false
+            authServiceConnection.unbind()
+        }
     }
 
     @Keep

@@ -58,6 +58,7 @@ class FirebaseRemoteConfiguration(private val context: Context, inDevelopmentMod
     private val onFetchCompleteHandler: OnSuccessListener<Void> = OnSuccessListener {
         // Once the config is successfully fetched it must be
         // activated before newly fetched values are returned.
+        logger.debug("Firebase remote configs has been fetched, now activating these")
         firebase.activate()
                 .addOnSuccessListener {
                     cache = firebase.getKeysByPrefix("")

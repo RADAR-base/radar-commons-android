@@ -61,12 +61,14 @@ interface RadarConfiguration {
     /**
      * Force fetching the remote configuration from server, even if it is not outdated.
      */
-    suspend fun forceFetch()
+    suspend fun forceFetch(callAfterLogout: Boolean = false)
 
     /**
      * Adds base URL from auth state to configuration.
      */
-    suspend fun updateWithAuthState(context: Context, appAuthState: AppAuthState?)
+    suspend fun updateWithAuthState(context: Context, appAuthState: AppAuthState?, isLogoutCall: Boolean = false)
+
+    suspend fun resetConfigs()
 
     companion object {
         const val RADAR_CONFIGURATION_CHANGED = "org.radarcns.android.RadarConfiguration.CHANGED"

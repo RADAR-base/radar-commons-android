@@ -60,7 +60,8 @@ abstract class AuthService : LifecycleService(), LoginListener {
     private val registryTweakMutex: Mutex = Mutex(false)
     private val authUpdateMutex: Mutex = Mutex(false)
 
-    private var needLoadedState: AtomicBoolean = AtomicBoolean(true)
+    private val needLoadedState: AtomicBoolean = AtomicBoolean(true)
+    private val authUpdatesResumed: AtomicBoolean = AtomicBoolean(true)
 
     private val _authStateFailures: MutableSharedFlow<AuthLoginListener.AuthStateFailure> = MutableSharedFlow(
         extraBufferCapacity = 1,
@@ -101,6 +102,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
         networkConnectedListener = NetworkConnectedReceiver(this)
         CoroutineTaskExecutor.startRetryScope()
+        authUpdatesResumed.set(true)
         executor.start()
         lifecycleScope.launch(Dispatchers.Default) {
             needLoadedState.set(true)
@@ -134,9 +136,11 @@ abstract class AuthService : LifecycleService(), LoginListener {
                 launch(Dispatchers.Default) {
                     authState
                         .collectLatest { state ->
-                        logger.trace("Collected AppAuth: {}", state)
-                        radarConfig.updateWithAuthState(this@AuthService, state)
-                    }
+                            logger.trace("Collected AppAuth: {}", state)
+                            if (authUpdatesResumed.get()) {
+                                radarConfig.updateWithAuthState(this@AuthService, state)
+                            }
+                        }
                 }
                 launch(Dispatchers.Default) {
                     networkConnectedListener.monitor()
@@ -185,6 +189,21 @@ abstract class AuthService : LifecycleService(), LoginListener {
                             }
                         }
                 }
+                launch(Dispatchers.Default) {
+                    authStateLogout
+                        .collectLatest {
+                            logger.info("Logout succeeded")
+                            authUpdatesResumed.set(false)
+                            val clearedState = latestAppAuth.reset()
+                            _authState.value = clearedState
+                            authSerialization.remove()
+                            callListeners {
+                                it.listener.logoutSucceeded(null, clearedState)
+                            }
+                            radarConfig.updateWithAuthState(this@AuthService, clearedState, true)
+                        }
+                }
+
             }
         }
     }
@@ -196,6 +215,9 @@ abstract class AuthService : LifecycleService(), LoginListener {
      * this opens the login activity.
      */
     suspend fun refresh() {
+        if (!authUpdatesResumed.get()) {
+            return
+        }
         executor.execute {
             logger.info("Refreshing authentication state")
             if (needLoadedState.get()) {
@@ -235,6 +257,10 @@ abstract class AuthService : LifecycleService(), LoginListener {
     suspend fun refreshIfOnline() {
         executor.execute {
             logger.debug("Refreshing if online")
+            if (!authUpdatesResumed.get()) {
+                logger.debug("Pausing refreshing for now, logging out")
+                return@execute
+            }
             for (i in 1..3) {
                 if (!isNetworkStatusReceived) {
                     delay(100)
@@ -477,6 +503,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
+        authUpdatesResumed.set(true)
         return AuthServiceBinder()
     }
 

@@ -16,6 +16,7 @@ import org.radarbase.android.util.ManagedServiceConnection.BoundService.Companio
 import org.slf4j.LoggerFactory
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.math.log
 
 open class ManagedServiceConnection<T: IBinder>(
     val context: Context,
@@ -53,7 +54,7 @@ open class ManagedServiceConnection<T: IBinder>(
                 if (!boundResult) {
                     throw IllegalStateException("Cannot bind ${context.javaClass.simpleName} to service $cls. Bind Service returned: $boundResult ")
                 } else {
-                    logger.debug("{} successfully bound to {}", context.javaClass.simpleName, cls)
+                    logger.trace("In ManagedServiceConnection: Bound service {} to {}", context.javaClass.simpleName, cls)
                 }
             }
             _state.value = service
@@ -71,6 +72,7 @@ open class ManagedServiceConnection<T: IBinder>(
     fun unbind(): Boolean {
         val currentState = state.value
         return if (currentState is BoundService<T>) {
+            logger.trace("In ManagedServiceConnection: Unbinding service {} from {}", context.javaClass.simpleName, currentState.componentName.className)
             context.unbind(currentState)
             _state.value = unbound
             true
@@ -88,7 +90,12 @@ open class ManagedServiceConnection<T: IBinder>(
     ) : BindState<T>() {
         companion object {
             fun Context.unbind(service: BoundService<*>) {
-                unbindService(service.conn)
+                try {
+                    unbindService(service.conn)
+                } catch (ex: Exception) {
+                    logger.error("Failed to unbind {} from {}", service.componentName.className, this::class.simpleName)
+                    throw ex
+                }
             }
         }
     }

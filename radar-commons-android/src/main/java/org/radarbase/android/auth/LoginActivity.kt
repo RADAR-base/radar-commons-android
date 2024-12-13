@@ -23,6 +23,7 @@ import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.radarbase.android.R
 import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.util.BindState
@@ -61,7 +62,6 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
     private val serviceUnboundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
         {it.isInLoginActivity = false},
         {binder: AuthService.AuthServiceBinder -> listenerRegistry?.let {
-            logger.debug("Unbound AuthService from ${this::class.simpleName!!}")
             binder.removeLoginListener(it)
             listenerRegistry = null
         }}
@@ -100,12 +100,7 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
                         }
 
                         is ManagedServiceConnection.Unbound -> {
-                            authServiceBinder = authServiceBinder?.let { binder ->
-                                serviceUnboundActions.forEach { action ->
-                                    action(binder)
-                                }
-                                null
-                            }
+                            // do nothing
                         }
                     }
                 }
@@ -116,8 +111,16 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        runBlocking {
+            listenerRegistry?.let {
+                authServiceBinder?.removeLoginListener(it)
+            }
+        }
+        listenerRegistry = null
+        authServiceBinder?.isInLoginActivity = false
+        authServiceBinder = null
         authServiceConnection.unbind()
+        super.onDestroy()
     }
 
     public override fun onSaveInstanceState(outState: Bundle) {

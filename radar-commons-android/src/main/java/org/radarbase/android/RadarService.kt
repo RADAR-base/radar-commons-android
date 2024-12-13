@@ -37,8 +37,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -58,7 +57,6 @@ import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.*
 import org.radarbase.android.util.*
-import org.radarbase.android.util.BluetoothEnforcer.Companion
 import org.radarbase.android.util.ManagedServiceConnection.Companion.serviceConnection
 import org.radarbase.android.util.NotificationHandler.Companion.NOTIFICATION_CHANNEL_INFO
 import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
@@ -67,10 +65,9 @@ import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.ArrayList
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
-    private var configurationUpdateFuture: CoroutineTaskExecutor.CoroutineFutureHandle? = null
+    private var configurationUpdateFuture: Job? = null
     private val fetchTimeout = ChangeRunner<Long>()
     private lateinit var mainHandler: Handler
     private var binder: IBinder? = null
@@ -111,12 +108,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private val needsPermissions = LinkedHashSet<String>()
 
-    private var authListenerRegitry: AuthService.LoginListenerRegistry? = null
+    private var authListenerRegistry: AuthService.LoginListenerRegistry? = null
     private var authServiceBinder: AuthService.AuthServiceBinder? = null
 
     private val authConnectionBoundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
         {
-            authListenerRegitry = it.addLoginListener(this)
+            authListenerRegistry = it.addLoginListener(this)
             it.refreshIfOnline()
         }
     )
@@ -128,16 +125,16 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         {
             radarExecutor.execute {
                 sourceRegistrar?.let {
-                    it.close()
+                    it.stop()
                     sourceRegistrar = null
                 }
             }
         },
         { binder ->
-            authListenerRegitry?.let {
+            authListenerRegistry?.let {
                 binder.removeLoginListener(it)
             }
-            authListenerRegitry = null
+            authListenerRegistry = null
         }
     )
 
@@ -184,6 +181,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     override fun onCreate() {
         super.onCreate()
+        logger.trace("Creating Radar Service")
         notificationHandler = NotificationHandler(this)
         binder = createBinder()
         radarExecutor = CoroutineTaskExecutor(this::class.simpleName!!, Dispatchers.Default).apply {
@@ -238,7 +236,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     }
             }
             launch {
-                configuration.config.collect(::configure)
+                configuration.config.collect {
+                    logger.trace("New Configuration received")
+                    doConfigure(it)
+                }
             }
         }
 
@@ -248,18 +249,20 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 bluetoothNotification?.cancel()
                 startScanning()
             } else {
-                mConnections.asSequence()
-                    .map { it.connection }
-                    .filter { it.needsBluetooth() }
-                    .forEach { it.stopRecording() }
+                lifecycleScope.launch {
+                    mConnections.asSequence()
+                        .map { it.connection }
+                        .filter { it.needsBluetooth() }
+                        .forEach { it.stopRecording() }
 
-                bluetoothNotification = notificationHandler.notify(
-                    BLUETOOTH_NOTIFICATION,
-                    NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
-                    false
-                ) {
-                    setContentTitle(getString(R.string.notification_bluetooth_needed_title))
-                    setContentText(getString(R.string.notification_bluetooth_needed_text))
+                    bluetoothNotification = notificationHandler.notify(
+                        BLUETOOTH_NOTIFICATION,
+                        NotificationHandler.NOTIFICATION_CHANNEL_ALERT,
+                        false
+                    ) {
+                        setContentTitle(getString(R.string.notification_bluetooth_needed_title))
+                        setContentText(getString(R.string.notification_bluetooth_needed_text))
+                    }
                 }
             }
         }
@@ -271,6 +274,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        logger.trace("OnStartCommand Radar Service")
         configure(configuration.latestConfig)
         checkPermissions()
         startForeground(1, createForegroundNotification())
@@ -296,27 +300,32 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     override fun onDestroy() {
+        authConnection.unbind()
         if (needsBluetooth.value) {
             bluetoothReceiver.unregister()
         }
-
-        radarExecutor.stop {
-            sourceRegistrar?.let {
-                it.close()
-                sourceRegistrar = null
-            }
+        configurationUpdateFuture?.cancel()
+        detachAllSources()
+        radarExecutor.stop()
+        sourceRegistrar?.let {
+            it.stop()
+            sourceRegistrar = null
+        }
+        lifecycleScope.launch(Dispatchers.Default) {
             (dataHandler as TableDataHandler).stop()
             dataHandler = null
         }
         recordTrackerJob?.cancel()
         statusTrackerJob?.cancel()
-        authConnection.unbind()
+        super.onDestroy()
+    }
 
+    private fun detachAllSources() {
         mConnections.asSequence()
             .filter(SourceProvider<*>::isBound)
-            .forEach(SourceProvider<*>::unbind)
-
-        super.onDestroy()
+            .forEach {
+                it.unbind()
+            }
     }
 
     @CallSuper
@@ -326,8 +335,11 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
             fetchTimeout.applyIfChanged(config.getLong(FETCH_TIMEOUT_MS_KEY, FETCH_TIMEOUT_MS_DEFAULT)) { timeout ->
                 configurationUpdateFuture?.cancel()
-                configurationUpdateFuture = radarExecutor.repeat(timeout) {
-                    configuration.fetch()
+                configurationUpdateFuture = lifecycleScope.launch(Dispatchers.Default) {
+                    while (isActive){
+                        kotlinx.coroutines.delay(timeout)
+                        configuration.fetch()
+                    }
                 }
             }
         }
@@ -600,9 +612,18 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
-    override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
+    override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) {
+            updateProviders(authState, configuration.latestConfig)
+            val oldProviders = mConnections
+            removeProviders(mConnections.toSet())
+            oldProviders.forEach {
+                it.stopService()
+            }
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+    }
 
-    private fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
+    private suspend fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
         if (sourceProviders.isEmpty()) {
             return
         }
@@ -612,7 +633,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             bluetoothRequiredValues -= it.doesRequireBluetooth()
         }
         updateBluetoothNeeded(mConnections.any { it.isConnected && it.connection.needsBluetooth() })
-        sourceProviders.forEach(SourceProvider<*>::unbind)
+        sourceProviders.forEach {
+            it.unbind()
+        }
     }
 
     private fun addProviders(sourceProviders: List<SourceProvider<*>>) {
@@ -634,7 +657,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         logger.info("Creating source registration")
         sourceRegistrar = SourceProviderRegistrar(
             authServiceBinder,
-            radarExecutor,
+            this,
             providers
         ) { unregisteredProviders, registeredProviders ->
             logger.info(
@@ -668,29 +691,34 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             .filter { hasFeatures(it, packageManager) }
 
         configuredProviders.applyIfChanged(supportedPlugins) { providers ->
-            val previousConnections = mConnections
-            removeProviders(mConnections.filterNotTo(HashSet(), providers::contains))
+            lifecycleScope.launch(Dispatchers.Default) {
+                val previousConnections = mConnections
+                removeProviders(mConnections.filterNotTo(HashSet(), providers::contains))
 
-            sourceRegistrar?.let {
-                it.close()
-                sourceRegistrar = null
-            }
-            lifecycleScope.launch {
+                sourceRegistrar?.let {
+                    it.stop()
+                    sourceRegistrar = null
+                }
+
                 authConnection.applyBinder {
                     createRegistrar(this, providers)
                 }
-            }
-            if (failedSourceObserverJob == null || mConnections != previousConnections) {
-                failedSourceObserverJob?.cancel()
 
-                failedSourceObserverJob = lifecycleScope.launch {
-                    mConnections.forEach {
-                        it.connection.sourceConnectFailed
-                            ?.onEach { }?.launchIn(this)
+                if (failedSourceObserverJob == null || mConnections != previousConnections) {
+                    failedSourceObserverJob?.cancel()
+
+                    failedSourceObserverJob = lifecycleScope.launch {
+                        mConnections.forEach {
+                            it.connection.sourceConnectFailed
+                                ?.collectLatest {
+                                    Boast.makeText(
+                                        this@RadarService,
+                                        it.sourceName,
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                        }
                     }
-                }
-
-                lifecycleScope.launch {
                     _actionProvidersUpdated.emit(true)
                 }
             }
@@ -711,8 +739,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     protected inner class RadarBinder : Binder(), IRadarBinder {
-        override fun startScanning() = this@RadarService.startActiveScanning()
-        override fun stopScanning() = this@RadarService.stopActiveScanning()
+        override suspend fun startScanning() = this@RadarService.startActiveScanning()
+        override suspend fun stopScanning() = this@RadarService.stopActiveScanning()
 
         override val serverStatus: StateFlow<ServerStatus>
             get() = this@RadarService.serverStatus
@@ -762,7 +790,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             isScanningEnabled = false
             mConnections.asSequence()
                 .filter { it.isConnected && it.connection.mayBeDisabledInBackground() }
-                .forEach(SourceProvider<*>::unbind)
+                .forEach {
+                    it.unbind()
+                }
         }
     }
 

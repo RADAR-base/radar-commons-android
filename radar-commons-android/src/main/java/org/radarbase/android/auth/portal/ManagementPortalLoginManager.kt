@@ -155,6 +155,7 @@ class ManagementPortalLoginManager(
         if (authState.authenticationSource != SOURCE_TYPE) return
         if (disableRefresh) {
             authState.clear()
+            listener.logoutSucceeded(this, AppAuthState())
         } else authState.invalidate()
     }
 
