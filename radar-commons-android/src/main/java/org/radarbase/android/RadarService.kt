@@ -120,6 +120,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private val startServiceMutex: Mutex = Mutex()
     private val providerUpdateMutex: Mutex = Mutex()
+    private var configCollectorJob: Job? = null
 
     private val authConnectionUnboundActions: MutableList<AuthServiceStateReactor> = mutableListOf(
         {
@@ -235,7 +236,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                         }
                     }
             }
-            launch {
+            configCollectorJob = launch {
                 configuration.config.collect {
                     logger.trace("New Configuration received")
                     doConfigure(it)
@@ -300,6 +301,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     override fun onDestroy() {
+        configCollectorJob?.cancel()
         authConnection.unbind()
         if (needsBluetooth.value) {
             bluetoothReceiver.unregister()
@@ -315,6 +317,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             (dataHandler as TableDataHandler).stop()
             dataHandler = null
         }
+        logger.debug("Destroying RadarService")
         recordTrackerJob?.cancel()
         statusTrackerJob?.cancel()
         super.onDestroy()
@@ -326,6 +329,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             .forEach {
                 it.unbind()
             }
+        mConnections.forEach {
+            it.stopService()
+        }
     }
 
     @CallSuper

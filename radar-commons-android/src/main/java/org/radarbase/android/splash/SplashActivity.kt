@@ -97,12 +97,14 @@ abstract class SplashActivity : AppCompatActivity() {
                 stopConfigListener()
                 startAuthConnection()
             } else if (status == RadarConfiguration.RemoteConfigStatus.PARTIALLY_FETCHED) {
-
+                logger.debug("Config has been partially fetched")
                 lifecycleScope.launch {
                     delay(waitForFullFetchMs)
                     updateConfig(radarConfig.status.value, allowPartialConfiguration = true)
                 }
             }
+        } else {
+            logger.info("Didn't meet the criteria for updating config")
         }
     }
 
@@ -131,11 +133,12 @@ abstract class SplashActivity : AppCompatActivity() {
                 }
             }
             configCollectorJob = launch {
-                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                repeatOnLifecycle(Lifecycle.State.CREATED) {
                     logger.trace("Started collecting config updates to splashActivity")
                     config.config.
                     collect {
-                        updateConfig(config.status.value, allowPartialConfiguration = false)
+                        logger.trace("New config status: {}", it.status)
+                        updateConfig(it.status, allowPartialConfiguration = false)
                     }
                 }
             }
@@ -178,9 +181,10 @@ abstract class SplashActivity : AppCompatActivity() {
 
         logger.info("Starting SplashActivity.")
 
-
-        lifecycleScope.launch(Dispatchers.Default) {
-            when (config.status.value) {
+        lifecycleScope.launch {
+            val status = config.config.value.status
+            logger.trace("Config Status is: {}", status)
+            when (status) {
                 RadarConfiguration.RemoteConfigStatus.UNAVAILABLE -> {
                     logger.info("Firebase unavailable")
                     updateState(STATE_FIREBASE_UNAVAILABLE)
@@ -283,7 +287,9 @@ abstract class SplashActivity : AppCompatActivity() {
     protected open suspend fun startConfigReceiver() {
         logger.trace("Starting config receiver for splash activity")
         updateState(STATE_FETCHING_CONFIG)
-        config.forceFetch(true)
+        lifecycleScope.launch {
+            config.forceFetch(true)
+        }
         if (configCollectorJob != null) {
             configReceiver = true
         }
@@ -295,7 +301,9 @@ abstract class SplashActivity : AppCompatActivity() {
             if (!isAuthBound) {
                 isAuthBound = true
                 updateState(STATE_AUTHORIZING)
-                authServiceConnection.bind()
+                lifecycleScope.launch {
+                    authServiceConnection.bind()
+                }
             }
         }
     }

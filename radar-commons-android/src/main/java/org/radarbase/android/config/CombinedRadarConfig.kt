@@ -85,6 +85,7 @@ class CombinedRadarConfig(
                 status.value = when {
                     FETCHING in allStatus -> FETCHING
                     FETCHED in allStatus && allStatus.all { it == FETCHED || it == UNAVAILABLE } -> FETCHED
+                    FETCHED in allStatus && READY in allStatus -> FETCHED
                     FETCHED in allStatus || PARTIALLY_FETCHED in allStatus -> PARTIALLY_FETCHED
                     ERROR in allStatus -> ERROR
                     READY in allStatus -> READY
@@ -211,8 +212,6 @@ class CombinedRadarConfig(
         }
 
         persistChanges()
-
-        if (isLogoutCall) return
 
         remoteConfigs.forEach {
             it.updateWithAuthState(appAuthState)

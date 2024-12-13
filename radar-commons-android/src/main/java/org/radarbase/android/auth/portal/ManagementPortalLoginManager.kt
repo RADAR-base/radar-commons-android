@@ -167,6 +167,10 @@ class ManagementPortalLoginManager(
         success: (AppAuthState, SourceMetadata) -> Unit,
         failure: (Exception?) -> Unit
     ): Boolean {
+        if (!listener.authUpdatesResumed.get()) {
+            logger.debug("Not updating source, because of logout")
+            return false
+        }
         logger.debug("Handling source update for source {} with type {}", source, source.type)
 
         val client = client
@@ -216,6 +220,11 @@ class ManagementPortalLoginManager(
         success: suspend (AppAuthState, SourceMetadata) -> Unit,
         failure: suspend (Exception?) -> Unit
     ): Boolean {
+
+        if (!listener.authUpdatesResumed.get()) {
+            logger.debug("Not registering source, because of logout")
+            return false
+        }
         logger.debug("Handling source registration")
         val appAuth: AppAuthState = authState.build()
         val existingSource = sources[source.sourceId]

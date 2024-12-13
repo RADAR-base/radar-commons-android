@@ -405,10 +405,10 @@ abstract class MainActivity : AppCompatActivity(), LoginListener {
             connectionBound = false
             radarConnection.unbind()
             authConnection.unbind()
+            delay(400)
         }
         clearAppData(this)
         delay(300)
-        logger.trace("Configurations reset")
         logger.info("Starting SplashActivity")
         val applicationPackage = packageName
         withContext(Dispatchers.Main) {

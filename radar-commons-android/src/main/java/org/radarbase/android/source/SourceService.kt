@@ -22,6 +22,7 @@ import androidx.annotation.CallSuper
 import androidx.annotation.Keep
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,6 +114,8 @@ abstract class SourceService<T : BaseSourceState> :
     )
 
     val locationChangedBroadcast: MutableSharedFlow<String> = MutableSharedFlow()
+
+    private var configCollectorJob: Job? = null
     
     protected lateinit var config: RadarConfiguration
     private lateinit var radarConnection: ManagedServiceConnection<org.radarbase.android.IRadarBinder>
@@ -224,7 +227,7 @@ abstract class SourceService<T : BaseSourceState> :
                         }
                     }.launchIn(this)
             }
-            launch {
+            configCollectorJob = launch {
                 radarConfig.config
                     .collectLatest {
                         configure(it)
@@ -243,6 +246,7 @@ abstract class SourceService<T : BaseSourceState> :
     @CallSuper
     override fun onDestroy() {
         logger.info("Destroying SourceService {}", this)
+        configCollectorJob?.cancel()
         radarConnection.unbind()
         authConnection.unbind()
         stopRecording()

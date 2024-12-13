@@ -61,7 +61,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
     private val authUpdateMutex: Mutex = Mutex(false)
 
     private val needLoadedState: AtomicBoolean = AtomicBoolean(true)
-    private val authUpdatesResumed: AtomicBoolean = AtomicBoolean(true)
+    val authUpdatesResumed: AtomicBoolean = AtomicBoolean(true)
 
     private val _authStateFailures: MutableSharedFlow<AuthLoginListener.AuthStateFailure> = MutableSharedFlow(
         extraBufferCapacity = 1,
@@ -137,9 +137,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
                     authState
                         .collectLatest { state ->
                             logger.trace("Collected AppAuth: {}", state)
-                            if (authUpdatesResumed.get()) {
-                                radarConfig.updateWithAuthState(this@AuthService, state)
-                            }
+                            radarConfig.updateWithAuthState(this@AuthService, state)
                         }
                 }
                 launch(Dispatchers.Default) {
@@ -215,10 +213,11 @@ abstract class AuthService : LifecycleService(), LoginListener {
      * this opens the login activity.
      */
     suspend fun refresh() {
-        if (!authUpdatesResumed.get()) {
-            return
-        }
         executor.execute {
+            if (!waitForAuthUpdates()) {
+                logger.debug("Can't refresh now, performing logout")
+                return@execute
+            }
             logger.info("Refreshing authentication state")
             if (needLoadedState.get()) {
                 for (i in 1..4) {
@@ -257,15 +256,16 @@ abstract class AuthService : LifecycleService(), LoginListener {
     suspend fun refreshIfOnline() {
         executor.execute {
             logger.debug("Refreshing if online")
-            if (!authUpdatesResumed.get()) {
-                logger.debug("Pausing refreshing for now, logging out")
+            if (!waitForAuthUpdates()) {
+                logger.debug("Not refreshing now, logging out")
                 return@execute
             }
-            for (i in 1..3) {
-                if (!isNetworkStatusReceived) {
-                    delay(100)
-                }
+
+            if (!waitForNetworkStatus()) {
+                logger.debug("Network status not received, cannot proceed")
+                return@execute
             }
+
             if (isConnected) {
                 logger.trace("Network is available, now refreshing")
                 refresh()
@@ -335,7 +335,7 @@ abstract class AuthService : LifecycleService(), LoginListener {
                 loginListener.loginSucceeded(null, auth)
             }
         }
-
+        authUpdatesResumed.set(true)
         return LoginListenerRegistry(loginListener)
             .also {
                 registryTweakMutex.withLock { listeners += it }
@@ -397,6 +397,27 @@ abstract class AuthService : LifecycleService(), LoginListener {
             manager.refresh(this)
         }
     }
+
+    private suspend fun waitForAuthUpdates(maxAttempts: Int = 2, delayMs: Long = 100): Boolean {
+        repeat(maxAttempts) {
+            if (authUpdatesResumed.get()) {
+                return true
+            }
+            delay(delayMs)
+        }
+        return false
+    }
+
+    private suspend fun waitForNetworkStatus(maxAttempts: Int = 3, delayMs: Long = 100): Boolean {
+        repeat(maxAttempts) {
+            if (isNetworkStatusReceived) {
+                return true
+            }
+            delay(delayMs)
+        }
+        return false
+    }
+
 
     /**
      * Create your login managers here. Call [LoginManager.start] for the login method that
