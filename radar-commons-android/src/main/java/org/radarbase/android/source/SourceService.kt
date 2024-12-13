@@ -243,14 +243,12 @@ abstract class SourceService<T : BaseSourceState> :
     @CallSuper
     override fun onDestroy() {
         logger.info("Destroying SourceService {}", this)
-        super.onDestroy()
-
         radarConnection.unbind()
         authConnection.unbind()
-
         stopRecording()
+        radarApp.onSourceServiceDestroy(this@SourceService)
+        super.onDestroy()
 
-        radarApp.onSourceServiceDestroy(this)
     }
 
     @CallSuper
@@ -401,9 +399,11 @@ abstract class SourceService<T : BaseSourceState> :
         doStart(acceptableIds)
     }
 
-    fun stopRecording() = sourceServiceExecutor.stop { doStop() }
+    fun stopRecording()  {
+        doStop()
+    }
 
-    private fun doStop() {
+    private  fun doStop() {
         delayedStart = null
         startFuture?.let {
             it.cancel()

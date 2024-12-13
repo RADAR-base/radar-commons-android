@@ -1,5 +1,15 @@
 package org.radarbase.android.source
 
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.AuthService.Companion.RETRY_MAX_DELAY
@@ -14,21 +24,30 @@ import java.io.Closeable
 
 class SourceProviderRegistrar(
     private val authServiceBinder: AuthService.AuthServiceBinder,
-    private val executor: CoroutineTaskExecutor,
+    private val service: LifecycleService,
     private val providers: List<SourceProvider<*>>,
     val onUpdate: suspend (unregisteredProviders: List<SourceProvider<*>>, registeredProviders: List<SourceProvider<*>>) -> Unit
-): LoginListener, Closeable {
-    private val authRegistration: AuthService.LoginListenerRegistry = executor.nonSuspendingCompute {
-        authServiceBinder.addLoginListener(this)
+): LoginListener {
+
+    private val authRegistration: Deferred<AuthService.LoginListenerRegistry> = service.lifecycleScope.async(Dispatchers.Default) {
+        authServiceBinder.addLoginListener(this@SourceProviderRegistrar)
     }
+
     private var isClosed: Boolean = false
-    private val retry: MutableMap<SourceProvider<*>, Pair<DelayedRetry, CoroutineTaskExecutor.CoroutineFutureHandle>> = mutableMapOf()
+    private val retry: MutableMap<SourceProvider<*>, Pair<DelayedRetry, Job>> = mutableMapOf()
+    private val retryAccessMutex: Mutex = Mutex()
+
+    init {
+        service.lifecycleScope.launch {
+            authRegistration.await()
+        }
+    }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         if (isClosed) {
             return
         }
-        executor.execute {
+        service.lifecycleScope.launch(Dispatchers.Default) {
             logger.debug("Received login succeeded callback in registrar")
             resetRetry()
 
@@ -63,10 +82,13 @@ class SourceProviderRegistrar(
             retry -= provider
         }, { ex ->
             logger.error("Failed to register source {}. Trying again", sourceType, ex)
-            executor.executeReentrant {
-                if (isClosed) { return@executeReentrant }
+            service.lifecycleScope.launch(Dispatchers.Default) {
+                if (isClosed) { return@launch }
                 val delay = retry[provider]?.first ?: DelayedRetry(RETRY_MIN_DELAY, RETRY_MAX_DELAY)
-                val future = executor.delay(delay.nextDelay()) { registerProvider(provider, authState) }
+                val future = service.lifecycleScope.launch(Dispatchers.Default) {
+                    delay(delay.nextDelay())
+                    registerProvider(provider, authState)
+                }
                 if (future != null) {
                     retry[provider] = Pair(delay, future)
                 } else {
@@ -82,20 +104,24 @@ class SourceProviderRegistrar(
     override suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState) = Unit
 
     private fun resetRetry() {
-        retry.values.forEach { (_, future) ->
-            future.cancel()
+        logger.info("Resetting retry values")
+        try {
+            retry.values.forEach { (_, future) ->
+                future.cancel()
+            }
+        } catch (ex: Exception) {
+            logger.warn("Exception when resetting retry values", ex)
         }
         retry.clear()
     }
 
-    override fun close() {
-        executor.execute {
-            authServiceBinder.removeLoginListener(authRegistration)
+    fun stop() {
+        logger.debug("Stopping the source provider registrar")
+        service.lifecycleScope.launch {
+            authServiceBinder.removeLoginListener(authRegistration.await())
         }
-            executor.executeReentrant {
-            resetRetry()
-            isClosed = true
-        }
+        resetRetry()
+        isClosed = true
     }
 
     companion object {

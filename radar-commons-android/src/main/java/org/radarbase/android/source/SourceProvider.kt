@@ -251,6 +251,11 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
                 || authState.sourceMetadata.any { matches(it.type, checkVersion) && authState.isAuthorizedForSource(it.sourceId) }
     }
 
+    fun stopService() {
+        val intent = Intent(radarService, serviceClass)
+        radarService.stopService(intent)
+    }
+
     open val actions: List<Action> = emptyList()
 
     data class Action(

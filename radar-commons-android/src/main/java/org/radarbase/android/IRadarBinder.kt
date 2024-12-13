@@ -37,8 +37,8 @@ interface IRadarBinder : IBinder {
 
     fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>)
 
-    fun startScanning()
-    fun stopScanning()
+    suspend fun startScanning()
+    suspend fun stopScanning()
 
     fun needsBluetooth(): Boolean
 

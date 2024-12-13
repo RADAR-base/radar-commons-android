@@ -24,6 +24,7 @@ import android.os.SystemClock
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -86,8 +87,7 @@ class ApplicationStatusManager(
     private var tzProcessor: OfflineProcessor? = null
     private val tzIntervalMutex: Mutex = Mutex()
 
-    private val applicationStatusExecutor: CoroutineTaskExecutor =
-        CoroutineTaskExecutor(this::class.simpleName!!)
+    private val applicationStatusExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     @get:Synchronized
     @set:Synchronized
@@ -104,6 +104,9 @@ class ApplicationStatusManager(
 
     private lateinit var tzOffsetCache: ChangeRunner<Int>
     private lateinit var deviceInfoCache: ChangeRunner<ApplicationInfo>
+    private var cachedRecordTrackJob: Job? = null
+    private var serverRecordsSentJob: Job? = null
+    private var serverStatusJob: Job? = null
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
@@ -163,7 +166,7 @@ class ApplicationStatusManager(
         logger.info("Starting ApplicationStatusManager")
             with(applicationStatusExecutor) {
                 service.dataHandler?.let { handler ->
-                    execute {
+                    cachedRecordTrackJob = service.lifecycleScope.launch(Dispatchers.Default) {
                         handler.numberOfRecords
                             .collect { records: TableDataHandler.CacheSize ->
                                 val topic = records.topicName
@@ -173,14 +176,14 @@ class ApplicationStatusManager(
                             }
                         }
 
-                    execute {
+                    serverRecordsSentJob = service.lifecycleScope.launch(Dispatchers.Default) {
                         handler.recordsSent.collect { sent: TopicSendReceipt ->
                             logger.trace("Topic {} sent {} records", sent.topic, sent.numberOfRecords)
                             state.addRecordsSent(sent.numberOfRecords)
                         }
                     }
 
-                    execute {
+                    serverStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
                         handler.serverStatus.collect {
                             state.serverStatus = it
                             logger.trace("Updated Server Status to {}", it)
@@ -311,6 +314,18 @@ class ApplicationStatusManager(
     override fun onClose() {
         applicationStatusExecutor.stop {
             this.processor.stop()
+            cachedRecordTrackJob?.also {
+                it.cancel()
+                cachedRecordTrackJob = null
+            }
+            serverRecordsSentJob?.also {
+                it.cancel()
+                serverRecordsSentJob = null
+            }
+            serverStatusJob?.also {
+                it.cancel()
+                serverStatusJob = null
+            }
             tzProcessor?.stop()
         }
     }

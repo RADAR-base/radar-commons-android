@@ -20,6 +20,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.net.PlacesClient
+import org.radarbase.android.AbstractRadarApplication
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
@@ -48,6 +49,8 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
 
     override fun onCreate() {
         super.onCreate()
+        val applicationPlacesClientStatus = (application as AbstractRadarApplication).placesClientCreated.get()
+        placesClientCreated.set(applicationPlacesClientStatus)
         placeHandler = CoroutineTaskExecutor(this::class.simpleName!!).apply {
             start()
         }
@@ -103,8 +106,10 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
         try {
             placesClient = Places.createClient(this)
             placesClientCreated.set(true)
+            (application as AbstractRadarApplication).placesClientCreated.set(true)
         } catch (ex: IllegalStateException) {
             placesClientCreated.set(false)
+            (application as AbstractRadarApplication).placesClientCreated.set(false)
             logger.error("Places client has not been initialized yet.")
         }
     }

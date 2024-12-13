@@ -30,6 +30,7 @@ import org.radarbase.android.config.RemoteConfig
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.NotificationHandler
 import org.slf4j.impl.HandroidLoggerAdapter
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Provides the name and some metadata of the main activity  */
 abstract class AbstractRadarApplication : Application(), RadarApplication {
@@ -37,6 +38,13 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
     override lateinit var notificationHandler: NotificationHandler
 
     override lateinit var configuration: RadarConfiguration
+
+    /**
+     * A boolean value indicating whether a plugin exists that utilizes the Google Places API's PlacesClient.
+     * This is used in the application class because it is efficient to create exactly one instance of PlacesClient
+     * for a single application instance.
+     */
+    val placesClientCreated: AtomicBoolean = AtomicBoolean(false)
 
     override fun configureProvider(bundle: Bundle) {}
     override fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean) {}
