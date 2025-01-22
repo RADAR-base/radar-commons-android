@@ -1,9 +1,9 @@
 <resources>
     <string name="app_name">RADAR common android app</string>
 
-    <string name="service_notification_ticker">Wearables data collection</string>
-    <string name="service_notification_text">Collecting data from your wearable bluetooth device.</string>
-    <string name="service_notification_title">Wearables data collection</string>
+    <string name="service_notification_ticker">Data Collection</string>
+    <string name="service_notification_text">Collecting data from connected sources</string>
+    <string name="service_notification_title">Data Collection in Progress</string>
 
     <string name="filter_split_regex">,</string>
     <string name="retry_oauth_login">Failed to login to authorization service, please retry</string>

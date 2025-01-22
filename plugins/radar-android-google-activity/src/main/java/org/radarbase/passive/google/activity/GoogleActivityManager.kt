@@ -69,7 +69,9 @@ class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceMana
 
     private fun registerActivityTransitionReceiver() {
         val filter = IntentFilter(ACTION_ACTIVITY_UPDATE)
-        service.registerReceiver(activityTransitionReceiver, filter)
+        ContextCompat.registerReceiver(service, activityTransitionReceiver, filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         logger.info("Registered activity transition receiver.")
     }
 
@@ -117,7 +119,9 @@ class GoogleActivityManager(context: GoogleActivityService) : AbstractSourceMana
     }
 
     private fun createActivityPendingIntent(): PendingIntent {
-        val intent = Intent(ACTION_ACTIVITY_UPDATE)
+        val intent = Intent(ACTION_ACTIVITY_UPDATE).apply {
+            `package` = service.packageName
+        }
         logger.info("Activity pending intent created")
         return PendingIntent.getBroadcast(service, ACTIVITY_UPDATE_REQUEST_CODE, intent,
             PendingIntent.FLAG_CANCEL_CURRENT.toPendingIntentFlag(true)

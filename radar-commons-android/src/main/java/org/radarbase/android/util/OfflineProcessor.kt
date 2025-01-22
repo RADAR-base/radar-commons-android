@@ -29,6 +29,8 @@ import android.os.Debug
 import android.os.PowerManager
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.RECEIVER_EXPORTED
 import org.radarbase.util.CountedReference
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -79,7 +81,9 @@ class OfflineProcessor(
         this.alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
 
         handler = config.handlerReference.acquire()
-        val intent = Intent(config.requestName)
+        val intent = Intent(config.requestName).apply {
+            `package` = context.packageName
+        }
         pendingIntent = PendingIntent.getBroadcast(
             context,
             requireNotNull(config.requestCode) { "Cannot start processor without request code" },
@@ -103,7 +107,12 @@ class OfflineProcessor(
         }
         handler.execute {
             didStart = true
-            context.registerReceiver(this.receiver, IntentFilter(requestName))
+            ContextCompat.registerReceiver(
+                context,
+                this.receiver,
+                IntentFilter(requestName),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
             schedule()
             initializer?.let { it() }
         }
@@ -195,7 +204,7 @@ class OfflineProcessor(
                 alarmManager.cancel(pendingIntent)
                 try {
                     context.unregisterReceiver(receiver)
-                } catch (ex: IllegalStateException) {
+                } catch (ex: IllegalArgumentException) {
                     logger.warn(
                         "Cannot unregister OfflineProcessor {}, it was most likely not completely started: {}",
                         config.requestName,
