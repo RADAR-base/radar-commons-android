@@ -12,5 +12,5 @@ import androidx.room.PrimaryKey
 data class NetworkStatusLog(
     @PrimaryKey(autoGenerate = true) val id: Long,
     val time: Long,
-    @ColumnInfo("connection_state") val connectionState: NetworkStatus
+    @ColumnInfo("connection_state") val connectionStatus: ConnectionStatus
 )

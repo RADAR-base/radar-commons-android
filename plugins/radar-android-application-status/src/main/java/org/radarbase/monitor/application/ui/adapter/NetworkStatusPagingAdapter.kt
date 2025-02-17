@@ -23,7 +23,7 @@ class NetworkStatusPagingAdapter(
         fun bind(log: NetworkStatusLog) {
             binding.tvStatusInfo.text = context.getString(
                 R.string.network_status_info,
-                log.connectionState.name,
+                log.connectionStatus.name,
                 dateTimeFromInstant(log.time)
             )
 

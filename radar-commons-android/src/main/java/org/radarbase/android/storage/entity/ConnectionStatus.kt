@@ -1,5 +1,5 @@
 package org.radarbase.android.storage.entity
 
-enum class NetworkStatus {
+enum class ConnectionStatus {
     DISCONNECTED, CONNECTED_WIFI, CONNECTED_CELLULAR
 }

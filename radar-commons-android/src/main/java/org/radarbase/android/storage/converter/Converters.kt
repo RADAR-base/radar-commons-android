@@ -2,7 +2,7 @@ package org.radarbase.android.storage.converter
 
 import androidx.room.TypeConverter
 import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.storage.entity.NetworkStatus
+import org.radarbase.android.storage.entity.ConnectionStatus
 
 @Suppress("unused")
 class Converters {
@@ -14,9 +14,9 @@ class Converters {
         SourceStatusListener.Status.valueOf(statusName)
 
     @TypeConverter
-    fun fromNetworkStatus(status: NetworkStatus): String = status.name
+    fun fromNetworkStatus(status: ConnectionStatus): String = status.name
 
     @TypeConverter
-    fun toNetworkStatus(statusName: String): NetworkStatus =
-        NetworkStatus.valueOf(statusName)
+    fun toNetworkStatus(statusName: String): ConnectionStatus =
+        ConnectionStatus.valueOf(statusName)
 }
