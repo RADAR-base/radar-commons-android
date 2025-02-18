@@ -26,26 +26,38 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.radarbase.android.AbstractRadarApplication
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.data.TableDataHandler
 import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.source.SourceStatusTrace
+import org.radarbase.android.storage.db.RadarApplicationDatabase
+import org.radarbase.android.storage.entity.ConnectionStatus
+import org.radarbase.android.storage.entity.NetworkStatusLog
+import org.radarbase.android.storage.entity.SourceStatusLog
 import org.radarbase.android.util.ChangeRunner
 import org.radarbase.android.util.CoroutineTaskExecutor
+import org.radarbase.android.util.NetworkConnectedReceiver
 import org.radarbase.android.util.OfflineProcessor
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.monitor.application.ApplicationStatusService.Companion.UPDATE_RATE_DEFAULT
+import org.radarbase.monitor.application.utils.AppRepository
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.monitor.application.ApplicationDeviceInfo
 import org.radarcns.monitor.application.ApplicationExternalTime
+import org.radarcns.monitor.application.ApplicationNetworkStatus
+import org.radarcns.monitor.application.ApplicationPluginStatus
 import org.radarcns.monitor.application.ApplicationRecordCounts
 import org.radarcns.monitor.application.ApplicationServerStatus
 import org.radarcns.monitor.application.ApplicationTimeZone
+import org.radarcns.monitor.application.ApplicationTopicRecordsSent
 import org.radarcns.monitor.application.ApplicationUptime
 import org.radarcns.monitor.application.ExternalTimeProtocol
 import org.radarcns.monitor.application.OperatingSystem
@@ -79,15 +91,32 @@ class ApplicationStatusManager(
     private val deviceInfoTopic: Deferred<DataCache<ObservationKey, ApplicationDeviceInfo>> = service.lifecycleScope.async(Dispatchers.Default) {
         createCache("application_device_info", ApplicationDeviceInfo())
     }
+    private val networkStatusTopic: Deferred<DataCache<ObservationKey, ApplicationNetworkStatus>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_network_status", ApplicationNetworkStatus())
+    }
+    private val pluginStatusTopic: Deferred<DataCache<ObservationKey, ApplicationPluginStatus>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_plugin_status", ApplicationPluginStatus())
+    }
+    private val recordCountsPerTopic: Deferred<DataCache<ObservationKey, ApplicationTopicRecordsSent>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_topic_records_sent", ApplicationTopicRecordsSent())
+    }
 
     private val processor: OfflineProcessor
     private val creationTimeStamp: Long = SystemClock.elapsedRealtime()
     private val sntpClient: SntpClient = SntpClient()
     private val prefs: SharedPreferences = service.getSharedPreferences(ApplicationStatusManager::class.java.name, Context.MODE_PRIVATE)
     private var tzProcessor: OfflineProcessor? = null
+    private var verificationProcessor: OfflineProcessor? = null
     private val tzIntervalMutex: Mutex = Mutex()
+    private val verificationIntervalMutex: Mutex = Mutex()
 
     private val applicationStatusExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
+    private val radarApplicationDb: RadarApplicationDatabase = RadarApplicationDatabase.getInstance(service)
+    private val appRepository = AppRepository(radarApplicationDb)
+    private val sourceStatusDao = appRepository.sourceStatusDao
+    private val networkStatusDao = appRepository.networkStatusDao
+
+    private val networkStatusReceiver: NetworkConnectedReceiver = NetworkConnectedReceiver(service)
 
     @get:Synchronized
     @set:Synchronized
@@ -100,6 +129,8 @@ class ApplicationStatusManager(
             field = value?.takeTrimmedIfNotEmpty()
         }
 
+    var metricsBatchSize: Long = 0
+
     private var previousInetAddress: InetAddress? = null
 
     private lateinit var tzOffsetCache: ChangeRunner<Int>
@@ -107,6 +138,11 @@ class ApplicationStatusManager(
     private var cachedRecordTrackJob: Job? = null
     private var serverRecordsSentJob: Job? = null
     private var serverStatusJob: Job? = null
+    private var sourceStatusJob: Job? = null
+    private var networkReceiverJob: Job? = null
+    private var recordsSentPerTopicJob: Job? = null
+
+    private var networkMonitorJob: Job? = null
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
@@ -117,6 +153,7 @@ class ApplicationStatusManager(
                 ::processRecordsSent,
                 ::processReferenceTime,
                 ::processDeviceInfo,
+                ::processRecordCountsPerTopic
             )
             requestCode = APPLICATION_PROCESSOR_REQUEST_CODE
             requestName = APPLICATION_PROCESSOR_REQUEST_NAME
@@ -162,9 +199,13 @@ class ApplicationStatusManager(
             this.tzOffsetCache = ChangeRunner(this.prefs.getInt("timeZoneOffset", -1))
         }
         tzProcessor?.start()
+        verificationProcessor?.start()
+
+        networkMonitorJob = service.lifecycleScope.launch(Dispatchers.Default) {
+            networkStatusReceiver.monitor()
+        }
 
         logger.info("Starting ApplicationStatusManager")
-            with(applicationStatusExecutor) {
                 service.dataHandler?.let { handler ->
                     cachedRecordTrackJob = service.lifecycleScope.launch(Dispatchers.Default) {
                         handler.numberOfRecords
@@ -189,8 +230,85 @@ class ApplicationStatusManager(
                             logger.trace("Updated Server Status to {}", it)
                         }
                     }
+
+                    sourceStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                        val serviceInstance = (service.application as AbstractRadarApplication).radarServiceImpl
+
+                        serviceInstance.sourceStatus
+                            .collectLatest { trace: SourceStatusTrace ->
+                                val pluginName = trace.plugin
+                                 pluginName ?: return@collectLatest
+
+                                val bufferCount = state.sourceStatusBufferCount.get()
+
+                                if (bufferCount == 0) {
+                                    launch(Dispatchers.Default) {
+                                        state.clearSourceStatuses()
+                                    }
+                                }
+                                if (bufferCount > metricsBatchSize) {
+                                    launch(Dispatchers.IO) {
+                                        insertSourceStatusBatchToDb()
+                                    }
+                                }
+
+                                state.addSourceStatus(
+                                    SourceStatusLog(
+                                        time = currentTime.toLong(),
+                                        plugin = pluginName,
+                                        sourceStatus = trace.status
+                                    )
+                                )
+
+                                state.sourceStatusBufferCount.incrementAndGet()
+                            }
+                    }
+
+                    networkReceiverJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                        networkStatusReceiver.state!!.collect { status: NetworkConnectedReceiver.NetworkState ->
+                            val networkStatusBufferCount = state.networkStatusBufferCount.get()
+
+                            if (networkStatusBufferCount == 0) {
+                                launch(Dispatchers.Default) {
+                                    state.clearNetworkStatuses()
+                                }
+                            }
+                            if (networkStatusBufferCount > metricsBatchSize) {
+                                launch(Dispatchers.IO) {
+                                    insertNetworkStatusBatchToDb()
+                                }
+                            }
+
+                            val connectionStatus: ConnectionStatus = when {
+                                status is NetworkConnectedReceiver.NetworkState.Disconnected -> ConnectionStatus.DISCONNECTED
+                                status is NetworkConnectedReceiver.NetworkState.Connected && status.hasConnection(
+                                    true
+                                ) -> ConnectionStatus.CONNECTED_WIFI
+
+                                else -> ConnectionStatus.CONNECTED_CELLULAR
+                            }
+
+                            state.addNetworkStatus(NetworkStatusLog(
+                                time = currentTime.toLong(),
+                                connectionStatus = connectionStatus
+                            ))
+
+                            state.networkStatusBufferCount.incrementAndGet()
+                        }
+                    }
+
+                    recordsSentPerTopicJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                        handler.recordsSent
+                            .collect { records: TopicSendReceipt ->
+                                val topic = records.topic
+                                val noOfRecords = records.numberOfRecords.coerceAtLeast(0)
+
+                                state.recordsSentPerTopic.compute(topic) { _, existingRecords ->
+                                    (existingRecords ?: 0) + noOfRecords
+                                }
+                            }
+                    }
                 }
-            }
 
         status = SourceStatusListener.Status.CONNECTED
     }
@@ -266,6 +384,20 @@ class ApplicationStatusManager(
         }
     }
 
+    private suspend fun insertSourceStatusBatchToDb() {
+        sourceStatusDao.addAll(state.getSourceStatuses())
+        withContext(Dispatchers.Default) {
+            state.sourceStatusBufferCount.set(0)
+        }
+    }
+
+    private suspend fun insertNetworkStatusBatchToDb() {
+        networkStatusDao.addAll(state.getNetworkStatus())
+        withContext(Dispatchers.Default) {
+            state.networkStatusBufferCount.set(0)
+        }
+    }
+
     private suspend fun processServerStatus() {
         val time = currentTime
 
@@ -292,6 +424,17 @@ class ApplicationStatusManager(
         return previousInetAddress?.hostAddress
     }
 
+    private suspend fun processRecordCountsPerTopic() {
+        state.recordsSentPerTopic.forEach {
+            send(recordCountsPerTopic.await(), ApplicationTopicRecordsSent(currentTime, it.key, it.value))
+        }
+        state.recordsSentPerTopic.clear()
+    }
+
+    suspend fun processVerification() {
+        val networkStatusCount = networkStatusDao.deleteNetworkLogById()
+    }
+
     private suspend fun processUptime() {
         val uptime = (SystemClock.elapsedRealtime() - creationTimeStamp) / 1000.0
         send(uptimeTopic.await(), ApplicationUptime(currentTime, uptime))
@@ -314,6 +457,10 @@ class ApplicationStatusManager(
     override fun onClose() {
         applicationStatusExecutor.stop {
             this.processor.stop()
+            networkMonitorJob?.also {
+                it.cancel()
+                networkMonitorJob = null
+            }
             cachedRecordTrackJob?.also {
                 it.cancel()
                 cachedRecordTrackJob = null
@@ -326,7 +473,20 @@ class ApplicationStatusManager(
                 it.cancel()
                 serverStatusJob = null
             }
+            sourceStatusJob?.also {
+                it.cancel()
+                sourceStatusJob = null
+            }
+            recordsSentPerTopicJob?.also {
+                it.cancel()
+                recordsSentPerTopicJob = null
+            }
+            networkReceiverJob?.also {
+                it.cancel()
+                networkReceiverJob = null
+            }
             tzProcessor?.stop()
+            verificationProcessor?.stop()
         }
     }
 
@@ -384,6 +544,39 @@ class ApplicationStatusManager(
         }
     }
 
+    fun setVerificationUpdateRate(verificationUpdateRate: Long, unit: TimeUnit) {
+        service.lifecycleScope.launch(Dispatchers.Default) {
+            verificationIntervalMutex.withLock {
+                if (verificationUpdateRate > 0) {
+                    var processor = this@ApplicationStatusManager.verificationProcessor
+                    if (processor == null) {
+                        processor = OfflineProcessor(service) {
+                            process = listOf { this@ApplicationStatusManager.processVerification() }
+                            requestCode = APPLICATION_VERIFICATION_PROCESSOR_REQUEST_CODE
+                            requestName = APPLICATION_VERIFICATION_PROCESSOR_REQUEST_NAME
+                            interval(verificationUpdateRate, unit)
+                            wake = false
+                        }
+                        this@ApplicationStatusManager.verificationProcessor = processor
+
+                        if (this@ApplicationStatusManager.state.status == SourceStatusListener.Status.CONNECTED) {
+                            processor.start()
+                        }
+                    } else {
+                        processor.interval(verificationUpdateRate, unit)
+                    }
+                } else { // disable timezone processor
+                    this@ApplicationStatusManager.verificationProcessor?.let {
+                        service.lifecycleScope.launch(Dispatchers.Default) {
+                            it.stop()
+                        }
+                        this@ApplicationStatusManager.verificationProcessor = null
+                    }
+                }
+            }
+        }
+    }
+
     fun setApplicationStatusUpdateRate(period: Long, unit: TimeUnit) {
         processor.interval(period, unit)
     }
@@ -402,8 +595,10 @@ class ApplicationStatusManager(
         private const val NUMBER_UNKNOWN = -1L
         private const val APPLICATION_PROCESSOR_REQUEST_CODE = 72553575
         private const val APPLICATION_TZ_PROCESSOR_REQUEST_CODE = 72553576
+        private const val APPLICATION_VERIFICATION_PROCESSOR_REQUEST_CODE = 72553577
         private const val APPLICATION_PROCESSOR_REQUEST_NAME = "org.radarbase.monitor.application.ApplicationStatusManager"
         private const val APPLICATION_TZ_PROCESSOR_REQUEST_NAME = "$APPLICATION_PROCESSOR_REQUEST_NAME.timeZone"
+        private const val APPLICATION_VERIFICATION_PROCESSOR_REQUEST_NAME = "$APPLICATION_PROCESSOR_REQUEST_NAME.verification"
 
         private fun Long.toIntCapped(): Int = if (this <= Int.MAX_VALUE) toInt() else Int.MAX_VALUE
 

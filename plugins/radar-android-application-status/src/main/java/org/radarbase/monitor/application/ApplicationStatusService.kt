@@ -32,15 +32,25 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
         manager as ApplicationStatusManager
         manager.setApplicationStatusUpdateRate(config.getLong(UPDATE_RATE, UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
         manager.setTzUpdateRate(config.getLong(TZ_UPDATE_RATE, TZ_UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
+        manager.setVerificationUpdateRate(config.getLong(VERIFICATION_UPDATE_RATE, VERIFICATION_UPDATE_RATE_DEFAULT), TimeUnit.SECONDS)
         manager.ntpServer = config.optString(NTP_SERVER_CONFIG)
         manager.isProcessingIp = config.getBoolean(SEND_IP, false)
+        manager.metricsBatchSize = config.getLong(APPLICATION_METRICS_BATCH_SIZE, APPLICATION_METRICS_BATCH_SIZE_DEFAULT)
     }
 
     companion object {
         private const val UPDATE_RATE = "application_status_update_rate"
         private const val TZ_UPDATE_RATE = "application_time_zone_update_rate"
+        private const val VERIFICATION_UPDATE_RATE = "application_time_zone_update_rate"
+        private const val APPLICATION_METRICS_BATCH_SIZE = "application_metrics_buffer_size"
+        private const val APPLICATION_METRICS_RETENTION_TIME_VALUE = "application_metrics_retention_time_value"
+        private const val APPLICATION_METRICS_RETENTION_TIME_UNIT = "application_metrics_retention_time_unit"
+        private const val APPLICATION_METRICS_BATCH_SIZE_DEFAULT = 100L
+        private const val APPLICATION_METRICS_RETENTION_TIME_VALUE_DEFAULT = 7 * 86400
+        private const val APPLICATION_METRICS_RETENTION_TIME_UNIT_DEFAULT = "day"
         private const val SEND_IP = "application_send_ip"
         internal const val UPDATE_RATE_DEFAULT = 300L // seconds == 5 minutes
+        internal const val VERIFICATION_UPDATE_RATE_DEFAULT = 300L // seconds == 5 minutes
         internal const val TZ_UPDATE_RATE_DEFAULT = 86400L // seconds == 1 day
         private const val NTP_SERVER_CONFIG = "ntp_server"
     }
