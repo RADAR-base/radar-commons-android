@@ -43,7 +43,7 @@ class SourceServiceConnection<S : BaseSourceState>(
 
         radarService.run {
             serviceJob = lifecycleScope.launch {
-                sourceStatus
+                super.sourceStatus
                     ?.collect {
                         logger.info("Source status changed of source: $sourceName with service class: {}", serviceClassName)
                         radarService.sourceStatusUpdated(this@SourceServiceConnection, it)

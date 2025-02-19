@@ -59,7 +59,7 @@ abstract class NetworkStatusDao : BaseDao<NetworkStatusLog> {
      * @return a [PagingSource] that loads pages of [SourceStatusLog] items.
      */
     @Query("SELECT * FROM network_status_log ORDER BY time ASC")
-    abstract fun pagingSource(): PagingSource<Long, NetworkStatusLog>
+    abstract fun pagingSource(): PagingSource<Int, NetworkStatusLog>
 
     /**
      * Retrieves the total number of status logs present in the table.

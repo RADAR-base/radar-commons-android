@@ -75,7 +75,7 @@ abstract class SourceStatusDao : BaseDao<SourceStatusLog> {
      * @return a [PagingSource] that loads pages of [SourceStatusLog] items.
      */
     @Query("SELECT * FROM source_status_log WHERE plugin = :pluginName ORDER BY time ASC")
-    abstract fun pagingSourceByPluginName(pluginName: String): PagingSource<Long, SourceStatusLog>
+    abstract fun pagingSourceByPluginName(pluginName: String): PagingSource<Int, SourceStatusLog>
 
     /**
      * Retrieves the total number of source status logs.

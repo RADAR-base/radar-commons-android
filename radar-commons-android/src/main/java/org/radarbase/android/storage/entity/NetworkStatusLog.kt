@@ -10,7 +10,7 @@ import androidx.room.PrimaryKey
     indices = [Index(value = ["time"])]
 )
 data class NetworkStatusLog(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val time: Long,
     @ColumnInfo("connection_state") val connectionStatus: ConnectionStatus
 )
