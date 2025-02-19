@@ -73,7 +73,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 
 class ApplicationStatusManager(
     service: ApplicationStatusService
-) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
+) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service), ApplicationState.UserInterfaceManager {
     private val serverTopic: Deferred<DataCache<ObservationKey, ApplicationServerStatus>> = service.lifecycleScope.async(Dispatchers.Default) {
             createCache("application_server_status", ApplicationServerStatus())
         }
@@ -133,6 +133,11 @@ class ApplicationStatusManager(
     var metricsBatchSize: Long = 0
     var metricsRetentionTime: Long = 0
     var metricsRetentionSize: Long = 0
+    var uiStatusUpdateRate: Long
+        get() = state.uiStatusUpdateRate
+        set(value) {
+            state.uiStatusUpdateRate = value
+        }
 
     private var previousInetAddress: InetAddress? = null
 
@@ -209,129 +214,144 @@ class ApplicationStatusManager(
         }
 
         logger.info("Starting ApplicationStatusManager")
-                service.dataHandler?.let { handler ->
-                    cachedRecordTrackJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                        handler.numberOfRecords
-                            .collect { records: TableDataHandler.CacheSize ->
-                                val topic = records.topicName
-                                val noOfRecords = records.numberOfRecords
-                                logger.trace("Topic {} has {} records in cache", topic, noOfRecords)
-                                state.cachedRecords[topic] = noOfRecords.coerceAtLeast(0)
-                            }
-                        }
+        state.uiManager = this@ApplicationStatusManager
 
-                    serverRecordsSentJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                        handler.recordsSent.collect { sent: TopicSendReceipt ->
-                            logger.trace("Topic {} sent {} records", sent.topic, sent.numberOfRecords)
-                            state.addRecordsSent(sent.numberOfRecords)
-                        }
+        service.dataHandler?.let { handler ->
+            cachedRecordTrackJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                handler.numberOfRecords
+                    .collect { records: TableDataHandler.CacheSize ->
+                        val topic = records.topicName
+                        val noOfRecords = records.numberOfRecords
+                        logger.trace("Topic {} has {} records in cache", topic, noOfRecords)
+                        state.cachedRecords[topic] = noOfRecords.coerceAtLeast(0)
                     }
+            }
 
-                    serverStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                        handler.serverStatus.collect {
-                            state.serverStatus = it
-                            logger.trace("Updated Server Status to {}", it)
-                        }
-                    }
-
-                    sourceStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                        val serviceInstance = (service.application as AbstractRadarApplication).radarServiceImpl
-                        var shouldClearCountOnNextBatchUpdate = false
-
-                        serviceInstance.sourceStatus
-                            .collectLatest { trace: SourceStatusTrace ->
-                                val pluginName = trace.plugin
-                                 pluginName ?: return@collectLatest
-
-                                val bufferCount = state.sourceStatusBufferCount.get()
-
-                                if (bufferCount == 0) {
-                                    launch(Dispatchers.Default) {
-                                        state.clearSourceStatuses()
-                                    }
-                                }
-                                if (bufferCount > metricsBatchSize) {
-                                    launch(Dispatchers.IO) {
-                                        insertSourceStatusBatchToDb(shouldClearCountOnNextBatchUpdate)
-                                        shouldClearCountOnNextBatchUpdate = false
-                                    }
-                                }
-
-                                state.metricsCountPerTopic.compute(APPLICATION_SOURCE_STATUS_TOPIC) { _, count ->
-                                    (count ?: 0) + 1
-                                }
-                                val totalSourceStatusMetrics = state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC] ?: 0
-                                if (!shouldClearCountOnNextBatchUpdate && totalSourceStatusMetrics > metricsRetentionSize) {
-                                    shouldClearCountOnNextBatchUpdate = true
-                                }
-
-                                state.addSourceStatus(
-                                    SourceStatusLog(
-                                        time = currentTime.toLong(),
-                                        plugin = pluginName,
-                                        sourceStatus = trace.status
-                                    )
-                                )
-
-                                state.sourceStatusBufferCount.incrementAndGet()
-                            }
-                    }
-
-                    networkReceiverJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                        networkStatusReceiver.state!!.collect { status: NetworkConnectedReceiver.NetworkState ->
-                            val networkStatusBufferCount = state.networkStatusBufferCount.get()
-                            var shouldClearCountOnNextBatchUpdate = false
-
-                            if (networkStatusBufferCount == 0) {
-                                launch(Dispatchers.Default) {
-                                    state.clearNetworkStatuses()
-                                }
-                            }
-                            if (networkStatusBufferCount > metricsBatchSize) {
-                                launch(Dispatchers.IO) {
-                                    insertNetworkStatusBatchToDb(shouldClearCountOnNextBatchUpdate)
-                                    shouldClearCountOnNextBatchUpdate = false
-                                }
-                            }
-
-                            state.metricsCountPerTopic.compute(APPLICATION_NETWORK_STATUS_TOPIC) { _, count ->
-                                (count ?: 0) + 1
-                            }
-                            val totalSourceStatusMetrics = state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] ?: 0
-                            if (!shouldClearCountOnNextBatchUpdate && totalSourceStatusMetrics > metricsRetentionSize) {
-                                shouldClearCountOnNextBatchUpdate = true
-                            }
-
-                            val connectionStatus: ConnectionStatus = when {
-                                status is NetworkConnectedReceiver.NetworkState.Disconnected -> ConnectionStatus.DISCONNECTED
-                                status is NetworkConnectedReceiver.NetworkState.Connected && status.hasConnection(
-                                    true
-                                ) -> ConnectionStatus.CONNECTED_WIFI
-
-                                else -> ConnectionStatus.CONNECTED_CELLULAR
-                            }
-
-                            state.addNetworkStatus(NetworkStatusLog(
-                                time = currentTime.toLong(),
-                                connectionStatus = connectionStatus
-                            ))
-
-                            state.networkStatusBufferCount.incrementAndGet()
-                        }
-                    }
-
-                    recordsSentPerTopicJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                        handler.recordsSent
-                            .collect { records: TopicSendReceipt ->
-                                val topic = records.topic
-                                val noOfRecords = records.numberOfRecords.coerceAtLeast(0)
-
-                                state.recordsSentPerTopic.compute(topic) { _, existingRecords ->
-                                    (existingRecords ?: 0) + noOfRecords
-                                }
-                            }
-                    }
+            serverRecordsSentJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                handler.recordsSent.collect { sent: TopicSendReceipt ->
+                    logger.trace("Topic {} sent {} records", sent.topic, sent.numberOfRecords)
+                    state.addRecordsSent(sent.numberOfRecords)
                 }
+            }
+
+            serverStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                handler.serverStatus.collect {
+                    state.serverStatus = it
+                    logger.trace("Updated Server Status to {}", it)
+                }
+            }
+
+            sourceStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                val serviceInstance =
+                    (service.application as AbstractRadarApplication).radarServiceImpl
+                var shouldClearCountOnNextBatchUpdate = false
+
+                serviceInstance.sourceStatus
+                    .collectLatest { trace: SourceStatusTrace ->
+                        logger.debug("ApplicationStatusDebug: Received source status: {} for plugin {}", trace.status, trace.plugin)
+
+                        val pluginName = trace.plugin
+                        pluginName ?: return@collectLatest
+
+                        val bufferCount = state.sourceStatusBufferCount.get()
+                        logger.debug("ApplicationStatusDebug: Source status buffer count: {}", bufferCount)
+
+                        if (bufferCount == 0) {
+                            launch(Dispatchers.Default) {
+                                state.clearSourceStatuses()
+                            }
+                        }
+                        if (bufferCount > metricsBatchSize) {
+                            launch(Dispatchers.IO) {
+                                insertSourceStatusBatchToDb(shouldClearCountOnNextBatchUpdate)
+                                shouldClearCountOnNextBatchUpdate = false
+                            }
+                        }
+
+                        state.metricsCountPerTopic.compute(APPLICATION_SOURCE_STATUS_TOPIC) { _, count ->
+                            (count ?: 0) + 1
+                        }
+                        val totalSourceStatusMetrics =
+                            state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC] ?: 0
+                        if (!shouldClearCountOnNextBatchUpdate && totalSourceStatusMetrics > metricsRetentionSize) {
+                            shouldClearCountOnNextBatchUpdate = true
+                        }
+
+                        state.addSourceStatus(
+                            SourceStatusLog(
+                                time = currentTime.toLong(),
+                                plugin = pluginName,
+                                sourceStatus = trace.status
+                            )
+                        )
+
+                        state.sourceStatusBufferCount.incrementAndGet()
+                    }
+            }
+
+            networkReceiverJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                networkStatusReceiver.state!!.collect { status: NetworkConnectedReceiver.NetworkState ->
+                    logger.debug("ApplicationStatusDebug: Received network state: {}", status)
+
+                    val networkStatusBufferCount = state.networkStatusBufferCount.get()
+                    var shouldClearCountOnNextBatchUpdate = false
+
+                    logger.debug("ApplicationStatusDebug: Network status buffer count: {}", networkStatusBufferCount)
+
+                    if (networkStatusBufferCount == 0) {
+                        launch(Dispatchers.Default) {
+                            state.clearNetworkStatuses()
+                        }
+                    }
+                    if (networkStatusBufferCount > metricsBatchSize) {
+                        launch(Dispatchers.IO) {
+                            insertNetworkStatusBatchToDb(shouldClearCountOnNextBatchUpdate)
+                            shouldClearCountOnNextBatchUpdate = false
+                        }
+                    }
+
+                    state.metricsCountPerTopic.compute(APPLICATION_NETWORK_STATUS_TOPIC) { _, count ->
+                        (count ?: 0) + 1
+                    }
+                    val totalSourceStatusMetrics =
+                        state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] ?: 0
+                    if (!shouldClearCountOnNextBatchUpdate && totalSourceStatusMetrics > metricsRetentionSize) {
+                        shouldClearCountOnNextBatchUpdate = true
+                    }
+
+                    val connectionStatus: ConnectionStatus = when {
+                        status is NetworkConnectedReceiver.NetworkState.Disconnected -> ConnectionStatus.DISCONNECTED
+                        status is NetworkConnectedReceiver.NetworkState.Connected && status.hasConnection(
+                            true
+                        ) -> ConnectionStatus.CONNECTED_WIFI
+
+                        else -> ConnectionStatus.CONNECTED_CELLULAR
+                    }
+
+                    state.addNetworkStatus(
+                        NetworkStatusLog(
+                            time = currentTime.toLong(),
+                            connectionStatus = connectionStatus
+                        )
+                    )
+
+                    state.networkStatusBufferCount.incrementAndGet()
+                }
+            }
+
+            recordsSentPerTopicJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                handler.recordsSent
+                    .collect { records: TopicSendReceipt ->
+                        logger.debug("ApplicationStatusDebug: {} Records sent for topic: {}", records.numberOfRecords, records.topic)
+                        val topic = records.topic
+                        val noOfRecords = records.numberOfRecords.coerceAtLeast(0)
+
+                        state.recordsSentPerTopic.compute(topic) { _, existingRecords ->
+                            (existingRecords ?: 0) + noOfRecords
+                        }
+                    }
+            }
+        }
 
         status = SourceStatusListener.Status.CONNECTED
     }
@@ -408,6 +428,7 @@ class ApplicationStatusManager(
     }
 
     private suspend fun insertSourceStatusBatchToDb(manageSpace: Boolean) {
+        logger.info("ApplicationStatusDebug: Adding source status batch to database")
         sourceStatusDao.addAll(state.getSourceStatuses())
         withContext(Dispatchers.Default) {
             state.sourceStatusBufferCount.set(0)
@@ -422,12 +443,14 @@ class ApplicationStatusManager(
     }
 
     private suspend fun insertNetworkStatusBatchToDb(manageSpace: Boolean) {
+        logger.info("ApplicationStatusDebug: Adding network status batch to database")
         networkStatusDao.addAll(state.getNetworkStatus())
         withContext(Dispatchers.Default) {
             state.networkStatusBufferCount.set(0)
         }
 
         if (manageSpace) {
+            logger.debug("ApplicationStatusDebug: Managing space")
             val deletedCount = networkStatusDao.deleteNetworkLogsCountGreaterThan(metricsRetentionSize)
             state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] ?: return
             state.metricsCountPerTopic.compute(APPLICATION_NETWORK_STATUS_TOPIC) { _, count ->
@@ -436,7 +459,8 @@ class ApplicationStatusManager(
         }
     }
 
-    private fun sendSourceStatuses() {
+    override fun sendSourceStatus() {
+        logger.debug("ApplicationStatusDebug: Sending Source Status")
         service.lifecycleScope.launch {
             var maxTime = 0L
 
@@ -454,12 +478,21 @@ class ApplicationStatusManager(
             }
 
             launch(Dispatchers.IO) {
-                sourceStatusDao.deleteSourceLogsOlderThan(maxTime)
+                val statusDeletedCount = sourceStatusDao.deleteSourceLogsOlderThan(maxTime)
+
+                val sourceStatusCount = state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC]
+
+                if (sourceStatusCount != null) {
+                    state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC] =
+                        sourceStatusCount - statusDeletedCount
+                    logger.debug("ApplicationStatusDebug: All source logs sent")
+                }
             }
         }
     }
 
-    private fun sendNetworkStatuses() {
+    override fun sendNetworkStatus() {
+        logger.debug("ApplicationStatusDebug: Sending Network Status")
         service.lifecycleScope.launch {
             var latestTime = 0L
 
@@ -476,7 +509,14 @@ class ApplicationStatusManager(
             }
 
             launch(Dispatchers.IO) {
-                networkStatusDao.deleteNetworkLogsOlderThan(latestTime)
+                val noOfLogsDeleted = networkStatusDao.deleteNetworkLogsOlderThan(latestTime)
+                val count = state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC]
+
+                if (count != null) {
+                    state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] =
+                        count - noOfLogsDeleted
+                    logger.debug("ApplicationStatusDebug: All network logs sent")
+                }
             }
         }
     }

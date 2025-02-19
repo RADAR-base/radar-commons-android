@@ -29,6 +29,8 @@ class ApplicationState : BaseSourceState() {
 
     private val sourceStatusMutex: Mutex = Mutex()
     private val networkStatusMutex: Mutex = Mutex()
+    var uiManager: UserInterfaceManager? = null
+    var uiStatusUpdateRate: Long = 60
 
     val sourceStatusBufferCount: AtomicInteger = AtomicInteger(0)
     val networkStatusBufferCount: AtomicInteger = AtomicInteger(0)
@@ -80,5 +82,10 @@ class ApplicationState : BaseSourceState() {
     @Synchronized
     fun addRecordsSent(nRecords: Long) {
         recordsSent += nRecords
+    }
+
+    interface UserInterfaceManager {
+        fun sendSourceStatus()
+        fun sendNetworkStatus()
     }
 }
