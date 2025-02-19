@@ -438,26 +438,45 @@ class ApplicationStatusManager(
 
     private fun sendSourceStatuses() {
         service.lifecycleScope.launch {
+            var maxTime = 0L
+
             val sourceStatusLogs = withContext(Dispatchers.IO) {
                 sourceStatusDao.loadAllStatuses()
             }
 
             sourceStatusLogs.forEach { status ->
+                if (maxTime < status.time) {
+                    maxTime = status.time
+                }
+
                 val state: SourceStatus = status.sourceStatus.toPluginState()
                 send(pluginStatusTopic.await(), ApplicationPluginStatus(status.time.toDouble(), status.plugin, state))
+            }
+
+            launch(Dispatchers.IO) {
+                sourceStatusDao.deleteSourceLogsOlderThan(maxTime)
             }
         }
     }
 
     private fun sendNetworkStatuses() {
         service.lifecycleScope.launch {
+            var latestTime = 0L
+
             val networkStatusLogs = withContext(Dispatchers.IO) {
                 networkStatusDao.loadAllNetworkLogs()
             }
 
             networkStatusLogs.forEach { status ->
+                if (latestTime < status.time) {
+                    latestTime = status.time
+                }
                 val state = status.connectionStatus.toConnectionState()
                 send(networkStatusTopic.await(), ApplicationNetworkStatus(status.time.toDouble(), state))
+            }
+
+            launch(Dispatchers.IO) {
+                networkStatusDao.deleteNetworkLogsOlderThan(latestTime)
             }
         }
     }
