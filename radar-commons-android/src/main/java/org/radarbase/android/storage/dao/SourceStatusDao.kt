@@ -78,9 +78,9 @@ abstract class SourceStatusDao : BaseDao<SourceStatusLog> {
     abstract fun pagingSourceByPluginName(pluginName: String): PagingSource<Long, SourceStatusLog>
 
     /**
-     * Retrieves the total number of status logs present in the [source_status_log] table.
+     * Retrieves the total number of source status logs.
      *
-     * @return the count of status logs.
+     * @return the count of source status.
      */
     @Query("SELECT COUNT(*) FROM source_status_log")
     abstract suspend fun getStatusesCount(): Int
@@ -112,6 +112,8 @@ abstract class SourceStatusDao : BaseDao<SourceStatusLog> {
      * will be deleted.
      *
      * @param count the maximum number of recent records to retain.
+     * @return the number of rows that were deleted.
+     *
      */
     @Query(
         """
@@ -123,5 +125,21 @@ abstract class SourceStatusDao : BaseDao<SourceStatusLog> {
     )
 """
     )
-    abstract suspend fun deleteStatusesCountGreaterThan(count: Long)
+    abstract suspend fun deleteStatusesCountGreaterThan(count: Long): Int
+
+    /**
+     * Deletes source status logs that are older than the specified [time] threshold.
+     *
+     * Useful for removing records that are older than a certain retention period.
+     *
+     * @param time the timestamp threshold. All network status logs with a `time` less than this value will be deleted.
+     * @return the number of rows that were deleted.
+     */
+    @Query(
+        """
+    DELETE FROM source_status_log WHERE time < :time
+    """
+    )
+    abstract suspend fun deleteSourceLogsOlderThan(time: Long): Int
+
 }

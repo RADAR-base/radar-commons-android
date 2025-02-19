@@ -62,7 +62,7 @@ abstract class NetworkStatusDao : BaseDao<NetworkStatusLog> {
     abstract fun pagingSource(): PagingSource<Long, NetworkStatusLog>
 
     /**
-     * Retrieves the total number of status logs present in the [source_status_log] table.
+     * Retrieves the total number of status logs present in the table.
      *
      * @return the count of status logs.
      */
@@ -95,6 +95,8 @@ abstract class NetworkStatusDao : BaseDao<NetworkStatusLog> {
      * For example, if the table has 100 records and [count] is set to 80, then the 20 oldest records will be deleted.
      *
      * @param count the maximum number of recent records to retain.
+     * @return the number of rows that were deleted.
+     *
      */
     @Query(
         """
@@ -106,5 +108,20 @@ abstract class NetworkStatusDao : BaseDao<NetworkStatusLog> {
         )
         """
     )
-    abstract suspend fun deleteNetworkLogsCountGreaterThan(count: Long)
+    abstract suspend fun deleteNetworkLogsCountGreaterThan(count: Long): Int
+
+    /**
+     * Deletes network status log records that are older than the specified [time] threshold.
+     *
+     * Useful for removing logs that are older than a certain retention period.
+     *
+     * @param time the timestamp threshold. All network status logs with a `time` less than this value will be deleted.
+     * @return the number of rows that were deleted.
+     */
+    @Query(
+        """
+    DELETE FROM network_status_log WHERE time < :time
+    """
+    )
+    abstract suspend fun deleteNetworkLogsOlderThan(time: Long): Int
 }
