@@ -16,6 +16,7 @@
 
 apply from: "$rootDir/gradle/android.gradle"
 apply plugin: 'kotlinx-serialization'
+apply plugin: 'androidx.room'
 
 android {
     namespace "org.radarbase.android"
@@ -25,6 +26,9 @@ android {
     buildFeatures {
         viewBinding true
         buildConfig true
+    }
+    room {
+        schemaDirectory "$projectDir/src/main/res/schemas"
     }
 }
 
@@ -63,10 +67,21 @@ dependencies {
     implementation "com.google.firebase:firebase-crashlytics"
     implementation "com.gitlab.mvysny.slf4j:slf4j-handroid:$slf4j_handroid_version"
 
+    implementation "androidx.room:room-runtime:$room_version"
+    kapt "androidx.room:room-compiler:$room_version" // Required for annotation processing
+    implementation "androidx.room:room-ktx:$room_version" // For Kotlin Coroutines support
+
+    implementation "androidx.paging:paging-runtime:$paging_version"
+    implementation "androidx.room:room-paging:$room_version"
+
     implementation("io.ktor:ktor-client-content-negotiation")
     implementation("io.ktor:ktor-serialization-kotlinx-json")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
+}
+
+afterEvaluate {
+    tasks["dokkaJavadoc"].dependsOn(tasks.getByName("kaptReleaseKotlin"), tasks.getByName("kaptDebugKotlin"))
 }
 
 apply from: "$rootDir/gradle/test.gradle"

@@ -27,6 +27,7 @@ buildscript {
         classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:$dokka_android_gradle_plugin_version"
         classpath("org.jetbrains.dokka:dokka-gradle-plugin:$dokka_version")
         classpath "org.jetbrains.kotlin:kotlin-serialization:$kotlin_version"
+        classpath "androidx.room:room-gradle-plugin:$room_version"
     }
 }
 
@@ -59,6 +60,7 @@ subprojects {
     apply plugin: 'com.android.library'
     apply plugin: 'kotlin-android'
     apply plugin: 'idea'
+    apply plugin: 'kotlin-kapt'
 
 //---------------------------------------------------------------------------//
 // Sources and classpath configurations                                      //
