@@ -35,7 +35,7 @@ interface BaseDao<T> {
      * @param rows a variable number of entities to be inserted.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun addAll(vararg rows: T)
+    fun addAll(rows: List<T>)
 
     /**
      * Updates the given [data] in the database.

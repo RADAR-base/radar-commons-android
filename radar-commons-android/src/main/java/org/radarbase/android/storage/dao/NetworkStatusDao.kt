@@ -62,6 +62,14 @@ abstract class NetworkStatusDao : BaseDao<NetworkStatusLog> {
     abstract fun pagingSource(): PagingSource<Long, NetworkStatusLog>
 
     /**
+     * Retrieves the total number of status logs present in the [source_status_log] table.
+     *
+     * @return the count of status logs.
+     */
+    @Query("SELECT COUNT(*) FROM source_status_log")
+    abstract suspend fun getStatusesCount(): Int
+
+    /**
      * Deletes network status log records with a [NetworkStatusLog.time] value between the specified [from] and [to] timestamps.
      *
      * @param from the start timestamp (inclusive) for deletion.
