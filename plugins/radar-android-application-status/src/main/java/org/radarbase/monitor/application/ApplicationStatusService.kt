@@ -44,11 +44,11 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
     companion object {
         private const val UPDATE_RATE = "application_status_update_rate"
         private const val TZ_UPDATE_RATE = "application_time_zone_update_rate"
-        private const val VERIFICATION_UPDATE_RATE = "application_time_zone_update_rate"
+        private const val VERIFICATION_UPDATE_RATE = "application_metrics_verification_update_rate"
         private const val APPLICATION_METRICS_BATCH_SIZE = "application_metrics_buffer_size"
-        private const val APPLICATION_METRICS_RETENTION_TIME = "application_metrics_retention_time_value"
+        private const val APPLICATION_METRICS_RETENTION_TIME = "application_metrics_retention_time"
         private const val APPLICATION_METRICS_DATA_RETENTION_COUNT = "application_metrics_data_retention_count"
-        private const val APPLICATION_METRICS_BATCH_SIZE_DEFAULT = 5L
+        private const val APPLICATION_METRICS_BATCH_SIZE_DEFAULT = 100L
         private const val APPLICATION_METRICS_RETENTION_TIME_DEFAULT = 7 * 86400L // seconds == 1 day
         private const val APPLICATION_METRICS_DATA_RETENTION_COUNT_DEFAULT = 10000L // 10,000 counts per topic
         private const val APPLICATION_PLUGIN_UI_COUNT_UPDATE_RATE = "application_plugin_ui_count_update_rate"
