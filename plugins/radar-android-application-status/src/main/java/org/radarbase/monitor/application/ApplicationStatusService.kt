@@ -36,6 +36,8 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
         manager.ntpServer = config.optString(NTP_SERVER_CONFIG)
         manager.isProcessingIp = config.getBoolean(SEND_IP, false)
         manager.metricsBatchSize = config.getLong(APPLICATION_METRICS_BATCH_SIZE, APPLICATION_METRICS_BATCH_SIZE_DEFAULT)
+        manager.metricsRetentionSize = config.getLong(APPLICATION_METRICS_DATA_RETENTION_COUNT, APPLICATION_METRICS_DATA_RETENTION_COUNT_DEFAULT)
+        manager.metricsRetentionTime = config.getLong(APPLICATION_METRICS_RETENTION_TIME, APPLICATION_METRICS_RETENTION_TIME_DEFAULT)
     }
 
     companion object {
@@ -43,11 +45,11 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
         private const val TZ_UPDATE_RATE = "application_time_zone_update_rate"
         private const val VERIFICATION_UPDATE_RATE = "application_time_zone_update_rate"
         private const val APPLICATION_METRICS_BATCH_SIZE = "application_metrics_buffer_size"
-        private const val APPLICATION_METRICS_RETENTION_TIME_VALUE = "application_metrics_retention_time_value"
-        private const val APPLICATION_METRICS_RETENTION_TIME_UNIT = "application_metrics_retention_time_unit"
+        private const val APPLICATION_METRICS_RETENTION_TIME = "application_metrics_retention_time_value"
+        private const val APPLICATION_METRICS_DATA_RETENTION_COUNT = "application_metrics_data_retention_count"
         private const val APPLICATION_METRICS_BATCH_SIZE_DEFAULT = 100L
-        private const val APPLICATION_METRICS_RETENTION_TIME_VALUE_DEFAULT = 7 * 86400
-        private const val APPLICATION_METRICS_RETENTION_TIME_UNIT_DEFAULT = "day"
+        private const val APPLICATION_METRICS_RETENTION_TIME_DEFAULT = 7 * 86400L // seconds == 1 day
+        private const val APPLICATION_METRICS_DATA_RETENTION_COUNT_DEFAULT = 10000L // 10,000 counts per topic
         private const val SEND_IP = "application_send_ip"
         internal const val UPDATE_RATE_DEFAULT = 300L // seconds == 5 minutes
         internal const val VERIFICATION_UPDATE_RATE_DEFAULT = 300L // seconds == 5 minutes

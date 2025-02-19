@@ -41,6 +41,7 @@ class ApplicationState : BaseSourceState() {
     var recordsSent = 0L
         private set
 
+    val metricsCountPerTopic: MutableMap<String, Long> = ConcurrentHashMap()
     val cachedRecords: MutableMap<String, Long> = ConcurrentHashMap()
     val recordsSentPerTopic: MutableMap<String, Long> = ConcurrentHashMap()
     private val sourceStatusBuffer: MutableList<SourceStatusLog> = mutableListOf()
