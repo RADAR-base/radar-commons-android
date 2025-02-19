@@ -49,3 +49,8 @@ interface SourceStatusListener {
      */
     fun sourceFailedToConnect(name: String)
 }
+
+data class SourceStatusTrace(
+    val plugin: String? = null,
+    val status: SourceStatusListener.Status
+)

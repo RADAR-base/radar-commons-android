@@ -147,8 +147,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private val _serverStatus: MutableStateFlow<ServerStatus> =
         MutableStateFlow(ServerStatus.DISCONNECTED)
 
+    private val _sourceStatus: MutableStateFlow<SourceStatusTrace> =
+        MutableStateFlow(SourceStatusTrace(status = SourceStatusListener.Status.DISCONNECTED))
+
     override val recordsSent: SharedFlow<TopicSendReceipt> = _recordsSent.asSharedFlow()
     override val serverStatus: StateFlow<ServerStatus> = _serverStatus
+    val sourceStatus: StateFlow<SourceStatusTrace> = _sourceStatus
 
     private var _actionBluetoothNeeded: MutableStateFlow<NeedsBluetoothState> = MutableStateFlow(BluetoothNeeded)
     val actionBluetoothNeeded: StateFlow<NeedsBluetoothState> = _actionBluetoothNeeded
@@ -502,6 +506,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     fun sourceStatusUpdated(connection: SourceServiceConnection<*>, status: SourceStatusListener.Status) {
+        _sourceStatus.value = SourceStatusTrace(connection.sourceName, status)
         logger.info("Source of {} was updated to {}", connection, status)
         if (status == SourceStatusListener.Status.CONNECTED) {
             logger.info("Device name is {} while connecting.", connection.sourceName)
