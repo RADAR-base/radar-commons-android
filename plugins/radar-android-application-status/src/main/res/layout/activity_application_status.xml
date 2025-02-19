@@ -11,9 +11,57 @@
         android:id="@+id/rvAppPlugin"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:layout_marginTop="15dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="80dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/btnSend"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/send"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="10dp"
+        android:paddingStart="3dp"
+        android:paddingEnd="3dp"
+        android:textStyle="bold"
+        android:background="?attr/colorPrimary"
+        app:layout_constraintTop_toBottomOf="@+id/rvAppPlugin"
+        tools:layout_editor_absoluteX="148dp"
+        tools:layout_editor_absoluteY="652dp" />
+
+    <TextView
+        android:id="@+id/tvNetworkStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/rvAppPlugin"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/btnSend"
+        android:text="@string/network_logs"
+        android:textStyle="bold"
+        android:background="?attr/colorPrimary"
+        tools:layout_editor_absoluteX="25dp"
+        tools:layout_editor_absoluteY="696dp" />
+
+    <TextView
+        android:id="@+id/tvPluginStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/plugin_logs"
+        tools:layout_editor_absoluteX="306dp"
+        app:layout_constraintStart_toEndOf="@+id/btnSend"
+        app:layout_constraintTop_toBottomOf="@+id/rvAppPlugin"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:background="?attr/colorPrimary"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:layout_editor_absoluteY="690dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
