@@ -14,7 +14,7 @@ import org.radarbase.android.source.SourceStatusListener
     ]
 )
 data class SourceStatusLog(
-    @PrimaryKey(autoGenerate = true) val id: Long,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val time: Long,
     val plugin: String,
     @ColumnInfo("source_status") val sourceStatus: SourceStatusListener.Status
