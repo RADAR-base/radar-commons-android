@@ -8,7 +8,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import org.radarbase.android.storage.entity.SourceStatusLog
 import org.radarbase.monitor.application.R
-import org.radarbase.monitor.application.databinding.ItemLogRowBinding
+import org.radarbase.monitor.application.databinding.ClickableStringRowBinding
 import org.radarbase.monitor.application.utils.dateTimeFromInstant
 
 class SourceStatusPagingAdapter(
@@ -18,10 +18,10 @@ class SourceStatusPagingAdapter(
     DIFF_CALLBACK
 ) {
 
-    inner class SourceStatusViewHolder(private val binding: ItemLogRowBinding) :
+    inner class SourceStatusViewHolder(private val binding: ClickableStringRowBinding) :
         RecyclerView.ViewHolder(binding.root) {
         fun bind(log: SourceStatusLog) {
-            binding.tvStatusInfo.text = context.getString(
+            binding.tvStringInfo.text = context.getString(
                 R.string.source_status_info,
                 log.sourceStatus.name,
                 dateTimeFromInstant(log.time)
@@ -39,7 +39,7 @@ class SourceStatusPagingAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SourceStatusViewHolder {
-        val binding = ItemLogRowBinding.inflate(LayoutInflater.from(context), parent, false)
+        val binding = ClickableStringRowBinding.inflate(LayoutInflater.from(context), parent, false)
         return SourceStatusViewHolder(binding)
     }
 

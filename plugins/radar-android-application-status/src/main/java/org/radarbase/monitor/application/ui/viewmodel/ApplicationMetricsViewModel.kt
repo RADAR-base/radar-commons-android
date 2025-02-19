@@ -12,6 +12,7 @@ import org.radarbase.android.storage.dao.SourceStatusDao
 import org.radarbase.android.storage.entity.NetworkStatusLog
 import org.radarbase.android.storage.entity.SourceStatusLog
 
+@Suppress("unused")
 class ApplicationMetricsViewModel(
     private val sourceStatusDao: SourceStatusDao,
     private val networkStatusDao: NetworkStatusDao
@@ -27,7 +28,7 @@ class ApplicationMetricsViewModel(
         }
     ).flow.cachedIn(viewModelScope)
 
-    suspend fun getSourceStatusForPagingData(pluginName: String): Flow<PagingData<SourceStatusLog>> {
+    fun getSourceStatusForPagingData(pluginName: String): Flow<PagingData<SourceStatusLog>> {
         return Pager (
             config = PagingConfig(
                 pageSize = 20,
@@ -49,5 +50,13 @@ class ApplicationMetricsViewModel(
 
     suspend fun loadAllNetworkLogs(): List<NetworkStatusLog> {
         return networkStatusDao.loadAllNetworkLogs()
+    }
+
+    suspend fun loadSourceStatusCount(): Int {
+        return sourceStatusDao.getStatusesCount()
+    }
+
+    suspend fun loadNetworkStatusCount(): Int {
+        return networkStatusDao.getStatusesCount()
     }
 }

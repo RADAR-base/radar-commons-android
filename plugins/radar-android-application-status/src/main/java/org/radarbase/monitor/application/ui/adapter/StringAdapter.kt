@@ -4,7 +4,7 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import org.radarbase.monitor.application.databinding.ClickableStringRowBinding
+import org.radarbase.monitor.application.databinding.ItemLogRowBinding
 
 class StringAdapter(
     private val context: Context,
@@ -12,15 +12,15 @@ class StringAdapter(
     private val itemClickAction: (String) -> Unit
 ) : RecyclerView.Adapter<StringAdapter.StringViewHolder>() {
 
-    inner class StringViewHolder(val binding: ClickableStringRowBinding) :
+    inner class StringViewHolder(val binding: ItemLogRowBinding) :
         RecyclerView.ViewHolder(binding.root) {
         fun bindView(item: String) {
-            binding.tvStringInfo.text = item
+            binding.tvStatusInfo.text = item
         }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StringViewHolder {
-        val viewBinding = ClickableStringRowBinding.inflate(
+        val viewBinding = ItemLogRowBinding.inflate(
             LayoutInflater.from(context),
             parent,
             false
@@ -32,7 +32,7 @@ class StringAdapter(
     override fun onBindViewHolder(holder: StringViewHolder, position: Int) {
         val content = contents[position]
         holder.bindView(content)
-        holder.binding.clStringItem.setOnClickListener {
+        holder.binding.btnMoreInfo.setOnClickListener {
             content.apply(itemClickAction)
         }
     }
