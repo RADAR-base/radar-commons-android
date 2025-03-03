@@ -507,7 +507,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         val pluginName = getCachedConnectionProvider(connection)?.pluginName
 
         dataHandler?.sourceStatus?.value = SourceStatusTrace(pluginName, status)
-        logger.debug("2. ApplicationStatusDebug: (Radar Service) Source status for source {} updated to {}", pluginName, status)
         logger.info("Source of {} was updated to {}", connection, status)
         if (status == SourceStatusListener.Status.CONNECTED) {
             logger.info("Device name is {} while connecting.", connection.sourceName)

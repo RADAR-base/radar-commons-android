@@ -16,8 +16,6 @@
 
 package org.radarbase.monitor.application
 
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.storage.entity.NetworkStatusLog
@@ -27,8 +25,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class ApplicationState : BaseSourceState() {
 
-    private val sourceMutex: Mutex = Mutex()
-    private val networkMutex: Mutex = Mutex()
     var uiManager: UserInterfaceManager? = null
 
     val sourceStatusBufferCount: AtomicInteger = AtomicInteger(0)
@@ -48,34 +44,28 @@ class ApplicationState : BaseSourceState() {
     private val sourceStatusBuffer: MutableList<SourceStatusLog> = mutableListOf()
     private val networkStatusBuffer: MutableList<NetworkStatusLog> = mutableListOf()
 
-    suspend fun addSourceStatus(status: SourceStatusLog) {
-        sourceMutex.withLock {
-            sourceStatusBuffer.add(status)
-        }
+    fun addSourceStatus(status: SourceStatusLog) {
+        sourceStatusBuffer.add(status)
     }
 
-    suspend fun clearSourceStatuses() {
-        sourceMutex.withLock {
-            sourceStatusBuffer.clear()
-        }
+    fun clearSourceStatuses() {
+        sourceStatusBuffer.clear()
     }
 
-    suspend fun clearNetworkStatuses() {
-        networkMutex.withLock {
-            networkStatusBuffer.clear()
-        }
+    fun clearNetworkStatuses() {
+        networkStatusBuffer.clear()
     }
 
-    suspend fun getSourceStatuses(): List<SourceStatusLog> = sourceMutex.withLock {
-        sourceStatusBuffer
+    fun getSourceStatuses(): List<SourceStatusLog> {
+        return sourceStatusBuffer
     }
-    
-    suspend fun addNetworkStatus(status: NetworkStatusLog) = networkMutex.withLock {
+
+    fun addNetworkStatus(status: NetworkStatusLog) {
         networkStatusBuffer.add(status)
     }
-    
-    suspend fun getNetworkStatus(): List<NetworkStatusLog> = networkMutex.withLock {
-        networkStatusBuffer
+
+    fun getNetworkStatuses(): List<NetworkStatusLog> {
+        return networkStatusBuffer
     }
 
     @Synchronized

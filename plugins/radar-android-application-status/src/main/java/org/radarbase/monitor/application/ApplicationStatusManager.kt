@@ -244,7 +244,7 @@ class ApplicationStatusManager(
                     .collect { trace: SourceStatusTrace ->
                         sourceStatusMutex.withLock {
                             logger.debug(
-                                "ApplicationStatusDebug: Received source status: {} for plugin {}",
+                                "Received source status: {} for plugin {}",
                                 trace.status,
                                 trace.plugin
                             )
@@ -284,7 +284,7 @@ class ApplicationStatusManager(
 
                                 state.sourceStatusBufferCount.incrementAndGet()
                             }
-                                ?: logger.debug("ApplicationStatusDebug: Plugin name is null when processing status")
+                                ?: logger.debug("Plugin name is null when processing status")
                         }
                     }
             }
@@ -295,12 +295,12 @@ class ApplicationStatusManager(
                     distinctUntilChanged().
                 collect { status: NetworkConnectedReceiver.NetworkState ->
                     networkStatusMutex.withLock {
-                        logger.debug("ApplicationStatusDebug: Received network state: {}", status)
+                        logger.debug("Received network state: {}", status)
 
                         val networkStatusBufferCount = state.networkStatusBufferCount.get()
 
                         logger.debug(
-                            "ApplicationStatusDebug: Network status buffer count: {}",
+                            "Network status buffer count: {}",
                             networkStatusBufferCount
                         )
 
@@ -349,7 +349,7 @@ class ApplicationStatusManager(
             recordsSentPerTopicJob = service.lifecycleScope.launch(Dispatchers.Default) {
                 handler.recordsSent
                     .collect { records: TopicSendReceipt ->
-                        logger.debug("ApplicationStatusDebug: {} Records sent for topic: {}", records.numberOfRecords, records.topic)
+                        logger.debug("{} Records sent for topic: {}", records.numberOfRecords, records.topic)
                         val topic = records.topic
                         val noOfRecords = records.numberOfRecords.coerceAtLeast(0)
 
@@ -439,8 +439,9 @@ class ApplicationStatusManager(
             state.sourceStatusBufferCount.set(0)
         }
 
-        logger.info("ApplicationStatusDebug: Adding source status batch to database")
-        sourceStatusDao.addAll(state.getSourceStatuses())
+        logger.info("Adding source status batch to database")
+        val statuses = ArrayList(state.getSourceStatuses())
+        sourceStatusDao.addAll(statuses)
         if (manageSpace) {
             val numbersDeleted = sourceStatusDao.deleteStatusesCountGreaterThan(metricsRetentionSize)
             state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC] ?: return
@@ -455,10 +456,11 @@ class ApplicationStatusManager(
             state.networkStatusBufferCount.set(0)
         }
 
-        logger.info("ApplicationStatusDebug: Adding network status batch to database")
-        networkStatusDao.addAll(state.getNetworkStatus())
+        logger.info("Adding network status batch to database")
+        val networkStatuses = ArrayList(state.getNetworkStatuses())
+        networkStatusDao.addAll(networkStatuses)
         if (manageSpace) {
-            logger.debug("ApplicationStatusDebug: Managing space")
+            logger.debug("Managing space")
             val deletedCount = networkStatusDao.deleteNetworkLogsCountGreaterThan(metricsRetentionSize)
             state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] ?: return
             state.metricsCountPerTopic.compute(APPLICATION_NETWORK_STATUS_TOPIC) { _, count ->
@@ -468,7 +470,7 @@ class ApplicationStatusManager(
     }
 
     override fun sendSourceStatus() {
-        logger.debug("ApplicationStatusDebug: Sending Source Status")
+        logger.debug("Sending Source Status")
         service.lifecycleScope.launch {
             var maxTime = 0L
 
@@ -493,14 +495,14 @@ class ApplicationStatusManager(
                 if (sourceStatusCount != null) {
                     state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC] =
                         sourceStatusCount - statusDeletedCount
-                    logger.debug("ApplicationStatusDebug: All source logs sent")
+                    logger.debug("All source logs sent")
                 }
             }
         }
     }
 
     override fun sendNetworkStatus() {
-        logger.debug("ApplicationStatusDebug: Sending Network Status")
+        logger.debug("Sending Network Status")
         service.lifecycleScope.launch {
             var latestTime = 0L
 
@@ -523,7 +525,7 @@ class ApplicationStatusManager(
                 if (count != null) {
                     state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] =
                         count - noOfLogsDeleted
-                    logger.debug("ApplicationStatusDebug: All network logs sent")
+                    logger.debug("All network logs sent")
                 }
             }
         }
