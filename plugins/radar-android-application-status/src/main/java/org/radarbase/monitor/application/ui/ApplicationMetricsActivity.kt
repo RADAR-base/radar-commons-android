@@ -12,11 +12,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.radarbase.android.IRadarBinder
@@ -27,13 +24,9 @@ import org.radarbase.monitor.application.ApplicationState
 import org.radarbase.monitor.application.ApplicationStatusProvider
 import org.radarbase.monitor.application.R
 import org.radarbase.monitor.application.databinding.ActivityApplicationStatusBinding
-import org.radarbase.monitor.application.ui.adapter.NetworkStatusPagingAdapter
-import org.radarbase.monitor.application.ui.adapter.SourceStatusPagingAdapter
-import org.radarbase.monitor.application.ui.adapter.StringAdapter
 import org.radarbase.monitor.application.ui.viewmodel.ApplicationMetricsViewModel
 import org.radarbase.monitor.application.ui.viewmodel.factory.ApplicationMetricsViewModelFactory
 import org.radarbase.monitor.application.utils.AppRepository
-import org.radarbase.monitor.application.utils.LogNamesHolder
 import org.slf4j.LoggerFactory
 
 class ApplicationMetricsActivity : AppCompatActivity() {
@@ -45,9 +38,6 @@ class ApplicationMetricsActivity : AppCompatActivity() {
     private var statusProvider: ApplicationStatusProvider? = null
     private val state: ApplicationState?
         get() = statusProvider?.connection?.sourceState
-
-    private var sourceAdapter: SourceStatusPagingAdapter? = null
-    private var networkAdapter: NetworkStatusPagingAdapter? = null
 
     private val radarServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -107,9 +97,7 @@ class ApplicationMetricsActivity : AppCompatActivity() {
             }
         }
 
-        setUpScrollView()
-        
-        checkForStatusCounts()
+        updateStatusCounts()
     }
     
     override fun onStart() {
@@ -117,92 +105,18 @@ class ApplicationMetricsActivity : AppCompatActivity() {
         bindService(Intent(this, radarApp.radarService), radarServiceConnection, 0)
     }
 
-    private fun setUpScrollView() {
-        binding.rvAppPlugin.layoutManager = LinearLayoutManager(this)
 
-        binding.rvAppPlugin.adapter = StringAdapter(
-            this, listOf(
-                LogNamesHolder.APPLICATION_PLUGIN_STATUS.alias,
-                LogNamesHolder.APPLICATION_NETWORK_STATUS.alias
-            )
-        ) { topicClicked ->
-            when (topicClicked) {
-                LogNamesHolder.APPLICATION_PLUGIN_STATUS.alias -> {
-                    lifecycleScope.launch {
-                        val plugins = withContext(Dispatchers.IO) {
-                            viewModel.loadDistinctPluginsFromSourceLogs()
-                        }
-                        binding.rvAppPlugin.adapter = StringAdapter(
-                            this@ApplicationMetricsActivity,
-                            plugins
-                        ) { pluginName ->
-                            if (sourceAdapter == null) {
-                                sourceAdapter = SourceStatusPagingAdapter(
-                                    this@ApplicationMetricsActivity,
-                                ) {
-                                    // Take no action when clicked on source status logs
-                                }
-                                networkAdapter = null
-                                binding.rvAppPlugin.adapter = sourceAdapter
+    private fun updateStatusCounts() {
+        logger.debug("ApplicationStatusDebug: Updating Status count")
 
-                                lifecycleScope.launch {
-                                    viewModel.getSourceStatusForPagingData(pluginName)
-                                        .collectLatest { pagingData ->
-                                            sourceAdapter?.submitData(pagingData)
-                                        }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                LogNamesHolder.APPLICATION_NETWORK_STATUS.alias -> {
-                    networkAdapter = NetworkStatusPagingAdapter(
-                        this@ApplicationMetricsActivity,
-                    ) {
-                        // No action should be taken when clicked on network status logs
-                    }
-
-                    sourceAdapter = null
-                    binding.rvAppPlugin.adapter = networkAdapter
-
-                    lifecycleScope.launch {
-                        viewModel.networkStatusPagingData.collectLatest { pagingData ->
-                            if (binding.rvAppPlugin.adapter == networkAdapter) {
-                                networkAdapter?.submitData(pagingData)
-                            }
-                        }
-                    }
-                }
-
-                else -> {
-                    // Do Nothing
-                }
-            }
+        viewModel.loadSourceStatusCount().observe(this@ApplicationMetricsActivity) { sourceCount ->
+            logger.debug("ApplicationStatusDebug: Source status count: $sourceCount")
+            binding.tvPluginStatus.text = getString(R.string.plugin_log_count, sourceCount)
         }
-    }
 
-    private fun checkForStatusCounts() {
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                val sourceStatusDeferred = async {
-                    viewModel.loadSourceStatusCount()
-                }
-
-                val networkStatusDeferred = async {
-                    viewModel.loadNetworkStatusCount()
-                }
-
-                val sourceStatusCounts = sourceStatusDeferred.await()
-                val networkStatusCounts = networkStatusDeferred.await()
-
-                withContext(Dispatchers.Main) {
-                    binding.tvPluginStatus.text = getString(R.string.plugin_log_count, sourceStatusCounts)
-                    binding.tvNetworkStatus.text = getString(R.string.network_log_count, networkStatusCounts)
-                }
-            }
-
-            delay((state?.uiStatusUpdateRate ?: 60) * 1000)
+        viewModel.loadNetworkStatusCount().observe(this@ApplicationMetricsActivity) { networkCount ->
+            logger.debug("ApplicationStatusDebug: Network status count: $networkCount")
+            binding.tvNetworkStatus.text = getString(R.string.network_log_count, networkCount)
         }
     }
 

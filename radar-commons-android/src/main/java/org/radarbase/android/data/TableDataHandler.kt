@@ -29,6 +29,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.kafka.*
+import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.source.SourceStatusTrace
 import org.radarbase.android.util.BatteryStageReceiver
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.NetworkConnectedReceiver
@@ -75,6 +77,10 @@ class TableDataHandler(
     override val recordsSent: MutableSharedFlow<TopicSendReceipt> = MutableSharedFlow(
         replay = 1000,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    override val sourceStatus: MutableStateFlow<SourceStatusTrace> = MutableStateFlow(
+        SourceStatusTrace(null, SourceStatusListener.Status.DISCONNECTED)
     )
 
     private var submitter: KafkaDataSubmitter? = null

@@ -38,7 +38,6 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
         manager.metricsBatchSize = config.getLong(APPLICATION_METRICS_BATCH_SIZE, APPLICATION_METRICS_BATCH_SIZE_DEFAULT)
         manager.metricsRetentionSize = config.getLong(APPLICATION_METRICS_DATA_RETENTION_COUNT, APPLICATION_METRICS_DATA_RETENTION_COUNT_DEFAULT)
         manager.metricsRetentionTime = config.getLong(APPLICATION_METRICS_RETENTION_TIME, APPLICATION_METRICS_RETENTION_TIME_DEFAULT)
-        manager.uiStatusUpdateRate = config.getLong(APPLICATION_PLUGIN_UI_COUNT_UPDATE_RATE, APPLICATION_PLUGIN_UI_COUNT_UPDATE_RATE_DEFAULT)
     }
 
     companion object {
@@ -48,14 +47,12 @@ class ApplicationStatusService : SourceService<ApplicationState>() {
         private const val APPLICATION_METRICS_BATCH_SIZE = "application_metrics_buffer_size"
         private const val APPLICATION_METRICS_RETENTION_TIME = "application_metrics_retention_time"
         private const val APPLICATION_METRICS_DATA_RETENTION_COUNT = "application_metrics_data_retention_count"
-        private const val APPLICATION_METRICS_BATCH_SIZE_DEFAULT = 100L
+        private const val APPLICATION_METRICS_BATCH_SIZE_DEFAULT = 5L
         private const val APPLICATION_METRICS_RETENTION_TIME_DEFAULT = 7 * 86400L // seconds == 1 day
         private const val APPLICATION_METRICS_DATA_RETENTION_COUNT_DEFAULT = 10000L // 10,000 counts per topic
-        private const val APPLICATION_PLUGIN_UI_COUNT_UPDATE_RATE = "application_plugin_ui_count_update_rate"
-        private const val APPLICATION_PLUGIN_UI_COUNT_UPDATE_RATE_DEFAULT = 60L // 1 minute
         private const val SEND_IP = "application_send_ip"
         internal const val UPDATE_RATE_DEFAULT = 300L // seconds == 5 minutes
-        internal const val VERIFICATION_UPDATE_RATE_DEFAULT = 300L // seconds == 5 minutes
+        internal const val VERIFICATION_UPDATE_RATE_DEFAULT = 3600L // seconds == 1 hour
         internal const val TZ_UPDATE_RATE_DEFAULT = 86400L // seconds == 1 day
         private const val NTP_SERVER_CONFIG = "ntp_server"
     }

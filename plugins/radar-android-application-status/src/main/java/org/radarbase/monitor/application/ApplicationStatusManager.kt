@@ -26,12 +26,11 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.radarbase.android.AbstractRadarApplication
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.data.TableDataHandler
 import org.radarbase.android.kafka.TopicSendReceipt
@@ -110,6 +109,8 @@ class ApplicationStatusManager(
     private var verificationProcessor: OfflineProcessor? = null
     private val tzIntervalMutex: Mutex = Mutex()
     private val verificationIntervalMutex: Mutex = Mutex()
+    private val sourceStatusMutex: Mutex = Mutex()
+    private val networkStatusMutex: Mutex = Mutex()
 
     private val applicationStatusExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
     private val radarApplicationDb: RadarApplicationDatabase = RadarApplicationDatabase.getInstance(service)
@@ -133,11 +134,6 @@ class ApplicationStatusManager(
     var metricsBatchSize: Long = 0
     var metricsRetentionTime: Long = 0
     var metricsRetentionSize: Long = 0
-    var uiStatusUpdateRate: Long
-        get() = state.uiStatusUpdateRate
-        set(value) {
-            state.uiStatusUpdateRate = value
-        }
 
     private var previousInetAddress: InetAddress? = null
 
@@ -242,61 +238,71 @@ class ApplicationStatusManager(
             }
 
             sourceStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                val serviceInstance =
-                    (service.application as AbstractRadarApplication).radarServiceImpl
                 var shouldClearCountOnNextBatchUpdate = false
 
-                serviceInstance.sourceStatus
-                    .collectLatest { trace: SourceStatusTrace ->
-                        logger.debug("ApplicationStatusDebug: Received source status: {} for plugin {}", trace.status, trace.plugin)
-
-                        val pluginName = trace.plugin
-                        pluginName ?: return@collectLatest
-
-                        val bufferCount = state.sourceStatusBufferCount.get()
-                        logger.debug("ApplicationStatusDebug: Source status buffer count: {}", bufferCount)
-
-                        if (bufferCount == 0) {
-                            launch(Dispatchers.Default) {
-                                state.clearSourceStatuses()
-                            }
-                        }
-                        if (bufferCount > metricsBatchSize) {
-                            launch(Dispatchers.IO) {
-                                insertSourceStatusBatchToDb(shouldClearCountOnNextBatchUpdate)
-                                shouldClearCountOnNextBatchUpdate = false
-                            }
-                        }
-
-                        state.metricsCountPerTopic.compute(APPLICATION_SOURCE_STATUS_TOPIC) { _, count ->
-                            (count ?: 0) + 1
-                        }
-                        val totalSourceStatusMetrics =
-                            state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC] ?: 0
-                        if (!shouldClearCountOnNextBatchUpdate && totalSourceStatusMetrics > metricsRetentionSize) {
-                            shouldClearCountOnNextBatchUpdate = true
-                        }
-
-                        state.addSourceStatus(
-                            SourceStatusLog(
-                                time = currentTime.toLong(),
-                                plugin = pluginName,
-                                sourceStatus = trace.status
+                handler.sourceStatus
+                    .collect { trace: SourceStatusTrace ->
+                        sourceStatusMutex.withLock {
+                            logger.debug(
+                                "ApplicationStatusDebug: Received source status: {} for plugin {}",
+                                trace.status,
+                                trace.plugin
                             )
-                        )
 
-                        state.sourceStatusBufferCount.incrementAndGet()
+                            val pluginName = trace.plugin
+                            pluginName?.let {
+                                var bufferCount = state.sourceStatusBufferCount.get()
+                                if (bufferCount >= metricsBatchSize) {
+                                    launch(Dispatchers.IO) {
+                                        insertSourceStatusBatchToDb(shouldClearCountOnNextBatchUpdate)
+                                        shouldClearCountOnNextBatchUpdate = false
+                                    }
+                                }
+                                bufferCount = state.sourceStatusBufferCount.get()
+
+                                if (bufferCount == 0) {
+                                    withContext(Dispatchers.Default) {
+                                        state.clearSourceStatuses()
+                                    }
+                                }
+
+                                val totalSourceStatusMetrics = state.metricsCountPerTopic.compute(APPLICATION_SOURCE_STATUS_TOPIC) { _, count ->
+                                    (count ?: 0) + 1
+                                } ?: 0
+
+                                if (!shouldClearCountOnNextBatchUpdate && totalSourceStatusMetrics > metricsRetentionSize) {
+                                    shouldClearCountOnNextBatchUpdate = true
+                                }
+
+                                state.addSourceStatus(
+                                    SourceStatusLog(
+                                        time = currentTime.toLong(),
+                                        plugin = it,
+                                        sourceStatus = trace.status
+                                    )
+                                )
+
+                                state.sourceStatusBufferCount.incrementAndGet()
+                            }
+                                ?: logger.debug("ApplicationStatusDebug: Plugin name is null when processing status")
+                        }
                     }
             }
 
             networkReceiverJob = service.lifecycleScope.launch(Dispatchers.Default) {
-                networkStatusReceiver.state!!.collect { status: NetworkConnectedReceiver.NetworkState ->
-                    logger.debug("ApplicationStatusDebug: Received network state: {}", status)
+                var shouldClearCountOnNextBatchUpdate = false
+                networkStatusReceiver.state!!.
+                    distinctUntilChanged().
+                collect { status: NetworkConnectedReceiver.NetworkState ->
+                    networkStatusMutex.withLock {
+                        logger.debug("ApplicationStatusDebug: Received network state: {}", status)
 
-                    val networkStatusBufferCount = state.networkStatusBufferCount.get()
-                    var shouldClearCountOnNextBatchUpdate = false
+                        val networkStatusBufferCount = state.networkStatusBufferCount.get()
 
-                    logger.debug("ApplicationStatusDebug: Network status buffer count: {}", networkStatusBufferCount)
+                        logger.debug(
+                            "ApplicationStatusDebug: Network status buffer count: {}",
+                            networkStatusBufferCount
+                        )
 
                     if (networkStatusBufferCount == 0) {
                         launch(Dispatchers.Default) {
@@ -310,32 +316,33 @@ class ApplicationStatusManager(
                         }
                     }
 
-                    state.metricsCountPerTopic.compute(APPLICATION_NETWORK_STATUS_TOPIC) { _, count ->
-                        (count ?: 0) + 1
-                    }
-                    val totalSourceStatusMetrics =
-                        state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] ?: 0
-                    if (!shouldClearCountOnNextBatchUpdate && totalSourceStatusMetrics > metricsRetentionSize) {
-                        shouldClearCountOnNextBatchUpdate = true
-                    }
+                        state.metricsCountPerTopic.compute(APPLICATION_NETWORK_STATUS_TOPIC) { _, count ->
+                            (count ?: 0) + 1
+                        }
+                        val totalNetworkStatusMetrics =
+                            state.metricsCountPerTopic[APPLICATION_NETWORK_STATUS_TOPIC] ?: 0
+                        if (!shouldClearCountOnNextBatchUpdate && totalNetworkStatusMetrics > metricsRetentionSize) {
+                            shouldClearCountOnNextBatchUpdate = true
+                        }
 
-                    val connectionStatus: ConnectionStatus = when {
-                        status is NetworkConnectedReceiver.NetworkState.Disconnected -> ConnectionStatus.DISCONNECTED
-                        status is NetworkConnectedReceiver.NetworkState.Connected && status.hasConnection(
-                            true
-                        ) -> ConnectionStatus.CONNECTED_WIFI
+                        val connectionStatus: ConnectionStatus = when {
+                            status is NetworkConnectedReceiver.NetworkState.Disconnected -> ConnectionStatus.DISCONNECTED
+                            status is NetworkConnectedReceiver.NetworkState.Connected && status.hasConnection(
+                                true
+                            ) -> ConnectionStatus.CONNECTED_WIFI
 
-                        else -> ConnectionStatus.CONNECTED_CELLULAR
-                    }
+                            else -> ConnectionStatus.CONNECTED_CELLULAR
+                        }
 
-                    state.addNetworkStatus(
-                        NetworkStatusLog(
-                            time = currentTime.toLong(),
-                            connectionStatus = connectionStatus
+                        state.addNetworkStatus(
+                            NetworkStatusLog(
+                                time = currentTime.toLong(),
+                                connectionStatus = connectionStatus
+                            )
                         )
-                    )
 
-                    state.networkStatusBufferCount.incrementAndGet()
+                        state.networkStatusBufferCount.incrementAndGet()
+                    }
                 }
             }
 
@@ -428,11 +435,12 @@ class ApplicationStatusManager(
     }
 
     private suspend fun insertSourceStatusBatchToDb(manageSpace: Boolean) {
-        logger.info("ApplicationStatusDebug: Adding source status batch to database")
-        sourceStatusDao.addAll(state.getSourceStatuses())
         withContext(Dispatchers.Default) {
             state.sourceStatusBufferCount.set(0)
         }
+
+        logger.info("ApplicationStatusDebug: Adding source status batch to database")
+        sourceStatusDao.addAll(state.getSourceStatuses())
         if (manageSpace) {
             val numbersDeleted = sourceStatusDao.deleteStatusesCountGreaterThan(metricsRetentionSize)
             state.metricsCountPerTopic[APPLICATION_SOURCE_STATUS_TOPIC] ?: return
@@ -443,12 +451,12 @@ class ApplicationStatusManager(
     }
 
     private suspend fun insertNetworkStatusBatchToDb(manageSpace: Boolean) {
-        logger.info("ApplicationStatusDebug: Adding network status batch to database")
-        networkStatusDao.addAll(state.getNetworkStatus())
         withContext(Dispatchers.Default) {
             state.networkStatusBufferCount.set(0)
         }
 
+        logger.info("ApplicationStatusDebug: Adding network status batch to database")
+        networkStatusDao.addAll(state.getNetworkStatus())
         if (manageSpace) {
             logger.debug("ApplicationStatusDebug: Managing space")
             val deletedCount = networkStatusDao.deleteNetworkLogsCountGreaterThan(metricsRetentionSize)

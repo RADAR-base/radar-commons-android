@@ -27,10 +27,9 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class ApplicationState : BaseSourceState() {
 
-    private val sourceStatusMutex: Mutex = Mutex()
-    private val networkStatusMutex: Mutex = Mutex()
+    private val sourceMutex: Mutex = Mutex()
+    private val networkMutex: Mutex = Mutex()
     var uiManager: UserInterfaceManager? = null
-    var uiStatusUpdateRate: Long = 60
 
     val sourceStatusBufferCount: AtomicInteger = AtomicInteger(0)
     val networkStatusBufferCount: AtomicInteger = AtomicInteger(0)
@@ -50,32 +49,32 @@ class ApplicationState : BaseSourceState() {
     private val networkStatusBuffer: MutableList<NetworkStatusLog> = mutableListOf()
 
     suspend fun addSourceStatus(status: SourceStatusLog) {
-        sourceStatusMutex.withLock {
+        sourceMutex.withLock {
             sourceStatusBuffer.add(status)
         }
     }
 
     suspend fun clearSourceStatuses() {
-        sourceStatusMutex.withLock {
+        sourceMutex.withLock {
             sourceStatusBuffer.clear()
         }
     }
 
     suspend fun clearNetworkStatuses() {
-        networkStatusMutex.withLock {
+        networkMutex.withLock {
             networkStatusBuffer.clear()
         }
     }
 
-    suspend fun getSourceStatuses(): List<SourceStatusLog> = sourceStatusMutex.withLock {
+    suspend fun getSourceStatuses(): List<SourceStatusLog> = sourceMutex.withLock {
         sourceStatusBuffer
     }
     
-    suspend fun addNetworkStatus(status: NetworkStatusLog) = networkStatusMutex.withLock {
+    suspend fun addNetworkStatus(status: NetworkStatusLog) = networkMutex.withLock {
         networkStatusBuffer.add(status)
     }
     
-    suspend fun getNetworkStatus(): List<NetworkStatusLog> = networkStatusMutex.withLock {
+    suspend fun getNetworkStatus(): List<NetworkStatusLog> = networkMutex.withLock {
         networkStatusBuffer
     }
 

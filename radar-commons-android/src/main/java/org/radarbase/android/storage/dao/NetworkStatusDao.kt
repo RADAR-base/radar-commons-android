@@ -1,5 +1,6 @@
 package org.radarbase.android.storage.dao
 
+import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Query
@@ -66,8 +67,8 @@ abstract class NetworkStatusDao : BaseDao<NetworkStatusLog> {
      *
      * @return the count of status logs.
      */
-    @Query("SELECT COUNT(*) FROM source_status_log")
-    abstract suspend fun getStatusesCount(): Int
+    @Query("SELECT COUNT(*) FROM network_status_log")
+    abstract fun getStatusesCount(): LiveData<Int>
 
     /**
      * Deletes network status log records with a [NetworkStatusLog.time] value between the specified [from] and [to] timestamps.
@@ -120,7 +121,7 @@ abstract class NetworkStatusDao : BaseDao<NetworkStatusLog> {
      */
     @Query(
         """
-    DELETE FROM network_status_log WHERE time < :time
+    DELETE FROM network_status_log WHERE time <= :time
     """
     )
     abstract suspend fun deleteNetworkLogsOlderThan(time: Long): Int

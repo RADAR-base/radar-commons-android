@@ -22,9 +22,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.kafka.TopicSendReceipt
+import org.radarbase.android.source.SourceStatusTrace
+import org.radarbase.android.source.SourceStatusTracker
 import org.radarbase.topic.AvroTopic
 
-interface DataHandler<K: Any, V: Any>: ServerStatusListener {
+interface DataHandler<K: Any, V: Any>: ServerStatusListener, SourceStatusTracker {
     /** Get all caches.  */
     val caches: List<ReadableDataCache>
 
@@ -34,6 +36,8 @@ interface DataHandler<K: Any, V: Any>: ServerStatusListener {
     override val serverStatus: MutableStateFlow<ServerStatus>
 
     override val recordsSent: MutableSharedFlow<TopicSendReceipt>
+
+    override val sourceStatus: MutableStateFlow<SourceStatusTrace>
 
     suspend fun <W: V> registerCache(topic: AvroTopic<K, W>): DataCache<K, W>
 

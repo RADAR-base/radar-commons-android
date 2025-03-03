@@ -1,5 +1,6 @@
 package org.radarbase.android.storage.dao
 
+import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Query
@@ -83,7 +84,7 @@ abstract class SourceStatusDao : BaseDao<SourceStatusLog> {
      * @return the count of source status.
      */
     @Query("SELECT COUNT(*) FROM source_status_log")
-    abstract suspend fun getStatusesCount(): Int
+    abstract fun getStatusesCount(): LiveData<Int>
 
     /**
      * Deletes source status log records that have a [SourceStatusLog.time] value between the specified [from] and [to] timestamps.
@@ -137,7 +138,7 @@ abstract class SourceStatusDao : BaseDao<SourceStatusLog> {
      */
     @Query(
         """
-    DELETE FROM source_status_log WHERE time < :time
+    DELETE FROM source_status_log WHERE time <= :time
     """
     )
     abstract suspend fun deleteSourceLogsOlderThan(time: Long): Int
