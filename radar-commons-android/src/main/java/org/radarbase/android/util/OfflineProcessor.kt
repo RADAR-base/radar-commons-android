@@ -28,6 +28,7 @@ import android.content.IntentFilter
 import android.os.Debug
 import android.os.PowerManager
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -87,7 +88,9 @@ class OfflineProcessor(
         require(process.isNotEmpty()) { "Cannot start processor without processes" }
         this.alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
 
-        val intent = Intent(config.requestName)
+        val intent = Intent(config.requestName).apply {
+            `package` = context.packageName
+        }
         pendingIntent = PendingIntent.getBroadcast(
             context,
             requireNotNull(config.requestCode) { "Cannot start processor without request code" },
@@ -107,7 +110,12 @@ class OfflineProcessor(
     fun start(initializer: (suspend () -> Unit)? = null) {
         processorScope.launch {
             isStarted = true
-            context.registerReceiver(receiver, IntentFilter(requestName))
+            ContextCompat.registerReceiver(
+                context,
+                this@OfflineProcessor.receiver,
+                IntentFilter(requestName),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
             schedule()
             if (initializer != null) {
                 initializer()
