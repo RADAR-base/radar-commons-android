@@ -23,9 +23,20 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
 import android.os.*
+import android.os.Build.VERSION.SDK_INT
+import android.os.Build.VERSION_CODES
+import android.os.Build.VERSION_CODES.Q
+import android.os.Build.VERSION_CODES.S
+import android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 import android.widget.Toast
 import androidx.annotation.CallSuper
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +52,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.MainActivity.Companion.permissionsBroadcastReceiver
 import org.radarbase.android.RadarApplication.Companion.radarApp
@@ -161,10 +173,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     protected open val servicePermissions: List<String> = buildList(4) {
         add(ACCESS_NETWORK_STATE)
         add(INTERNET)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        if (SDK_INT >= VERSION_CODES.P) {
             add(FOREGROUND_SERVICE)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (SDK_INT >= VERSION_CODES.TIRAMISU) {
             add(POST_NOTIFICATIONS)
         }
     }
@@ -176,6 +188,17 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
+
+    @RequiresApi(Q)
+    val fgsHealthPermissions: Set<String> = setOf(BODY_SENSORS, ACTIVITY_RECOGNITION)
+    @RequiresApi(S)
+    val fgsConnectDevicePermissions: Set<String> =
+        setOf(BLUETOOTH_CONNECT, BLUETOOTH_SCAN, BLUETOOTH_ADVERTISE, UWB_RANGING)
+    private val fgsLocationPermissions: Set<String> =
+        setOf(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)
+    private val fgsMicrophonePermissions: Set<String> =
+        setOf(RECORD_AUDIO)
+
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
@@ -280,9 +303,63 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         logger.trace("OnStartCommand Radar Service")
         configure(configuration.latestConfig)
         checkPermissions()
-        startForeground(1, createForegroundNotification())
+
+        if (SDK_INT < UPSIDE_DOWN_CAKE) {
+            // Below API 34: Start foreground without service types
+            startForeground(1, createForegroundNotification())
+        } else {
+
+            /**
+             * API 34+ (Android 14+): Adding DATA_SYNC type
+             * Currently this is not explicitly checking for android 14+ version.
+             * This need to be modified it in future when setting new targetSdkVersion
+             */
+            startForeground(1, createForegroundNotification(),
+                        FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        }
 
         return START_STICKY
+    }
+
+    private fun startForegroundIfNeeded(grantedPermissions: Set<String>) {
+        if (SDK_INT < Q) return
+
+        val fgsTypePermissions: MutableSet<Int> = mutableSetOf()
+
+        if (SDK_INT >= S) {
+            if (grantedPermissions.intersect(fgsConnectDevicePermissions).isNotEmpty()) {
+                fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            }
+        }
+
+        if (grantedPermissions.intersect(fgsHealthPermissions)
+                .isNotEmpty() && (SDK_INT >= UPSIDE_DOWN_CAKE)
+        ) {
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_HEALTH)
+        }
+
+        if (grantedPermissions.intersect(fgsLocationPermissions).isNotEmpty()) {
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_LOCATION)
+        }
+
+        if (grantedPermissions.intersect(fgsMicrophonePermissions)
+                .isNotEmpty() && (SDK_INT >= VERSION_CODES.R)
+        ) {
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        }
+
+        if (fgsTypePermissions.isNotEmpty()) {
+
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+
+            val combinedFgsType: Int = fgsTypePermissions.reduce { acc, type -> acc or type }
+
+            startForeground(
+                1, createForegroundNotification(),
+                combinedFgsType
+            )
+        }
     }
 
     protected open fun createForegroundNotification(): Notification {
@@ -424,25 +501,28 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
-    private fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
-        val grantedPermissions = buildSet {
-            grantResults.indices.forEach { index ->
-                if (grantResults[index] == PERMISSION_GRANTED) {
-                    add(permissions[index])
-                } else {
-                    logger.info("Denied permission {}", permissions[index])
+    private suspend fun onPermissionsGranted(permissions: Array<String>, grantResults: IntArray) {
+        withContext(Dispatchers.Default) {
+            val grantedPermissions = buildSet {
+                grantResults.indices.forEach { index ->
+                    if (grantResults[index] == PERMISSION_GRANTED) {
+                        add(permissions[index])
+                    } else {
+                        logger.info("Denied permission {}", permissions[index])
+                    }
                 }
             }
-        }
 
-        if (grantedPermissions.isNotEmpty()) {
-            radarExecutor.execute {
-                logger.info("Granted permissions {}", grantedPermissions)
-                // Permission granted.
-                needsPermissions -= grantedPermissions
-                startScanning()
+            if (grantedPermissions.isNotEmpty()) {
+                startForegroundIfNeeded(grantedPermissions)
+                radarExecutor.execute {
+                    logger.info("Granted permissions {}", grantedPermissions)
+                    // Permission granted.
+                    needsPermissions -= grantedPermissions
+                    startScanning()
+                }
+                checkPermissions()
             }
-            checkPermissions()
         }
     }
 
@@ -640,7 +720,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             stopSelf()
     }
 
-    private suspend fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
+    private fun removeProviders(sourceProviders: Set<SourceProvider<*>>) {
         if (sourceProviders.isEmpty()) {
             return
         }
@@ -727,10 +807,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                     failedSourceObserverJob = lifecycleScope.launch {
                         mConnections.forEach {
                             it.connection.sourceConnectFailed
-                                ?.collectLatest {
+                                ?.collectLatest { info ->
                                     Boast.makeText(
                                         this@RadarService,
-                                        it.sourceName,
+                                        info.sourceName,
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -831,7 +911,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
-        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (SDK_INT >= Q)
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 
         private const val BACKGROUND_REQUEST_CODE = 9559
