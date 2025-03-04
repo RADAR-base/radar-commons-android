@@ -1,4 +1,18 @@
 <resources>
     <string name="applicationServiceDisplayName">Application</string>
     <string name="application_status_description">Monitors how much data the app is collecting and server status.</string>
+    <string name="dummy_topic_name">Application Plugin Status</string>
+    <string name="btn_info_text">More Info</string>
+    <string name="source_status_info">%1$s (%2$s)</string>
+    <string name="network_status_info">%1$s (%2$s)</string>
+    <string name="empty_text" />
+    <string name="text_more_info">More Info</string>
+    <string name="dummy_plugin_status">Android Phone Battery Usage</string>
+    <string name="start_app_metrics_activity">Radar Application Status</string>
+    <string name="send">Send</string>
+    <string name="unable_to_proceed_toast">Cannot process request, the plugin status is not CONNECTED. Please try reconnecting the plugin.</string>
+    <string name="network_logs">Network Logs\n1234</string>
+    <string name="plugin_logs">Plugin Logs\n1234</string>
+    <string name="plugin_log_count">Plugin Logs \n%1$d</string>
+    <string name="network_log_count">Network Logs \n%1$d</string>
 </resources>

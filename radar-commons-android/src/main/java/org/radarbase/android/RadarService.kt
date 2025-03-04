@@ -76,6 +76,7 @@ import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarcns.kafka.ObservationKey
 import org.slf4j.LoggerFactory
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 abstract class RadarService : LifecycleService(), ServerStatusListener, LoginListener {
@@ -115,6 +116,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     private var mConnections: List<SourceProvider<*>> = emptyList()
     private var isScanningEnabled = false
 
+    private val connectionProviderCache: MutableMap<SourceServiceConnection<*>, SourceProvider<*>> = ConcurrentHashMap()
     /** An overview of how many records have been sent throughout the application.  */
     private var latestNumberOfRecordsSent = TimedLong(0)
 
@@ -582,6 +584,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     fun sourceStatusUpdated(connection: SourceServiceConnection<*>, status: SourceStatusListener.Status) {
+        val pluginName = getCachedConnectionProvider(connection)?.pluginName
+
+        dataHandler?.sourceStatus?.value = SourceStatusTrace(pluginName, status)
         logger.info("Source of {} was updated to {}", connection, status)
         if (status == SourceStatusListener.Status.CONNECTED) {
             logger.info("Device name is {} while connecting.", connection.sourceName)
@@ -601,6 +606,12 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
                 Boast.makeText(this@RadarService, showRes).show()
             }
+        }
+    }
+
+    private fun getCachedConnectionProvider(connection: SourceServiceConnection<*>): SourceProvider<*>? {
+        return connectionProviderCache[connection] ?: getConnectionProvider(connection)?.also {
+            connectionProviderCache[connection] = it
         }
     }
 

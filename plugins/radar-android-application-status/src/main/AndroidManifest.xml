@@ -2,8 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <service android:name=".ApplicationStatusService"
-            android:exported="false"
-            android:description="@string/application_status_description" />
+        <activity
+            android:name=".ui.ApplicationMetricsActivity"
+            android:exported="false" />
+
+        <service
+            android:name=".ApplicationStatusService"
+            android:description="@string/application_status_description"
+            android:exported="false" />
     </application>
+
 </manifest>

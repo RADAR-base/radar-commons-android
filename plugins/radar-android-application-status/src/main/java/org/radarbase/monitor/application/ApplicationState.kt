@@ -18,9 +18,18 @@ package org.radarbase.monitor.application
 
 import org.radarbase.android.kafka.ServerStatus
 import org.radarbase.android.source.BaseSourceState
+import org.radarbase.android.storage.entity.NetworkStatusLog
+import org.radarbase.android.storage.entity.SourceStatusLog
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 class ApplicationState : BaseSourceState() {
+
+    var uiManager: UserInterfaceManager? = null
+
+    val sourceStatusBufferCount: AtomicInteger = AtomicInteger(0)
+    val networkStatusBufferCount: AtomicInteger = AtomicInteger(0)
+
     @set:Synchronized
     var serverStatus: ServerStatus? = null
         @Synchronized get() = field ?: ServerStatus.DISCONNECTED
@@ -29,10 +38,43 @@ class ApplicationState : BaseSourceState() {
     var recordsSent = 0L
         private set
 
+    val metricsCountPerTopic: MutableMap<String, Long> = ConcurrentHashMap()
     val cachedRecords: MutableMap<String, Long> = ConcurrentHashMap()
+    val recordsSentPerTopic: MutableMap<String, Long> = ConcurrentHashMap()
+    private val sourceStatusBuffer: MutableList<SourceStatusLog> = mutableListOf()
+    private val networkStatusBuffer: MutableList<NetworkStatusLog> = mutableListOf()
+
+    fun addSourceStatus(status: SourceStatusLog) {
+        sourceStatusBuffer.add(status)
+    }
+
+    fun clearSourceStatuses() {
+        sourceStatusBuffer.clear()
+    }
+
+    fun clearNetworkStatuses() {
+        networkStatusBuffer.clear()
+    }
+
+    fun getSourceStatuses(): List<SourceStatusLog> {
+        return sourceStatusBuffer
+    }
+
+    fun addNetworkStatus(status: NetworkStatusLog) {
+        networkStatusBuffer.add(status)
+    }
+
+    fun getNetworkStatuses(): List<NetworkStatusLog> {
+        return networkStatusBuffer
+    }
 
     @Synchronized
     fun addRecordsSent(nRecords: Long) {
         recordsSent += nRecords
+    }
+
+    interface UserInterfaceManager {
+        fun sendSourceStatus()
+        fun sendNetworkStatus()
     }
 }

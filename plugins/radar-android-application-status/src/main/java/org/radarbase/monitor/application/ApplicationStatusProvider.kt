@@ -16,9 +16,11 @@
 
 package org.radarbase.monitor.application
 
+import android.content.Intent
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.monitor.application.ui.ApplicationMetricsActivity
 
 open class ApplicationStatusProvider(radarService: RadarService) : SourceProvider<ApplicationState>(radarService) {
     override val description: String?
@@ -46,4 +48,9 @@ open class ApplicationStatusProvider(radarService: RadarService) : SourceProvide
     override val sourceModel: String = "pRMT"
 
     override val version: String = BuildConfig.VERSION_NAME
+
+    override val actions: List<Action>
+        get() = listOf(Action(radarService.getString(R.string.start_app_metrics_activity)){
+            startActivity(Intent(this, ApplicationMetricsActivity::class.java))
+        })
 }
