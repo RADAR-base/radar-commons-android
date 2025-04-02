@@ -1,6 +1,10 @@
 package org.radarbase.android.storage.extract
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 import org.radarbase.android.storage.dao.NetworkStatusDao
 import org.radarbase.android.storage.dao.SourceStatusDao
 import org.radarbase.android.storage.db.RadarApplicationDatabase
@@ -10,6 +14,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
 
+@Suppress("unused")
 class DatabaseToCSVExtractor {
     private var database: RadarApplicationDatabase? = null
     private var sourceStatusDao: SourceStatusDao? = null
@@ -18,10 +23,35 @@ class DatabaseToCSVExtractor {
 
     fun initialize(context: Context) {
         database = RadarApplicationDatabase.getInstance(context).also {
-            sourceStatusDao = it.sourceStatusDao()
-            networkStatusDao = it.networkStatusDao()
+            this.sourceStatusDao = it.sourceStatusDao()
+            this.networkStatusDao = it.networkStatusDao()
         }
         prepareExportDirectory(context)
+    }
+
+    @Throws(IllegalStateException::class)
+    suspend fun exportEntities() {
+        val sDao = sourceStatusDao
+        val nDao = networkStatusDao
+        check(sDao != null && nDao != null) { "Data Access Objects are not initialized yet." }
+
+        clearExportDirectoryFiles()
+        supervisorScope {
+            launch {
+                exportSourceEntitiesToCsvFile(
+                    withContext(Dispatchers.IO) {
+                        sDao.loadAllStatuses()
+                    }
+                )
+            }
+            launch {
+                exportNetworkEntitiesToCSVFile(
+                    withContext(Dispatchers.IO) {
+                        nDao.loadAllNetworkLogs()
+                    }
+                )
+            }
+        }
     }
 
     /**
@@ -30,7 +60,7 @@ class DatabaseToCSVExtractor {
      *
      * @param sourceEntities List of [SourceStatusLog] objects to export.
      */
-    fun exportSourceEntitiesToCsvFile(sourceEntities: List<SourceStatusLog>) {
+    private fun exportSourceEntitiesToCsvFile(sourceEntities: List<SourceStatusLog>) {
         val sourceStatusFile = SOURCE_STATUS_FILE
         val file = File(exportsDir, sourceStatusFile)
 
@@ -62,7 +92,7 @@ class DatabaseToCSVExtractor {
      *
      * @param networkEntities List of [NetworkStatusLog] objects to export.
      */
-    fun exportNetworkEntitiesToCSVFile(networkEntities: List<NetworkStatusLog>) {
+    private fun exportNetworkEntitiesToCSVFile(networkEntities: List<NetworkStatusLog>) {
         val networkStatusFile = NETWORK_STATUS_FILE
         val file = File(exportsDir, networkStatusFile)
 
@@ -90,16 +120,15 @@ class DatabaseToCSVExtractor {
      * Prepares the export directory within the internal cache directory.
      */
     private fun prepareExportDirectory(context: Context) {
-        val internalDir: File = context.cacheDir
-        val exportPath = "org.radarbase.monitor.application"
-        exportsDir = File(internalDir, exportPath).also {
+        val internalDir: File = context.filesDir
+        exportsDir = File(internalDir, APPLICATION_PLUGIN_EXPORT_PATH).also {
             if (!it.exists()) {
                 it.mkdirs()
             }
         }
     }
 
-    fun clearExportDirectory() {
+    private fun clearExportDirectoryFiles() {
         exportsDir?.let { exports ->
             exports.listFiles { file ->
                 file.name.startsWith(FILE_NAME_PREFIX) && file.name.endsWith(FILE_EXTENSION)
@@ -120,5 +149,6 @@ class DatabaseToCSVExtractor {
         private const val FILE_EXTENSION = ".csv"
         private const val SOURCE_STATUS_FILE = "${FILE_NAME_PREFIX}source${FILE_EXTENSION}"
         private const val NETWORK_STATUS_FILE = "${FILE_NAME_PREFIX}network${FILE_EXTENSION}"
+        private const val APPLICATION_PLUGIN_EXPORT_PATH = "org.radarbase.monitor.application.exports"
     }
 }
