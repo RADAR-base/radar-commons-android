@@ -373,20 +373,23 @@ class PhoneAudioInputActivity : AppCompatActivity() {
             setTitle(getString(R.string.proceed_title))
                 .setMessage(getString(R.string.proceed_message))
                 .setPositiveButton(getString(R.string.send)) { dialog: DialogInterface, _: Int ->
-                dialog.dismiss()
+                    dialog.dismiss()
                     state?.audioRecordingManager?.send()
-                logger.debug("Sending the data")
-            }.setNeutralButton(getString(R.string.play)) { dialog: DialogInterface, _: Int ->
-                dialog.dismiss()
-                logger.debug("Playing the audio")
-                startAudioPlaybackFragment()
-            }.setNegativeButton(getString(R.string.discard)) { dialog: DialogInterface, _: Int ->
-                logger.debug("Discarding the last recorded file")
-                dialog.cancel()
+                    logger.debug("Sending the data")
+                }.setNeutralButton(getString(R.string.play)) { dialog: DialogInterface, _: Int ->
+                    dialog.dismiss()
+                    logger.debug("Playing the audio")
+                    startAudioPlaybackFragment()
+                }
+                .setNegativeButton(getString(R.string.discard)) { dialog: DialogInterface, _: Int ->
+                    logger.debug("Discarding the last recorded file")
+                    dialog.cancel()
                     state?.isRecordingPlayed = false
-                clearLastRecordedFile()
-                state?.audioRecordManager?.clear()
-            }
+                    lastRecordedAudioFile?.let {
+                        state?.audioRecordManager?.clear(it)
+                    }
+                    clearLastRecordedFile()
+                }
         }
     }
 

@@ -31,7 +31,6 @@ import android.media.AudioRecord
 import android.media.AudioRecord.STATE_INITIALIZED
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Deferred
@@ -39,9 +38,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import androidx.lifecycle.Observer
 import org.radarbase.android.data.DataCache
+import org.radarbase.android.gateway.GatewayFileUploadClient
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.util.Boast
 import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.LAST_RECORDED_AUDIO_FILE
 import org.radarbase.passive.phone.audio.input.PhoneAudioInputService.Companion.PHONE_AUDIO_INPUT_SHARED_PREFS
@@ -54,13 +53,15 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.RandomAccessFile
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 
 class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceManager<PhoneAudioInputService,
         PhoneAudioInputState>(service), PhoneAudioInputState.AudioRecordManager, PhoneAudioInputState.AudioRecordingManager {
     private val audioInputTopic: Deferred<DataCache<ObservationKey, PhoneAudioInput>> = service.lifecycleScope.async(
         Dispatchers.Default) {
         createCache(
-            "android_phone_audio_input",
+            TOPIC_NAME,
             PhoneAudioInput()
         )
     }
@@ -70,9 +71,14 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     private var buffer: ByteArray = byteArrayOf()
     private val audioRecordingHandler = CoroutineTaskExecutor("AudioRecordExecutor")
     private val recordProcessingHandler: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
+    private val isFileUploading: AtomicBoolean = AtomicBoolean(false)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val preferences: SharedPreferences =
         service.getSharedPreferences(PHONE_AUDIO_INPUT_SHARED_PREFS, Context.MODE_PRIVATE)
+    private val gatewayClient: GatewayFileUploadClient
+        get() = service.gatewayClient
+
+    private val uploadingFiles: MutableList<File> = Collections.synchronizedList(mutableListOf())
 
     var audioSource: Int
         get() = state.audioSource.get()
@@ -138,7 +144,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
             val dirCreated = audioDir.mkdirs()
             val directoryExists = audioDir.exists()
             logger.debug("Directory for saving audio file, created: {}, exists: {}", dirCreated, directoryExists)
-            clearAudioDirectory()
+            clearAudioDirectory(true)
             SourceStatusListener.Status.READY
         } else {
             audioDir = null
@@ -224,8 +230,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
         stopAudioRecording()
     }
 
-    override fun clear() {
-        clearAudioDirectory()
+    override fun clear(fileName: String) {
+        deleteFiles(listOf(File(fileName)))
     }
 
     override fun send() {
@@ -233,7 +239,8 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
             recordingFile?.let { wavFile ->
                 var audioDuration: Long = -1L
                 try {
-                    audioDuration = AudioDeviceUtils.getAudioDuration(wavFile) ?: throw RuntimeException("Can't retrieve the duration of audio file")
+                    audioDuration = AudioDeviceUtils.getAudioDuration(wavFile)
+                        ?: throw RuntimeException("Can't retrieve the duration of audio file")
                     if (audioDuration == -1L) {
                         throw RuntimeException("Audio length not retrieved")
                     }
@@ -241,6 +248,24 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                     logger.error("Cannot retrieve audio file duration. Discarding sending data")
                 }
                 recordProcessingHandler.execute {
+                    isFileUploading.set(true)
+                    uploadingFiles.add(wavFile)
+                    try {
+                        gatewayClient.uploadFile(
+                            service,
+                            state.id,
+                            TOPIC_NAME,
+                            wavFile
+                        )
+                    } catch (ex: Exception) {
+                        logger.error(
+                            "Failed to upload file: {} to gateway, with exception: ",
+                            wavFile.name,
+                            ex
+                        )
+                        return@execute
+                    }
+
                     send(
                         audioInputTopic.await(), PhoneAudioInput(
                             currentTime,
@@ -263,12 +288,11 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
                             AudioTypeFormatUtil.toLogFriendlyEncoding(audioFormat)
                         )
                     )
+                    uploadingFiles.remove(wavFile)
+                    deleteFiles(listOf(wavFile))
+                    isFileUploading.set(false)
                 }
-                // Dummy Toast, will be removed after file uploading to s3 will be enabled.
-                Boast.makeText(service, "Sending last recorded audio. Is played? : ${state.isRecordingPlayed}", Toast.LENGTH_LONG).show()
-
             }
-
         }
 
         // After the data is sent:
@@ -302,22 +326,38 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
             this.firstOrNull { deviceType == it.type }
         }
 
-    private fun clearAudioDirectory() {
-        payloadSize = 0
-        audioDir?.let { audioDir ->
-            audioDir.parentFile
-                ?.list { _, name -> name.startsWith("phone_audio_input") && name.endsWith(".wav") }
-                ?.forEach {
-                    File(audioDir.parentFile, it).delete()
-                    logger.debug("Deleted audio file: {}", it)
-                }
+    private fun clearAudioDirectory(force: Boolean = false) {
+        if (!force && isFileUploading.get()) {
+            logger.warn("Aborting the audio directory deletion. File upload in progress.")
+        } else {
+            payloadSize = 0
+            audioDir?.let { audioDir ->
+                audioDir.parentFile
+                    ?.list { _, name -> name.startsWith("phone_audio_input") && name.endsWith(".wav") }
+                    ?.forEach {
+                        File(audioDir.parentFile, it).delete()
+                        logger.debug("Deleted audio file: {}", it)
+                    }
 
-            audioDir.walk()
-                .filter { it.name.startsWith("phone_audio_input") && it.path.endsWith(".wav") }
-                .forEach {
-                    it.delete()
-                    logger.debug("Deleted file: {}", it)
+                audioDir.walk()
+                    .filter { it.name.startsWith("phone_audio_input") && it.path.endsWith(".wav") }
+                    .forEach {
+                        it.delete()
+                        logger.debug("Deleted file: {}", it)
+                    }
+            }
+        }
+    }
+
+    private fun deleteFiles(files: List<File>) {
+        files.forEach {
+            it.delete().also { success: Boolean ->
+                if (success) {
+                    logger.debug("Successfully deleted file: {}", it.path)
+                } else {
+                    logger.debug("Failed to delete file: {}", it.path)
                 }
+            }
         }
     }
 
@@ -431,7 +471,7 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
     override fun onClose() {
         audioRecordingHandler.stop{
             audioRecord?.release()
-            clearAudioDirectory()
+            clearAudioDirectory(true)
         }
         mainHandler.post { state.connectedMicrophones.removeObserver(connectedMicrophonesObserver) }
         recordProcessingHandler.stop()
@@ -441,5 +481,6 @@ class PhoneAudioInputManager(service: PhoneAudioInputService) : AbstractSourceMa
 
         /** The interval(ms) in which the recorded samples are output to the file */
         private const val TIMER_INTERVAL = 120
+        private const val TOPIC_NAME = "android_phone_audio_input"
     }
 }
