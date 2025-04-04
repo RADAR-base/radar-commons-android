@@ -62,7 +62,8 @@ class TableDataHandler(
     handlerDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : DataHandler<ObservationKey, SpecificRecord> {
     private val tables: ConcurrentMap<String, DataCacheGroup<*, *>> = ConcurrentHashMap()
-    private var config = DataHandlerConfiguration()
+    var config = DataHandlerConfiguration()
+        private set
 
     private val batteryLevelReceiver: BatteryStageReceiver
     private val networkConnectedReceiver: NetworkConnectedReceiver = NetworkConnectedReceiver(context)

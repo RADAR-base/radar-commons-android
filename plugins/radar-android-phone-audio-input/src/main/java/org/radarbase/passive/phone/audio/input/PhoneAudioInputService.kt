@@ -18,7 +18,11 @@ package org.radarbase.passive.phone.audio.input
 
 import android.media.AudioFormat
 import android.media.MediaRecorder
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.radarbase.android.config.SingleRadarConfiguration
+import org.radarbase.android.gateway.GatewayFileUploadClient
 import org.radarbase.android.source.SourceManager
 import org.radarbase.android.source.SourceService
 
@@ -26,6 +30,17 @@ class PhoneAudioInputService: SourceService<PhoneAudioInputState>() {
 
     override val defaultState: PhoneAudioInputState
         get() = PhoneAudioInputState()
+
+    lateinit var gatewayClient: GatewayFileUploadClient
+
+    override fun onCreate() {
+        super.onCreate()
+        lifecycleScope.launch(Dispatchers.Default) {
+            gatewayClient = GatewayFileUploadClient().apply {
+                init(this@PhoneAudioInputService)
+            }
+        }
+    }
 
     override fun createSourceManager(): PhoneAudioInputManager = PhoneAudioInputManager(this)
 
@@ -41,6 +56,12 @@ class PhoneAudioInputService: SourceService<PhoneAudioInputState>() {
         manager.sampleRate = config.getInt(PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE, PHONE_AUDIO_INPUT_CURRENT_SAMPLE_RATE_DEFAULT)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        lifecycleScope.launch(Dispatchers.Default) {
+            gatewayClient.close()
+        }
+    }
     companion object {
         private const val PHONE_AUDIO_INPUT_PREFIX = "phone-audio-input-"
         const val PHONE_AUDIO_INPUT_AUDIO_SOURCE = PHONE_AUDIO_INPUT_PREFIX + "audio-source"

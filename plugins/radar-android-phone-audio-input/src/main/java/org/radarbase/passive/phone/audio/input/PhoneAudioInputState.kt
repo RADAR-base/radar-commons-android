@@ -48,7 +48,7 @@ class PhoneAudioInputState: BaseSourceState() {
         fun stopRecording()
         fun pauseRecording()
         fun resumeRecording()
-        fun clear()
+        fun clear(fileName: String)
         fun setPreferredMicrophone(microphone: AudioDeviceInfo)
     }
 
