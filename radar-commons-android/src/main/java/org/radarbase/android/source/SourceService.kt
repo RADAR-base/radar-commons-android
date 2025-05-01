@@ -356,14 +356,14 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             pluginToSourceIdMapper[pluginName] = acceptableSources.joinToString(separator = " ") {
                 it.sourceId.toString()
             }
-        } ?: logger.warn("(MismatchedIdDebug) plugin metadata instance is null when adding plugin $this")
+        }
     }
 
     fun mapTopicAndSource(topicName: String) {
         metadataStore?.topicToPluginMapper?.putIfAbsent(
             topicName,
             pluginName
-        ) ?: logger.warn("(MismatchedIdDebug) plugin metadata instance is null when adding topic $this")
+        )
     }
 
     /**

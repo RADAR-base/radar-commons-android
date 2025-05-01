@@ -269,7 +269,7 @@ class KafkaDataSubmitter(
                 if (pluginMetadata != null) {
                     val stringSourceId =  keySourceId as? String
                     if (stringSourceId != null &&  stringSourceId !in pluginMetadata.sourceIds) {
-                        logger.warn("(MismatchedIdDebug) SourceId: {} for topic: {} doesn't match with any sourceId's. Discarding the data", stringSourceId, topic.name)
+                        logger.warn("(MismatchedId) SourceId: {} for topic: {} doesn't match with any sourceId's. Discarding the data", stringSourceId, topic.name)
                         dataHandler.let {
                             it.updateRecordsSent(topic.name, size.toLong())
                             // The upload has not actually failed yet, but if it proceeds, it will fail due to an incorrect sourceId.
@@ -297,8 +297,6 @@ class KafkaDataSubmitter(
                         }
                         return size
                     }
-                } else {
-                    logger.warn("(MismatchedIdDebug) SourceId: {} for topic: {} matches.", keySourceId, topic.name)
                 }
 
                 try {
@@ -333,9 +331,22 @@ class KafkaDataSubmitter(
         pluginName: String?,
         tokenSourceId: String?
     ) {
-        Firebase.crashlytics.log("Mismatch detected in source ID for Plugin: $pluginName and Topic: $topic for User: $userId in Project: $projectId.")
-        userId?.let(Firebase.crashlytics::setUserId)
-        Firebase.crashlytics.recordException(MismatchedIdException("Mismatch detected in source ID for Plugin: $pluginName and Topic: $topic for User: $userId in Project: $projectId. The source ID in the payload ($keySourceId) does not match the source ID in the token ($tokenSourceId)."))
+        logger.warn("Reporting MismatchedSourceId error to crashlytics")
+        Firebase.crashlytics.apply {
+            setCustomKey("error_type", "source_id_mismatch")
+            setCustomKey("plugin_name", pluginName ?: "")
+            setCustomKey("topic", topic)
+            setCustomKey("project_id", projectId ?: "")
+            setCustomKey("payload_source_id", keySourceId ?: "")
+            setCustomKey("token_source_id", tokenSourceId ?: "")
+            setUserId(userId ?: "")
+            log("Detected sourceId mismatch for plugin=$pluginName, topic=$topic")
+            recordException(
+                MismatchedIdException(
+                    "Payload sourceId=$keySourceId ≠ token sourceId=$tokenSourceId"
+                )
+            )
+        }
     }
 
     private fun retrieveDataFromFields(topic: AvroTopic<Any, Any>, data: RecordData<Any, Any?>, field: String) =
