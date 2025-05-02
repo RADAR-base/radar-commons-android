@@ -1,8 +1,6 @@
-package org.radarbase.android.util
+package org.radarbase.android.util.exceptions
 
-import java.io.IOException
-
-class MismatchedIdException : RuntimeException {
+class MismatchedUserIdException : RuntimeException {
     constructor(message: String?): super(message)
     constructor(message: String?, cause: Throwable?): super(message, cause)
 }
