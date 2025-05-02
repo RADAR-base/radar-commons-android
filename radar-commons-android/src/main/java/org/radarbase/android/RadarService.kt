@@ -74,6 +74,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
         private set
 
+    val pluginMetadata = PluginMetadataStore()
+
     open val cacheStore: CacheStore = CacheStore()
 
     private lateinit var mHandler: SafeHandler
@@ -657,6 +659,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
             submitter {
                 userId = authState.userId
+                projectId = authState.projectId
             }
         }
 
@@ -717,6 +720,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
             }
         }
+
+        override val pluginMetadataStore: PluginMetadataStore
+            get() = this@RadarService.pluginMetadata
 
         override val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
             get() = this@RadarService.dataHandler
