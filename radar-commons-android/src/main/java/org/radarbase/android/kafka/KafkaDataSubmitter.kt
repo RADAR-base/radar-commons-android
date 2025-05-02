@@ -27,7 +27,8 @@ import org.radarbase.android.data.DataCacheGroup
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.ReadableDataCache
 import org.radarbase.android.source.PluginMetadataStore
-import org.radarbase.android.util.MismatchedIdException
+import org.radarbase.android.util.NonFatalCrashlyticsReporter
+import org.radarbase.android.util.exceptions.MismatchedSourceIdException
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.data.AvroRecordData
 import org.radarbase.data.RecordData
@@ -60,6 +61,7 @@ class KafkaDataSubmitter(
     private val connection: KafkaConnectionChecker
     private val pluginMetadata: PluginMetadataStore? = radarService?.pluginMetadata
     private val reportedTopics: MutableSet<String> = mutableSetOf()
+
 
     var config: SubmitterConfiguration = config
         set(newValue) {
@@ -260,7 +262,9 @@ class KafkaDataSubmitter(
                 }
             } else null
 
-            if (keyUserId == null || keyUserId == config.userId) {
+            val keyProjectId = retrieveDataFromFields(topic, data, "projectId")
+
+            if ((keyUserId == null || keyUserId == config.userId) && (keyProjectId == null || keyProjectId == config.projectId)) {
                 if (uploadingNotified.compareAndSet(false, true)) {
                     dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING)
                 }
@@ -282,13 +286,11 @@ class KafkaDataSubmitter(
                         if (!reportedTopics.contains(topic.name)) {
                             val pluginName = pluginMetadata.topicToPluginMapper.get(topic.name)
                             val sourceId = pluginMetadata.pluginToSourceIdMapper[pluginName]
-                            val userId = retrieveDataFromFields(topic, data, "userId")
-                            val projectId = retrieveDataFromFields(topic, data, "projectId")
 
-                            nonFatalReportToCrashlytics(
-                                projectId,
+                            NonFatalCrashlyticsReporter.reportMismatchedSourceId(
+                                keyProjectId,
                                 keySourceId,
-                                userId,
+                                keyUserId,
                                 topic.name,
                                 pluginName,
                                 sourceId
@@ -315,6 +317,22 @@ class KafkaDataSubmitter(
                 }
 
                 logger.debug("uploaded {} {} records", size, topic.name)
+            } else {
+                val pluginName = pluginMetadata?.topicToPluginMapper?.get(topic.name)
+
+                when {
+                    keyProjectId != config.projectId -> {
+                        NonFatalCrashlyticsReporter.reportMismatchedProjectId(
+                            keyProjectId, config.projectId, pluginName, topic.name, keyUserId
+                        )
+                    }
+
+                    keyUserId != config.userId -> {
+                        NonFatalCrashlyticsReporter.reportMismatchedUserId(
+                            keyUserId, config.userId, pluginName, topic.name
+                        )
+                    }
+                }
             }
         }
 
@@ -342,7 +360,7 @@ class KafkaDataSubmitter(
             setUserId(userId ?: "")
             log("Detected sourceId mismatch for plugin=$pluginName, topic=$topic")
             recordException(
-                MismatchedIdException(
+                MismatchedSourceIdException(
                     "Payload sourceId=$keySourceId ≠ token sourceId=$tokenSourceId"
                 )
             )

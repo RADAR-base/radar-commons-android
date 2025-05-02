@@ -659,6 +659,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
             submitter {
                 userId = authState.userId
+                projectId = authState.projectId
             }
         }
 

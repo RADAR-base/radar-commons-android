@@ -14,7 +14,8 @@ import org.slf4j.LoggerFactory
  * This class centralizes reporting logic for mismatched IDs between payloads and
  * auth tokens
  */
-class NonFatalCrashlyticsReporter {
+object NonFatalCrashlyticsReporter {
+    private val logger = LoggerFactory.getLogger(NonFatalCrashlyticsReporter::class.java)
 
     /**
      * Report a mismatch between the payload's source ID and the token's source ID.
@@ -121,7 +122,4 @@ class NonFatalCrashlyticsReporter {
         Firebase.crashlytics.apply(block)
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(NonFatalCrashlyticsReporter::class.java)
-    }
 }
