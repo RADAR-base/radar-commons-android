@@ -39,7 +39,7 @@ object BundleSerialization {
         }
     }
 
-    fun saveToPreferences(prefs: SharedPreferences, `in`: Bundle) {
+    private fun saveToPreferences(prefs: SharedPreferences, `in`: Bundle) {
         val parcel = Parcel.obtain()
         val serialized: String? = try {
             `in`.writeToParcel(parcel, 0)
@@ -61,7 +61,7 @@ object BundleSerialization {
         }
     }
 
-    fun restoreFromPreferences(prefs: SharedPreferences): Bundle? {
+    private fun restoreFromPreferences(prefs: SharedPreferences): Bundle? {
         return prefs.getString("parcel", null)?.let { serialized ->
             val data = Base64.decode(serialized, 0)
             val parcel = Parcel.obtain()

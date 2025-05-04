@@ -16,13 +16,18 @@
 
 package org.radarbase.passive.bittium
 
-import org.radarbase.android.RadarApplication.Companion.radarApp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.NotificationHandler
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.util.Strings
+import org.radarbase.util.StringTransforms
 import org.radarcns.bittium.faros.*
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.bittium.*
@@ -39,15 +44,28 @@ class FarosManager internal constructor(
         NotificationHandler(this.service)
     }
     private var doNotify: Boolean = false
-    private val accelerationTopic: DataCache<ObservationKey, BittiumFarosAcceleration> = createCache("android_bittium_faros_acceleration", BittiumFarosAcceleration())
-    private val ecgTopic: DataCache<ObservationKey, BittiumFarosEcg> = createCache("android_bittium_faros_ecg", BittiumFarosEcg())
-    private val ibiTopic: DataCache<ObservationKey, BittiumFarosInterBeatInterval> = createCache("android_bittium_faros_inter_beat_interval", BittiumFarosInterBeatInterval())
-    private val temperatureTopic: DataCache<ObservationKey, BittiumFarosTemperature> = createCache("android_bittium_faros_temperature", BittiumFarosTemperature())
-    private val batteryTopic: DataCache<ObservationKey, BittiumFarosBatteryLevel> = createCache("android_bittium_faros_battery_level", BittiumFarosBatteryLevel())
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, BittiumFarosAcceleration>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("android_bittium_faros_acceleration", BittiumFarosAcceleration())
+    }
+    private val ecgTopic: Deferred<DataCache<ObservationKey, BittiumFarosEcg>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("android_bittium_faros_ecg", BittiumFarosEcg())
+    }
+    private val ibiTopic: Deferred<DataCache<ObservationKey, BittiumFarosInterBeatInterval>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("android_bittium_faros_inter_beat_interval", BittiumFarosInterBeatInterval())
+    }
+    private val temperatureTopic: Deferred<DataCache<ObservationKey, BittiumFarosTemperature>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("android_bittium_faros_temperature", BittiumFarosTemperature())
+    }
+    private val batteryTopic: Deferred<DataCache<ObservationKey, BittiumFarosBatteryLevel>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache("android_bittium_faros_battery_level", BittiumFarosBatteryLevel())
+    }
 
     private lateinit var acceptableIds: Array<Pattern>
     private lateinit var apiManager: FarosSdkManager
     private var settings: FarosSettings = farosFactory.defaultSettingsBuilder().build()
+
+    private val farosTaskExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     private var faros: FarosDevice? = null
 
@@ -56,8 +74,9 @@ class FarosManager internal constructor(
         service.getString(R.string.farosLabel)
 
         handler.start()
-        handler.execute {
-            this.acceptableIds = Strings.containsPatterns(acceptableIds)
+        farosTaskExecutor.start()
+        farosTaskExecutor.execute {
+            this.acceptableIds = StringTransforms.containsPatterns(acceptableIds)
 
             apiManager = farosFactory.createSdkManager(service)
             try {
@@ -73,7 +92,7 @@ class FarosManager internal constructor(
     override fun onStatusUpdate(status: Int) {
         val radarStatus = when(status) {
             FarosDeviceListener.IDLE -> {
-                handler.execute {
+                farosTaskExecutor.execute {
                     logger.debug("Faros status is IDLE. Request to start/restart measurements.")
                     applySettings(this.settings)
                     faros?.run {
@@ -115,10 +134,10 @@ class FarosManager internal constructor(
                         else -> "unknown"
                     }))
 
-            if ((acceptableIds.isEmpty() || Strings.findAny(acceptableIds, device.name))) {
+            if ((acceptableIds.isEmpty() || StringTransforms.findAny(acceptableIds, device.name))) {
                 register(device.name, device.name, attributes) {
                     if (it != null) {
-                        handler.executeReentrant {
+                        farosTaskExecutor.executeReentrant {
                             logger.info("Stopping scanning")
                             apiManager.stopScanning()
                             name = service.getString(R.string.farosDeviceName, device.name)
@@ -137,17 +156,23 @@ class FarosManager internal constructor(
 
     override fun didReceiveAcceleration(timestamp: Double, x: Float, y: Float, z: Float) {
         state.setAcceleration(x, y, z)
-        send(accelerationTopic, BittiumFarosAcceleration(timestamp, currentTime, x, y, z))
+        farosTaskExecutor.execute {
+            send(accelerationTopic.await(), BittiumFarosAcceleration(timestamp, currentTime, x, y, z))
+        }
     }
 
     override fun didReceiveTemperature(timestamp: Double, temperature: Float) {
         state.temperature = temperature
-        send(temperatureTopic, BittiumFarosTemperature(timestamp, currentTime, temperature))
+        farosTaskExecutor.execute {
+            send(temperatureTopic.await(), BittiumFarosTemperature(timestamp, currentTime, temperature))
+        }
     }
 
     override fun didReceiveInterBeatInterval(timestamp: Double, interBeatInterval: Float) {
         state.heartRate = 60 / interBeatInterval
-        send(ibiTopic, BittiumFarosInterBeatInterval(timestamp, currentTime, interBeatInterval))
+        farosTaskExecutor.execute {
+            send(ibiTopic.await(), BittiumFarosInterBeatInterval(timestamp, currentTime, interBeatInterval))
+        }
     }
 
     override fun didReceiveEcg(timestamp: Double, channels: FloatArray) {
@@ -155,33 +180,42 @@ class FarosManager internal constructor(
         val channelTwo = if (channels.size > 1) channels[1] else null
         val channelThree = if (channels.size > 2) channels[2] else null
 
-        send(ecgTopic, BittiumFarosEcg(timestamp, currentTime, channelOne, channelTwo, channelThree))
+        farosTaskExecutor.execute {
+            send(
+                ecgTopic.await(),
+                BittiumFarosEcg(timestamp, currentTime, channelOne, channelTwo, channelThree)
+            )
+        }
     }
 
     override fun didReceiveBatteryStatus(timestamp: Double, status: Int) {
         // only send approximate battery levels if the battery level interval is disabled.
-        val level = when(status) {
+        val level = when (status) {
             FarosDeviceListener.BATTERY_STATUS_CRITICAL -> 0.05f
-            FarosDeviceListener.BATTERY_STATUS_LOW      -> 0.175f
-            FarosDeviceListener.BATTERY_STATUS_MEDIUM   -> 0.5f
-            FarosDeviceListener.BATTERY_STATUS_FULL     -> 0.875f
+            FarosDeviceListener.BATTERY_STATUS_LOW -> 0.175f
+            FarosDeviceListener.BATTERY_STATUS_MEDIUM -> 0.5f
+            FarosDeviceListener.BATTERY_STATUS_FULL -> 0.875f
             else -> {
                 logger.warn("Unknown battery status {} passed", status)
                 return
             }
         }
         state.batteryLevel = level
-        send(batteryTopic, BittiumFarosBatteryLevel(timestamp, currentTime, level, false))
+        farosTaskExecutor.execute {
+            send(batteryTopic.await(), BittiumFarosBatteryLevel(timestamp, currentTime, level, false))
+        }
     }
 
     override fun didReceiveBatteryLevel(timestamp: Double, level: Float) {
         state.batteryLevel = level
-        send(batteryTopic, BittiumFarosBatteryLevel(timestamp, currentTime, level, true))
+        farosTaskExecutor.execute {
+            send(batteryTopic.await(), BittiumFarosBatteryLevel(timestamp, currentTime, level, true))
+        }
     }
 
     internal fun applySettings(settings: FarosSettings) {
-        handler.executeReentrant {
-            this.settings = settings
+        service.lifecycleScope.launch(Dispatchers.Default) {
+            this@FarosManager.settings = settings
             faros?.run {
                 if (isMeasuring) {
                     logger.info("Device is measuring. Stopping device before applying settings.")
@@ -213,7 +247,8 @@ class FarosManager internal constructor(
     override fun onClose() {
         logger.info("Faros BT Closing device {}", this)
 
-        handler.stop {
+        handler.stop()
+        farosTaskExecutor.stop {
             try {
                 faros?.close()
             } catch (e2: IOException) {

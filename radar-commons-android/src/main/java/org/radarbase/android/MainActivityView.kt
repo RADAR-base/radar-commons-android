@@ -22,4 +22,6 @@ interface MainActivityView {
      */
     fun update()
     fun onRadarServiceBound(binder: IRadarBinder)
+    fun showLogoutProgress()
+    fun stopLogoutProgress()
 }

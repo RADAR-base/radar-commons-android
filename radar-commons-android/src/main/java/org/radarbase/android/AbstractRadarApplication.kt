@@ -19,21 +19,32 @@ package org.radarbase.android
 import android.app.Application
 import android.os.Bundle
 import androidx.annotation.CallSuper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.config.LocalConfiguration
 import org.radarbase.android.config.RemoteConfig
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.NotificationHandler
 import org.slf4j.impl.HandroidLoggerAdapter
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Provides the name and some metadata of the main activity  */
 abstract class AbstractRadarApplication : Application(), RadarApplication {
-    private lateinit var innerNotificationHandler: NotificationHandler
 
-    override val notificationHandler: NotificationHandler
-        get() = innerNotificationHandler
+    override lateinit var notificationHandler: NotificationHandler
 
     override lateinit var configuration: RadarConfiguration
+
+    /**
+     * A boolean value indicating whether a plugin exists that utilizes the Google Places API's PlacesClient.
+     * This is used in the application class because it is efficient to create exactly one instance of PlacesClient
+     * for a single application instance.
+     */
+    val placesClientCreated: AtomicBoolean = AtomicBoolean(false)
 
     override fun configureProvider(bundle: Bundle) {}
     override fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean) {}
@@ -43,8 +54,16 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
     override fun onCreate() {
         super.onCreate()
         setupLogging()
-        configuration = createConfiguration()
-        innerNotificationHandler = NotificationHandler(this)
+
+        runBlocking(Dispatchers.Default) {
+            launch {
+                notificationHandler = NotificationHandler(this@AbstractRadarApplication)
+                notificationHandler.onCreate()
+            }
+            launch {
+                configuration = createConfiguration()
+            }
+        }
     }
 
     protected open fun setupLogging() {
@@ -60,11 +79,14 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
      *
      * @return configured RadarConfiguration
      */
-    protected open fun createConfiguration(): RadarConfiguration {
-        return CombinedRadarConfig(
-            LocalConfiguration(this),
-            createRemoteConfiguration(),
-            ::createDefaultConfiguration
+    protected open suspend fun createConfiguration(): RadarConfiguration = coroutineScope {
+        val localConfigurationJob = async(Dispatchers.IO) { LocalConfiguration(this@AbstractRadarApplication) }
+        val remoteConfigJob = async { createRemoteConfiguration() }
+        val defaultConfigJob = async { createDefaultConfiguration() }
+        CombinedRadarConfig(
+            localConfigurationJob.await(),
+            remoteConfigJob.await(),
+            defaultConfigJob.await(),
         )
     }
 
@@ -74,10 +96,10 @@ abstract class AbstractRadarApplication : Application(), RadarApplication {
      *
      * @return configured RadarConfiguration
      */
-    protected open fun createRemoteConfiguration(): List<RemoteConfig> = listOf()
+    protected open suspend fun createRemoteConfiguration(): List<RemoteConfig> = listOf()
 
     /**
      * Create default configuration for the app.
      */
-    protected open fun createDefaultConfiguration(): Map<String, String> = mapOf()
+    protected open suspend fun createDefaultConfiguration(): Map<String, String> = mapOf()
 }

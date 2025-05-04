@@ -19,7 +19,6 @@ package org.radarbase.android
 import android.app.Activity
 import android.app.Service
 import android.content.Context
-import android.graphics.Bitmap
 import android.os.Bundle
 import org.radarbase.android.source.SourceService
 import org.radarbase.android.util.NotificationHandler
@@ -38,6 +37,8 @@ interface RadarApplication {
 
     val radarService: Class<out Service>
         get() = RadarService::class.java
+
+    val radarServiceImpl: RadarService
 
     fun configureProvider(bundle: Bundle)
     fun onSourceServiceInvocation(service: SourceService<*>, bundle: Bundle, isNew: Boolean)

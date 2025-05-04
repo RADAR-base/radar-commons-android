@@ -28,12 +28,18 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothAdapter
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.hasBluetoothPermission
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.HashGenerator
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
@@ -47,8 +53,26 @@ import java.util.concurrent.TimeUnit
 
 class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceManager<PhoneBluetoothService, BaseSourceState>(service) {
     private val processor: OfflineProcessor
-    private val bluetoothDevicesTopic: DataCache<ObservationKey, PhoneBluetoothDevices> = createCache("android_phone_bluetooth_devices", PhoneBluetoothDevices())
-    private val bluetoothScannedTopic: DataCache<ObservationKey, PhoneBluetoothDeviceScanned> = createCache("android_phone_bluetooth_device_scanned", PhoneBluetoothDeviceScanned())
+    private val bluetoothDevicesTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDevices>> =
+        service.lifecycleScope.async(
+            Dispatchers.Default
+        ) {
+            createCache(
+                "android_phone_bluetooth_devices",
+                PhoneBluetoothDevices()
+            )
+        }
+    private val bluetoothScannedTopic: Deferred<DataCache<ObservationKey, PhoneBluetoothDeviceScanned>> =
+        service.lifecycleScope.async(
+            Dispatchers.Default
+        ) {
+            createCache(
+                "android_phone_bluetooth_device_scanned",
+                PhoneBluetoothDeviceScanned()
+            )
+        }
+
+    private val bluetoothTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
     private val hashGenerator: HashGenerator = HashGenerator(service, "bluetooth_devices")
@@ -82,10 +106,11 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
         status = SourceStatusListener.Status.READY
         register()
         processor.start()
+        bluetoothTaskExecutor.start(SupervisorJob())
         status = SourceStatusListener.Status.CONNECTED
     }
 
-    private fun processBluetoothDevices() {
+    private suspend fun processBluetoothDevices() {
         val bluetoothAdapter = service.bluetoothAdapter
         if (bluetoothAdapter == null) {
             logger.error("Bluetooth is not available.")
@@ -133,21 +158,24 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
 
                             pairedDevices.forEach { bd ->
                                 val mac = bd.address
-                                val hash = hashGenerator.createHashByteBuffer(mac + "$hashSaltReference")
+                                val hash =
+                                    hashGenerator.createHashByteBuffer(mac + "$hashSaltReference")
 
-                                send(bluetoothScannedTopic, scannedTopicBuilder.apply {
+                                bluetoothTaskExecutor.execute {
+                                    send(bluetoothScannedTopic.await(), scannedTopicBuilder.apply {
                                         this.macAddressHash = hash
                                         this.pairedState = bd.bondState.toPairedState()
                                         this.hashSaltReference = hashSaltReference
                                     }.build())
                                 }
-
-                            send(bluetoothScannedTopic, scannedTopicBuilder.apply {
-                                this.macAddressHash = macAddressHash
-                                this.pairedState = device.bondState.toPairedState()
-                                this.hashSaltReference = hashSaltReference
-                            }.build())
-
+                            }
+                            bluetoothTaskExecutor.execute {
+                                send(bluetoothScannedTopic.await(), scannedTopicBuilder.apply {
+                                    this.macAddressHash = macAddressHash
+                                    this.pairedState = device.bondState.toPairedState()
+                                    this.hashSaltReference = hashSaltReference
+                                }.build())
+                            }
                         }
 
                         BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
@@ -158,8 +186,13 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
 
                             if (!isClosed) {
                                 val time = currentTime
-                                send(bluetoothDevicesTopic, PhoneBluetoothDevices(
-                                        time, time, bondedDevices, numberOfDevices, true))
+                                bluetoothTaskExecutor.execute {
+                                    send(
+                                        bluetoothDevicesTopic.await(), PhoneBluetoothDevices(
+                                            time, time, bondedDevices, numberOfDevices, true
+                                        )
+                                    )
+                                }
                             }
                         }
                     }
@@ -170,13 +203,15 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
             bluetoothAdapter.startDiscovery()
         } else {
             val time = currentTime
-            send(bluetoothDevicesTopic, PhoneBluetoothDevices(
+            send(bluetoothDevicesTopic.await(), PhoneBluetoothDevices(
                     time, time, null, null, false))
         }
     }
 
     override fun onClose() {
-        processor.close()
+        bluetoothTaskExecutor.stop {
+            processor.stop()
+        }
         bluetoothBroadcastReceiver?.let {
             try {
                 service.unregisterReceiver(it)

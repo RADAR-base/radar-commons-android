@@ -1,15 +1,26 @@
 package org.radarbase.android.auth.portal
 
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.accept
+import io.ktor.http.ContentType
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.SourceType
+import org.radarbase.android.auth.entities.source.SourceRegistrationBody
 import org.radarbase.config.ServerConfig
 import java.io.IOException
 import java.util.*
@@ -80,7 +91,7 @@ class ManagementPortalClientTest {
 
     @Test
     @Throws(IOException::class)
-    fun requestSubject() {
+    fun requestSubject() = runTest {
         MockWebServer().use { server ->
 
             // Schedule some responses.
@@ -93,8 +104,19 @@ class ManagementPortalClientTest {
 
             val serverConfig = ServerConfig(server.url("/").toUrl())
 
-            val client = ManagementPortalClient(serverConfig, "pRMT", "")
-            val authState = AppAuthState {
+            val ktorClient = HttpClient(CIO) {
+                install(ContentNegotiation) {
+                    json(Json {
+                        ignoreUnknownKeys = true
+                        coerceInputValues = true
+                    })
+                }
+                defaultRequest {
+                    accept(ContentType.Application.Json)
+                }
+            }
+            val client = ManagementPortalClient(serverConfig, "pRMT", "", ktorClient)
+            val authState = AppAuthState.Builder().apply {
                 userId = "sub-1"
             }
             val retAuthState = client.getSubject(authState, GetSubjectParser(authState))
@@ -122,14 +144,13 @@ class ManagementPortalClientTest {
             attributes += Pair("firmware", "0.11")
         }
 
-        val body = ManagementPortalClient.sourceRegistrationBody(source).toString()
-        val `object` = JSONObject(body)
-        assertEquals("something", `object`.getString("sourceName"))
-        assertEquals(0, `object`.getInt("sourceTypeId").toLong())
-        val attr = `object`.getJSONObject("attributes")
-        assertEquals(3L, `object`.names()?.length()?.toLong())
-        assertEquals("0.11", attr.getString("firmware"))
-        assertEquals(1L, attr.names()?.length()?.toLong())
+        val `object`: SourceRegistrationBody = ManagementPortalClient.sourceRegistrationBody(source)
+        assertEquals("something", `object`.sourceName)
+        assertEquals(0, `object`.sourceTypeId.toLong())
+        val attributes = `object`.attributes
+        assertNotNull(attributes) // Ensure attributes are not null
+        assertEquals("0.11", attributes?.get("firmware"))
+        assertEquals(1, attributes?.size)
     }
 
     @Test
@@ -140,11 +161,9 @@ class ManagementPortalClientTest {
             sourceName = "something(With)_others+"
         }
 
-        val body = ManagementPortalClient.sourceRegistrationBody(source).toString()
-        val `object` = JSONObject(body)
-        assertEquals("something-With-_others-", `object`.getString("sourceName"))
-        assertEquals(0, `object`.getInt("sourceTypeId").toLong())
-        assertEquals(2L, `object`.names()?.length()?.toLong())
+        val `object` = ManagementPortalClient.sourceRegistrationBody(source)
+        assertEquals("something-With-_others-", `object`.sourceName)
+        assertEquals(0, `object`.sourceTypeId)
     }
 
     @Test

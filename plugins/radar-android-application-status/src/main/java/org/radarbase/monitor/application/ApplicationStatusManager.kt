@@ -21,43 +21,73 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.radarbase.android.data.DataCache
-import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.data.TableDataHandler
+import org.radarbase.android.kafka.TopicSendReceipt
 import org.radarbase.android.source.AbstractSourceManager
-import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
-import org.radarbase.android.source.SourceService.Companion.CACHE_TOPIC
-import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_NUMBER
-import org.radarbase.android.source.SourceService.Companion.SERVER_RECORDS_SENT_TOPIC
-import org.radarbase.android.source.SourceService.Companion.SERVER_STATUS_CHANGED
 import org.radarbase.android.source.SourceStatusListener
-import org.radarbase.android.util.*
+import org.radarbase.android.util.ChangeRunner
+import org.radarbase.android.util.CoroutineTaskExecutor
+import org.radarbase.android.util.OfflineProcessor
+import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.radarbase.monitor.application.ApplicationStatusService.Companion.UPDATE_RATE_DEFAULT
 import org.radarcns.kafka.ObservationKey
-import org.radarcns.monitor.application.*
+import org.radarcns.monitor.application.ApplicationDeviceInfo
+import org.radarcns.monitor.application.ApplicationExternalTime
+import org.radarcns.monitor.application.ApplicationRecordCounts
+import org.radarcns.monitor.application.ApplicationServerStatus
+import org.radarcns.monitor.application.ApplicationTimeZone
+import org.radarcns.monitor.application.ApplicationUptime
+import org.radarcns.monitor.application.ExternalTimeProtocol
+import org.radarcns.monitor.application.OperatingSystem
+import org.radarcns.monitor.application.ServerStatus
 import org.slf4j.LoggerFactory
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.SocketException
-import java.util.*
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 
 class ApplicationStatusManager(
-        service: ApplicationStatusService
+    service: ApplicationStatusService
 ) : AbstractSourceManager<ApplicationStatusService, ApplicationState>(service) {
-    private val serverTopic: DataCache<ObservationKey, ApplicationServerStatus> = createCache("application_server_status", ApplicationServerStatus())
-    private val recordCountsTopic: DataCache<ObservationKey, ApplicationRecordCounts> = createCache("application_record_counts", ApplicationRecordCounts())
-    private val uptimeTopic: DataCache<ObservationKey, ApplicationUptime> = createCache("application_uptime", ApplicationUptime())
-    private val ntpTopic: DataCache<ObservationKey, ApplicationExternalTime> = createCache("application_external_time", ApplicationExternalTime())
-    private val timeZoneTopic: DataCache<ObservationKey, ApplicationTimeZone> = createCache("application_time_zone", ApplicationTimeZone())
-    private val deviceInfoTopic: DataCache<ObservationKey, ApplicationDeviceInfo> = createCache("application_device_info", ApplicationDeviceInfo())
+    private val serverTopic: Deferred<DataCache<ObservationKey, ApplicationServerStatus>> = service.lifecycleScope.async(Dispatchers.Default) {
+            createCache("application_server_status", ApplicationServerStatus())
+        }
+    private val recordCountsTopic: Deferred<DataCache<ObservationKey, ApplicationRecordCounts>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_record_counts", ApplicationRecordCounts())
+    }
+    private val uptimeTopic: Deferred<DataCache<ObservationKey, ApplicationUptime>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_uptime", ApplicationUptime())
+    }
+    private val ntpTopic: Deferred<DataCache<ObservationKey, ApplicationExternalTime>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_external_time", ApplicationExternalTime())
+    }
+    private val timeZoneTopic: Deferred<DataCache<ObservationKey, ApplicationTimeZone>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_time_zone", ApplicationTimeZone())
+    }
+    private val deviceInfoTopic: Deferred<DataCache<ObservationKey, ApplicationDeviceInfo>> = service.lifecycleScope.async(Dispatchers.Default) {
+        createCache("application_device_info", ApplicationDeviceInfo())
+    }
 
     private val processor: OfflineProcessor
     private val creationTimeStamp: Long = SystemClock.elapsedRealtime()
     private val sntpClient: SntpClient = SntpClient()
     private val prefs: SharedPreferences = service.getSharedPreferences(ApplicationStatusManager::class.java.name, Context.MODE_PRIVATE)
     private var tzProcessor: OfflineProcessor? = null
+    private val tzIntervalMutex: Mutex = Mutex()
+
+    private val applicationStatusExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     @get:Synchronized
     @set:Synchronized
@@ -74,9 +104,9 @@ class ApplicationStatusManager(
 
     private lateinit var tzOffsetCache: ChangeRunner<Int>
     private lateinit var deviceInfoCache: ChangeRunner<ApplicationInfo>
-    private var serverStatusReceiver: BroadcastRegistration? = null
-    private var serverRecordsReceiver: BroadcastRegistration? = null
-    private var cacheReceiver: BroadcastRegistration? = null
+    private var cachedRecordTrackJob: Job? = null
+    private var serverRecordsSentJob: Job? = null
+    private var serverStatusJob: Job? = null
 
     init {
         name = service.getString(R.string.applicationServiceDisplayName)
@@ -98,6 +128,7 @@ class ApplicationStatusManager(
     override fun start(acceptableIds: Set<String>) {
         status = SourceStatusListener.Status.READY
 
+        applicationStatusExecutor.start()
         processor.start {
             val osVersionCode: Int = this.prefs.getInt("operatingSystemVersionCode", -1)
             val appVersionCode: Int = this.prefs.getInt("appVersionCode", -1)
@@ -133,20 +164,33 @@ class ApplicationStatusManager(
         tzProcessor?.start()
 
         logger.info("Starting ApplicationStatusManager")
-        LocalBroadcastManager.getInstance(service).apply {
-            serverStatusReceiver = register(SERVER_STATUS_CHANGED) { _, intent ->
-                state.serverStatus = ServerStatusListener.Status.values()[intent.getIntExtra(SERVER_STATUS_CHANGED, 0)]
+            with(applicationStatusExecutor) {
+                service.dataHandler?.let { handler ->
+                    cachedRecordTrackJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                        handler.numberOfRecords
+                            .collect { records: TableDataHandler.CacheSize ->
+                                val topic = records.topicName
+                                val noOfRecords = records.numberOfRecords
+                                logger.trace("Topic {} has {} records in cache", topic, noOfRecords)
+                                state.cachedRecords[topic] = noOfRecords.coerceAtLeast(0)
+                            }
+                        }
+
+                    serverRecordsSentJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                        handler.recordsSent.collect { sent: TopicSendReceipt ->
+                            logger.trace("Topic {} sent {} records", sent.topic, sent.numberOfRecords)
+                            state.addRecordsSent(sent.numberOfRecords)
+                        }
+                    }
+
+                    serverStatusJob = service.lifecycleScope.launch(Dispatchers.Default) {
+                        handler.serverStatus.collect {
+                            state.serverStatus = it
+                            logger.trace("Updated Server Status to {}", it)
+                        }
+                    }
+                }
             }
-            serverRecordsReceiver = register(SERVER_RECORDS_SENT_TOPIC) { _, intent ->
-                val numberOfRecordsSent = intent.getLongExtra(SERVER_RECORDS_SENT_NUMBER, 0)
-                state.addRecordsSent(numberOfRecordsSent.coerceAtLeast(0))
-            }
-            cacheReceiver = register(CACHE_TOPIC) { _, intent ->
-                val topic = intent.getStringExtra(CACHE_TOPIC) ?: return@register
-                val records = intent.getLongExtra(CACHE_RECORDS_UNSENT_NUMBER, 0)
-                state.cachedRecords[topic] = records.coerceAtLeast(0)
-            }
-        }
 
         status = SourceStatusListener.Status.CONNECTED
     }
@@ -172,34 +216,37 @@ class ApplicationStatusManager(
         }
 
     // using versionCode
-    private fun processDeviceInfo() {
+    private suspend fun processDeviceInfo() {
         deviceInfoCache.applyIfChanged(currentApplicationInfo) { deviceInfo ->
-            send(
-                deviceInfoTopic,
-                ApplicationDeviceInfo(
-                    currentTime,
-                    deviceInfo.manufacturer,
-                    deviceInfo.model,
-                    OperatingSystem.ANDROID,
-                    deviceInfo.osVersion,
-                    deviceInfo.osVersionCode,
-                    deviceInfo.appVersion,
-                    deviceInfo.appVersionCode,
-                ),
-            )
-
-            prefs.edit().apply {
-                putString("manufacturer", deviceInfo.manufacturer)
-                putString("model", deviceInfo.model)
-                putString("operatingSystemVersion", deviceInfo.osVersion)
-                putInt("operatingSystemVersionCode", deviceInfo.osVersionCode ?: -1)
-                putString("appVersion", deviceInfo.appVersion)
-                putInt("appVersionCode", deviceInfo.appVersionCode ?: -1)
-            }.apply()
+            applicationStatusExecutor.execute {
+                send(
+                    deviceInfoTopic.await(),
+                    ApplicationDeviceInfo(
+                        currentTime,
+                        deviceInfo.manufacturer,
+                        deviceInfo.model,
+                        OperatingSystem.ANDROID,
+                        deviceInfo.osVersion,
+                        deviceInfo.osVersionCode,
+                        deviceInfo.appVersion,
+                        deviceInfo.appVersionCode,
+                    ),
+                )
+                withContext(Dispatchers.IO) {
+                    prefs.edit().apply {
+                        putString("manufacturer", deviceInfo.manufacturer)
+                        putString("model", deviceInfo.model)
+                        putString("operatingSystemVersion", deviceInfo.osVersion)
+                        putInt("operatingSystemVersionCode", deviceInfo.osVersionCode ?: -1)
+                        putString("appVersion", deviceInfo.appVersion)
+                        putInt("appVersionCode", deviceInfo.appVersionCode ?: -1)
+                    }.apply()
+                }
+            }
         }
     }
 
-    private fun processReferenceTime() {
+    private suspend fun processReferenceTime() {
         val ntpServer = ntpServer ?: return
         if (sntpClient.requestTime(ntpServer, 5000)) {
             val delay = sntpClient.roundTripTime / 1000.0
@@ -207,7 +254,7 @@ class ApplicationStatusManager(
             val ntpTime = (sntpClient.ntpTime + SystemClock.elapsedRealtime() - sntpClient.ntpTimeReference) / 1000.0
 
             send(
-                ntpTopic,
+                ntpTopic.await(),
                 ApplicationExternalTime(
                     time,
                     ntpTime,
@@ -219,14 +266,14 @@ class ApplicationStatusManager(
         }
     }
 
-    private fun processServerStatus() {
+    private suspend fun processServerStatus() {
         val time = currentTime
 
         val status: ServerStatus = state.serverStatus.toServerStatus()
         val ipAddress = if (isProcessingIp) lookupIpAddress() else null
         logger.info("Server Status: {}; Device IP: {}", status, ipAddress)
 
-        send(serverTopic, ApplicationServerStatus(time, status, ipAddress))
+        send(serverTopic.await(), ApplicationServerStatus(time, status, ipAddress))
     }
 
     // Find Ip via NetworkInterfaces. Works via wifi, ethernet and mobile network
@@ -245,12 +292,12 @@ class ApplicationStatusManager(
         return previousInetAddress?.hostAddress
     }
 
-    private fun processUptime() {
+    private suspend fun processUptime() {
         val uptime = (SystemClock.elapsedRealtime() - creationTimeStamp) / 1000.0
-        send(uptimeTopic, ApplicationUptime(currentTime, uptime))
+        send(uptimeTopic.await(), ApplicationUptime(currentTime, uptime))
     }
 
-    private fun processRecordsSent() {
+    private suspend fun processRecordsSent() {
         val time = currentTime
 
         val recordsCached = state.cachedRecords.values
@@ -260,58 +307,79 @@ class ApplicationStatusManager(
 
         logger.info("Number of records: {sent: {}, unsent: {}, cached: {}}",
             recordsSent, recordsCached, recordsCached)
-        send(recordCountsTopic, ApplicationRecordCounts(time,
+        send(recordCountsTopic.await(), ApplicationRecordCounts(time,
             recordsCached, recordsSent, recordsCached.toIntCapped()))
     }
 
     override fun onClose() {
-        this.processor.close()
-        cacheReceiver?.unregister()
-        serverRecordsReceiver?.unregister()
-        serverStatusReceiver?.unregister()
-    }
-
-    private fun processTimeZone() {
-        val now = System.currentTimeMillis()
-        val tzOffset = TimeZone.getDefault().getOffset(now)
-        tzOffsetCache.applyIfChanged(tzOffset / 1000) { offset ->
-            send(
-                timeZoneTopic,
-                ApplicationTimeZone(
-                    now / 1000.0,
-                    offset,
-                ),
-            )
-            prefs.edit()
-                .putInt("timeZoneOffset", offset)
-                .apply()
+        applicationStatusExecutor.stop {
+            this.processor.stop()
+            cachedRecordTrackJob?.also {
+                it.cancel()
+                cachedRecordTrackJob = null
+            }
+            serverRecordsSentJob?.also {
+                it.cancel()
+                serverRecordsSentJob = null
+            }
+            serverStatusJob?.also {
+                it.cancel()
+                serverStatusJob = null
+            }
+            tzProcessor?.stop()
         }
     }
 
-    @Synchronized
-    fun setTzUpdateRate(tzUpdateRate: Long, unit: TimeUnit) {
-        if (tzUpdateRate > 0) { // enable timezone processor
-            var processor = this.tzProcessor
-            if (processor == null) {
-                processor = OfflineProcessor(service) {
-                    process = listOf(this@ApplicationStatusManager::processTimeZone)
-                    requestCode = APPLICATION_TZ_PROCESSOR_REQUEST_CODE
-                    requestName = APPLICATION_TZ_PROCESSOR_REQUEST_NAME
-                    interval(tzUpdateRate, unit)
-                    wake = false
+    private suspend fun processTimeZone() {
+        val now = System.currentTimeMillis()
+        val tzOffset = TimeZone.getDefault().getOffset(now)
+        tzOffsetCache.applyIfChanged(tzOffset / 1000) { offset ->
+            applicationStatusExecutor.execute {
+                send(
+                    timeZoneTopic.await(),
+                    ApplicationTimeZone(
+                        now / 1000.0,
+                        offset,
+                    ),
+                )
+                withContext(Dispatchers.IO) {
+                    prefs.edit()
+                        .putInt("timeZoneOffset", offset)
+                        .apply()
                 }
-                this.tzProcessor = processor
-
-                if (this.state.status == SourceStatusListener.Status.CONNECTED) {
-                    processor.start()
-                }
-            } else {
-                processor.interval(tzUpdateRate, unit)
             }
-        } else { // disable timezone processor
-            this.tzProcessor?.let {
-                it.close()
-                this.tzProcessor = null
+        }
+    }
+
+    fun setTzUpdateRate(tzUpdateRate: Long, unit: TimeUnit) {
+        service.lifecycleScope.launch(Dispatchers.Default) {
+            tzIntervalMutex.withLock {
+                if (tzUpdateRate > 0) { // enable timezone processor
+                    var processor = this@ApplicationStatusManager.tzProcessor
+                    if (processor == null) {
+                        processor = OfflineProcessor(service) {
+                            process = listOf { this@ApplicationStatusManager.processTimeZone() }
+                            requestCode = APPLICATION_TZ_PROCESSOR_REQUEST_CODE
+                            requestName = APPLICATION_TZ_PROCESSOR_REQUEST_NAME
+                            interval(tzUpdateRate, unit)
+                            wake = false
+                        }
+                        this@ApplicationStatusManager.tzProcessor = processor
+
+                        if (this@ApplicationStatusManager.state.status == SourceStatusListener.Status.CONNECTED) {
+                            processor.start()
+                        }
+                    } else {
+                        processor.interval(tzUpdateRate, unit)
+                    }
+                } else { // disable timezone processor
+                    this@ApplicationStatusManager.tzProcessor?.let {
+                        service.lifecycleScope.launch(Dispatchers.Default) {
+                            it.stop()
+                        }
+                        this@ApplicationStatusManager.tzProcessor = null
+                    }
+                }
             }
         }
     }
@@ -339,13 +407,13 @@ class ApplicationStatusManager(
 
         private fun Long.toIntCapped(): Int = if (this <= Int.MAX_VALUE) toInt() else Int.MAX_VALUE
 
-        private fun ServerStatusListener.Status?.toServerStatus(): ServerStatus = when (this) {
-            ServerStatusListener.Status.CONNECTED,
-            ServerStatusListener.Status.READY,
-            ServerStatusListener.Status.UPLOADING -> ServerStatus.CONNECTED
-            ServerStatusListener.Status.DISCONNECTED,
-            ServerStatusListener.Status.DISABLED,
-            ServerStatusListener.Status.UPLOADING_FAILED -> ServerStatus.DISCONNECTED
+        private fun org.radarbase.android.kafka.ServerStatus?.toServerStatus(): ServerStatus = when (this) {
+            org.radarbase.android.kafka.ServerStatus.CONNECTED,
+            org.radarbase.android.kafka.ServerStatus.READY,
+            org.radarbase.android.kafka.ServerStatus.UPLOADING -> ServerStatus.CONNECTED
+            org.radarbase.android.kafka.ServerStatus.DISCONNECTED,
+            org.radarbase.android.kafka.ServerStatus.DISABLED,
+            org.radarbase.android.kafka.ServerStatus.UPLOADING_FAILED -> ServerStatus.DISCONNECTED
             else -> ServerStatus.UNKNOWN
         }
     }

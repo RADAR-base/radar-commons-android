@@ -39,17 +39,42 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import org.radarbase.android.util.CoroutineTaskExecutor
 
 class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLogService, BaseSourceState>(context) {
-    private val callTopic: DataCache<ObservationKey, PhoneCall> = createCache("android_phone_call", PhoneCall())
-    private val smsTopic: DataCache<ObservationKey, PhoneSms> = createCache("android_phone_sms", PhoneSms())
-    private val smsUnreadTopic: DataCache<ObservationKey, PhoneSmsUnread> = createCache("android_phone_sms_unread", PhoneSmsUnread())
+    private val callTopic: Deferred<DataCache<ObservationKey, PhoneCall>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache(
+            "android_phone_call",
+            PhoneCall()
+        )
+    }
+    private val smsTopic: Deferred<DataCache<ObservationKey, PhoneSms>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache(
+            "android_phone_sms",
+            PhoneSms()
+        )
+    }
+    private val smsUnreadTopic: Deferred<DataCache<ObservationKey, PhoneSmsUnread>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache(
+            "android_phone_sms_unread",
+            PhoneSmsUnread()
+        )
+    }
     private val preferences: SharedPreferences = context.getSharedPreferences(PhoneLogService::class.java.name, Context.MODE_PRIVATE)
     private val hashGenerator = HashGenerator(context, PhoneLogService::class.java.name)
     private val db: ContentResolver = context.contentResolver
     private val logProcessor: OfflineProcessor
     private var lastSmsTimestamp: Long = 0
     private var lastCallTimestamp: Long = 0
+
+    private val logsExecutor: CoroutineTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     init {
         name = service.getString(R.string.phoneLogServiceDisplayName)
@@ -82,6 +107,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
                     .apply()
             }
         }
+        logsExecutor.start()
 
         status = SourceStatusListener.Status.CONNECTED
     }
@@ -92,7 +118,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         logger.info("Call and SMS log: listener activated and set to a period of {} {}", period, unit)
     }
 
-    private fun processSmsLog() {
+    private suspend fun processSmsLog() {
         val newSmsTimestamp = processDb(Telephony.Sms.CONTENT_URI, SMS_COLUMNS, Telephony.Sms.DATE, lastSmsTimestamp) {
             val date = getLong(getColumnIndexOrThrow(Telephony.Sms.DATE))
 
@@ -117,7 +143,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         }
     }
 
-    private fun processCallLog() {
+    private suspend fun processCallLog() {
         val newLastCallTimestamp = processDb(CallLog.Calls.CONTENT_URI, CALL_COLUMNS, CallLog.Calls.DATE, lastCallTimestamp) {
             val date = getLong(getColumnIndexOrThrow(CallLog.Calls.DATE))
 
@@ -194,7 +220,7 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
         return lastTimestamp
     }
 
-    private fun processNumberUnreadSms() {
+    private suspend fun processNumberUnreadSms() {
         val where = Telephony.Sms.READ + " = 0"
         try {
             db.query(Telephony.Sms.CONTENT_URI, ID_COLUMNS, where, null, null)?.use { c ->
@@ -216,16 +242,20 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
             CallLog.Calls.MISSED_TYPE -> PhoneCallType.MISSED
             else -> PhoneCallType.UNKNOWN
         }
-
-        send(callTopic, PhoneCall(
-                eventTimestamp,
-                currentTime,
-                duration,
-                targetKey,
-                type,
-                targetIsContact,
-                phoneNumber == null,
-                target.length))
+        logsExecutor.execute {
+            send(
+                callTopic.await(), PhoneCall(
+                    eventTimestamp,
+                    currentTime,
+                    duration,
+                    targetKey,
+                    type,
+                    targetIsContact,
+                    phoneNumber == null,
+                    target.length
+                )
+            )
+        }
     }
 
     private fun sendPhoneSms(eventTimestamp: Double, target: String, typeCode: Int, message: String, targetIsContact: Boolean) {
@@ -246,21 +276,27 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
 
         // Only incoming messages are associated with a contact. For outgoing we don't know
         val sendFromContact: Boolean? = if (type == PhoneSmsType.INCOMING) targetIsContact else null
-
-        send(smsTopic, PhoneSms(
-                eventTimestamp,
-                currentTime,
-                targetKey,
-                type,
-                length,
-                sendFromContact,
-                phoneNumber == null,
-                target.length))
+        logsExecutor.execute {
+            send(
+                smsTopic.await(), PhoneSms(
+                    eventTimestamp,
+                    currentTime,
+                    targetKey,
+                    type,
+                    length,
+                    sendFromContact,
+                    phoneNumber == null,
+                    target.length
+                )
+            )
+        }
     }
 
     private fun sendNumberUnreadSms(numberUnread: Int) {
         val time = currentTime
-        send(smsUnreadTopic, PhoneSmsUnread(time, time, numberUnread))
+        logsExecutor.execute {
+            send(smsUnreadTopic.await(), PhoneSmsUnread(time, time, numberUnread))
+        }
     }
 
     /**
@@ -298,7 +334,9 @@ class PhoneLogManager(context: PhoneLogService) : AbstractSourceManager<PhoneLog
     }
 
     override fun onClose() {
-        logProcessor.close()
+        logsExecutor.stop {
+            logProcessor.stop()
+        }
     }
 
     companion object {

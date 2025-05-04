@@ -18,8 +18,11 @@ package org.radarbase.android.source
 
 import android.Manifest.permission.BLUETOOTH
 import android.Manifest.permission.BLUETOOTH_ADMIN
+import android.Manifest.permission.BLUETOOTH_CONNECT
+import android.Manifest.permission.BLUETOOTH_SCAN
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.annotation.CallSuper
 import androidx.annotation.DrawableRes
@@ -169,12 +172,19 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     protected fun configure(bundle: Bundle) {
         // Add the default configuration parameters given to the service intents
         radarService.radarApp.configureProvider(bundle)
-        val permissions = permissionsNeeded
-        bundle.putBoolean(NEEDS_BLUETOOTH_KEY,
-                BLUETOOTH in permissions || BLUETOOTH_ADMIN in permissions)
+        bundle.putBoolean(NEEDS_BLUETOOTH_KEY, doesRequireBluetooth())
         bundle.putString(PLUGIN_NAME_KEY, pluginName)
         bundle.putString(PRODUCER_KEY, sourceProducer)
         bundle.putString(MODEL_KEY, sourceModel)
+    }
+
+    fun doesRequireBluetooth(): Boolean {
+        val permissions = permissionsNeeded
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            BLUETOOTH_CONNECT in permissions || BLUETOOTH_SCAN in permissions
+        } else {
+            BLUETOOTH in permissions || BLUETOOTH_ADMIN in permissions
+        }
     }
 
     /** Whether [.getConnection] has already been called.  */
@@ -239,6 +249,11 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     fun isRegisteredFor(authState: AppAuthState, checkVersion: Boolean): Boolean {
         return !authState.needsRegisteredSources
                 || authState.sourceMetadata.any { matches(it.type, checkVersion) && authState.isAuthorizedForSource(it.sourceId) }
+    }
+
+    fun stopService() {
+        val intent = Intent(radarService, serviceClass)
+        radarService.stopService(intent)
     }
 
     open val actions: List<Action> = emptyList()

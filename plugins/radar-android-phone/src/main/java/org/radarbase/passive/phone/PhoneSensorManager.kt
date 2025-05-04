@@ -25,36 +25,72 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.BatteryManager.*
+import android.os.BatteryManager.BATTERY_STATUS_CHARGING
+import android.os.BatteryManager.BATTERY_STATUS_DISCHARGING
+import android.os.BatteryManager.BATTERY_STATUS_FULL
+import android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING
+import android.os.BatteryManager.BATTERY_STATUS_UNKNOWN
+import android.os.BatteryManager.EXTRA_LEVEL
+import android.os.BatteryManager.EXTRA_PLUGGED
+import android.os.BatteryManager.EXTRA_SCALE
+import android.os.BatteryManager.EXTRA_STATUS
 import android.os.PowerManager
-import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.os.SystemClock
 import android.util.SparseArray
 import android.util.SparseIntArray
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.OfflineProcessor
-import org.radarbase.android.util.SafeHandler
 import org.radarbase.passive.phone.PhoneSensorService.Companion.PHONE_SENSOR_INTERVAL_DEFAULT
 import org.radarcns.kafka.ObservationKey
-import org.radarcns.passive.phone.*
+import org.radarcns.passive.phone.BatteryStatus
+import org.radarcns.passive.phone.PhoneAcceleration
+import org.radarcns.passive.phone.PhoneBatteryLevel
+import org.radarcns.passive.phone.PhoneGyroscope
+import org.radarcns.passive.phone.PhoneLight
+import org.radarcns.passive.phone.PhoneMagneticField
+import org.radarcns.passive.phone.PhoneStepCount
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<PhoneSensorService, PhoneState>(context), SensorEventListener {
-    private val accelerationTopic: DataCache<ObservationKey, PhoneAcceleration> = createCache("android_phone_acceleration", PhoneAcceleration())
-    private val lightTopic: DataCache<ObservationKey, PhoneLight> = createCache("android_phone_light", PhoneLight())
-    private val stepCountTopic: DataCache<ObservationKey, PhoneStepCount> = createCache("android_phone_step_count", PhoneStepCount())
-    private val gyroscopeTopic: DataCache<ObservationKey, PhoneGyroscope> = createCache("android_phone_gyroscope", PhoneGyroscope())
-    private val magneticFieldTopic: DataCache<ObservationKey, PhoneMagneticField> = createCache("android_phone_magnetic_field", PhoneMagneticField())
-    private val batteryTopic: DataCache<ObservationKey, PhoneBatteryLevel> = createCache("android_phone_battery_level", PhoneBatteryLevel())
+    private val accelerationTopic: Deferred<DataCache<ObservationKey, PhoneAcceleration>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache("android_phone_acceleration", PhoneAcceleration())
+    }
+    private val lightTopic: Deferred<DataCache<ObservationKey, PhoneLight>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache("android_phone_light", PhoneLight())
+    }
+    private val stepCountTopic: Deferred<DataCache<ObservationKey, PhoneStepCount>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache("android_phone_step_count", PhoneStepCount())
+    }
+    private val gyroscopeTopic: Deferred<DataCache<ObservationKey, PhoneGyroscope>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache("android_phone_gyroscope", PhoneGyroscope())
+    }
+    private val magneticFieldTopic: Deferred<DataCache<ObservationKey, PhoneMagneticField>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache("android_phone_magnetic_field", PhoneMagneticField())
+    }
+    private val batteryTopic: Deferred<DataCache<ObservationKey, PhoneBatteryLevel>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache("android_phone_battery_level", PhoneBatteryLevel())
+    }
 
     var sensorDelays: SparseIntArray = SparseIntArray()
         set(value) {
-            mHandler.execute(defaultToCurrentThread = true) {
+            service.lifecycleScope.launch(Dispatchers.Default) {
                 if (field.contentsEquals(value)) {
-                    return@execute
+                    return@launch
                 }
 
                 field = value
@@ -66,7 +102,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
 
     private val sensorSendStates = SparseArray<SensorSendState>()
 
-    private val mHandler = SafeHandler.getInstance("Phone sensors", THREAD_PRIORITY_BACKGROUND)
+    private val sensorTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     private val sensorManager: SensorManager? = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager?
     private val batteryProcessor: OfflineProcessor
@@ -92,8 +128,8 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     @SuppressLint("WakelockTimeout")
     override fun start(acceptableIds: Set<String>) {
         register()
-        mHandler.start()
-        mHandler.execute {
+        sensorTaskExecutor.start()
+        service.lifecycleScope.launch(Dispatchers.Default) {
             wakeLock = (service.getSystemService(POWER_SERVICE) as PowerManager?)?.let { pm ->
                 pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "org.radarcns.phone:PhoneSensorManager")
                     .also { it.acquire() }
@@ -116,7 +152,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
      */
     private fun registerSensors() {
         sensorManager ?: return
-        mHandler.executeReentrant {
+        sensorTaskExecutor.executeReentrant {
             if (state.status == SourceStatusListener.Status.CONNECTED) {
                 sensorManager.unregisterListener(this)
             }
@@ -154,7 +190,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
     override fun onSensorChanged(event: SensorEvent) {
         val time = currentTime
         val sensorType = event.sensor.type
-        mHandler.execute {
+        sensorTaskExecutor.execute {
             val delay = sensorDelays[sensorType]
             // Ignore disabled sensors
             if (delay <= 0) return@execute
@@ -164,14 +200,16 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             if (sendState.mayStartNewInterval(delay)) {
                 processSensorEvent(sensorType, time, event, sendState)
             } else {
-                sendState.postponeEvent(time, event, mHandler, delay) { postponedTime, postponedEvent ->
-                    processSensorEvent(sensorType, postponedTime, postponedEvent, sendState)
+                sendState.postponeEvent(time, event, sensorTaskExecutor, delay) { postponedTime, postponedEvent ->
+                    sensorTaskExecutor.execute {
+                        processSensorEvent(sensorType, postponedTime, postponedEvent, sendState)
+                    }
                 }
             }
         }
     }
 
-    private fun processSensorEvent(
+    private suspend fun processSensorEvent(
         sensorType: Int,
         time: Double,
         event: SensorEvent,
@@ -192,41 +230,41 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         // no action
     }
 
-    private fun processAcceleration(time: Double, event: SensorEvent) {
+    private suspend fun processAcceleration(time: Double, event: SensorEvent) {
         // x,y,z are in m/s2
         val x = event.values[0] / SensorManager.GRAVITY_EARTH
         val y = event.values[1] / SensorManager.GRAVITY_EARTH
         val z = event.values[2] / SensorManager.GRAVITY_EARTH
         state.setAcceleration(x, y, z)
 
-        send(accelerationTopic, PhoneAcceleration(time, time, x, y, z))
+        send(accelerationTopic.await(), PhoneAcceleration(time, time, x, y, z))
     }
 
-    private fun processLight(time: Double, event: SensorEvent) {
+    private suspend fun processLight(time: Double, event: SensorEvent) {
         val lightValue = event.values[0]
 
-        send(lightTopic, PhoneLight(time, time, lightValue))
+        send(lightTopic.await(), PhoneLight(time, time, lightValue))
     }
 
-    private fun processGyroscope(time: Double, event: SensorEvent) {
+    private suspend fun processGyroscope(time: Double, event: SensorEvent) {
         // Not normalized axis of rotation in rad/s
         val axisX = event.values[0]
         val axisY = event.values[1]
         val axisZ = event.values[2]
 
-        send(gyroscopeTopic, PhoneGyroscope(time, time, axisX, axisY, axisZ))
+        send(gyroscopeTopic.await(), PhoneGyroscope(time, time, axisX, axisY, axisZ))
     }
 
-    private fun processMagneticField(time: Double, event: SensorEvent) {
+    private suspend fun processMagneticField(time: Double, event: SensorEvent) {
         // Magnetic field in microTesla
         val axisX = event.values[0]
         val axisY = event.values[1]
         val axisZ = event.values[2]
 
-        send(magneticFieldTopic, PhoneMagneticField(time, time, axisX, axisY, axisZ))
+        send(magneticFieldTopic.await(), PhoneMagneticField(time, time, axisX, axisY, axisZ))
     }
 
-    private fun processStep(time: Double, event: SensorEvent) {
+    private suspend fun processStep(time: Double, event: SensorEvent) {
         // Number of step since listening or since reboot
         val stepCount = event.values[0].toInt()
 
@@ -238,12 +276,12 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             stepCount - lastStepCount
         }
         lastStepCount = stepCount
-        send(stepCountTopic, PhoneStepCount(time, time, stepsSinceLastUpdate))
+        send(stepCountTopic.await(), PhoneStepCount(time, time, stepsSinceLastUpdate))
 
         logger.info("Steps taken: {}", stepsSinceLastUpdate)
     }
 
-    private fun processBatteryStatus() {
+    private suspend fun processBatteryStatus() {
         // Get last broadcast battery change intent
         val intent = service.registerReceiver(null,
                 IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
@@ -260,13 +298,14 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
         state.batteryLevel = batteryPct
 
         val time = currentTime
-        send(batteryTopic, PhoneBatteryLevel(time, time, batteryPct, isPlugged, batteryStatus))
+        send(batteryTopic.await(), PhoneBatteryLevel(time, time, batteryPct, isPlugged, batteryStatus))
     }
 
     override fun onClose() {
-        batteryProcessor.close()
 
-        mHandler.stop {
+
+        sensorTaskExecutor.stop {
+            batteryProcessor.stop()
             sensorManager?.unregisterListener(this)
             wakeLock?.release()
         }
@@ -318,7 +357,7 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
             var lastSendTime: Long = 0,
             var postponedTime: Double? = null,
             var postponedEvent: SensorEvent? = null,
-            var postponeFuture: SafeHandler.HandlerFuture? = null,
+            var postponeFuture: CoroutineTaskExecutor.CoroutineFutureHandle? = null,
         ) {
             /**
              * Whether the previous interval has ended. The interval is measured as [delay]
@@ -349,19 +388,19 @@ class PhoneSensorManager(context: PhoneSensorService) : AbstractSourceManager<Ph
              * Postpone sending [event] until the next interval ends. Only the last event
              * in the current interval will be sent and only if no events are sent in the interval
              * after it. This method may be called multiple times in an interval. The postponed
-             * action will be run by [mHandler]. The interval is measured as [delay] milliseconds.
+             * action will be run by [CoroutineTaskExecutor]. The interval is measured as [delay] milliseconds.
              */
             fun postponeEvent(
                 time: Double,
                 event: SensorEvent,
-                mHandler: SafeHandler,
+                executor: CoroutineTaskExecutor,
                 delay: Int,
                 process: (postponedTime: Double, postponedEvent: SensorEvent) -> Unit,
             ) {
                 postponedTime = time
                 postponedEvent = event
                 if (postponeFuture == null) {
-                    postponeFuture = mHandler.delay(timeUntilNextIntervalEnds(delay)) {
+                    postponeFuture = executor.delay(timeUntilNextIntervalEnds(delay)) {
                         postponeFuture = null
                         process(
                             postponedTime ?: return@delay,

@@ -23,24 +23,36 @@ import android.database.Cursor
 import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneContactList
-import java.util.*
 import java.util.concurrent.TimeUnit
-import kotlin.collections.ArrayList
 import kotlin.collections.LinkedHashSet
 
 class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourceManager<PhoneContactsListService, BaseSourceState>(service) {
     private val preferences: SharedPreferences = service.getSharedPreferences(PhoneContactListManager::class.java.name, Context.MODE_PRIVATE)
-    private val contactsTopic: DataCache<ObservationKey, PhoneContactList> = createCache("android_phone_contacts", PhoneContactList())
+    private val contactsTopic: Deferred<DataCache<ObservationKey, PhoneContactList>> = service.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache(
+            "android_phone_contacts",
+            PhoneContactList()
+        )
+    }
     private val processor: OfflineProcessor
     private val db: ContentResolver = service.contentResolver
     private var savedContactLookups: Set<String> = emptySet()
+
+    private val contactsTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
 
     init {
         name = service.getString(R.string.contact_list)
@@ -50,6 +62,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
             requestName = ACTION_UPDATE_CONTACTS_LIST
             wake = false
         }
+        contactsTaskExecutor.start()
     }
 
     override fun start(acceptableIds: Set<String>) {
@@ -58,11 +71,14 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
 
         processor.start {
             // deprecated using contact _ID, using LOOKUP instead.
-            preferences.edit()
+            withContext(Dispatchers.IO) {
+                preferences.edit()
                     .remove(CONTACT_IDS)
                     .apply()
 
-            savedContactLookups = preferences.getStringSet(CONTACT_LOOKUPS, emptySet()) ?: emptySet()
+                savedContactLookups =
+                    preferences.getStringSet(CONTACT_LOOKUPS, emptySet()) ?: emptySet()
+            }
         }
 
         status = SourceStatusListener.Status.CONNECTED
@@ -111,7 +127,9 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
     }
 
     override fun onClose() {
-        processor.close()
+        contactsTaskExecutor.stop {
+            processor.stop()
+        }
     }
 
     private fun makeQuery(
@@ -135,7 +153,7 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
         }
     }
 
-    private fun processContacts() {
+    private suspend fun processContacts() {
         val newContactLookups = queryContacts() ?: return
 
         var added: Int? = null
@@ -147,12 +165,14 @@ class PhoneContactListManager(service: PhoneContactsListService) : AbstractSourc
         }
 
         savedContactLookups = newContactLookups
-        preferences.edit()
+        withContext(Dispatchers.IO) {
+            preferences.edit()
                 .putStringSet(CONTACT_LOOKUPS, savedContactLookups)
                 .apply()
+        }
 
         val timestamp = currentTime
-        send(contactsTopic, PhoneContactList(timestamp, timestamp, added, removed, newContactLookups.size))
+        send(contactsTopic.await(), PhoneContactList(timestamp, timestamp, added, removed, newContactLookups.size))
     }
 
     internal fun setCheckInterval(checkInterval: Long, unit: TimeUnit) {

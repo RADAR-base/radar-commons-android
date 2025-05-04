@@ -19,53 +19,59 @@ package org.radarbase.android.source
 import android.content.ComponentName
 import android.content.Context
 import android.os.IBinder
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import org.radarbase.android.RadarService
-import org.radarbase.android.source.SourceService.Companion.SOURCE_SERVICE_CLASS
-import org.radarbase.android.source.SourceService.Companion.SOURCE_STATUS_CHANGED
-import org.radarbase.android.util.BroadcastRegistration
-import org.radarbase.android.util.register
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 class SourceServiceConnection<S : BaseSourceState>(
-        private val radarService: RadarService,
-        val serviceClassName: String
+    private val radarService: RadarService,
+    serviceClassName: String,
 ) : BaseServiceConnection<S>(serviceClassName) {
     val context: Context
         get() = radarService
-    private val broadcaster = LocalBroadcastManager.getInstance(radarService)
-    private var statusReceiver: BroadcastRegistration? = null
+
+    private var serviceJob: Job? = null
+    private var sourceFailedJob: Job? = null
 
     override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
-        statusReceiver = broadcaster.register(SOURCE_STATUS_CHANGED) { _, intent ->
-            if (serviceClassName == intent.getStringExtra(SOURCE_SERVICE_CLASS)) {
-                logger.info("AppSource status changed of source {}", sourceName)
-                val statusOrdinal = intent.getIntExtra(SOURCE_STATUS_CHANGED, 0)
-                sourceStatus = SourceStatusListener.Status.values()[statusOrdinal]
-                        .also { logger.info("Updated source status to {}", it) }
-                        .also { radarService.sourceStatusUpdated(this@SourceServiceConnection, it) }
+        if (!hasService()) {
+            super.onServiceConnected(className, service)
+        }
+
+        radarService.run {
+            serviceJob = lifecycleScope.launch {
+                sourceStatus
+                    ?.collect {
+                        logger.info("Source status changed of source: $sourceName with service class: {}", serviceClassName)
+                        radarService.sourceStatusUpdated(this@SourceServiceConnection, it)
+                    }
+            }
+            sourceFailedJob = lifecycleScope.launch {
+                sourceConnectFailed?.collect {
+                    radarService.sourceFailedToConnect(it.sourceName, it.serviceClass)
+                }
             }
         }
 
-        if (!hasService()) {
-            super.onServiceConnected(className, service)
-            if (hasService()) {
-                radarService.serviceConnected(this)
-            }
+        if (hasService()) {
+            radarService.serviceConnected(this)
         }
     }
 
     override fun onServiceDisconnected(className: ComponentName?) {
+        serviceJob?.cancel()
+        sourceFailedJob?.cancel()
         val hadService = hasService()
         super.onServiceDisconnected(className)
 
         if (hadService) {
-            statusReceiver?.unregister()
             radarService.serviceDisconnected(this)
         }
     }
-
     companion object {
-        private val logger = LoggerFactory.getLogger(SourceServiceConnection::class.java)
+        private val logger: Logger = LoggerFactory.getLogger(SourceServiceConnection::class.java)
     }
 }

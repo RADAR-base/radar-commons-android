@@ -41,4 +41,6 @@ interface LoginListener {
      * It my also be `null`.
      */
     fun loginFailed(manager: LoginManager?, ex: Exception?)
+
+    suspend fun logoutSucceeded(manager: LoginManager?, authState: AppAuthState)
 }

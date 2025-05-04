@@ -21,10 +21,16 @@ import android.app.usage.UsageEvents.Event.*
 import android.app.usage.UsageStatsManager
 import android.content.*
 import android.os.Build
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceStatusListener
+import org.radarbase.android.util.CoroutineTaskExecutor
 import org.radarbase.android.util.OfflineProcessor
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneInteractionState
@@ -37,8 +43,14 @@ import java.util.concurrent.TimeUnit
 
 class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<PhoneUsageService, BaseSourceState>(context) {
 
-    private val usageEventTopic: DataCache<ObservationKey, PhoneUsageEvent>?
-    private val userInteractionTopic: DataCache<ObservationKey, PhoneUserInteraction> = createCache("android_phone_user_interaction", PhoneUserInteraction())
+    private val usageEventTopic: Deferred<DataCache<ObservationKey, PhoneUsageEvent>>?
+    private val userInteractionTopic: Deferred<DataCache<ObservationKey, PhoneUserInteraction>> = context.lifecycleScope.async(
+        Dispatchers.Default) {
+        createCache(
+            "android_phone_user_interaction",
+            PhoneUserInteraction()
+        )
+    }
 
     private val phoneStateReceiver: BroadcastReceiver
     private val usageStatsManager: UsageStatsManager?
@@ -50,12 +62,16 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
     private var lastEventType: Int = 0
     private var lastEventIsSent: Boolean = false
 
+    private val usagesTaskExecutor = CoroutineTaskExecutor(this::class.simpleName!!)
+
     init {
         name = service.getString(R.string.phoneUsageServiceDisplayName)
         this.usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
 
         usageEventTopic = if (usageStatsManager != null) {
-            createCache("android_phone_usage_event", PhoneUsageEvent())
+            context.lifecycleScope.async(Dispatchers.Default) {
+                createCache("android_phone_usage_event", PhoneUsageEvent())
+            }
         } else {
             logger.warn("Usage statistics are not available.")
             null
@@ -98,7 +114,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         })
 
         phoneUsageProcessor.start()
-
+        usagesTaskExecutor.start(SupervisorJob())
         status = SourceStatusListener.Status.CONNECTED
     }
 
@@ -112,8 +128,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         }
 
         val time = currentTime
-        send(userInteractionTopic, PhoneUserInteraction(time, time, state))
-
+        usagesTaskExecutor.execute {
+            send(userInteractionTopic.await(), PhoneUserInteraction(time, time, state))
+        }
         // Save the last user interaction state. Value shutdown is used to register boot.
         preferences.edit()
                 .putString(LAST_USER_INTERACTION, action)
@@ -130,7 +147,7 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         logger.info("Usage event alarm activated and set to a period of {} seconds", interval)
     }
 
-    private fun processUsageEvents() {
+    private suspend fun processUsageEvents() {
         usageStatsManager ?: return
 
         // Get events from previous event to now or from a fixed history
@@ -179,7 +196,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
         val time = lastTimestamp / 1000.0
         val value = PhoneUsageEvent(time, currentTime, lastPackageName, null, null, usageEventType)
-        send(usageEventTopic, value)
+        usagesTaskExecutor.execute {
+            send(usageEventTopic.await(), value)
+        }
 
         if (logger.isDebugEnabled) {
             logger.debug("Event: [{}] {}\n\t{}", lastEventType, lastPackageName, Date(lastTimestamp))
@@ -215,7 +234,9 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
 
     override fun onClose() {
         if (phoneUsageProcessor.isStarted) {
-            phoneUsageProcessor.close()
+            usagesTaskExecutor.stop {
+                phoneUsageProcessor.stop()
+            }
             service.unregisterReceiver(phoneStateReceiver)
         }
     }
