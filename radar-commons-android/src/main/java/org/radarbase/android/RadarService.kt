@@ -420,6 +420,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
 
+    fun nonGrantedPermissions(): Set<String> {
+        return needsPermissions
+    }
+
     private fun updateBluetoothNeeded(newValue: Boolean) {
         needsBluetooth.applyIfChanged(newValue) {
             if (newValue) {
