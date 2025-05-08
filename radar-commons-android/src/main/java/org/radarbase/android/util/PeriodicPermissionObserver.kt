@@ -29,16 +29,15 @@ class PeriodicPermissionObserver(private val context: RadarService) {
         count += 1
         if (isFirstAlarm) return
 
-        val permissions = context.nonGrantedPermissions()
-
-        if (permissions.isNotEmpty()) {
-            Firebase.crashlytics.apply {
-                log("User have not granted some permissions")
-                setCustomKey("error_type", "permissions_not_granted")
-                setCustomKey("non_granted_permissions", permissions.joinToString(", ") { it })
+        context.nonGrantedPermissions().also { permissions ->
+            if (permissions.isNotEmpty()) {
+                Firebase.crashlytics.apply {
+                    log("User have not granted some permissions")
+                    setCustomKey("error_type", "permissions_not_granted")
+                    setCustomKey("non_granted_permissions", permissions.joinToString(", ") { it })
+                }
             }
         }
-
     }
 
     private fun configurePermissionObserver(config: SingleRadarConfiguration) {
@@ -50,7 +49,7 @@ class PeriodicPermissionObserver(private val context: RadarService) {
 
 
     fun stop() {
-
+        pObserverProcessor.close()
     }
 
     companion object {
