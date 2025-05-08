@@ -366,6 +366,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
             }
         }
+
+        periodicPermissionObserver.configurePermissionObserver(config)
     }
 
     private fun hasFeatures(provider: SourceProvider<*>, packageManager: PackageManager?): Boolean {
