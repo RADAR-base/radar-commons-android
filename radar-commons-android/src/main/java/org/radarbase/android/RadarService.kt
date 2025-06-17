@@ -24,10 +24,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
 import android.os.*
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES
@@ -240,7 +240,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
              * This need to be modified it in future when setting new targetSdkVersion
              */
             startForeground(1, createForegroundNotification(),
-                        FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                        FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             )
         }
 
@@ -248,7 +248,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     private fun startForegroundIfNeeded(grantedPermissions: Set<String>) {
-        if (SDK_INT < Q) return
+        if (SDK_INT < UPSIDE_DOWN_CAKE) return
 
         val fgsTypePermissions: MutableSet<Int> = mutableSetOf()
 
@@ -275,8 +275,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
 
         if (fgsTypePermissions.isNotEmpty()) {
-
-            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
 
             val combinedFgsType: Int = fgsTypePermissions.reduce { acc, type -> acc or type }
 
