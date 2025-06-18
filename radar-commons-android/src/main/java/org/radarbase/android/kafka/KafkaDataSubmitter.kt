@@ -20,11 +20,15 @@ import android.os.Process
 import org.apache.avro.Schema
 import org.apache.avro.SchemaValidationException
 import org.apache.avro.generic.IndexedRecord
+import org.radarbase.android.RadarService
 import org.radarbase.android.data.DataCacheGroup
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.data.ReadableDataCache
+import org.radarbase.android.source.PluginMetadataStore
+import org.radarbase.android.util.FirebaseEventLogger
 import org.radarbase.android.util.SafeHandler
 import org.radarbase.data.AvroRecordData
+import org.radarbase.data.RecordData
 import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.KafkaSender
 import org.radarbase.producer.KafkaTopicSender
@@ -46,11 +50,14 @@ class KafkaDataSubmitter(
     private val dataHandler: DataHandler<*, *>,
     private val sender: KafkaSender,
     config: SubmitterConfiguration,
+    radarService: RadarService? = null,
 ) : Closeable {
 
     private val submitHandler = SafeHandler.getInstance("KafkaDataSubmitter", Process.THREAD_PRIORITY_BACKGROUND)
     private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>> = HashMap()
     private val connection: KafkaConnectionChecker
+    private val pluginMetadata: PluginMetadataStore? = radarService?.pluginMetadata
+    private val reportedTopics: MutableSet<String> = mutableSetOf()
 
     var config: SubmitterConfiguration = config
         set(newValue) {
@@ -251,11 +258,47 @@ class KafkaDataSubmitter(
                 }
             } else null
 
-            if (keyUserId == null || keyUserId == config.userId) {
+            val keyProjectId = retrieveDataFromFields(topic, data, "projectId")
+
+            if ((keyUserId == null || keyUserId == config.userId) && (keyProjectId == null || keyProjectId == config.projectId)) {
                 if (uploadingNotified.compareAndSet(false, true)) {
                     dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING)
                 }
+                val keySourceId = retrieveDataFromFields(topic, data, "sourceId")
+                if (pluginMetadata != null) {
+                    val stringSourceId = keySourceId as? String
+                    if (stringSourceId != null && stringSourceId !in pluginMetadata.sourceIds) {
+                        logger.warn(
+                            "(MismatchedId) SourceId: {} for topic: {} doesn't match with any sourceId's. Discarding the data",
+                            stringSourceId,
+                            topic.name
+                        )
+                        dataHandler.let {
+                            it.updateRecordsSent(topic.name, size.toLong())
+                            // The upload has not actually failed yet, but if it proceeds, it will fail due to an incorrect sourceId.
+                            // Therefore, the status is explicitly set to UPLOADING_FAILED.
+                            it.updateServerStatus(ServerStatusListener.Status.UPLOADING_FAILED)
+                        }
 
+                        cache.remove(size)
+
+                        if (!reportedTopics.contains(topic.name)) {
+                            val pluginName = pluginMetadata.topicToPluginMap.get(topic.name)
+                            val sourceId = pluginMetadata.pluginToSourceIdMap[pluginName]
+
+                            FirebaseEventLogger.reportMismatchedSourceId(
+                                keyProjectId,
+                                keySourceId,
+                                keyUserId,
+                                topic.name,
+                                pluginName,
+                                sourceId
+                            )
+                            reportedTopics.add(topic.name)
+                        }
+                        return size
+                    }
+                }
                 try {
                     sender(topic).run {
                         send(AvroRecordData<Any, Any>(data.topic, data.key, recordsNotNull))
@@ -272,13 +315,35 @@ class KafkaDataSubmitter(
                 }
 
                 logger.debug("uploaded {} {} records", size, topic.name)
+            } else {
+                val pluginName = pluginMetadata?.topicToPluginMap?.get(topic.name)
+
+                when {
+                    keyProjectId != config.projectId -> {
+                        FirebaseEventLogger.reportMismatchedProjectId(
+                            keyProjectId, config.projectId, pluginName, topic.name, keyUserId
+                        )
+                    }
+
+                    keyUserId != config.userId -> {
+                        FirebaseEventLogger.reportMismatchedUserId(
+                            keyUserId, config.userId, pluginName, topic.name
+                        )
+                    }
+                }
             }
         }
 
         cache.remove(size)
-
         return size
     }
+
+    private fun retrieveDataFromFields(topic: AvroTopic<Any, Any>, data: RecordData<Any, Any?>, field: String) =
+        if (topic.keySchema.type == Schema.Type.RECORD) {
+            topic.keySchema.getField(field)?.let { fieldName ->
+                (data.key as IndexedRecord).get(fieldName.pos()).toString()
+            }
+        } else null
 
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaDataSubmitter::class.java)
