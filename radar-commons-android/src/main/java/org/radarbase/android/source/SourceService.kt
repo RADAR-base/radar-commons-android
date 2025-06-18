@@ -60,6 +60,11 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
     @get:Synchronized
     @set:Synchronized
     var dataHandler: DataHandler<ObservationKey, SpecificRecord>? = null
+
+    @get:Synchronized
+    @set:Synchronized
+    var metadataStore: PluginMetadataStore? = null
+
     @get:Synchronized
     var sourceManager: SourceManager<T>? = null
         private set
@@ -340,6 +345,26 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
 
     }
 
+    private fun addPluginMetadata() {
+        metadataStore?.apply {
+            acceptableSources.mapNotNull {
+                it.sourceId
+            }.forEach(sourceIds::add)
+
+
+            pluginToSourceIdMap[pluginName] = acceptableSources.joinToString(separator = " ") {
+                it.sourceId.toString()
+            }
+        }
+    }
+
+    fun mapTopicAndSource(topicName: String) {
+        metadataStore?.topicToPluginMap?.putIfAbsent(
+            topicName,
+            pluginName
+        )
+    }
+
     /**
      * Override this function to get any parameters from the given intent.
      * Bundle classloader needs to be set correctly for this to work.
@@ -394,6 +419,8 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             },
             onFail,
         ) ?: onFail(null)
+
+        addPluginMetadata()
     }
 
     open fun ensureRegistration(id: String?, name: String?, attributes: Map<String, String>, onMapping: (SourceMetadata?) -> Unit) {
