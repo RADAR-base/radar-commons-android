@@ -24,7 +24,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
@@ -42,7 +41,6 @@ import org.radarcns.passive.phone.PhoneBluetoothDeviceScanned
 import org.radarcns.passive.phone.PhoneBluetoothDevices
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
-import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 
 class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceManager<PhoneBluetoothService, BaseSourceState>(service) {
@@ -52,10 +50,6 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
 
     private var bluetoothBroadcastReceiver: BroadcastReceiver? = null
     private val hashGenerator: HashGenerator = HashGenerator(service, "bluetooth_devices")
-    private val preferences: SharedPreferences
-        get() = service.getSharedPreferences(PhoneBluetoothManager::class.java.name, Context.MODE_PRIVATE)
-
-    private var hashSaltReference: Int = 0
 
     init {
         name = service.getString(R.string.bluetooth_devices)
@@ -64,17 +58,6 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
             requestCode = SCAN_DEVICES_REQUEST_CODE
             requestName = ACTION_SCAN_DEVICES
             wake = true
-        }
-        preferences.apply {
-             if (contains(HASH_SALT_REFERENCE)) {
-                 hashSaltReference = getInt(HASH_SALT_REFERENCE, -1)
-             } else {
-                 val random = ThreadLocalRandom.current()
-                 while (hashSaltReference == 0) {
-                     hashSaltReference = random.nextInt()
-                 }
-                 edit().putInt(HASH_SALT_REFERENCE, hashSaltReference).apply()
-             }
         }
     }
 
@@ -122,7 +105,7 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             } ?: return
 
                             val macAddress = device.address
-                            val macAddressHash: ByteBuffer = hashGenerator.createHashByteBuffer(macAddress + "$hashSaltReference")
+                            val macAddressHash: ByteBuffer = hashGenerator.createHashByteBuffer(macAddress)
 
                             val scannedTopicBuilder = PhoneBluetoothDeviceScanned.newBuilder().apply {
                                 time = currentTime
@@ -133,19 +116,17 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
 
                             pairedDevices.forEach { bd ->
                                 val mac = bd.address
-                                val hash = hashGenerator.createHashByteBuffer(mac + "$hashSaltReference")
+                                val hash = hashGenerator.createHashByteBuffer(mac)
 
                                 send(bluetoothScannedTopic, scannedTopicBuilder.apply {
                                         this.macAddressHash = hash
                                         this.pairedState = bd.bondState.toPairedState()
-                                        this.hashSaltReference = hashSaltReference
                                     }.build())
                                 }
 
                             send(bluetoothScannedTopic, scannedTopicBuilder.apply {
                                 this.macAddressHash = macAddressHash
                                 this.pairedState = device.bondState.toPairedState()
-                                this.hashSaltReference = hashSaltReference
                             }.build())
 
                         }
@@ -196,12 +177,11 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
 
         private const val SCAN_DEVICES_REQUEST_CODE = 3248902
         private const val ACTION_SCAN_DEVICES = "org.radarbase.passive.phone.PhoneBluetoothManager.ACTION_SCAN_DEVICES"
-        private const val HASH_SALT_REFERENCE = "hash_salt_reference"
 
         private fun Int.toPairedState(): PairedState = when(this) {
-            10 -> PairedState.NOT_PAIRED
-            11 -> PairedState.PAIRING
-            12 -> PairedState.PAIRED
+            BluetoothDevice.BOND_NONE -> PairedState.NOT_PAIRED
+            BluetoothDevice.BOND_BONDING -> PairedState.PAIRING
+            BluetoothDevice.BOND_BONDED -> PairedState.PAIRED
             else -> PairedState.UNKNOWN
         }
     }
