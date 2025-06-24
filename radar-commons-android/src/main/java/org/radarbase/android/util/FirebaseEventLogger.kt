@@ -9,6 +9,9 @@ object FirebaseEventLogger {
     private val logger = LoggerFactory.getLogger(FirebaseEventLogger::class.java)
 
     private val firebaseAnalytics = Firebase.analytics
+    private const val EVENT_SOURCE_ID_MISMATCH = "source_id_mismatch"
+    private const val EVENT_PROJECT_ID_MISMATCH = "project_id_mismatch"
+    private const val EVENT_USER_ID_MISMATCH = "user_id_mismatch"
 
     /**
      * Report a mismatch between the payload's source ID and the token's source ID.
@@ -29,7 +32,7 @@ object FirebaseEventLogger {
         tokenSourceId: String?
     ) {
         logger.warn("Reporting MismatchedSourceId to Crashlytics")
-        firebaseAnalytics.logEvent("source_id_mismatch") {
+        firebaseAnalytics.logEvent(EVENT_SOURCE_ID_MISMATCH) {
             param("project_id", projectId.orEmpty())
             param("plugin_name", pluginName.orEmpty())
             param("topic", topic)
@@ -58,7 +61,7 @@ object FirebaseEventLogger {
         userId: String?
     ) {
         logger.warn("Reporting MismatchedProjectId to Crashlytics")
-        firebaseAnalytics.logEvent("project_id_mismatch") {
+        firebaseAnalytics.logEvent(EVENT_PROJECT_ID_MISMATCH) {
             param("key_project_id", keyProjectId.orEmpty())
             param("token_project_id", tokenProjectId.orEmpty())
             param("plugin_name", pluginName.orEmpty())
@@ -84,9 +87,10 @@ object FirebaseEventLogger {
         topic: String
     ) {
         logger.warn("Reporting MismatchedUserId to Crashlytics")
-        firebaseAnalytics.logEvent("user_id_mismatch") {
+        firebaseAnalytics.logEvent(EVENT_USER_ID_MISMATCH) {
             param("key_user_id", keyUserId.orEmpty())
             param("token_user_id", tokenUserId.orEmpty())
+            param("plugin_name", pluginName.orEmpty())
 
             logger.info("Detected userId mismatch when sending data for plugin=$pluginName, topic=$topic")
         }

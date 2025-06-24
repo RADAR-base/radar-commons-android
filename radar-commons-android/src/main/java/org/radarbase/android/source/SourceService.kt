@@ -135,6 +135,7 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
         radarConnection = ManagedServiceConnection(this, radarApp.radarService)
         radarConnection.onBoundListeners.add { binder ->
             dataHandler = binder.dataHandler
+            metadataStore = binder.pluginMetadataStore
             handler.execute {
                 startFuture?.runNow()
             }
@@ -350,7 +351,6 @@ abstract class SourceService<T : BaseSourceState> : LifecycleService(), SourceSt
             acceptableSources.mapNotNull {
                 it.sourceId
             }.forEach(sourceIds::add)
-
 
             pluginToSourceIdMap[pluginName] = acceptableSources.joinToString(separator = " ") {
                 it.sourceId.toString()
