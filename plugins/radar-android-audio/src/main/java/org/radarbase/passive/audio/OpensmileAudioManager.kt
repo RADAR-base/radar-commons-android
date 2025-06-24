@@ -34,7 +34,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** Manages Phone sensors  */
-class OpensmileAudioManager constructor(service: OpenSmileAudioService) : AbstractSourceManager<OpenSmileAudioService, BaseSourceState>(service) {
+class OpensmileAudioManager(service: OpenSmileAudioService) : AbstractSourceManager<OpenSmileAudioService, BaseSourceState>(service) {
     private val audioTopic: DataCache<ObservationKey, OpenSmile2PhoneAudio> = createCache("android_processed_audio", OpenSmile2PhoneAudio())
 
     @get:Synchronized

@@ -57,7 +57,6 @@ class KafkaDataSubmitter(
     private val topicSenders: MutableMap<String, KafkaTopicSender<Any, Any>> = HashMap()
     private val connection: KafkaConnectionChecker
     private val pluginMetadata: PluginMetadataStore? = radarService?.pluginMetadata
-    private val reportedTopics: MutableSet<String> = mutableSetOf()
 
     var config: SubmitterConfiguration = config
         set(newValue) {
@@ -252,25 +251,24 @@ class KafkaDataSubmitter(
         if (recordsNotNull.isNotEmpty()) {
             val topic = cache.readTopic
 
-            val keyUserId = if (topic.keySchema.type == Schema.Type.RECORD) {
+            val keyUserId: String? = if (topic.keySchema.type == Schema.Type.RECORD) {
                 topic.keySchema.getField("userId")?.let { userIdField ->
                     (data.key as IndexedRecord).get(userIdField.pos()).toString()
                 }
             } else null
 
-            val keyProjectId = retrieveDataFromFields(topic, data, "projectId")
+            val keyProjectId: String? = retrieveDataFromFields(topic, data, "projectId") as? String
 
             if ((keyUserId == null || keyUserId == config.userId) && (keyProjectId == null || keyProjectId == config.projectId)) {
                 if (uploadingNotified.compareAndSet(false, true)) {
                     dataHandler.updateServerStatus(ServerStatusListener.Status.UPLOADING)
                 }
-                val keySourceId = retrieveDataFromFields(topic, data, "sourceId")
+                val keySourceId = retrieveDataFromFields(topic, data, "sourceId") as? String
                 if (pluginMetadata != null) {
-                    val stringSourceId = keySourceId as? String
-                    if (stringSourceId != null && stringSourceId !in pluginMetadata.sourceIds) {
+                    if (keySourceId != null && keySourceId !in pluginMetadata.sourceIds) {
                         logger.warn(
                             "(MismatchedId) SourceId: {} for topic: {} doesn't match with any sourceId's. Discarding the data",
-                            stringSourceId,
+                            keySourceId,
                             topic.name
                         )
                         dataHandler.let {
@@ -282,20 +280,18 @@ class KafkaDataSubmitter(
 
                         cache.remove(size)
 
-                        if (!reportedTopics.contains(topic.name)) {
-                            val pluginName = pluginMetadata.topicToPluginMap.get(topic.name)
-                            val sourceId = pluginMetadata.pluginToSourceIdMap[pluginName]
+                        val pluginName = pluginMetadata.topicToPluginMap.get(topic.name)
+                        val sourceId = pluginMetadata.pluginToSourceIdMap[pluginName]
 
-                            FirebaseEventLogger.reportMismatchedSourceId(
-                                keyProjectId,
-                                keySourceId,
-                                keyUserId,
-                                topic.name,
-                                pluginName,
-                                sourceId
-                            )
-                            reportedTopics.add(topic.name)
-                        }
+                        FirebaseEventLogger.reportMismatchedSourceId(
+                            keyProjectId,
+                            keySourceId,
+                            keyUserId,
+                            topic.name,
+                            pluginName,
+                            sourceId
+                        )
+
                         return size
                     }
                 }
