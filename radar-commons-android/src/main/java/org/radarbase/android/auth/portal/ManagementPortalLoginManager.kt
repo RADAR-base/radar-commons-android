@@ -100,7 +100,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                     }
                 }
             } else {
-                logger.error("Invalid client type detected: expected ManagementPortalClient for the meta token URL. Terminating operation.")
+                logger.error("Invalid client type detected: expected ManagementPortalClient for refresh_token flow. Terminating operation.")
             }
         }
         return true
@@ -170,7 +170,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     companion object {
         const val SOURCE_TYPE_MP = "org.radarcns.auth.portal.ManagementPortal"
         private val logger = LoggerFactory.getLogger(ManagementPortalLoginManager::class.java)
-        val sourceTypeList = listOf(SOURCE_TYPE_MP)
+        private val sourceTypeList = listOf(SOURCE_TYPE_MP)
 
         @OptIn(ExperimentalContracts::class)
         private fun ensureMpClient(client: AbstractRadarPortalClient): Boolean {

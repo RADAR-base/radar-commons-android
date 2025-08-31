@@ -187,6 +187,6 @@ abstract class AbstractRadarPortalClient(
 
         class SourceNotFoundException(message: String) : RuntimeException(message)
         class UserNotFoundException(message: String) : RuntimeException(message)
+        class MismatchedClientException(message: String) : RuntimeException(message)
     }
-
 }

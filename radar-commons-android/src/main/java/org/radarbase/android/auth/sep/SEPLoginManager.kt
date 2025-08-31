@@ -3,16 +3,25 @@ package org.radarbase.android.auth.sep
 import android.app.Activity
 import androidx.lifecycle.Observer
 import org.radarbase.android.RadarApplication.Companion.radarConfig
+import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
+import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
+import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
+import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
+import org.radarbase.android.auth.portal.ManagementPortalClient
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager.ManagementPortalConfig
+import org.radarbase.android.auth.portal.MetaTokenParser
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
 import java.io.UnsupportedEncodingException
+import java.net.MalformedURLException
 import java.net.URLDecoder
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.contracts.ExperimentalContracts
@@ -26,18 +35,27 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
     private val refreshLock = ReentrantLock()
     private val config = listener.radarConfig
     private val configUpdateObserver = Observer<SingleRadarConfiguration> {
-        //TODO
+        ensureClientConnectivity(it)
+    }
+
+    init {
+        config.config.observeForever(configUpdateObserver)
+        updateSources(state)
     }
 
     override val sourceTypes: List<String> = sepSourceTypeList
 
-    fun sepQrFlow(data: String) {
-        val params = parseQueryParams(data)
+    fun sepQrFlow(authState: AppAuthState, qrData: String) {
+        val params = parseQueryParams(qrData)
 
-        val data = params["data"]
-        val referrer = params["referrer"]
+        val data = checkNotNull(params["data"]) { "Data can't be null" }
+        val referrer = checkNotNull(params["referrer"]) { "Referrer can't be null" }
 
-
+        SepQrParser(authState, referrer).parse(data).let { authState ->
+            config.updateWithAuthState(listener, authState)
+            ensureClientConnectivity(config.latestConfig)
+            logger.info("Processed sep url data")
+        }
     }
 
     /**
@@ -95,7 +113,10 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
             logger.error("Unsupported encoding '{}' while decoding query parameter '$key'", enc, e)
             null
         } catch (e: IllegalArgumentException) {
-            logger.error("Malformed percent-encoding in query parameter$key (rawLength=${raw.length})", e)
+            logger.error(
+                "Malformed percent-encoding in query parameter$key (rawLength=${raw.length})",
+                e
+            )
             null
         }
     }
@@ -126,6 +147,37 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
 
     override fun onDestroy() {
         TODO("Not yet implemented")
+    }
+
+    @Synchronized
+    private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
+        val newClientConfig = try {
+            SEPClientConfig(
+                config.getString(MANAGEMENT_PORTAL_URL_KEY),
+                config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
+                config.getString(OAUTH2_CLIENT_ID),
+                config.getString(OAUTH2_CLIENT_SECRET, ""),
+            )
+        } catch (_: MalformedURLException) {
+            logger.error("Cannot construct ManagementPortalClient with malformed URL")
+            null
+        } catch (_: IllegalArgumentException) {
+            logger.error("Cannot construct ManagementPortalClient without client credentials")
+            null
+        }
+
+        if (newClientConfig == clientConfig) return
+
+        client = newClientConfig?.let {
+            SEPClient(
+                it.serverConfig,
+                it.clientId,
+                it.clientSecret,
+                client = restClient
+            ).also {
+                restClient = it.client
+            }
+        }
     }
 
     fun operateOnSepClient(client: AbstractRadarPortalClient, operation: () -> Unit) {
