@@ -10,6 +10,7 @@ import org.junit.Test
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.SourceType
+import org.radarbase.android.auth.commons.AbstractRadarPortalClient
 import org.radarbase.config.ServerConfig
 import java.io.IOException
 import java.util.*
@@ -122,7 +123,7 @@ class ManagementPortalClientTest {
             attributes += Pair("firmware", "0.11")
         }
 
-        val body = ManagementPortalClient.sourceRegistrationBody(source).toString()
+        val body = AbstractRadarPortalClient.sourceRegistrationBody(source).toString()
         val `object` = JSONObject(body)
         assertEquals("something", `object`.getString("sourceName"))
         assertEquals(0, `object`.getInt("sourceTypeId").toLong())
@@ -140,7 +141,7 @@ class ManagementPortalClientTest {
             sourceName = "something(With)_others+"
         }
 
-        val body = ManagementPortalClient.sourceRegistrationBody(source).toString()
+        val body = AbstractRadarPortalClient.sourceRegistrationBody(source).toString()
         val `object` = JSONObject(body)
         assertEquals("something-With-_others-", `object`.getString("sourceName"))
         assertEquals(0, `object`.getInt("sourceTypeId").toLong())
@@ -155,7 +156,7 @@ class ManagementPortalClientTest {
             sourceName = "something"
         }
         val response = "{\"sourceName\": \"something_18131\", \"sourceId\": \"uuid-abcdef\", \"deviceTypeId\": 0, \"attributes\":{\"firmware\":\"0.11\"}, \"expectedSourceName\": \"abc\"}"
-        ManagementPortalClient.parseSourceRegistration(response, source)
+        AbstractRadarPortalClient.parseSourceRegistration(response, source)
         assertEquals("something_18131", source.sourceName)
         assertEquals("uuid-abcdef", source.sourceId)
         assertEquals(Collections.singletonMap("firmware", "0.11"), source.attributes)
