@@ -124,8 +124,8 @@ class CombinedRadarConfig(
             put(RadarConfiguration.KAFKA_REST_PROXY_URL_KEY, "$baseUrl/kafka/")
             put(RadarConfiguration.SCHEMA_REGISTRY_URL_KEY, "$baseUrl/schema/")
             put(RadarConfiguration.MANAGEMENT_PORTAL_URL_KEY, "$baseUrl/managementportal/")
-            put(RadarConfiguration.OAUTH2_TOKEN_URL, "$baseUrl/managementportal/oauth/token")
-            put(RadarConfiguration.OAUTH2_AUTHORIZE_URL, "$baseUrl/managementportal/oauth/authorize")
+            put(RadarConfiguration.OAUTH2_TOKEN_URL, "$baseUrl/hydra/oauth2/token")
+            put(RadarConfiguration.OAUTH2_AUTHORIZE_URL, "$baseUrl/hydra/oauth2/auth")
             crashlytics.setCustomKey(BASE_URL_KEY, baseUrl)
         }
 
