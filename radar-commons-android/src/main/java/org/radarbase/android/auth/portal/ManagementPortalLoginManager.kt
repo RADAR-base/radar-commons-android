@@ -122,7 +122,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
 
     override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
         return when {
-            authState.authenticationSource != SOURCE_TYPE -> null
+            authState.authenticationSource != SOURCE_TYPE_MP -> null
             disableRefresh -> authState.alter {
                 attributes -= MP_REFRESH_TOKEN_PROPERTY
                 isPrivacyPolicyAccepted = false
@@ -168,9 +168,9 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     companion object {
-        const val SOURCE_TYPE = "org.radarcns.auth.portal.ManagementPortal"
+        const val SOURCE_TYPE_MP = "org.radarcns.auth.portal.ManagementPortal"
         private val logger = LoggerFactory.getLogger(ManagementPortalLoginManager::class.java)
-        val sourceTypeList = listOf(SOURCE_TYPE)
+        val sourceTypeList = listOf(SOURCE_TYPE_MP)
 
         @OptIn(ExperimentalContracts::class)
         private fun ensureMpClient(client: AbstractRadarPortalClient): Boolean {

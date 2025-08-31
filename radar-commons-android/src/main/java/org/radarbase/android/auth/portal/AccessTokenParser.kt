@@ -8,7 +8,7 @@ import org.radarbase.android.auth.LoginManager.Companion.AUTH_TYPE_BEARER
 import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -33,7 +33,7 @@ class AccessTokenParser(private val state: AppAuthState) : AuthStringParser {
                 userId = json.getString("sub")
                 expiration = TimeUnit.SECONDS.toMillis(json.optLong("expires_in", 3600L)) + System.currentTimeMillis()
                 needsRegisteredSources = true
-                authenticationSource = SOURCE_TYPE
+                authenticationSource = SOURCE_TYPE_MP
             }
         } catch (ex: JSONException) {
             throw IOException("Failed to parse json string $value", ex)

@@ -8,7 +8,7 @@ import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
 import org.radarbase.android.auth.SourceType
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -33,7 +33,7 @@ class GetSubjectParser(private val state: AppAuthState) : AuthStringParser {
                 userId = parseUserId(jsonObject)
                 projectId = parseProjectId(project)
                 needsRegisteredSources = true
-                authenticationSource = SOURCE_TYPE
+                authenticationSource = SOURCE_TYPE_MP
 
                 jsonObject.opt("attributes")?.let { attrObjects ->
                     if (attrObjects is JSONArray) {
