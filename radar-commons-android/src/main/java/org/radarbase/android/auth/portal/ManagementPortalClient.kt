@@ -5,6 +5,7 @@ import okhttp3.FormBody
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
+import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.config.ServerConfig
 import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
@@ -16,7 +17,7 @@ class ManagementPortalClient(
     clientId: String,
     clientSecret: String,
     client: RestClient? = null,
-) : AbstractRadarPortalClient(managementPortal, client){
+) : AbstractRadarPortalClient(AuthType.MP, managementPortal, client){
     private val credentials = Credentials.basic(clientId, clientSecret)
 
     /**

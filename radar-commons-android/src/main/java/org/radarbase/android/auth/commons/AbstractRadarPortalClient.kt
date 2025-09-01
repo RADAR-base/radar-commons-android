@@ -20,6 +20,7 @@ import java.io.IOException
 import java.lang.RuntimeException
 
 abstract class AbstractRadarPortalClient(
+    private val authType: AuthType,
     portal: ServerConfig,
     client: RestClient? = null
 ) {
@@ -39,11 +40,18 @@ abstract class AbstractRadarPortalClient(
         if (state.userId == null) {
             throw IOException("Authentication state does not contain user ID")
         }
-        val request = client.requestBuilder("api/subjects/${state.userId}")
-            .headers(state.okHttpHeaders)
-            .header("Accept", APPLICATION_JSON)
-            .build()
+        val request = when(authType) {
+            AuthType.MP -> client.requestBuilder("api/subjects/${state.userId}")
+                .headers(state.okHttpHeaders)
+                .header("Accept", APPLICATION_JSON)
+                .build()
 
+            AuthType.SEP -> client.requestBuilder("managementportal/api/subjects/${state.userId}")
+                .headers(state.okHttpHeaders)
+                .header("Accept", APPLICATION_JSON)
+                .build()
+
+        }
         logger.info(
             "Requesting subject {} with parseHeaders {}", state.userId,
             state.okHttpHeaders
@@ -70,23 +78,43 @@ abstract class AbstractRadarPortalClient(
 
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
-    fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata =
-        handleSourceUpdateRequest(
-            auth,
-            "api/subjects/${auth.userId}/sources",
-            sourceRegistrationBody(source),
-            source,
-        )
+    fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
+        return if (authType == AuthType.MP) {
+            handleSourceUpdateRequest(
+                auth,
+                "api/subjects/${auth.userId}/sources",
+                sourceRegistrationBody(source),
+                source,
+            )
+        } else {
+            handleSourceUpdateRequest(
+                auth,
+                "managementportal/api/subjects/${auth.userId}/sources",
+                sourceRegistrationBody(source),
+                source,
+            )
+        }
+    }
 
     /** Updates a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
-    fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata =
-        handleSourceUpdateRequest(
-            auth,
-            "api/subjects/${auth.userId}/sources/${source.sourceName}",
-            sourceUpdateBody(source),
-            source,
-        )
+    fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
+        return if (authType == AuthType.MP) {
+            handleSourceUpdateRequest(
+                auth,
+                "api/subjects/${auth.userId}/sources/${source.sourceName}",
+                sourceUpdateBody(source),
+                source,
+            )
+        } else {
+            handleSourceUpdateRequest(
+                auth,
+                "managementportal/api/subjects/${auth.userId}/sources/${source.sourceName}",
+                sourceUpdateBody(source),
+                source,
+            )
+        }
+    }
 
     private fun handleSourceUpdateRequest(
         auth: AppAuthState,

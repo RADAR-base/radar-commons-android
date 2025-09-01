@@ -11,6 +11,7 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
+import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.android.config.SingleRadarConfiguration
@@ -24,7 +25,7 @@ import kotlin.contracts.contract
 
 @Suppress("unused")
 class ManagementPortalLoginManager(private val listener: AuthService, state: AppAuthState) :
-    AbstractRadarLoginManager(listener) {
+    AbstractRadarLoginManager(listener, AuthType.MP) {
 
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: ManagementPortalConfig? = null
