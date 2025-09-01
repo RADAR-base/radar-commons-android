@@ -56,7 +56,7 @@ abstract class AbstractRadarLoginManager(private val listener: AuthService, priv
                 failure(ex)
             } catch (ex: ConflictException) {
                 try {
-                    client.getSubject(authState, GetSubjectParser(authState)).let { authState ->
+                    client.getSubject(authState, GetSubjectParser(authState, authType)).let { authState ->
                         updateSources(authState)
                         sources[source.sourceId]?.let { source ->
                             success(authState, source)

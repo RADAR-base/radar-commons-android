@@ -85,7 +85,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
             if (ensureMpClient(client)) {
                 if (refreshLock.tryLock()) {
                     try {
-                        val parser = SubjectTokenParser(client, authState)
+                        val parser = SubjectTokenParser(client, AuthType.MP, authState)
 
                         client.refreshToken(authState, parser).let { authState ->
                             logger.info("Refreshed JWT")

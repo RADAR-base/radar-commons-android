@@ -147,7 +147,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
                     try {
                         val accessTokenParser = AccessTokenParser(authState)
                         client.refreshToken(authState, accessTokenParser, config.latestConfig).let { newState: AppAuthState ->
-                            client.getSubject(newState, GetSubjectParser(newState))
+                            client.getSubject(newState, GetSubjectParser(newState, AuthType.SEP))
                         }
                         logger.info("Refreshed JWT from sep")
 
