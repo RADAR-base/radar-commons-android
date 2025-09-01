@@ -12,14 +12,14 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import kotlin.collections.set
 
-abstract class AbstractRadarLoginManager(private val listener: AuthService) : LoginManager {
+abstract class AbstractRadarLoginManager(private val listener: AuthService, private val authType: AuthType) : LoginManager {
     protected open var client: AbstractRadarPortalClient? = null
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
 
     override fun registerSource(authState: AppAuthState, source: SourceMetadata,
                                 success: (AppAuthState, SourceMetadata) -> Unit,
                                 failure: (Exception?) -> Unit): Boolean {
-        logger.debug("Handling source registration")
+        logger.debug("Handling source registration for AuthType(${authType.name}")
 
         val existingSource = sources[source.sourceId]
         if (existingSource != null) {
@@ -91,7 +91,7 @@ abstract class AbstractRadarLoginManager(private val listener: AuthService) : Lo
     }
 
     override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
-        logger.debug("Handling source update")
+        logger.debug("Handling source update for authType {}", authType.name)
 
         val client = client
 
