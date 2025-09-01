@@ -3,18 +3,19 @@ package org.radarbase.android.auth.sep
 import android.app.Activity
 import androidx.lifecycle.Observer
 import org.radarbase.android.RadarApplication.Companion.radarConfig
-import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
+import org.radarbase.android.RadarConfiguration.Companion.SEP_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
-import org.radarbase.android.auth.portal.ManagementPortalClient
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager.ManagementPortalConfig
-import org.radarbase.android.auth.portal.MetaTokenParser
+import org.radarbase.android.auth.commons.AuthType
+import org.radarbase.android.auth.portal.GetSubjectParser
+import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
+import org.radarbase.android.auth.sep.SEPClient.Companion.SEP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
 import org.radarbase.config.ServerConfig
@@ -27,8 +28,9 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
+@Suppress("unused")
 class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
-    AbstractRadarLoginManager(listener) {
+    AbstractRadarLoginManager(listener, AuthType.SEP) {
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: SEPClientConfig? = null
     private var restClient: RestClient? = null
@@ -46,15 +48,27 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
     override val sourceTypes: List<String> = sepSourceTypeList
 
     fun sepQrFlow(authState: AppAuthState, qrData: String) {
-        val params = parseQueryParams(qrData)
+        if (refreshLock.tryLock()) {
+            try {
+                val params = parseQueryParams(qrData)
 
-        val data = checkNotNull(params["data"]) { "Data can't be null" }
-        val referrer = checkNotNull(params["referrer"]) { "Referrer can't be null" }
+                val data = checkNotNull(params["data"]) { "Data can't be null" }
+                val referrer = checkNotNull(params["referrer"]) { "Referrer can't be null" }
 
-        SepQrParser(authState, referrer).parse(data).let { authState ->
-            config.updateWithAuthState(listener, authState)
-            ensureClientConnectivity(config.latestConfig)
-            logger.info("Processed sep url data")
+                SepQrParser(authState, referrer).parse(data).let { appAuthState ->
+                    config.updateWithAuthState(listener, appAuthState)
+                    ensureClientConnectivity(config.latestConfig)
+                    logger.info("Processed sep url data")
+                    refresh(appAuthState)
+                }
+            } catch (ex: Exception) {
+                logger.error("Failed to process sep qr data", ex)
+                listener.loginFailed(this, ex)
+            } finally {
+                refreshLock.unlock()
+            }
+        } else {
+            logger.warn("Refresh lock is acquired by other thread, skipping attempt")
         }
     }
 
@@ -106,7 +120,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
      *   - `UnsupportedEncodingException` is caught (should never happen for UTF-8).
      *   - `IllegalArgumentException` is caught if malformed `%` sequences are encountered.
      */
-    fun safeDecode(raw: String, key: String, enc: String = "UTF-8"): String? {
+    fun safeDecode(raw: String, key: String, enc: String = UTF_8): String? {
         return try {
             URLDecoder.decode(raw, enc)
         } catch (e: UnsupportedEncodingException) {
@@ -123,37 +137,71 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
 
 
     override fun refresh(authState: AppAuthState): Boolean {
-        TODO("Not yet implemented")
+        if (authState.getAttribute(SEP_REFRESH_TOKEN_PROPERTY) == null) {
+            return false
+        }
+        client?.let { client ->
+            operateOnSepClient(client) {
+                client as SEPClient
+                if (refreshLock.tryLock()) {
+                    try {
+                        val accessTokenParser = AccessTokenParser(authState)
+                        client.refreshToken(authState, accessTokenParser, config.latestConfig).let { newState: AppAuthState ->
+                            client.getSubject(newState, GetSubjectParser(newState))
+                        }
+                        logger.info("Refreshed JWT from sep")
+
+                        updateSources(authState)
+                        listener.loginSucceeded(this, authState)
+                    } catch (ex: Exception) {
+                        logger.error("Failed to get access token", ex)
+                        listener.loginFailed(this, ex)
+                    } finally {
+                        refreshLock.unlock()
+                    }
+                }
+            }
+        }
+        return true
     }
 
     override fun isRefreshable(authState: AppAuthState): Boolean {
-        TODO("Not yet implemented")
+        return authState.userId != null
+                && authState.projectId != null
+                && authState.getAttribute(SEP_REFRESH_TOKEN_PROPERTY) != null
     }
 
     override fun start(authState: AppAuthState) {
-        TODO("Not yet implemented")
+        refresh(authState)
     }
 
     override fun onActivityCreate(activity: Activity): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     override fun invalidate(
         authState: AppAuthState,
         disableRefresh: Boolean
     ): AppAuthState? {
-        TODO("Not yet implemented")
+        return when {
+            authState.authenticationSource != SOURCE_TYPE_MP -> null
+            disableRefresh -> authState.alter {
+                attributes -= MP_REFRESH_TOKEN_PROPERTY
+                isPrivacyPolicyAccepted = false
+            }
+            else -> authState
+        }
     }
 
     override fun onDestroy() {
-        TODO("Not yet implemented")
+        config.config.removeObserver(configUpdateObserver)
     }
 
     @Synchronized
     private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
         val newClientConfig = try {
             SEPClientConfig(
-                config.getString(MANAGEMENT_PORTAL_URL_KEY),
+                config.getString(SEP_URL_KEY),
                 config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
                 config.getString(OAUTH2_CLIENT_ID),
                 config.getString(OAUTH2_CLIENT_SECRET, ""),
@@ -174,8 +222,8 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
                 it.clientId,
                 it.clientSecret,
                 client = restClient
-            ).also {
-                restClient = it.client
+            ).also { sep ->
+                restClient = sep.client
             }
         }
     }
@@ -192,8 +240,8 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
     companion object {
         private val logger = LoggerFactory.getLogger(SEPLoginManager::class.java)
 
-        private val sepSourceTypeList = listOf(SOURCE_TYPE_SEP)
         const val SOURCE_TYPE_SEP = "org.radarbase.android.auth.sep.SelfEnrolmentPortal"
+        private val sepSourceTypeList = listOf(SOURCE_TYPE_SEP)
 
         @OptIn(ExperimentalContracts::class)
         private fun requireSepClient(client: AbstractRadarPortalClient) {
@@ -202,7 +250,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
             }
             if (client !is SEPClient) {
                 throw AbstractRadarPortalClient.Companion.MismatchedClientException(
-                    "Invalid client type detected: expected SEPClient, but actual ${client::class.simpleName} Terminating operation."
+                    "Invalid client type detected: expected 'SEPClient', but actual '${client::class.simpleName}' Terminating operation."
                 )
             }
         }
