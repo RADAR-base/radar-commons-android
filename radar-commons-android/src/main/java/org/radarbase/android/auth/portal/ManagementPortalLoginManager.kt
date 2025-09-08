@@ -1,6 +1,8 @@
 package org.radarbase.android.auth.portal
 
 import android.app.Activity
+import android.content.Intent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.Observer
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.MANAGEMENT_PORTAL_URL_KEY
@@ -113,11 +115,11 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
                 && authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY) != null
     }
 
-    override fun start(authState: AppAuthState) {
+    override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
         refresh(authState)
     }
 
-    override fun onActivityCreate(activity: Activity): Boolean {
+    override fun onActivityCreate(activity: Activity, binder: AuthService.AuthServiceBinder): Boolean {
         return false
     }
 

@@ -10,6 +10,7 @@ import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
 import org.radarbase.android.auth.SourceType
 import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
+import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_SEP
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.slf4j.LoggerFactory
@@ -38,6 +39,7 @@ class GetSubjectParser(private val state: AppAuthState, private val authType: Au
                 authenticationSource = when (authType) {
                     AuthType.MP -> SOURCE_TYPE_MP
                     AuthType.SEP -> SOURCE_TYPE_SEP
+                    AuthType.OAUTH2 -> SOURCE_TYPE_OAUTH2
                 }
 
                 jsonObject.opt("attributes")?.let { attrObjects ->

@@ -1,6 +1,8 @@
 package org.radarbase.android.auth.sep
 
 import android.app.Activity
+import android.content.Intent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.Observer
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
@@ -13,7 +15,6 @@ import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
 import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.android.auth.portal.GetSubjectParser
-import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
 import org.radarbase.android.auth.sep.SEPClient.Companion.SEP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.config.SingleRadarConfiguration
@@ -135,7 +136,6 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
         }
     }
 
-
     override fun refresh(authState: AppAuthState): Boolean {
         if (authState.getAttribute(SEP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
@@ -171,11 +171,11 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
                 && authState.getAttribute(SEP_REFRESH_TOKEN_PROPERTY) != null
     }
 
-    override fun start(authState: AppAuthState) {
+    override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
         refresh(authState)
     }
 
-    override fun onActivityCreate(activity: Activity): Boolean {
+    override fun onActivityCreate(activity: Activity, binder: AuthService.AuthServiceBinder): Boolean {
         return false
     }
 
@@ -186,7 +186,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
         return when {
             authState.authenticationSource != SOURCE_TYPE_MP -> null
             disableRefresh -> authState.alter {
-                attributes -= MP_REFRESH_TOKEN_PROPERTY
+                attributes -= SEP_REFRESH_TOKEN_PROPERTY
                 isPrivacyPolicyAccepted = false
             }
             else -> authState
@@ -241,6 +241,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
         private val logger = LoggerFactory.getLogger(SEPLoginManager::class.java)
 
         const val SOURCE_TYPE_SEP = "org.radarbase.android.auth.sep.SelfEnrolmentPortal"
+        const val SOURCE_TYPE_OAUTH2 = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
         private val sepSourceTypeList = listOf(SOURCE_TYPE_SEP)
 
         @OptIn(ExperimentalContracts::class)
