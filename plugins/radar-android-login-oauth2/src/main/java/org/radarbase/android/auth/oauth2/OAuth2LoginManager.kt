@@ -17,10 +17,13 @@
 package org.radarbase.android.auth.oauth2
 
 import android.app.Activity
+import android.content.Intent
+import androidx.activity.result.ActivityResultLauncher
 import org.json.JSONException
 import org.radarbase.android.RadarApplication.Companion.radarApp
+import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.auth.*
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager
+import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.producer.AuthenticationException
 
 /**
@@ -28,36 +31,37 @@ import org.radarbase.producer.AuthenticationException
  */
 class OAuth2LoginManager(
     private val service: AuthService,
-    private val projectIdClaim: String,
-    private val userIdClaim: String
 ) : LoginManager, LoginListener {
-    private val stateManager: OAuth2StateManager = OAuth2StateManager(service)
+    private val config = service.radarConfig
+    private val stateManager: OAuth2StateManager = OAuth2StateManager(config, service)
 
     override fun refresh(authState: AppAuthState): Boolean {
         if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER) {
             return false
         }
-        return authState.getAttribute(LOGIN_REFRESH_TOKEN)
-                ?.also { stateManager.refresh(service, it) } != null
+        return authState.getAttribute(OAUTH_REFRESH_TOKEN)
+                ?.also { stateManager.refresh(service, authState, it) } != null
     }
-
-
+    
     override fun isRefreshable(authState: AppAuthState): Boolean =
-        authState.userId != null && authState.getAttribute(LOGIN_REFRESH_TOKEN) != null
+        authState.userId != null && authState.getAttribute(OAUTH_REFRESH_TOKEN) != null
 
-    override fun start(authState: AppAuthState) {
+    override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
+        requireNotNull(activityResultLauncher) {
+            "Activity result launcher can't be null in OAuthLoginManager"
+        }
         service.radarApp.let { app ->
-            stateManager.login(service, app.loginActivity, app.configuration.latestConfig)
+            stateManager.login(service, app.loginActivity, app.configuration.latestConfig, activityResultLauncher)
         }
     }
 
-    override fun onActivityCreate(activity: Activity): Boolean {
-        stateManager.updateAfterAuthorization(service, activity.intent)
+    override fun onActivityCreate(activity: Activity, binder: AuthService.AuthServiceBinder): Boolean {
+        stateManager.updateAfterAuthorization(service, activity.intent, binder)
         return true
     }
 
     override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? =
-        authState.takeIf { it.authenticationSource == OAUTH2_SOURCE_TYPE }
+        authState.takeIf { it.authenticationSource == SOURCE_TYPE_OAUTH2 }
 
     override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
 
@@ -77,7 +81,9 @@ class OAuth2LoginManager(
         return true
     }
 
-    override fun onDestroy() = Unit
+    override fun onDestroy() {
+        stateManager.stop()
+    }
 
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         val token = authState.token
@@ -86,33 +92,33 @@ class OAuth2LoginManager(
                     IllegalArgumentException("Cannot login using OAuth2 without a token"))
             return
         }
-        try {
-            processJwt(authState, Jwt.parse(token)).let {
-                service.loginSucceeded(this, it)
-            }
-        } catch (ex: JSONException) {
-            loginFailed(this, ex)
-        }
+//        try {
+//            processJwt(authState, Jwt.parse(token)).let {
+//                service.loginSucceeded(this, it)
+//            }
+//        } catch (ex: JSONException) {
+//            loginFailed(this, ex)
+//        }
 
     }
 
     private fun processJwt(authState: AppAuthState, jwt: Jwt): AppAuthState {
         val body = jwt.body
 
-        return authState.alter {
-            authenticationSource = OAUTH2_SOURCE_TYPE
-            needsRegisteredSources = false
-            projectId = body.optString(projectIdClaim)
-            userId = body.optString(userIdClaim)
-            expiration = body.optLong("exp", java.lang.Long.MAX_VALUE / 1000L) * 1000L
-        }
+//        return authState.alter {
+//            authenticationSource = SOURCE_TYPE_OAUTH2
+//            needsRegisteredSources = false
+//            projectId = body.optString(projectIdClaim)
+//            userId = body.optString(userIdClaim)
+//            expiration = body.optLong("exp", java.lang.Long.MAX_VALUE / 1000L) * 1000L
+//        }
+        return authState
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
 
     companion object {
-        private const val OAUTH2_SOURCE_TYPE = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
-        private val OAUTH2_SOURCE_TYPES = listOf(OAUTH2_SOURCE_TYPE)
-        const val LOGIN_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
+        const val OAUTH_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
+        val OAUTH2_SOURCE_TYPES = listOf(SOURCE_TYPE_OAUTH2)
     }
 }
