@@ -260,7 +260,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
         private const val UTF_8 = "UTF-8"
     }
 
-    private data class SEPClientConfig(
+    data class SEPClientConfig(
         val serverConfig: ServerConfig,
         val clientId: String,
         val clientSecret: String

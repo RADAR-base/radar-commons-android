@@ -16,10 +16,10 @@
 
 package org.radarbase.android.auth.oauth2
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Process
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.AnyThread
 import net.openid.appauth.*
@@ -31,38 +31,39 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.slf4j.LoggerFactory
 import androidx.core.net.toUri
 import androidx.core.content.edit
-import org.radarbase.android.RadarApplication
+import org.radarbase.android.auth.commons.AbstractRadarPortalClient
+import org.radarbase.android.auth.commons.AuthType
+import org.radarbase.android.auth.portal.GetSubjectParser
+import org.radarbase.android.auth.sep.SEPClient
+import org.radarbase.android.util.SafeHandler
 
 class OAuth2StateManager(private val config: RadarConfiguration, context: Context) {
     private val mPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
     private var mCurrentAuthState: AuthState
     private val oAuthService: AuthorizationService = AuthorizationService(context)
+    private val handler: SafeHandler = SafeHandler.getInstance("OAuth2StateManager-Handler", Process.THREAD_PRIORITY_BACKGROUND)
 
     init {
         mCurrentAuthState = readState()
+        handler.start()
     }
-
-    val appContext = (context.applicationContext as RadarApplication).loginActivity
 
     @AnyThread
     @Synchronized
     fun login(
-        context: AuthService,
-        activityClass: Class<out Activity>,
         config: SingleRadarConfiguration,
-        activityResultLauncher: ActivityResultLauncher<Intent>
+        activityResultLauncher: ActivityResultLauncher<Intent>,
     ) {
-
         val authorizeUri = config.getString(RadarConfiguration.OAUTH2_AUTHORIZE_URL).toUri()
         val tokenUri = config.getString(RadarConfiguration.OAUTH2_TOKEN_URL).toUri()
         val redirectUri = config.getString(RadarConfiguration.OAUTH2_REDIRECT_URL, APP_REDIRECT_URI).toUri()
         val clientId = config.getString(RadarConfiguration.OAUTH2_CLIENT_ID)
 
-        logger.info("Performing o auth request with authorize uri: {}", authorizeUri)
+        logger.debug("Performing oAuth request at authorize uri: {}", authorizeUri)
 
         val authConfig = AuthorizationServiceConfiguration(authorizeUri, tokenUri)
         val additionalParams = mapOf(
-            "audience" to DEFAUL_APP_RESOURCES
+            "audience" to DEFAULT_APP_RESOURCES
         )
 
         val authRequestBuilder = AuthorizationRequest.Builder(
@@ -77,26 +78,19 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
 
         logger.info("Performing auth request")
         val authIntent = oAuthService.getAuthorizationRequestIntent(authRequestBuilder.build())
-
         activityResultLauncher.launch(authIntent)
-
-//        service.performAuthorizationRequest(
-//            authRequestBuilder.build(),
-//            PendingIntent.getActivity(
-//                context,
-//                OAUTH_INTENT_HANDLER_REQUEST_CODE,
-//                Intent(context, activityClass),
-//                PendingIntent.FLAG_UPDATE_CURRENT.toPendingIntentFlag(),
-//            ),
-//        )
-        logger.info("Performed auth request")
     }
 
     @AnyThread
     @Synchronized
-    fun updateAfterAuthorization(authService: AuthService, intent: Intent?, binder: AuthService.AuthServiceBinder) {
-        logger.info("AuthRequestDebug: updating after authorization, is the intent null? {} if not the data is {}", intent == null, intent?.data.toString())
+    fun updateAfterAuthorization(
+        authService: AuthService,
+        intent: Intent?,
+        binder: AuthService.AuthServiceBinder,
+        client: AbstractRadarPortalClient?
+    ) {
         if (intent == null) {
+            logger.info("Intent is null ")
             return
         }
 
@@ -113,8 +107,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
             writeState(mCurrentAuthState)
         }
 
-        val clientSecret: String = config.latestConfig.getString(RadarConfiguration.OAUTH2_CLIENT_SECRET)
-        val clientAuth = ClientSecretBasic(clientSecret)
+        val clientAuth = clientSecretBasic()
 
         if (resp != null) {
             logger.info("AuthRequestDebug: Response is not null, now performing the token request")
@@ -123,7 +116,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
                 oAuthService.performTokenRequest(
                     resp.createTokenExchangeRequest(),
                     clientAuth,
-                    processTokenResponse(authService, this@applyState)
+                    processTokenResponse(authService, this@applyState, client)
                 )
             }
         } else if (ex != null) {
@@ -133,32 +126,37 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
     }
 
     @Synchronized
-    fun refresh(context: AuthService, authState: AppAuthState, refreshToken: String?) {
+    fun refresh(context: AuthService, authState: AppAuthState, refreshToken: String?, client: AbstractRadarPortalClient?) {
         // refreshToken does not originate from the current auth state.
 
-        val clientSecret: String = config.latestConfig.getString(RadarConfiguration.OAUTH2_CLIENT_SECRET)
-        val clientAuth = ClientSecretBasic(clientSecret)
-
+        val clientAuth = clientSecretBasic()
         if (refreshToken != null && refreshToken != mCurrentAuthState.refreshToken) {
             try {
                 val json = mCurrentAuthState.jsonSerialize()
                 json.put("refreshToken", refreshToken)
                 mCurrentAuthState = AuthState.jsonDeserialize(json)
-            } catch (e: JSONException) {
-                logger.error("Failed to update refresh token")
+            } catch (ex: JSONException) {
+                logger.error("Failed to update refresh token", ex)
             }
         }
         // authorization succeeded
         oAuthService.performTokenRequest(
             mCurrentAuthState.createTokenRefreshRequest(),
             clientAuth,
-            processTokenResponse(context, authState),
+            processTokenResponse(context, authState, client),
         )
+    }
+
+    private fun clientSecretBasic(): ClientSecretBasic {
+        return config.latestConfig.getString(RadarConfiguration.OAUTH2_CLIENT_SECRET).let { clientSecret ->
+            ClientSecretBasic(clientSecret)
+        }
     }
 
     private fun processTokenResponse(
         context: AuthService,
         authState: AppAuthState,
+        client: AbstractRadarPortalClient?,
     ) = AuthorizationService.TokenResponseCallback { resp, ex ->
         logger.info("AuthRequestDebug: Now processing the token response")
         resp ?: return@TokenResponseCallback context.loginFailed(null, ex)
@@ -167,7 +165,17 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
         val updatedAuth = accessTokenParser.parse(authState, mCurrentAuthState)
 
         config.updateWithAuthState(context, updatedAuth)
-        context.loginSucceeded(null, updatedAuth)
+        val getSubjectParser = GetSubjectParser(updatedAuth, AuthType.OAUTH2)
+        if (client is SEPClient) {
+            handler.compute {
+                client.getSubject(updatedAuth, getSubjectParser)
+            }.also { latestAuth ->
+                context.loginSucceeded(null, latestAuth)
+            }
+        } else {
+            logger.error("Can't process the get subject request, client is not the instance of SEP Client")
+        }
+
     }
 
     @AnyThread
@@ -209,17 +217,16 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
 
     fun stop() {
         oAuthService.dispose()
+        handler.stop()
     }
 
     companion object {
-        private const val OAUTH_INTENT_HANDLER_REQUEST_CODE = 8422341
-
         private val logger = LoggerFactory.getLogger(OAuth2StateManager::class.java)
 
         private const val STORE_NAME = "AuthState"
         private const val KEY_STATE = "state"
         private const val APP_REDIRECT_URI = "org.radarbase.prmt://login"
         private const val DEFAULT_OAUTH_SCOPES = "SUBJECT.READ SUBJECT.UPDATE MEASUREMENT.CREATE offline_access"
-        private const val DEFAUL_APP_RESOURCES = "res_gateway res_ManagementPortal"
+        private const val DEFAULT_APP_RESOURCES = "res_gateway res_ManagementPortal res_appconfig"
     }
 }
