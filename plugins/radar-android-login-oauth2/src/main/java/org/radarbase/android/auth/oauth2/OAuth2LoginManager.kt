@@ -27,7 +27,9 @@ import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
 import org.radarbase.android.RadarConfiguration.Companion.SEP_URL_KEY
 import org.radarbase.android.RadarConfiguration.Companion.UNSAFE_KAFKA_CONNECTION
 import org.radarbase.android.auth.*
+import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
+import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.android.auth.sep.SEPClient
 import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.android.auth.sep.SEPLoginManager.SEPClientConfig
@@ -43,14 +45,13 @@ import java.util.concurrent.locks.ReentrantLock
  */
 class OAuth2LoginManager(
     private val service: AuthService,
-) : LoginManager, LoginListener {
+) : AbstractRadarLoginManager(service, AuthType.OAUTH2), LoginListener {
     private val config = service.radarConfig
     private val stateManager: OAuth2StateManager = OAuth2StateManager(config, service)
 
-    var client: AbstractRadarPortalClient? = null
+    override var client: AbstractRadarPortalClient? = null
     private var clientConfig: SEPClientConfig? = null
     private var restClient: RestClient? = null
-    private val refreshLock = ReentrantLock()
     private val configUpdateObserver = Observer<SingleRadarConfiguration> {
         ensureClientConnectivity(it)
     }
