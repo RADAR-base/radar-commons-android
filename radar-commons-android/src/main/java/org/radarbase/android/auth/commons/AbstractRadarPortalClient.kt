@@ -46,11 +46,10 @@ abstract class AbstractRadarPortalClient(
                 .header("Accept", APPLICATION_JSON)
                 .build()
 
-            AuthType.SEP -> client.requestBuilder("managementportal/api/subjects/${state.userId}")
+            AuthType.SEP, AuthType.OAUTH2 -> client.requestBuilder("managementportal/api/subjects/${state.userId}")
                 .headers(state.okHttpHeaders)
                 .header("Accept", APPLICATION_JSON)
                 .build()
-
         }
         logger.info(
             "Requesting subject {} with parseHeaders {}", state.userId,
@@ -79,15 +78,15 @@ abstract class AbstractRadarPortalClient(
     /** Register a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
     fun registerSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
-        return if (authType == AuthType.MP) {
-            handleSourceUpdateRequest(
+        return when (authType) {
+            AuthType.MP -> handleSourceUpdateRequest(
                 auth,
                 "api/subjects/${auth.userId}/sources",
                 sourceRegistrationBody(source),
                 source,
             )
-        } else {
-            handleSourceUpdateRequest(
+
+            AuthType.SEP, AuthType.OAUTH2 -> handleSourceUpdateRequest(
                 auth,
                 "managementportal/api/subjects/${auth.userId}/sources",
                 sourceRegistrationBody(source),
@@ -99,15 +98,15 @@ abstract class AbstractRadarPortalClient(
     /** Updates a source with the Management Portal.  */
     @Throws(IOException::class, JSONException::class)
     fun updateSource(auth: AppAuthState, source: SourceMetadata): SourceMetadata {
-        return if (authType == AuthType.MP) {
-            handleSourceUpdateRequest(
+        return when (authType) {
+            AuthType.MP -> handleSourceUpdateRequest(
                 auth,
                 "api/subjects/${auth.userId}/sources/${source.sourceName}",
                 sourceUpdateBody(source),
                 source,
             )
-        } else {
-            handleSourceUpdateRequest(
+
+            AuthType.SEP, AuthType.OAUTH2 -> handleSourceUpdateRequest(
                 auth,
                 "managementportal/api/subjects/${auth.userId}/sources/${source.sourceName}",
                 sourceUpdateBody(source),

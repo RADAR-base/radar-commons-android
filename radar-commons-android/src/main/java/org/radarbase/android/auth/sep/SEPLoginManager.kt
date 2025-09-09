@@ -148,11 +148,12 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
                         val accessTokenParser = SepAccessTokenParser(authState)
                         client.refreshToken(authState, accessTokenParser, config.latestConfig).let { newState: AppAuthState ->
                             client.getSubject(newState, GetSubjectParser(newState, AuthType.SEP))
-                        }
-                        logger.info("Refreshed JWT from sep")
+                        }.also { finalState ->
+                            logger.info("Refreshed JWT from sep")
 
-                        updateSources(authState)
-                        listener.loginSucceeded(this, authState)
+                            updateSources(authState)
+                            listener.loginSucceeded(this, finalState)
+                        }
                     } catch (ex: Exception) {
                         logger.error("Failed to get access token", ex)
                         listener.loginFailed(this, ex)
