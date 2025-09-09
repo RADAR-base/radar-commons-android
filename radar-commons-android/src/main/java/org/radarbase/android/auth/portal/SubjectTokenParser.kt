@@ -7,7 +7,7 @@ import org.radarbase.android.auth.commons.AuthType
 import java.io.IOException
 
 class SubjectTokenParser(private val client: ManagementPortalClient, private val authType: AuthType, state: AppAuthState) : AuthStringParser {
-    private val accessTokenParser: AccessTokenParser = AccessTokenParser(state)
+    private val accessTokenParser: MpAccessTokenParser = MpAccessTokenParser(state)
 
     @Throws(IOException::class)
     override fun parse(value: String): AppAuthState {

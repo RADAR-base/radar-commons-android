@@ -12,7 +12,7 @@ import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class AccessTokenParser(private val state: AppAuthState) : AuthStringParser {
+class MpAccessTokenParser(private val state: AppAuthState) : AuthStringParser {
 
     @Throws(IOException::class)
     override fun parse(value: String): AppAuthState {

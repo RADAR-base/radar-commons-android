@@ -145,7 +145,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
                 client as SEPClient
                 if (refreshLock.tryLock()) {
                     try {
-                        val accessTokenParser = AccessTokenParser(authState)
+                        val accessTokenParser = SepAccessTokenParser(authState)
                         client.refreshToken(authState, accessTokenParser, config.latestConfig).let { newState: AppAuthState ->
                             client.getSubject(newState, GetSubjectParser(newState, AuthType.SEP))
                         }

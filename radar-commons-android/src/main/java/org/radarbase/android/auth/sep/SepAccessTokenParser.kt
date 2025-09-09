@@ -12,7 +12,7 @@ import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_SEP
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class AccessTokenParser(private val state: AppAuthState) : AuthStringParser{
+class SepAccessTokenParser(private val state: AppAuthState) : AuthStringParser{
 
     override fun parse(value: String): AppAuthState {
         val responseJson = JSONObject(value)
