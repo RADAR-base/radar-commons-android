@@ -34,11 +34,9 @@ import org.radarbase.android.auth.sep.SEPClient
 import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.android.auth.sep.SEPLoginManager.SEPClientConfig
 import org.radarbase.android.config.SingleRadarConfiguration
-import org.radarbase.producer.AuthenticationException
 import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
 import java.net.MalformedURLException
-import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Authenticates against the RADAR Management Portal.
@@ -95,22 +93,6 @@ class OAuth2LoginManager(
         authState.takeIf { it.authenticationSource == SOURCE_TYPE_OAUTH2 }
 
     override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
-
-    @Throws(AuthenticationException::class)
-    override fun registerSource(authState: AppAuthState, source: SourceMetadata,
-                       success: (AppAuthState, SourceMetadata) -> Unit,
-                       failure: (Exception?) -> Unit): Boolean {
-        success(authState, source)
-        return true
-    }
-
-    @Throws(AuthenticationException::class)
-    override fun updateSource(appAuth: AppAuthState, source: SourceMetadata,
-                              success: (AppAuthState, SourceMetadata) -> Unit,
-                              failure: (Exception?) -> Unit): Boolean {
-        success(appAuth, source)
-        return true
-    }
 
     @Synchronized
     private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
