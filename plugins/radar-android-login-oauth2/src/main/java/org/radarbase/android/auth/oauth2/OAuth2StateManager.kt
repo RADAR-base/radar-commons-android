@@ -110,7 +110,6 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
 
                 val redirectUri = intent.data
                 if (resp == null && ex == null) {
-                    logger.warn("AuthRequestDebug: No resp/ex, but redirectUri=$redirectUri")
                 }
 
                 if (resp != null || ex != null) {
@@ -121,9 +120,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
                 val clientAuth = clientSecretBasic()
 
                 if (resp != null) {
-                    logger.info("AuthRequestDebug: Response is not null, now performing the token request")
                     binder.applyState {
-                        logger.info("AuthRequestDebug: Applying the auth state")
                         oAuthService.performTokenRequest(
                             resp.createTokenExchangeRequest(),
                             clientAuth,
@@ -131,7 +128,6 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
                         )
                     }
                 } else if (ex != null) {
-                    logger.info("AuthRequestDebug: Exception is not null")
                     authService.loginFailed(null, ex)
                 }
             } finally {
@@ -183,7 +179,6 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
         authState: AppAuthState,
         client: AbstractRadarPortalClient?,
     ) = AuthorizationService.TokenResponseCallback { resp, ex ->
-        logger.info("AuthRequestDebug: Now processing the token response")
         resp ?: return@TokenResponseCallback context.loginFailed(null, ex)
         updateAfterTokenResponse(resp, ex)
         val accessTokenParser = OAuthAccessTokenParser()
