@@ -13,7 +13,7 @@ import org.radarbase.producer.rest.RestClient
 import java.net.MalformedURLException
 import java.net.URI
 
-class SEPClient(
+open class SEPClient(
     sep: ServerConfig,
     clientId: String,
     clientSecret: String,
@@ -59,7 +59,6 @@ class SEPClient(
     }
 
     companion object {
-        const val SEP_REFRESH_TOKEN_PROPERTY =
-            "org.radarbase.android.auth.sep.SEPClient.refreshToken"
+        const val SEP_REFRESH_TOKEN_PROPERTY = "org.radarbase.android.auth.sep.SEPClient.refreshToken"
     }
 }
