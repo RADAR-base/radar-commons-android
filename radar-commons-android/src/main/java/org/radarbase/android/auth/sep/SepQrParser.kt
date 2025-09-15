@@ -16,12 +16,19 @@ class SepQrParser(private val state: AppAuthState, private val referrer: String)
         try {
             val json = JSONObject(value)
             val serverUrl = referrer.toHttpUrlOrNull() ?: throw IOException("Referrer is null, can't get base url")
+
+            val defaultPort = when (serverUrl.scheme.lowercase()) {
+                "http" -> 80
+                "https" -> 443
+                else -> -1
+            }
+
             val baseUrl = buildString {
                 append(serverUrl.scheme)
                 append("://")
                 append(serverUrl.host)
                 val port = serverUrl.port
-                if (port != -1) {
+                if (port != -1 && port != defaultPort) {
                     append(":")
                     append(port)
                 }
@@ -32,7 +39,6 @@ class SepQrParser(private val state: AppAuthState, private val referrer: String)
                 attributes[BASE_URL_PROPERTY] = baseUrl
                 needsRegisteredSources = true
                 authenticationSource = SOURCE_TYPE_SEP
-
             }
         } catch (ex: JSONException) {
             throw IOException("Failed to parse json string $value", ex)
