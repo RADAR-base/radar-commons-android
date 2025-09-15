@@ -37,6 +37,7 @@ import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
 import java.net.MalformedURLException
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Authenticates against the RADAR Management Portal.
@@ -44,44 +45,47 @@ import java.net.MalformedURLException
 class OAuth2LoginManager(
     private val service: AuthService,
 ) : AbstractRadarLoginManager(service, AuthType.OAUTH2), LoginListener {
+
     private val config = service.radarConfig
-    private val stateManager: OAuth2StateManager = OAuth2StateManager(config, service)
+    private lateinit var stateManager: OAuth2StateManager
 
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: SEPClientConfig? = null
     private var restClient: RestClient? = null
-    private val configUpdateObserver = Observer<SingleRadarConfiguration> {
-        ensureClientConnectivity(it)
-    }
+    private lateinit var configUpdateObserver: Observer<SingleRadarConfiguration>
 
-    init {
+    override fun init(authState: AppAuthState?) {
+        requireNotNull(authState) { "Failed to initialize OAuth2 manager, provided auth state is null" }
+        stateManager = OAuth2StateManager(config, this, service)
+        configUpdateObserver = Observer<SingleRadarConfiguration> {
+            ensureClientConnectivity(it)
+        }
         config.config.observeForever(configUpdateObserver)
+        updateSources(authState)
+        super.init()
     }
 
-        override fun refresh(authState: AppAuthState): Boolean {
+    override fun refresh(authState: AppAuthState): Boolean {
+        checkManagerStarted()
         if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER) {
             return false
         }
         return authState.getAttribute(OAUTH_REFRESH_TOKEN)
-                ?.also { stateManager.refresh(service, authState, it, client) } != null
+            ?.also { stateManager.refresh(service, authState, it, client) } != null
     }
-    
+
     override fun isRefreshable(authState: AppAuthState): Boolean =
         authState.userId != null && authState.getAttribute(OAUTH_REFRESH_TOKEN) != null
 
     override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
+        checkManagerStarted()
         requireNotNull(activityResultLauncher) {
             "Activity result launcher can't be null in OAuthLoginManager"
         }
-        config.updateWithAuthState(service, authState)
-        ensureClientConnectivity(config.latestConfig)
+        val latestConfig = config.latestConfig
 
-        service.radarApp.let { app ->
-            stateManager.login(
-                app.configuration.latestConfig,
-                activityResultLauncher
-            )
-        }
+        ensureClientConnectivity(latestConfig)
+        stateManager.login(latestConfig, activityResultLauncher)
     }
 
     override fun onActivityCreate(activity: Activity, binder: AuthService.AuthServiceBinder): Boolean {
@@ -132,6 +136,9 @@ class OAuth2LoginManager(
                     IllegalArgumentException("Cannot login using OAuth2 without a token"))
             return
         }
+        logger.info("Updating sources with latest state")
+        updateSources(authState)
+        service.loginSucceeded(manager, authState)
     }
 
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
@@ -139,6 +146,7 @@ class OAuth2LoginManager(
     override fun onDestroy() {
         config.config.removeObserver(configUpdateObserver)
         stateManager.stop()
+        super.onDestroy()
     }
 
     companion object {

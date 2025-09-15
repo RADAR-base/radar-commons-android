@@ -245,8 +245,8 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     /**
-     * Create your login managers here. Call [LoginManager.start] for the login method that
-     * a user indicates.
+     * Create your login managers here. Call [LoginManager.init] to initialized the manager
+     *  for the login method that a user indicates.
      * @param appAuth previous invalid authentication
      * @return non-empty list of login managers to use
      */

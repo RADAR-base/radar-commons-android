@@ -25,6 +25,8 @@ import org.radarbase.producer.AuthenticationException
 /** Manage a single login method.  */
 @Keep
 interface LoginManager {
+
+    fun init(authState: AppAuthState? = null)
     /**
      * Types of authentication sources that the current login manager can handle.
      * @return non-empty list of source types.

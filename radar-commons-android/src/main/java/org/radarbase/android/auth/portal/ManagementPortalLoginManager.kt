@@ -26,29 +26,33 @@ import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
 @Suppress("unused")
-class ManagementPortalLoginManager(private val listener: AuthService, state: AppAuthState) :
+class ManagementPortalLoginManager(private val listener: AuthService, private val state: AppAuthState) :
     AbstractRadarLoginManager(listener, AuthType.MP) {
 
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: ManagementPortalConfig? = null
     private var restClient: RestClient? = null
-    private val refreshLock: ReentrantLock
+    private lateinit var refreshLock: ReentrantLock
     private val config = listener.radarConfig
-    private val configUpdateObserver = Observer<SingleRadarConfiguration> {
-        ensureClientConnectivity(it)
-    }
+    private lateinit var configUpdateObserver: Observer<SingleRadarConfiguration>
 
-    init {
+    override fun init(authState: AppAuthState?) {
+        refreshLock = ReentrantLock()
+        configUpdateObserver = Observer {
+            ensureClientConnectivity(it)
+        }
         config.config.observeForever(configUpdateObserver)
         updateSources(state)
-        refreshLock = ReentrantLock()
+        super.init()
     }
 
     fun setRefreshToken(authState: AppAuthState, refreshToken: String) {
+        checkManagerStarted()
         refresh(authState.alter { attributes[MP_REFRESH_TOKEN_PROPERTY] = refreshToken })
     }
 
     fun setTokenFromUrl(authState: AppAuthState, refreshTokenUrl: String) {
+        checkManagerStarted()
         client?.let { client ->
             if (ensureMpClient(client)) {
                 if (refreshLock.tryLock()) {
@@ -80,6 +84,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
+        checkManagerStarted()
         if (authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
         }
@@ -139,10 +144,12 @@ class ManagementPortalLoginManager(private val listener: AuthService, state: App
 
     override fun onDestroy() {
         config.config.removeObserver(configUpdateObserver)
+        super.onDestroy()
     }
 
     @Synchronized
     private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
+        checkManagerStarted()
         val newClientConfig = try {
             ManagementPortalConfig(
                 config.getString(MANAGEMENT_PORTAL_URL_KEY),

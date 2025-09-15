@@ -38,7 +38,7 @@ import org.radarbase.android.auth.sep.SEPClient
 import org.radarbase.android.util.SafeHandler
 import java.util.concurrent.locks.ReentrantLock
 
-class OAuth2StateManager(private val config: RadarConfiguration, context: Context) {
+class OAuth2StateManager(private val config: RadarConfiguration, private val oauthManager: OAuth2LoginManager, context: Context) {
     private val mPrefs: SharedPreferences =
         context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
     private var mCurrentAuthState: AuthState
@@ -190,7 +190,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, context: Contex
             handler.compute {
                 client.getSubject(updatedAuth, getSubjectParser)
             }.also { latestAuth ->
-                context.loginSucceeded(null, latestAuth)
+                oauthManager.loginSucceeded(null, latestAuth)
             }
         } else {
             logger.error("Can't process the get subject request, client is not the instance of SEP Client")

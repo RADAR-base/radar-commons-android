@@ -30,25 +30,30 @@ import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
 @Suppress("unused")
-class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
+class SEPLoginManager(private val listener: AuthService, private val state: AppAuthState) :
     AbstractRadarLoginManager(listener, AuthType.SEP) {
+
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: SEPClientConfig? = null
     private var restClient: RestClient? = null
-    private val refreshLock = ReentrantLock()
+    private lateinit var refreshLock: ReentrantLock
     private val config = listener.radarConfig
-    private val configUpdateObserver = Observer<SingleRadarConfiguration> {
-        ensureClientConnectivity(it)
-    }
+    private lateinit var configUpdateObserver: Observer<SingleRadarConfiguration>
 
-    init {
+    override fun init(authState: AppAuthState?) {
+        refreshLock = ReentrantLock()
+        configUpdateObserver = Observer {
+            ensureClientConnectivity(it)
+        }
         config.config.observeForever(configUpdateObserver)
         updateSources(state)
+        super.init()
     }
 
     override val sourceTypes: List<String> = sepSourceTypeList
 
     fun sepQrFlow(authState: AppAuthState, qrData: String) {
+        checkManagerStarted()
         if (refreshLock.tryLock()) {
             try {
                 val params = parseQueryParams(qrData)
@@ -137,6 +142,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
+        checkManagerStarted()
         if (authState.getAttribute(SEP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
         }
@@ -173,6 +179,7 @@ class SEPLoginManager(private val listener: AuthService, state: AppAuthState) :
     }
 
     override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
+        checkManagerStarted()
         refresh(authState)
     }
 
