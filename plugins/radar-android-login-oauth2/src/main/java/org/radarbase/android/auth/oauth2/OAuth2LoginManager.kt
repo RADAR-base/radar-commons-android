@@ -20,7 +20,6 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.Observer
-import org.radarbase.android.RadarApplication.Companion.radarApp
 import org.radarbase.android.RadarApplication.Companion.radarConfig
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_ID
 import org.radarbase.android.RadarConfiguration.Companion.OAUTH2_CLIENT_SECRET
@@ -30,17 +29,24 @@ import org.radarbase.android.auth.*
 import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
 import org.radarbase.android.auth.commons.AuthType
-import org.radarbase.android.auth.sep.SEPClient
-import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_OAUTH2
+import org.radarbase.android.auth.sep.SEPClient.Companion.SEP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.auth.sep.SEPLoginManager.SEPClientConfig
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.producer.rest.RestClient
 import org.slf4j.LoggerFactory
 import java.net.MalformedURLException
-import java.util.concurrent.locks.ReentrantLock
 
 /**
- * Authenticates against the RADAR Management Portal.
+ * Handles OAuth2 login flows using the [AppAuth-Android](https://openid.github.io/AppAuth-Android/) library.
+ *
+ * Provides initialization, token refresh, interactive login
+ * with activity launchers, and response handling for OAuth2
+ * providers configured in RADAR.
+ *
+ * @property service the [AuthService] for callback dispatching.
+ *
+ * @see OAuth2StateManager
+ * @see AbstractRadarLoginManager
  */
 class OAuth2LoginManager(
     private val service: AuthService,
@@ -57,25 +63,28 @@ class OAuth2LoginManager(
     override fun init(authState: AppAuthState?) {
         requireNotNull(authState) { "Failed to initialize OAuth2 manager, provided auth state is null" }
         stateManager = OAuth2StateManager(config, this, service)
-        configUpdateObserver = Observer<SingleRadarConfiguration> {
-            ensureClientConnectivity(it)
+        configUpdateObserver = Observer {
+            ensureOAuthClientConnectivity(it)
         }
         config.config.observeForever(configUpdateObserver)
         updateSources(authState)
-        super.init()
+        super.init(null)
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
         checkManagerStarted()
-        if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER) {
+        if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER || authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY) == null) {
             return false
         }
-        return authState.getAttribute(OAUTH_REFRESH_TOKEN)
+        return authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY)
             ?.also { stateManager.refresh(service, authState, it, client) } != null
     }
 
-    override fun isRefreshable(authState: AppAuthState): Boolean =
-        authState.userId != null && authState.getAttribute(OAUTH_REFRESH_TOKEN) != null
+    override fun isRefreshable(authState: AppAuthState): Boolean {
+        return authState.userId != null
+                && authState.projectId != null
+                && authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY) != null
+    }
 
     override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
         checkManagerStarted()
@@ -84,7 +93,7 @@ class OAuth2LoginManager(
         }
         val latestConfig = config.latestConfig
 
-        ensureClientConnectivity(latestConfig)
+        ensureOAuthClientConnectivity(latestConfig)
         stateManager.login(latestConfig, activityResultLauncher)
     }
 
@@ -93,14 +102,21 @@ class OAuth2LoginManager(
         return true
     }
 
-    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? =
-        authState.takeIf { it.authenticationSource == SOURCE_TYPE_OAUTH2 }
+    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
+        return when {
+            authState.authenticationSource != SOURCE_TYPE_OAUTH2 -> null
+            disableRefresh -> authState.alter {
+                attributes -= OAUTH2_REFRESH_TOKEN_PROPERTY
+                isPrivacyPolicyAccepted = false
+            }
+            else -> authState
+        }
+    }
 
     override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
 
-    @Synchronized
-    private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
-        val newClientConfig = try {
+    private fun ensureOAuthClientConnectivity(config: SingleRadarConfiguration) {
+        val oauthClientConfig = try {
             SEPClientConfig(
                 config.getString(SEP_URL_KEY),
                 config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
@@ -108,23 +124,24 @@ class OAuth2LoginManager(
                 config.getString(OAUTH2_CLIENT_SECRET, ""),
             )
         } catch (_: MalformedURLException) {
-            logger.error("Cannot construct ManagementPortalClient with malformed URL")
+            logger.error("Cannot construct OAuth client with malformed URL")
             null
         } catch (_: IllegalArgumentException) {
-            logger.error("Cannot construct ManagementPortalClient without client credentials")
+            logger.error("Cannot construct OAuth client without client credentials")
             null
         }
 
-        if (newClientConfig == clientConfig) return
+        if (oauthClientConfig == clientConfig) return
 
-        client = newClientConfig?.let {
-            SEPClient(
-                it.serverConfig,
-                it.clientId,
-                it.clientSecret,
+        client = oauthClientConfig?.let { oauthConfig ->
+            OAuth2Client(
+                oauthConfig.serverConfig,
+                oauthConfig.clientId,
+                oauthConfig.clientSecret,
                 client = restClient
-            ).also { sep ->
-                restClient = sep.client
+            ).also { oauth ->
+                restClient = oauth.client
+                clientConfig = oauthConfig
             }
         }
     }
@@ -136,6 +153,8 @@ class OAuth2LoginManager(
                     IllegalArgumentException("Cannot login using OAuth2 without a token"))
             return
         }
+        logger.warn("(TestOauthDebug) Login Succeeded callback in oauth login manager on thread: {}", Thread.currentThread().name)
+
         logger.info("Updating sources with latest state")
         updateSources(authState)
         service.loginSucceeded(manager, authState)
@@ -152,7 +171,8 @@ class OAuth2LoginManager(
     companion object {
         private val logger = LoggerFactory.getLogger(OAuth2LoginManager::class.java)
 
-        const val OAUTH_REFRESH_TOKEN = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
+        const val OAUTH2_REFRESH_TOKEN_PROPERTY = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
+        const val SOURCE_TYPE_OAUTH2 = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
         val OAUTH2_SOURCE_TYPES = listOf(SOURCE_TYPE_OAUTH2)
     }
 }

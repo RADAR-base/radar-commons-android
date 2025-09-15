@@ -25,6 +25,16 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
+/**
+ * Handles login and token management for the RADAR Management Portal.
+ *
+ * Supports setting refresh tokens directly or via meta-token URLs,
+ * refreshing access tokens, and initiating login flows tied to the
+ * Management Portal authentication backend.
+ *
+ * @see ManagementPortalClient
+ * @see AbstractRadarLoginManager
+ */
 @Suppress("unused")
 class ManagementPortalLoginManager(private val listener: AuthService, private val state: AppAuthState) :
     AbstractRadarLoginManager(listener, AuthType.MP) {
@@ -39,11 +49,11 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
     override fun init(authState: AppAuthState?) {
         refreshLock = ReentrantLock()
         configUpdateObserver = Observer {
-            ensureClientConnectivity(it)
+            ensureMpClientConnectivity(it)
         }
         config.config.observeForever(configUpdateObserver)
         updateSources(state)
-        super.init()
+        super.init(null)
     }
 
     fun setRefreshToken(authState: AppAuthState, refreshToken: String) {
@@ -65,7 +75,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
                             // update radarConfig
                             config.updateWithAuthState(listener, authState)
                             // refresh client
-                            ensureClientConnectivity(config.latestConfig)
+                            ensureMpClientConnectivity(config.latestConfig)
                             logger.info("Retrieved refreshToken from url")
                             // refresh token
                             refresh(authState)
@@ -121,6 +131,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
     }
 
     override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
+        checkManagerStarted()
         refresh(authState)
     }
 
@@ -148,9 +159,9 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
     }
 
     @Synchronized
-    private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
+    private fun ensureMpClientConnectivity(config: SingleRadarConfiguration) {
         checkManagerStarted()
-        val newClientConfig = try {
+        val mpClientConfig = try {
             ManagementPortalConfig(
                 config.getString(MANAGEMENT_PORTAL_URL_KEY),
                 config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
@@ -165,15 +176,18 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
             null
         }
 
-        if (newClientConfig == clientConfig) return
+        if (mpClientConfig == clientConfig) return
 
-        client = newClientConfig?.let {
+        client = mpClientConfig?.let { mpConfig ->
             ManagementPortalClient(
-                newClientConfig.serverConfig,
-                config.getString(OAUTH2_CLIENT_ID),
-                config.getString(OAUTH2_CLIENT_SECRET, ""),
+                mpConfig.serverConfig,
+                mpConfig.clientId,
+                mpConfig.clientSecret,
                 client = restClient,
-            ).also { restClient = it.client }
+            ).also {
+                restClient = it.client
+                clientConfig = mpConfig
+            }
         }
     }
 

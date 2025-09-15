@@ -5,9 +5,9 @@ import org.json.JSONException
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.Jwt
 import org.radarbase.android.auth.LoginManager
-import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.OAUTH_REFRESH_TOKEN
+import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.OAUTH2_REFRESH_TOKEN_PROPERTY
+import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
-import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_OAUTH2
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.collections.set
@@ -34,7 +34,7 @@ class OAuthAccessTokenParser {
                 userId = decodedJwt.getString("sub")
                 needsRegisteredSources = true
                 authenticationSource = SOURCE_TYPE_OAUTH2
-                attributes[OAUTH_REFRESH_TOKEN] = refreshToken
+                attributes[OAUTH2_REFRESH_TOKEN_PROPERTY] = refreshToken
                 attributes[SOURCE_IDS_PROPERTY] =
                     decodedJwt.optJSONArray("sources")?.join(",") ?: ""
             }

@@ -60,12 +60,10 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
             try {
                 val authorizeUri = config.getString(RadarConfiguration.OAUTH2_AUTHORIZE_URL).toUri()
                 val tokenUri = config.getString(RadarConfiguration.OAUTH2_TOKEN_URL).toUri()
-                val redirectUri =
-                    config.getString(RadarConfiguration.OAUTH2_REDIRECT_URL, APP_REDIRECT_URI)
-                        .toUri()
+                val redirectUri = config.getString(RadarConfiguration.OAUTH2_REDIRECT_URL, APP_REDIRECT_URI).toUri()
                 val clientId = config.getString(RadarConfiguration.OAUTH2_CLIENT_ID)
 
-                logger.debug("Performing oAuth request at authorize uri: {}", authorizeUri)
+                logger.debug("Performing oAuth request at authorization url: {}", authorizeUri)
 
                 val authConfig = AuthorizationServiceConfiguration(authorizeUri, tokenUri)
                 val additionalParams = mapOf(
@@ -83,8 +81,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
                 }
 
                 logger.info("Performing auth request")
-                val authIntent =
-                    oAuthService.getAuthorizationRequestIntent(authRequestBuilder.build())
+                val authIntent = oAuthService.getAuthorizationRequestIntent(authRequestBuilder.build())
                 activityResultLauncher.launch(authIntent)
             } finally {
                 refreshLock.unlock()
@@ -108,8 +105,8 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
                 val resp = AuthorizationResponse.fromIntent(intent)
                 val ex = AuthorizationException.fromIntent(intent)
 
-                val redirectUri = intent.data
                 if (resp == null && ex == null) {
+                    logger.warn("Both response and exception are null for authorization redirect intent")
                 }
 
                 if (resp != null || ex != null) {
@@ -184,6 +181,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         val accessTokenParser = OAuthAccessTokenParser()
         val updatedAuth = accessTokenParser.parse(authState, mCurrentAuthState)
 
+        logger.warn("(TestOauthDebug) Retrieved access token successfully, now getting subjects on thread: {}", Thread.currentThread().name)
         config.updateWithAuthState(context, updatedAuth)
         val getSubjectParser = GetSubjectParser(updatedAuth, AuthType.OAUTH2)
         if (client is SEPClient) {

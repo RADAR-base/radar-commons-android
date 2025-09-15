@@ -15,7 +15,6 @@ import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
 import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.android.auth.portal.GetSubjectParser
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
 import org.radarbase.android.auth.sep.SEPClient.Companion.SEP_REFRESH_TOKEN_PROPERTY
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.android.util.ServerConfigUtil.toServerConfig
@@ -29,6 +28,18 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
+/**
+ * Handles login via the Self-Enrolment Portal (SEP) backed by Ory Kratos.
+ *
+ * Provides support for QR code login, safe parameter parsing, and
+ * standard token refresh for maintaining authenticated sessions.
+ *
+ *  @property listener the [AuthService] for login callbacks.
+ *  @property state the authentication state being managed.
+ *
+ *  @see SEPClient
+ *  @see AbstractRadarLoginManager
+ */
 @Suppress("unused")
 class SEPLoginManager(private val listener: AuthService, private val state: AppAuthState) :
     AbstractRadarLoginManager(listener, AuthType.SEP) {
@@ -43,11 +54,11 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
     override fun init(authState: AppAuthState?) {
         refreshLock = ReentrantLock()
         configUpdateObserver = Observer {
-            ensureClientConnectivity(it)
+            ensureSepClientConnectivity(it)
         }
         config.config.observeForever(configUpdateObserver)
         updateSources(state)
-        super.init()
+        super.init(null)
     }
 
     override val sourceTypes: List<String> = sepSourceTypeList
@@ -63,8 +74,8 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
 
                 SepQrParser(authState, referrer).parse(data).let { appAuthState ->
                     config.updateWithAuthState(listener, appAuthState)
-                    ensureClientConnectivity(config.latestConfig)
-                    logger.info("Processed sep url data")
+                    ensureSepClientConnectivity(config.latestConfig)
+                    logger.debug("SEP qr data is processed")
                     refresh(appAuthState)
                 }
             } catch (ex: Exception) {
@@ -156,7 +167,6 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
                             client.getSubject(newState, GetSubjectParser(newState, AuthType.SEP))
                         }.also { finalState ->
                             logger.info("Refreshed JWT from sep")
-
                             updateSources(authState)
                             listener.loginSucceeded(this, finalState)
                         }
@@ -187,12 +197,9 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
         return false
     }
 
-    override fun invalidate(
-        authState: AppAuthState,
-        disableRefresh: Boolean
-    ): AppAuthState? {
+    override fun invalidate(authState: AppAuthState, disableRefresh: Boolean): AppAuthState? {
         return when {
-            authState.authenticationSource != SOURCE_TYPE_MP -> null
+            authState.authenticationSource != SOURCE_TYPE_SEP -> null
             disableRefresh -> authState.alter {
                 attributes -= SEP_REFRESH_TOKEN_PROPERTY
                 isPrivacyPolicyAccepted = false
@@ -203,11 +210,12 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
 
     override fun onDestroy() {
         config.config.removeObserver(configUpdateObserver)
+        super.onDestroy()
     }
 
     @Synchronized
-    private fun ensureClientConnectivity(config: SingleRadarConfiguration) {
-        val newClientConfig = try {
+    private fun ensureSepClientConnectivity(config: SingleRadarConfiguration) {
+        val sepClientConfig = try {
             SEPClientConfig(
                 config.getString(SEP_URL_KEY),
                 config.getBoolean(UNSAFE_KAFKA_CONNECTION, false),
@@ -215,23 +223,24 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
                 config.getString(OAUTH2_CLIENT_SECRET, ""),
             )
         } catch (_: MalformedURLException) {
-            logger.error("Cannot construct ManagementPortalClient with malformed URL")
+            logger.error("Cannot construct SepClient with malformed URL")
             null
         } catch (_: IllegalArgumentException) {
-            logger.error("Cannot construct ManagementPortalClient without client credentials")
+            logger.error("Cannot construct SepClient without client credentials")
             null
         }
 
-        if (newClientConfig == clientConfig) return
+        if (sepClientConfig == clientConfig) return
 
-        client = newClientConfig?.let {
+        client = sepClientConfig?.let { sepConfig ->
             SEPClient(
-                it.serverConfig,
-                it.clientId,
-                it.clientSecret,
+                sepConfig.serverConfig,
+                sepConfig.clientId,
+                sepConfig.clientSecret,
                 client = restClient
             ).also { sep ->
                 restClient = sep.client
+                clientConfig = sepConfig
             }
         }
     }
@@ -249,7 +258,6 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
         private val logger = LoggerFactory.getLogger(SEPLoginManager::class.java)
 
         const val SOURCE_TYPE_SEP = "org.radarbase.android.auth.sep.SelfEnrolmentPortal"
-        const val SOURCE_TYPE_OAUTH2 = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
         private val sepSourceTypeList = listOf(SOURCE_TYPE_SEP)
 
         @OptIn(ExperimentalContracts::class)
