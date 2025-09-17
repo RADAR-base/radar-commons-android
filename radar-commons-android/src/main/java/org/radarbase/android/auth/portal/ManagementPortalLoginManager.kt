@@ -51,7 +51,9 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
         configUpdateObserver = Observer {
             ensureMpClientConnectivity(it)
         }
-        config.config.observeForever(configUpdateObserver)
+        mainHandler.post {
+            config.config.observeForever(configUpdateObserver)
+        }
         updateSources(state)
         super.init(null)
     }
@@ -94,9 +96,12 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
-        checkManagerStarted()
         if (authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
+        }
+        if (!isStarted) {
+            init()
+            ensureMpClientConnectivity(config.latestConfig)
         }
         client?.let { client ->
             if (ensureMpClient(client)) {
@@ -154,6 +159,7 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
 
 
     override fun onDestroy() {
+        if (!isStarted) return
         config.config.removeObserver(configUpdateObserver)
         super.onDestroy()
     }

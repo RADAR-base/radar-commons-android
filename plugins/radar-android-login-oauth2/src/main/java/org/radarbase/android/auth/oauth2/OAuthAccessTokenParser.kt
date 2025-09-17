@@ -6,7 +6,7 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.Jwt
 import org.radarbase.android.auth.LoginManager
 import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.OAUTH2_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.auth.oauth2.OAuth2LoginManager.Companion.SOURCE_TYPE_OAUTH2
+import org.radarbase.android.auth.portal.GetSubjectParser.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.SOURCE_IDS_PROPERTY
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -35,8 +35,7 @@ class OAuthAccessTokenParser {
                 needsRegisteredSources = true
                 authenticationSource = SOURCE_TYPE_OAUTH2
                 attributes[OAUTH2_REFRESH_TOKEN_PROPERTY] = refreshToken
-                attributes[SOURCE_IDS_PROPERTY] =
-                    decodedJwt.optJSONArray("sources")?.join(",") ?: ""
+                attributes[SOURCE_IDS_PROPERTY] = decodedJwt.optJSONArray("sources")?.join(",") ?: ""
             }
         } catch (ex: JSONException) {
             throw IOException("Failed to parse json string from oauth access token parser", ex)

@@ -285,7 +285,13 @@ abstract class AuthService : Service(), LoginListener {
         handler.execute {
             logger.info("Registering source with {}: {}", source.type, source.sourceId)
 
-            relevantManagers.any { manager ->
+            relevantManagers.also {
+                it.forEach { manager ->
+                    if (!manager.isStarted) {
+                        manager.init(appAuth)
+                    }
+                }
+            }.any { manager ->
                 manager.registerSource(appAuth, source, { newAppAuth, newSource ->
                     if (newAppAuth != appAuth) {
                         appAuth = newAppAuth
@@ -357,7 +363,13 @@ abstract class AuthService : Service(), LoginListener {
 
     private fun updateSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) {
         handler.execute {
-            relevantManagers.any { manager ->
+            relevantManagers.also {
+                it.forEach { manager ->
+                    if (!manager.isStarted) {
+                        manager.init(appAuth)
+                    }
+                }
+            }.any { manager ->
                 manager.updateSource(appAuth, source, success, failure)
             }
         }

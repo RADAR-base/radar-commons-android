@@ -19,6 +19,7 @@ package org.radarbase.android.auth.oauth2
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Process
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.AnyThread
@@ -58,11 +59,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
     ) {
         if (refreshLock.tryLock()) {
             try {
-                val authorizeUri = config.getString(RadarConfiguration.OAUTH2_AUTHORIZE_URL).toUri()
-                val tokenUri = config.getString(RadarConfiguration.OAUTH2_TOKEN_URL).toUri()
-                val redirectUri = config.getString(RadarConfiguration.OAUTH2_REDIRECT_URL, APP_REDIRECT_URI).toUri()
-                val clientId = config.getString(RadarConfiguration.OAUTH2_CLIENT_ID)
-
+                val (authorizeUri: Uri, tokenUri: Uri, redirectUri: Uri, clientId: String) = getOAuthConfig(config)
                 logger.debug("Performing oAuth request at authorization url: {}", authorizeUri)
 
                 val authConfig = AuthorizationServiceConfiguration(authorizeUri, tokenUri)
@@ -89,7 +86,34 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         }
     }
 
-    fun updateAfterAuthorization(
+    private fun getOAuthConfig(config: SingleRadarConfiguration): OAuthConfig {
+        try {
+            val authorizeUri = config.getString(RadarConfiguration.OAUTH2_AUTHORIZE_URL).toUri()
+            val tokenUri = config.getString(RadarConfiguration.OAUTH2_TOKEN_URL).toUri()
+            val redirectUri = config.getString(RadarConfiguration.OAUTH2_REDIRECT_URL, APP_REDIRECT_URI).toUri()
+            val clientId = config.getString(RadarConfiguration.OAUTH2_CLIENT_ID)
+            config.getString(RadarConfiguration.OAUTH2_CLIENT_SECRET)
+
+            return OAuthConfig(authorizeUri, tokenUri, redirectUri, clientId)
+        } catch (e: IllegalArgumentException) {
+            throw MissingConfigurationException("Missing firebase remote configuration for either oauth endpoints, redirect uri or client credentials.", e)
+        }
+    }
+
+    private fun logIntent(intent: Intent?) {
+        val data = intent?.data
+        val action = intent?.action
+        val flags = intent?.flags
+        val extrasKeys = intent?.extras?.keySet()?.joinToString(", ") ?: "null"
+        logger.warn("(TestOauthDebug) AuthRequestDebug: action=$action, data=$data, flags=$flags, extras=$extrasKeys")
+        if (intent?.extras != null) {
+            intent.extras!!.keySet().forEach { k ->
+                logger.warn("(TestOauthDebug) AuthRequestDebug: extra $k => ${intent.extras?.get(k)}")
+            }
+        }
+    }
+
+        fun updateAfterAuthorization(
         authService: AuthService,
         intent: Intent?,
         binder: AuthService.AuthServiceBinder,
@@ -101,7 +125,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
                     logger.info("Intent is null ")
                     return
                 }
-
+                logIntent(intent)
                 val resp = AuthorizationResponse.fromIntent(intent)
                 val ex = AuthorizationException.fromIntent(intent)
 
@@ -241,8 +265,20 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         private const val STORE_NAME = "AuthState"
         private const val KEY_STATE = "state"
         private const val APP_REDIRECT_URI = "org.radarbase.prmt://login"
-        private const val DEFAULT_OAUTH_SCOPES =
-            "SUBJECT.READ SUBJECT.UPDATE MEASUREMENT.CREATE offline_access"
+        private const val DEFAULT_OAUTH_SCOPES = "SUBJECT.READ SUBJECT.UPDATE MEASUREMENT.CREATE offline_access"
         private const val DEFAULT_APP_RESOURCES = "res_gateway res_ManagementPortal res_appconfig"
+
+        class MissingConfigurationException(message: String) : RuntimeException(message) {
+            constructor(message: String, cause: Throwable) : this(message) {
+                initCause(cause)
+            }
+        }
+
+        private data class OAuthConfig(
+            val authorizeUri: Uri,
+            val tokenUri: Uri,
+            val redirectUri: Uri,
+            val clientId: String,
+        )
     }
 }

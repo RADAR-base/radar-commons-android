@@ -26,12 +26,15 @@ import org.radarbase.producer.AuthenticationException
 @Keep
 interface LoginManager {
 
-    fun init(authState: AppAuthState? = null)
     /**
      * Types of authentication sources that the current login manager can handle.
      * @return non-empty list of source types.
      */
     val sourceTypes: List<String>
+
+    val isStarted: Boolean
+
+    fun init(authState: AppAuthState? = null)
 
     /**
      * With or without user interaction, refresh the current authentication state. The result will

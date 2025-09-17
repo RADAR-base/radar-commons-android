@@ -29,7 +29,7 @@ import org.radarbase.android.auth.*
 import org.radarbase.android.auth.commons.AbstractRadarLoginManager
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
 import org.radarbase.android.auth.commons.AuthType
-import org.radarbase.android.auth.sep.SEPClient.Companion.SEP_REFRESH_TOKEN_PROPERTY
+import org.radarbase.android.auth.portal.GetSubjectParser.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.android.auth.sep.SEPLoginManager.SEPClientConfig
 import org.radarbase.android.config.SingleRadarConfiguration
 import org.radarbase.producer.rest.RestClient
@@ -66,15 +66,20 @@ class OAuth2LoginManager(
         configUpdateObserver = Observer {
             ensureOAuthClientConnectivity(it)
         }
-        config.config.observeForever(configUpdateObserver)
+        mainHandler.post {
+            config.config.observeForever(configUpdateObserver)
+        }
         updateSources(authState)
         super.init(null)
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
-        checkManagerStarted()
         if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER || authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY) == null) {
             return false
+        }
+        if (!isStarted) {
+            init()
+            ensureOAuthClientConnectivity(config.latestConfig)
         }
         return authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY)
             ?.also { stateManager.refresh(service, authState, it, client) } != null
@@ -115,6 +120,7 @@ class OAuth2LoginManager(
 
     override val sourceTypes: List<String> = OAUTH2_SOURCE_TYPES
 
+    @Synchronized
     private fun ensureOAuthClientConnectivity(config: SingleRadarConfiguration) {
         val oauthClientConfig = try {
             SEPClientConfig(
@@ -163,6 +169,7 @@ class OAuth2LoginManager(
     override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
 
     override fun onDestroy() {
+        if (!isStarted) return
         config.config.removeObserver(configUpdateObserver)
         stateManager.stop()
         super.onDestroy()
@@ -171,8 +178,7 @@ class OAuth2LoginManager(
     companion object {
         private val logger = LoggerFactory.getLogger(OAuth2LoginManager::class.java)
 
-        const val OAUTH2_REFRESH_TOKEN_PROPERTY = "org.radarcns.auth.OAuth2LoginManager.refreshToken"
-        const val SOURCE_TYPE_OAUTH2 = "org.radarcns.android.auth.oauth2.OAuth2LoginManager"
+        const val OAUTH2_REFRESH_TOKEN_PROPERTY = "org.radarbase.auth.OAuth2LoginManager.refreshToken"
         val OAUTH2_SOURCE_TYPES = listOf(SOURCE_TYPE_OAUTH2)
     }
 }

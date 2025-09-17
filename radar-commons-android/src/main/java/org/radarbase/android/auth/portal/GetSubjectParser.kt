@@ -10,7 +10,6 @@ import org.radarbase.android.auth.SourceMetadata.Companion.optNonEmptyString
 import org.radarbase.android.auth.SourceType
 import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
-import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_OAUTH2
 import org.radarbase.android.auth.sep.SEPLoginManager.Companion.SOURCE_TYPE_SEP
 import org.radarbase.android.util.takeTrimmedIfNotEmpty
 import org.slf4j.LoggerFactory
@@ -68,6 +67,7 @@ class GetSubjectParser(private val state: AppAuthState, private val authType: Au
     companion object {
         private val logger = LoggerFactory.getLogger(GetSubjectParser::class.java)
 
+        const val SOURCE_TYPE_OAUTH2 = "org.radarbase.android.auth.oauth2.OAuth2LoginManager"
         const val RADAR_EXTERNAL_ID = "radar_external_id"
         const val RADAR_EXTERNAL_URL = "radar_external_url"
 

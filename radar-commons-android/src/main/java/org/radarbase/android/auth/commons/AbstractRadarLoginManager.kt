@@ -1,5 +1,7 @@
 package org.radarbase.android.auth.commons
 
+import android.os.Handler
+import android.os.Looper
 import org.json.JSONException
 import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.AuthService
@@ -18,8 +20,9 @@ abstract class AbstractRadarLoginManager(private val listener: AuthService, priv
     protected open var client: AbstractRadarPortalClient? = null
     protected open var _started: AtomicBoolean = AtomicBoolean(false)
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
+    protected val mainHandler = Handler(Looper.getMainLooper())
 
-    val isStarted: Boolean
+    override val isStarted: Boolean
         get() = _started.get()
 
     override fun init(authState: AppAuthState?) {

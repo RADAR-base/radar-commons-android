@@ -56,7 +56,9 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
         configUpdateObserver = Observer {
             ensureSepClientConnectivity(it)
         }
-        config.config.observeForever(configUpdateObserver)
+        mainHandler.post {
+            config.config.observeForever(configUpdateObserver)
+        }
         updateSources(state)
         super.init(null)
     }
@@ -153,10 +155,14 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
-        checkManagerStarted()
         if (authState.getAttribute(SEP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
         }
+        if (!isStarted) {
+            init()
+            ensureSepClientConnectivity(config.latestConfig)
+        }
+
         client?.let { client ->
             operateOnSepClient(client) {
                 client as SEPClient
@@ -209,6 +215,7 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
     }
 
     override fun onDestroy() {
+        if (!isStarted) return
         config.config.removeObserver(configUpdateObserver)
         super.onDestroy()
     }
