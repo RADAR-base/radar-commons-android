@@ -11,6 +11,7 @@ import org.radarbase.android.auth.AppAuthState
 import org.radarbase.android.auth.SourceMetadata
 import org.radarbase.android.auth.SourceType
 import org.radarbase.android.auth.commons.AbstractRadarPortalClient
+import org.radarbase.android.auth.commons.AuthType
 import org.radarbase.config.ServerConfig
 import java.io.IOException
 import java.util.*
@@ -98,7 +99,7 @@ class ManagementPortalClientTest {
             val authState = AppAuthState {
                 userId = "sub-1"
             }
-            val retAuthState = client.getSubject(authState, GetSubjectParser(authState))
+            val retAuthState = client.getSubject(authState, GetSubjectParser(authState, AuthType.MP))
 
             val expected = SourceMetadata().apply {
                 type = SourceType(0, "p", "m", "v", true)
