@@ -36,35 +36,30 @@ import kotlin.contracts.contract
  * @see AbstractRadarLoginManager
  */
 @Suppress("unused")
-class ManagementPortalLoginManager(private val listener: AuthService, private val state: AppAuthState) :
+class ManagementPortalLoginManager(private val listener: AuthService, state: AppAuthState) :
     AbstractRadarLoginManager(listener, AuthType.MP) {
 
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: ManagementPortalConfig? = null
     private var restClient: RestClient? = null
-    private lateinit var refreshLock: ReentrantLock
+    private var refreshLock: ReentrantLock = ReentrantLock()
     private val config = listener.radarConfig
-    private lateinit var configUpdateObserver: Observer<SingleRadarConfiguration>
+    private var configUpdateObserver: Observer<SingleRadarConfiguration> = Observer {
+        ensureMpClientConnectivity(it)
+    }
 
-    override fun init(authState: AppAuthState?) {
-        refreshLock = ReentrantLock()
-        configUpdateObserver = Observer {
-            ensureMpClientConnectivity(it)
-        }
+    init {
         mainHandler.post {
             config.config.observeForever(configUpdateObserver)
         }
         updateSources(state)
-        super.init(null)
     }
 
     fun setRefreshToken(authState: AppAuthState, refreshToken: String) {
-        checkManagerStarted()
         refresh(authState.alter { attributes[MP_REFRESH_TOKEN_PROPERTY] = refreshToken })
     }
 
     fun setTokenFromUrl(authState: AppAuthState, refreshTokenUrl: String) {
-        checkManagerStarted()
         client?.let { client ->
             if (ensureMpClient(client)) {
                 if (refreshLock.tryLock()) {
@@ -99,10 +94,6 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
         if (authState.getAttribute(MP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
         }
-        if (!isStarted) {
-            init()
-            ensureMpClientConnectivity(config.latestConfig)
-        }
         client?.let { client ->
             if (ensureMpClient(client)) {
                 if (refreshLock.tryLock()) {
@@ -136,7 +127,6 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
     }
 
     override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
-        checkManagerStarted()
         refresh(authState)
     }
 
@@ -159,14 +149,11 @@ class ManagementPortalLoginManager(private val listener: AuthService, private va
 
 
     override fun onDestroy() {
-        if (!isStarted) return
         config.config.removeObserver(configUpdateObserver)
-        super.onDestroy()
     }
 
     @Synchronized
     private fun ensureMpClientConnectivity(config: SingleRadarConfiguration) {
-        checkManagerStarted()
         val mpClientConfig = try {
             ManagementPortalConfig(
                 config.getString(MANAGEMENT_PORTAL_URL_KEY),

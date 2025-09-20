@@ -47,26 +47,22 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: SEPClientConfig? = null
     private var restClient: RestClient? = null
-    private lateinit var refreshLock: ReentrantLock
+    private var refreshLock: ReentrantLock = ReentrantLock()
     private val config = listener.radarConfig
-    private lateinit var configUpdateObserver: Observer<SingleRadarConfiguration>
+    private var configUpdateObserver: Observer<SingleRadarConfiguration> = Observer {
+        ensureSepClientConnectivity(it)
+    }
 
-    override fun init(authState: AppAuthState?) {
-        refreshLock = ReentrantLock()
-        configUpdateObserver = Observer {
-            ensureSepClientConnectivity(it)
-        }
+    init {
         mainHandler.post {
             config.config.observeForever(configUpdateObserver)
         }
         updateSources(state)
-        super.init(null)
     }
 
     override val sourceTypes: List<String> = sepSourceTypeList
 
     fun sepQrFlow(authState: AppAuthState, qrData: String) {
-        checkManagerStarted()
         if (refreshLock.tryLock()) {
             try {
                 val params = parseQueryParams(qrData)
@@ -158,11 +154,6 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
         if (authState.getAttribute(SEP_REFRESH_TOKEN_PROPERTY) == null) {
             return false
         }
-        if (!isStarted) {
-            init()
-            ensureSepClientConnectivity(config.latestConfig)
-        }
-
         client?.let { client ->
             operateOnSepClient(client) {
                 client as SEPClient
@@ -195,7 +186,6 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
     }
 
     override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
-        checkManagerStarted()
         refresh(authState)
     }
 
@@ -215,9 +205,7 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
     }
 
     override fun onDestroy() {
-        if (!isStarted) return
         config.config.removeObserver(configUpdateObserver)
-        super.onDestroy()
     }
 
     @Synchronized

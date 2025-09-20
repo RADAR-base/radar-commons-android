@@ -12,27 +12,17 @@ import org.radarbase.android.auth.portal.GetSubjectParser
 import org.radarbase.producer.AuthenticationException
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.set
 
 abstract class AbstractRadarLoginManager(private val listener: AuthService, private val authType: AuthType) : LoginManager {
 
     protected open var client: AbstractRadarPortalClient? = null
-    protected open var _started: AtomicBoolean = AtomicBoolean(false)
     private val sources: MutableMap<String, SourceMetadata> = mutableMapOf()
     protected val mainHandler = Handler(Looper.getMainLooper())
-
-    override val isStarted: Boolean
-        get() = _started.get()
-
-    override fun init(authState: AppAuthState?) {
-        _started.set(true)
-    }
 
     override fun registerSource(authState: AppAuthState, source: SourceMetadata,
                                 success: (AppAuthState, SourceMetadata) -> Unit,
                                 failure: (Exception?) -> Unit): Boolean {
-        checkManagerStarted()
         logger.debug("Handling source registration for AuthType(${authType.name.lowercase()}")
 
         val existingSource = sources[source.sourceId]
@@ -105,7 +95,6 @@ abstract class AbstractRadarLoginManager(private val listener: AuthService, priv
     }
 
     override fun updateSource(appAuth: AppAuthState, source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit): Boolean {
-        checkManagerStarted()
         logger.debug("Handling source update for authType {}", authType.name)
 
         val client = client
@@ -188,17 +177,6 @@ abstract class AbstractRadarLoginManager(private val listener: AuthService, priv
             }
             source.sourceId = null
         }
-    }
-
-    @Throws(IllegalStateException::class)
-    fun checkManagerStarted() {
-        if (!isStarted) {
-            throw IllegalStateException("Can't perform operation on login manager without starting. Call start() first.")
-        }
-    }
-
-    override fun onDestroy() {
-        _started.set(false)
     }
 
     companion object {

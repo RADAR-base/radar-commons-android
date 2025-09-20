@@ -32,10 +32,6 @@ interface LoginManager {
      */
     val sourceTypes: List<String>
 
-    val isStarted: Boolean
-
-    fun init(authState: AppAuthState? = null)
-
     /**
      * With or without user interaction, refresh the current authentication state. The result will
      * be passed to a LoginListener.

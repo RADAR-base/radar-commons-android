@@ -50,37 +50,34 @@ import java.net.MalformedURLException
  */
 class OAuth2LoginManager(
     private val service: AuthService,
+    authState: AppAuthState
 ) : AbstractRadarLoginManager(service, AuthType.OAUTH2), LoginListener {
 
     private val config = service.radarConfig
-    private lateinit var stateManager: OAuth2StateManager
+    private var stateManager = OAuth2StateManager(config, this, service)
 
     override var client: AbstractRadarPortalClient? = null
     private var clientConfig: SEPClientConfig? = null
     private var restClient: RestClient? = null
-    private lateinit var configUpdateObserver: Observer<SingleRadarConfiguration>
+    private var configUpdateObserver: Observer<SingleRadarConfiguration> = Observer {
+        ensureOAuthClientConnectivity(it)
+    }
 
-    override fun init(authState: AppAuthState?) {
-        requireNotNull(authState) { "Failed to initialize OAuth2 manager, provided auth state is null" }
-        stateManager = OAuth2StateManager(config, this, service)
-        configUpdateObserver = Observer {
-            ensureOAuthClientConnectivity(it)
-        }
+    init {
         mainHandler.post {
             config.config.observeForever(configUpdateObserver)
         }
         updateSources(authState)
-        super.init(null)
     }
 
     override fun refresh(authState: AppAuthState): Boolean {
-        if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER || authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY) == null) {
+        if (authState.tokenType != LoginManager.AUTH_TYPE_BEARER || authState.getAttribute(
+                OAUTH2_REFRESH_TOKEN_PROPERTY
+            ) == null
+        ) {
             return false
         }
-        if (!isStarted) {
-            init()
-            ensureOAuthClientConnectivity(config.latestConfig)
-        }
+        ensureOAuthClientConnectivity(config.latestConfig)
         return authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY)
             ?.also { stateManager.refresh(service, authState, it, client) } != null
     }
@@ -91,8 +88,10 @@ class OAuth2LoginManager(
                 && authState.getAttribute(OAUTH2_REFRESH_TOKEN_PROPERTY) != null
     }
 
-    override fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>?) {
-        checkManagerStarted()
+    override fun start(
+        authState: AppAuthState,
+        activityResultLauncher: ActivityResultLauncher<Intent>?
+    ) {
         requireNotNull(activityResultLauncher) {
             "Activity result launcher can't be null in OAuthLoginManager"
         }
@@ -102,7 +101,10 @@ class OAuth2LoginManager(
         stateManager.login(latestConfig, activityResultLauncher)
     }
 
-    override fun onActivityCreate(activity: Activity, binder: AuthService.AuthServiceBinder): Boolean {
+    override fun onActivityCreate(
+        activity: Activity,
+        binder: AuthService.AuthServiceBinder
+    ): Boolean {
         stateManager.updateAfterAuthorization(service, activity.intent, binder, client)
         return true
     }
@@ -114,6 +116,7 @@ class OAuth2LoginManager(
                 attributes -= OAUTH2_REFRESH_TOKEN_PROPERTY
                 isPrivacyPolicyAccepted = false
             }
+
             else -> authState
         }
     }
@@ -155,30 +158,30 @@ class OAuth2LoginManager(
     override fun loginSucceeded(manager: LoginManager?, authState: AppAuthState) {
         val token = authState.token
         if (token == null) {
-            loginFailed(this,
-                    IllegalArgumentException("Cannot login using OAuth2 without a token"))
+            loginFailed(
+                this,
+                IllegalArgumentException("Cannot login using OAuth2 without a token")
+            )
             return
         }
-        logger.warn("(TestOauthDebug) Login Succeeded callback in oauth login manager on thread: {}", Thread.currentThread().name)
-
         logger.info("Updating sources with latest state")
         updateSources(authState)
         service.loginSucceeded(manager, authState)
     }
 
-    override fun loginFailed(manager: LoginManager?, ex: Exception?) = this.service.loginFailed(this, ex)
+    override fun loginFailed(manager: LoginManager?, ex: Exception?) =
+        this.service.loginFailed(this, ex)
 
     override fun onDestroy() {
-        if (!isStarted) return
         config.config.removeObserver(configUpdateObserver)
         stateManager.stop()
-        super.onDestroy()
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(OAuth2LoginManager::class.java)
 
-        const val OAUTH2_REFRESH_TOKEN_PROPERTY = "org.radarbase.auth.OAuth2LoginManager.refreshToken"
+        const val OAUTH2_REFRESH_TOKEN_PROPERTY =
+            "org.radarbase.auth.OAuth2LoginManager.refreshToken"
         val OAUTH2_SOURCE_TYPES = listOf(SOURCE_TYPE_OAUTH2)
     }
 }

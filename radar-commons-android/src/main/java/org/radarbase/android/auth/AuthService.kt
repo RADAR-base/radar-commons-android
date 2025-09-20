@@ -245,7 +245,7 @@ abstract class AuthService : Service(), LoginListener {
     }
 
     /**
-     * Create your login managers here. Call [LoginManager.init] to initialized the manager
+     * Create your login managers here. Call [LoginManager.start] to initialized the manager
      *  for the login method that a user indicates.
      * @param appAuth previous invalid authentication
      * @return non-empty list of login managers to use
@@ -285,13 +285,7 @@ abstract class AuthService : Service(), LoginListener {
         handler.execute {
             logger.info("Registering source with {}: {}", source.type, source.sourceId)
 
-            relevantManagers.also {
-                it.forEach { manager ->
-                    if (!manager.isStarted) {
-                        manager.init(appAuth)
-                    }
-                }
-            }.any { manager ->
+            relevantManagers.any { manager ->
                 manager.registerSource(appAuth, source, { newAppAuth, newSource ->
                     if (newAppAuth != appAuth) {
                         appAuth = newAppAuth
@@ -363,13 +357,7 @@ abstract class AuthService : Service(), LoginListener {
 
     private fun updateSource(source: SourceMetadata, success: (AppAuthState, SourceMetadata) -> Unit, failure: (Exception?) -> Unit) {
         handler.execute {
-            relevantManagers.also {
-                it.forEach { manager ->
-                    if (!manager.isStarted) {
-                        manager.init(appAuth)
-                    }
-                }
-            }.any { manager ->
+            relevantManagers.any { manager ->
                 manager.updateSource(appAuth, source, success, failure)
             }
         }
