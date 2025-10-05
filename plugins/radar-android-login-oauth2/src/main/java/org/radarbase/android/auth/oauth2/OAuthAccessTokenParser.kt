@@ -25,7 +25,7 @@ class OAuthAccessTokenParser {
             val decodedJwt = Jwt.parse(accessToken).body
 
             return authState.alter {
-                token = accessToken.also { addHeader("Authorization", "Bearer $it") }
+                token = accessToken.also { setHeader("Authorization", "Bearer $it") }
                 tokenType = LoginManager.AUTH_TYPE_BEARER
 
                 expiration = oAuthState.accessTokenExpirationTime ?: TimeUnit.SECONDS.toMillis(
