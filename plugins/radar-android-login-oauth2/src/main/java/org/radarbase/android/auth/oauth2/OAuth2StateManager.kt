@@ -22,7 +22,6 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Process
 import androidx.activity.result.ActivityResultLauncher
-import androidx.annotation.AnyThread
 import net.openid.appauth.*
 import org.json.JSONException
 import org.radarbase.android.RadarConfiguration
@@ -40,16 +39,14 @@ import org.radarbase.android.util.SafeHandler
 import java.util.concurrent.locks.ReentrantLock
 
 class OAuth2StateManager(private val config: RadarConfiguration, private val oauthManager: OAuth2LoginManager, context: Context) {
-    private val mPrefs: SharedPreferences =
-        context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
-    private var mCurrentAuthState: AuthState
+    private val oauthPrefs: SharedPreferences = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
+    private var currentAuthState: AuthState
     private val oAuthService: AuthorizationService = AuthorizationService(context)
-    private val handler: SafeHandler =
-        SafeHandler.getInstance("OAuth2StateManager-Handler", Process.THREAD_PRIORITY_BACKGROUND)
+    private val handler: SafeHandler = SafeHandler.getInstance("OAuth2StateManager-Handler", Process.THREAD_PRIORITY_BACKGROUND)
     private val refreshLock = ReentrantLock()
 
     init {
-        mCurrentAuthState = readState()
+        currentAuthState = readState()
         handler.start()
     }
 
@@ -134,8 +131,8 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
                 }
 
                 if (resp != null || ex != null) {
-                    mCurrentAuthState.update(resp, ex)
-                    writeState(mCurrentAuthState)
+                    currentAuthState.update(resp, ex)
+                    writeState(currentAuthState)
                 }
 
                 val clientAuth = clientSecretBasic()
@@ -167,18 +164,18 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         if (refreshLock.tryLock()) {
             try {
                 val clientAuth = clientSecretBasic()
-                if (refreshToken != null && refreshToken != mCurrentAuthState.refreshToken) {
+                if (refreshToken != null && refreshToken != currentAuthState.refreshToken) {
                     try {
-                        val json = mCurrentAuthState.jsonSerialize()
+                        val json = currentAuthState.jsonSerialize()
                         json.put("refreshToken", refreshToken)
-                        mCurrentAuthState = AuthState.jsonDeserialize(json)
+                        currentAuthState = AuthState.jsonDeserialize(json)
                     } catch (ex: JSONException) {
                         logger.error("Failed to update refresh token", ex)
                     }
                 }
                 // authorization succeeded
                 oAuthService.performTokenRequest(
-                    mCurrentAuthState.createTokenRefreshRequest(),
+                    currentAuthState.createTokenRefreshRequest(),
                     clientAuth,
                     processTokenResponse(context, authState, client),
                 )
@@ -203,7 +200,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         resp ?: return@TokenResponseCallback context.loginFailed(null, ex)
         updateAfterTokenResponse(resp, ex)
         val accessTokenParser = OAuthAccessTokenParser()
-        val updatedAuth = accessTokenParser.parse(authState, mCurrentAuthState)
+        val updatedAuth = accessTokenParser.parse(authState, currentAuthState)
 
         logger.warn("(TestOauthDebug) Retrieved access token successfully, now getting subjects on thread: {}", Thread.currentThread().name)
         config.updateWithAuthState(context, updatedAuth)
@@ -225,13 +222,13 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         response: TokenResponse?,
         ex: AuthorizationException?
     ) {
-        mCurrentAuthState.update(response, ex)
-        writeState(mCurrentAuthState)
+        currentAuthState.update(response, ex)
+        writeState(currentAuthState)
     }
 
     @Synchronized
     private fun readState(): AuthState {
-        val currentState = mPrefs.getString(KEY_STATE, null) ?: return AuthState()
+        val currentState = oauthPrefs.getString(KEY_STATE, null) ?: return AuthState()
 
         return try {
             AuthState.jsonDeserialize(currentState)
@@ -245,7 +242,7 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
 
     @Synchronized
     private fun writeState(state: AuthState?) {
-        mPrefs.edit {
+        oauthPrefs.edit {
             if (state != null) {
                 putString(KEY_STATE, state.jsonSerializeString())
             } else {
