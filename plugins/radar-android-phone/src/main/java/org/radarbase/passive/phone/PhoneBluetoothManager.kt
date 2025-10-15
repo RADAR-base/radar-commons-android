@@ -107,16 +107,16 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                             val macAddress = device.address
                             val macAddressHash: ByteBuffer = hashGenerator.createHashByteBuffer(macAddress)
 
-                            val scannedTopicBuilder = PhoneBluetoothDeviceScanned.newBuilder().apply {
-                                time = currentTime
-                                timeReceived = currentTime
-                            }
-
                             val pairedDevices: Set<BluetoothDevice> = if (hasConnectPermission) bluetoothAdapter.bondedDevices else emptySet()
 
                             pairedDevices.forEach { bd ->
                                 val mac = bd.address
                                 val hash = hashGenerator.createHashByteBuffer(mac)
+
+                                val scannedTopicBuilder = PhoneBluetoothDeviceScanned.newBuilder().apply {
+                                    time = currentTime
+                                    timeReceived = currentTime
+                                }
 
                                 send(bluetoothScannedTopic, scannedTopicBuilder.apply {
                                         this.macAddressHash = hash
@@ -124,11 +124,13 @@ class PhoneBluetoothManager(service: PhoneBluetoothService) : AbstractSourceMana
                                     }.build())
                                 }
 
-                            send(bluetoothScannedTopic, scannedTopicBuilder.apply {
+
+                            send(bluetoothScannedTopic, PhoneBluetoothDeviceScanned.newBuilder().apply {
+                                this.time = currentTime
+                                this.timeReceived = currentTime
                                 this.macAddressHash = macAddressHash
                                 this.pairedState = device.bondState.toPairedState()
                             }.build())
-
                         }
 
                         BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
