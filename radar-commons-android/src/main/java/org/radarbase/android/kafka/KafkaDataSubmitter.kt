@@ -294,6 +294,8 @@ class KafkaDataSubmitter(
 
                         return size
                     }
+                } else {
+                    logger.warn("Trying to upload data without validating. PluginMetadata is null")
                 }
                 try {
                     sender(topic).run {
