@@ -21,7 +21,7 @@ object FirebaseEventLogger {
      * @param userId The user ID associated with the record key.
      * @param topic The Kafka topic used for which the payload is published.
      * @param pluginName The name of the plugin producing the payload.
-     * @param tokenSourceId The source ID extracted from the access token.
+     * @param tokenSourceIds The source ID's matching the source type.
      */
     fun reportMismatchedSourceId(
         projectId: String?,
@@ -29,15 +29,15 @@ object FirebaseEventLogger {
         userId: String?,
         topic: String,
         pluginName: String?,
-        tokenSourceId: String?
+        tokenSourceIds: String?
     ) {
-        logger.warn("Reporting MismatchedSourceId to Crashlytics")
+        logger.warn("Reporting MismatchedSourceId to Firebase Analytics")
         firebaseAnalytics.logEvent(EVENT_SOURCE_ID_MISMATCH) {
             param("project_id", projectId.orEmpty())
             param("plugin_name", pluginName.orEmpty())
             param("topic", topic)
             param("payload_source_id", keySourceId.orEmpty())
-            param("token_source_id", tokenSourceId.orEmpty())
+            param("token_source_ids", tokenSourceIds.orEmpty())
             param("userId", userId.orEmpty())
 
             logger.info("Detected sourceId mismatch for plugin=$pluginName, topic=$topic")
@@ -60,7 +60,7 @@ object FirebaseEventLogger {
         topic: String,
         userId: String?
     ) {
-        logger.warn("Reporting MismatchedProjectId to Crashlytics")
+        logger.warn("Reporting MismatchedProjectId to Firebase Analytics")
         firebaseAnalytics.logEvent(EVENT_PROJECT_ID_MISMATCH) {
             param("key_project_id", keyProjectId.orEmpty())
             param("token_project_id", tokenProjectId.orEmpty())
@@ -86,7 +86,7 @@ object FirebaseEventLogger {
         pluginName: String?,
         topic: String
     ) {
-        logger.warn("Reporting MismatchedUserId to Crashlytics")
+        logger.warn("Reporting MismatchedUserId to Firebase Analytics")
         firebaseAnalytics.logEvent(EVENT_USER_ID_MISMATCH) {
             param("key_user_id", keyUserId.orEmpty())
             param("token_user_id", tokenUserId.orEmpty())
