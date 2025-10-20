@@ -92,6 +92,7 @@ object FirebaseEventLogger {
             param("key_user_id", keyUserId.orEmpty())
             param("token_user_id", tokenUserId.orEmpty())
             param("plugin_name", pluginName.orEmpty())
+            param("topic", topic)
             param("project_id", projectId.orEmpty())
 
             logger.info("Detected userId mismatch when sending data for plugin=$pluginName, topic=$topic")
