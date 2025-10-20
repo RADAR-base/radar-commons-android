@@ -1,4 +1,5 @@
 name: Snyk test
+
 on:
   pull_request:
     branches:
@@ -8,33 +9,24 @@ on:
 jobs:
   security:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: snyk/actions/setup@master
-        with:
-          snyk-version: v1.1032.0
 
-      - uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 17
+    steps:
+      - uses: actions/checkout@v5
 
       - name: Decrypt libraries
         run: ./.github/scripts/decrypt_libraries.sh
         env:
           E4LINK_PASSPHRASE: ${{ secrets.E4LINK_PASSPHRASE }}
 
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-
       - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/gradle-8-jdk17@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: >
-          snyk test
-          --all-sub-projects
-          --configuration-matching="^runtimeClasspath$"
-          --fail-on=upgradable
-          --org=radar-base
-          --policy-path=.snyk
-          --severity-threshold=high
+        with:
+          args: >-
+            --all-projects
+            --configuration-matching="^runtimeClasspath$"
+            --severity-threshold=high
+            --fail-on=upgradable
+            --org=radar-base
+            --policy-path=.snyk
