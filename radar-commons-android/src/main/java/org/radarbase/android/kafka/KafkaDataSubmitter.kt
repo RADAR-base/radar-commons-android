@@ -325,7 +325,7 @@ class KafkaDataSubmitter(
 
                     keyUserId != config.userId -> {
                         FirebaseEventLogger.reportMismatchedUserId(
-                            keyUserId, config.userId, pluginName, topic.name
+                            keyUserId, config.userId, pluginName, topic.name, config.projectId
                         )
                     }
                 }

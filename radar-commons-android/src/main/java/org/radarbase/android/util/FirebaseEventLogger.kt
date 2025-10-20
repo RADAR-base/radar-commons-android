@@ -84,13 +84,15 @@ object FirebaseEventLogger {
         keyUserId: String?,
         tokenUserId: String?,
         pluginName: String?,
-        topic: String
+        topic: String,
+        projectId: String?
     ) {
         logger.warn("Reporting MismatchedUserId to Firebase Analytics")
         firebaseAnalytics.logEvent(EVENT_USER_ID_MISMATCH) {
             param("key_user_id", keyUserId.orEmpty())
             param("token_user_id", tokenUserId.orEmpty())
             param("plugin_name", pluginName.orEmpty())
+            param("project_id", projectId.orEmpty())
 
             logger.info("Detected userId mismatch when sending data for plugin=$pluginName, topic=$topic")
         }
