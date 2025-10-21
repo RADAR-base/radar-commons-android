@@ -97,19 +97,6 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         }
     }
 
-    private fun logIntent(intent: Intent?) {
-        val data = intent?.data
-        val action = intent?.action
-        val flags = intent?.flags
-        val extrasKeys = intent?.extras?.keySet()?.joinToString(", ") ?: "null"
-        logger.warn("(TestOauthDebug) AuthRequestDebug: action=$action, data=$data, flags=$flags, extras=$extrasKeys")
-        if (intent?.extras != null) {
-            intent.extras!!.keySet().forEach { k ->
-                logger.warn("(TestOauthDebug) AuthRequestDebug: extra $k => ${intent.extras?.get(k)}")
-            }
-        }
-    }
-
         fun updateAfterAuthorization(
         authService: AuthService,
         intent: Intent?,
@@ -122,7 +109,6 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
                     logger.info("Intent is null ")
                     return
                 }
-                logIntent(intent)
                 val resp = AuthorizationResponse.fromIntent(intent)
                 val ex = AuthorizationException.fromIntent(intent)
 
@@ -202,7 +188,6 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
         val accessTokenParser = OAuthAccessTokenParser()
         val updatedAuth = accessTokenParser.parse(authState, currentAuthState)
 
-        logger.warn("(TestOauthDebug) Retrieved access token successfully, now getting subjects on thread: {}", Thread.currentThread().name)
         config.updateWithAuthState(context, updatedAuth)
         val getSubjectParser = GetSubjectParser(updatedAuth, AuthType.OAUTH2)
         if (client is SEPClient) {
@@ -237,7 +222,6 @@ class OAuth2StateManager(private val config: RadarConfiguration, private val oau
             writeState(null)
             AuthState()
         }
-
     }
 
     @Synchronized

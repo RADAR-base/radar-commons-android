@@ -73,7 +73,6 @@ class SEPLoginManager(private val listener: AuthService, private val state: AppA
                 SepQrParser(authState, referrer).parse(data).let { appAuthState ->
                     config.updateWithAuthState(listener, appAuthState)
                     ensureSepClientConnectivity(config.latestConfig)
-                    logger.debug("SEP qr data is processed")
                     refresh(appAuthState)
                 }
             } catch (ex: Exception) {
