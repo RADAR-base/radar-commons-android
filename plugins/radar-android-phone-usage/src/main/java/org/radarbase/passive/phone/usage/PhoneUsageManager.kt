@@ -171,9 +171,17 @@ class PhoneUsageManager(context: PhoneUsageService) : AbstractSourceManager<Phon
         val usageEventType = when (lastEventType) {
             ACTIVITY_RESUMED -> UsageEventType.FOREGROUND
             ACTIVITY_PAUSED -> UsageEventType.BACKGROUND
+            ACTIVITY_STOPPED -> UsageEventType.STOPPED
+            FOREGROUND_SERVICE_START -> UsageEventType.FOREGROUND_SERVICE_START
+            FOREGROUND_SERVICE_STOP -> UsageEventType.FOREGROUND_SERVICE_STOP
+            KEYGUARD_SHOWN -> UsageEventType.KEYGUARD_SHOWN
+            KEYGUARD_HIDDEN -> UsageEventType.KEYGUARD_HIDDEN
             CONFIGURATION_CHANGE -> UsageEventType.CONFIG
             SHORTCUT_INVOCATION_COMPAT -> UsageEventType.SHORTCUT
             USER_INTERACTION -> UsageEventType.INTERACTION
+            SCREEN_INTERACTIVE -> UsageEventType.SCREEN_INTERACTIVE
+            SCREEN_NON_INTERACTIVE -> UsageEventType.SCREEN_NON_INTERACTIVE
+            STANDBY_BUCKET_CHANGED -> UsageEventType.STANDBY_BUCKET_CHANGED
             else -> UsageEventType.OTHER
         }
 
