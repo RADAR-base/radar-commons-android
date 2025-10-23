@@ -136,6 +136,7 @@ LOCAL_CPP_FEATURES := exceptions
 DEFINES := -DOPENSMILE_BUILD -DBUILD_RNN -DHAVE_OPENSLES
 OPTIMIZE := -g -O3 -ffast-math -ftree-vectorize -funsafe-math-optimizations -fvisibility=hidden -ffunction-sections -fdata-sections
 LOCAL_LDFLAGS += -Wl,--gc-sections
+LOCAL_LDFLAGS += "-Wl,-z,max-page-size=16384"
 
 LOCAL_CFLAGS := $(OPTIMIZE) -I$(OPENSMILE_ROOT)/src/include $(DEFINES)
 LOCAL_CPPFLAGS := $(OPTIMIZE) -I$(OPENSMILE_ROOT)/src/include $(DEFINES)

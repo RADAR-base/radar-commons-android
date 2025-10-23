@@ -20,6 +20,7 @@ import android.os.IBinder
 import org.apache.avro.specific.SpecificRecord
 import org.radarbase.android.data.DataHandler
 import org.radarbase.android.kafka.ServerStatusListener
+import org.radarbase.android.source.PluginMetadataStore
 import org.radarbase.android.source.SourceProvider
 import org.radarbase.android.source.SourceServiceConnection
 import org.radarbase.android.util.TimedLong
@@ -33,6 +34,8 @@ interface IRadarBinder : IBinder {
     val connections: List<SourceProvider<*>>
 
     val dataHandler: DataHandler<ObservationKey, SpecificRecord>?
+
+    val pluginMetadataStore: PluginMetadataStore
 
     fun setAllowedSourceIds(connection: SourceServiceConnection<*>, allowedIds: Collection<String>)
 
