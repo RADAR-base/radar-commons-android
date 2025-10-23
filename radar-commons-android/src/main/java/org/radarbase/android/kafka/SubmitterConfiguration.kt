@@ -5,6 +5,7 @@ import org.radarbase.android.config.SingleRadarConfiguration
 
 data class SubmitterConfiguration(
         var userId: String? = null,
+        var projectId: String? = null,
         var amountLimit: Int = 1000,
         var sizeLimit: Long = 5000000L,
         var uploadRate: Long = 10L,

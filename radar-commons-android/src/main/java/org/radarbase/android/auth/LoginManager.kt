@@ -17,12 +17,15 @@
 package org.radarbase.android.auth
 
 import android.app.Activity
+import android.content.Intent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.Keep
 import org.radarbase.producer.AuthenticationException
 
 /** Manage a single login method.  */
 @Keep
 interface LoginManager {
+
     /**
      * Types of authentication sources that the current login manager can handle.
      * @return non-empty list of source types.
@@ -52,14 +55,14 @@ interface LoginManager {
      *
      * @param authState current authentication state
      */
-    fun start(authState: AppAuthState)
+    fun start(authState: AppAuthState, activityResultLauncher: ActivityResultLauncher<Intent>? = null)
 
     /**
      * Initialization at the end of [LoginActivity.onCreate].
      * @param activity the activity that was created
      * @return whether the current login manager will act on this call
      */
-    fun onActivityCreate(activity: Activity): Boolean
+    fun onActivityCreate(activity: Activity, binder: AuthService.AuthServiceBinder): Boolean
 
     /**
      * Invalidate the authentication state

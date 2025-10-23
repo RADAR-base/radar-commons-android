@@ -73,6 +73,7 @@ interface RadarConfiguration {
         const val KAFKA_REST_PROXY_URL_KEY = "kafka_rest_proxy_url"
         const val SCHEMA_REGISTRY_URL_KEY = "schema_registry_url"
         const val MANAGEMENT_PORTAL_URL_KEY = "management_portal_url"
+        const val SEP_URL_KEY = "self_enrolment_portal_url"
         const val PROJECT_ID_KEY = "radar_project_id"
         const val USER_ID_KEY = "radar_user_id"
         const val READABLE_USER_ID_KEY = "readable_user_id"

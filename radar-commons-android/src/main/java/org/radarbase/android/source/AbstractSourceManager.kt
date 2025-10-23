@@ -133,6 +133,7 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
                 ObservationKey::class.java,
                 valueClass::class.java,
             )
+            addTopicMapping(name)
             return dataHandler.registerCache(topic, handler)
         } catch (e: ReflectiveOperationException) {
             logger.error("Error creating topic {}", name, e)
@@ -141,6 +142,10 @@ abstract class AbstractSourceManager<S : SourceService<T>, T : BaseSourceState>(
             logger.error("Error creating topic {}", name, e)
             throw RuntimeException(e)
         }
+    }
+
+    private fun addTopicMapping(topicName: String) {
+        service.mapTopicAndSource(topicName)
     }
 
     /**

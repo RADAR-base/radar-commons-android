@@ -136,11 +136,11 @@ class GooglePlacesService: SourceService<GooglePlacesState>() {
 
         const val GOOGLE_PLACES_API_KEY = "places_api_key"
         const val GOOGLE_PLACES_FETCH_INTERVAL = "places_interval_seconds"
-        const val FETCH_GOOGLE_PLACES_ID_KEY = "should_fetch_places_id"
-        const val FETCH_GOOGLE_PLACES_ADDITIONAL_INFO = "should_fetch_additional_places_info"
-        const val FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND = "fetch_place_likelihoods_bound"
-        const val FETCH_GOOGLE_PLACE_COUNT_BOUND = "fetch_place_likelihoods_count"
-        const val ADDITIONAL_FETCH_NETWORK_DELAY = "additional_fetch_network_delay"
+        const val FETCH_GOOGLE_PLACES_ID_KEY = "places_should_fetch_places_id"
+        const val FETCH_GOOGLE_PLACES_ADDITIONAL_INFO = "places_should_fetch_additional_places_info"
+        const val FETCH_GOOGLE_PLACE_LIKELIHOOD_BOUND = "places_fetch_place_likelihoods_bound"
+        const val FETCH_GOOGLE_PLACE_COUNT_BOUND = "places_fetch_place_likelihoods_count"
+        const val ADDITIONAL_FETCH_NETWORK_DELAY = "places_additional_fetch_network_delay"
 
         const val GOOGLE_PLACES_FETCH_INTERVAL_DEFAULT = 600L
         const val GOOGLE_PLACES_API_KEY_DEFAULT = ""

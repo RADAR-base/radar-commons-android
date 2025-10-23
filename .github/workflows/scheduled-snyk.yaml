@@ -1,16 +1,92 @@
-name: Snyk scheduled code base scan
+name: Snyk scheduled test
 
 on:
   schedule:
     - cron: '0 2 * * 1'
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
+env:
+  MODULES: >-
+    [{
+    'name': 'radar-commons-android',
+    'build_file': 'radar-commons-android/build.gradle',
+    },{
+    'name': 'avro-android',
+    'build_file': 'avro-android/build.gradle',
+    },{
+    'name': 'radar-android-empatica',
+    'build_file': 'plugins/radar-android-empatica/build.gradle',
+    },{
+    'name': 'radar-android-faros',
+    'build_file': 'plugins/radar-android-faros/build.gradle',
+    },{
+    'name': 'radar-android-application-status',
+    'build_file': 'plugins/radar-android-application-status/build.gradle',
+    },{
+    'name': 'radar-android-audio',
+    'build_file': 'plugins/radar-android-audio/build.gradle',
+    },{
+    'name': 'radar-android-google-activity',
+    'build_file': 'plugins/radar-android-google-activity/build.gradle',
+    },{
+    'name': 'radar-android-google-places',
+    'build_file': 'plugins/radar-android-google-places/build.gradle',
+    },{
+    'name': 'radar-android-google-sleep',
+    'build_file': 'plugins/radar-android-google-sleep/build.gradle',
+    },{
+    'name': 'radar-android-login-oauth2',
+    'build_file': 'plugins/radar-android-login-oauth2/build.gradle',
+    },{
+    'name': 'radar-android-login-qr',
+    'build_file': 'plugins/radar-android-login-qr/build.gradle',
+    },{
+    'name': 'radar-android-phone',
+    'build_file': 'plugins/radar-android-phone/build.gradle',
+    },{
+    'name': 'radar-android-phone-audio-input',
+    'build_file': 'plugins/radar-android-phone-audio-input/build.gradle',
+    },{
+    'name': 'radar-android-phone-telephony',
+    'build_file': 'plugins/radar-android-phone-telephony/build.gradle',
+    },{
+    'name': 'radar-android-phone-usage',
+    'build_file': 'plugins/radar-android-phone-usage/build.gradle',
+    },{
+    'name': 'radar-android-polar',
+    'build_file': 'plugins/radar-android-polar/build.gradle',
+    },{
+    'name': 'radar-android-weather',
+    'build_file': 'plugins/radar-android-weather/build.gradle',
+    }]
+
 jobs:
-  security:
+  prepare-matrix:
+    name: Prepare Matrix Output
     runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      modules: ${{ steps.step1.outputs.matrix }}
+    steps:
+      - name: Create Matrix Variable
+        id: step1
+        run: echo "matrix=${{env.MODULES}}" >> $GITHUB_OUTPUT
+
+  security:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.prepare-matrix.outputs.modules ) }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
       - name: Decrypt libraries
         run: ./.github/scripts/decrypt_libraries.sh
@@ -18,13 +94,13 @@ jobs:
           E4LINK_PASSPHRASE: ${{ secrets.E4LINK_PASSPHRASE }}
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/gradle-jdk17@master
+        uses: snyk/actions/gradle-8-jdk17@master
         continue-on-error: true # To make sure that SARIF upload gets called
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: >-
-            --all-projects
+            --file=${{ matrix.module.build_file }}
             --configuration-matching='^runtimeClasspath$'
             --fail-on=upgradable
             --severity-threshold=high
@@ -37,3 +113,4 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: snyk.sarif
+          category: ${{ matrix.module.module }}

@@ -20,6 +20,7 @@ import android.content.Context
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.apache.avro.specific.SpecificRecord
+import org.radarbase.android.RadarService
 import org.radarbase.android.kafka.KafkaDataSubmitter
 import org.radarbase.android.kafka.ServerStatusListener
 import org.radarbase.android.source.SourceService.Companion.CACHE_RECORDS_UNSENT_NUMBER
@@ -183,7 +184,7 @@ class TableDataHandler(
             sender = it
         }
 
-        this.submitter = KafkaDataSubmitter(this, sender, config.submitterConfig)
+        this.submitter = KafkaDataSubmitter(this, sender, config.submitterConfig, context as? RadarService)
     }
 
     /**

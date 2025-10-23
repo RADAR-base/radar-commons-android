@@ -11,7 +11,7 @@ class AccessTokenParserTest {
     @Test
     @Throws(Exception::class)
     fun parse() {
-        val parser = AccessTokenParser(AppAuthState())
+        val parser = MpAccessTokenParser(AppAuthState())
 
         val parsedState = parser.parse(
                 "{\"access_token\":\"abcd\","
