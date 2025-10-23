@@ -7,7 +7,7 @@ import org.radarbase.android.auth.AuthService.Companion.BASE_URL_PROPERTY
 import org.radarbase.android.auth.AuthService.Companion.PRIVACY_POLICY_URL_PROPERTY
 import org.radarbase.android.auth.AuthStringParser
 import org.radarbase.android.auth.portal.ManagementPortalClient.Companion.MP_REFRESH_TOKEN_PROPERTY
-import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE
+import org.radarbase.android.auth.portal.ManagementPortalLoginManager.Companion.SOURCE_TYPE_MP
 import java.io.IOException
 
 /**
@@ -25,7 +25,7 @@ class MetaTokenParser(private val currentState: AppAuthState) : AuthStringParser
                 attributes[PRIVACY_POLICY_URL_PROPERTY] = json.getString("privacyPolicyUrl")
                 attributes[BASE_URL_PROPERTY] = json.getString("baseUrl")
                 needsRegisteredSources = true
-                authenticationSource = SOURCE_TYPE
+                authenticationSource = SOURCE_TYPE_MP
             }
         } catch (ex: JSONException) {
             throw IOException("Failed to parse json string $value", ex)
