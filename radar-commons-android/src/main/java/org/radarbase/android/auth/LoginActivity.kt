@@ -19,6 +19,7 @@ package org.radarbase.android.auth
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -58,10 +59,10 @@ abstract class LoginActivity : AppCompatActivity(), LoginListener {
             binder.isInLoginActivity = true
         }
         authConnection.onBoundListeners.add { binder ->
-            binder.refresh()
-            binder.managers
-                    .find { it.onActivityCreate(this@LoginActivity)}
-                    ?.let { binder.update(it) }
+//            binder.refresh()
+//            binder.managers
+//                    .find { it.onActivityCreate(this@LoginActivity, binder)}
+//                    ?.let { binder.update(it) }
         }
         authConnection.onUnboundListeners.add { binder ->
             binder.isInLoginActivity = false
