@@ -41,9 +41,19 @@ public class SmileJNI implements Runnable {
                 File assetDirectory = new File(c.getCacheDir(), ASSET_PATH_BASE);
 
                 AssetManager assetManager = c.getAssets();
-                for (String assetPath : ASSET_PATHS) {
-                    copyDirectory(assetManager, ASSET_PATH_BASE + '/' + assetPath, new File(assetDirectory, assetPath));
-                }
+
+                copyDirectory(
+                        assetManager,
+                        ASSET_PATH_BASE,
+                        assetDirectory
+                );
+
+                copyDirectory(
+                        assetManager,
+                        ASSET_PATH_BASE + "/shared",
+                        new File(assetDirectory, "shared")
+                );
+
                 assetDir = assetDirectory;
             }
             return assetDir;
@@ -60,6 +70,15 @@ public class SmileJNI implements Runnable {
             throw new IllegalStateException("Asset directory does not exist.");
         }
         for (String filename : fileList) {
+
+            String assetPath = fromDirectory + '/' + filename;
+            String[] children = assetManager.list(assetPath);
+
+            if (children != null && children.length > 0) {
+                logger.debug("Skipping directory: {}", assetPath);
+                continue;
+            }
+
             File outFile = new File(toDirectory, filename);
 
             byte[] buffer = new byte[8096];

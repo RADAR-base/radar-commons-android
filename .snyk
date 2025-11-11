@@ -2,9 +2,4 @@
 version: v1.931.0
 # ignores vulnerabilities until expiry date; change duration by modifying expiry date
 ignore:
-  SNYK-JAVA-ORGJETBRAINSKOTLIN-2393744:
-    - '*':
-        reason: Not using createTempFile/Dir
-        expires: 2023-10-27T10:04:03.174Z
-        created: 2022-06-27T10:04:03.177Z
 patch: {}
