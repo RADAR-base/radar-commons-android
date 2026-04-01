@@ -19,7 +19,7 @@ jobs:
 
       - name: Has SNAPSHOT version
         id: is-snapshot
-        run: grep 'version = ".*-SNAPSHOT"' build.gradle
+        run: grep 'project_version=.*-SNAPSHOT' gradle.properties
 
       - uses: actions/setup-java@v3
         with:
