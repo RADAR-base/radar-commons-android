@@ -9,13 +9,16 @@
     <string name="retry_oauth_login">Failed to login to authorization service, please retry</string>
     <string name="login_failed">Failed to log in</string>
 
-    <string name="location_bg_dialog_title">pRMT App uses your \"Location in Background\"</string>
-    <string name="location_bg_dialog_message">This app collects location data to enable Bluetooth Low Energy and/or location tracking as
-        part of the study even when the app is closed or not in use.</string>
     <string name="dialog_usage">The researcher(s) only use the collected data in the study you consented to.</string>
 
-    <string name="location_dialog_title">pRMT App uses your \"Location\"</string>
+    <string name="location_dialog_title">This app uses your \"Location\"</string>
     <string name="location_dialog_message">Location information is needed to enable Bluetooth Low Energy and/or location tracking as part of the study.</string>
+
+    <string name="bg_location_disclosure_title">Allow background location access?</string>
+    <string name="bg_location_disclosure_body">This app collects your device location, including when the app is closed or not in use, to keep your connected study device (e.g. Bluetooth wearable) reachable and to record location samples for the research study you consented to. Location data is uploaded to the study server you agreed to. Tap Accept to be asked by Android for the &quot;Allow all the time&quot; location permission.</string>
+    <string name="bg_location_disclosure_revoke_hint">You can revoke this permission at any time from Android Settings.</string>
+    <string name="disclosure_accept">Accept</string>
+    <string name="disclosure_reject">Reject</string>
 
     <string name="usage_tracking_dialog_title">Enable \"Usage tracking\"</string>
     <string name="usage_tracking_dialog_message">Enable usage access to keep track of what kind of applications you use.</string>
