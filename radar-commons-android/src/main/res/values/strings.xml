@@ -14,6 +14,9 @@
     <string name="location_dialog_title">This app uses your \"Location\"</string>
     <string name="location_dialog_message">Location information is needed to enable Bluetooth Low Energy and/or location tracking as part of the study.</string>
 
+    <string name="enable_location_dialog_title">Turn on Location</string>
+    <string name="enable_location_dialog_message">Location services are turned off on your device. Tap OK to open Settings and turn them on so the study can keep collecting data.</string>
+
     <string name="bg_location_disclosure_title">Allow background location access?</string>
     <string name="bg_location_disclosure_body">This app collects your device location, including when the app is closed or not in use, to keep your connected study device (e.g. Bluetooth wearable) reachable and to record location samples for the research study you consented to. Location data is uploaded to the study server you agreed to. Tap Accept to be asked by Android for the &quot;Allow all the time&quot; location permission.</string>
     <string name="bg_location_disclosure_revoke_hint">You can revoke this permission at any time from Android Settings.</string>

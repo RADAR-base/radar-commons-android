@@ -17,11 +17,15 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import android.view.View
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import org.radarbase.android.R
+import org.radarbase.android.RadarApplication.Companion.radarConfig
+import org.radarbase.android.RadarConfiguration
 import org.radarbase.android.RadarService
 import org.radarbase.android.RadarService.Companion.ACCESS_BACKGROUND_LOCATION_COMPAT
 import org.slf4j.LoggerFactory
@@ -38,9 +42,11 @@ open class PermissionHandler(
     private val isRequestingPermissions: MutableSet<String> = HashSet()
     private var isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
     private var requestFuture: SafeHandler.HandlerFuture? = null
+    private var isShowingDialog = false
 
     private fun onPermissionRequestResult(permission: String, granted: Boolean) {
         mHandler.execute {
+            isShowingDialog = false
             needsPermissions.remove(permission)
 
             val result = if (granted) PERMISSION_GRANTED else PERMISSION_DENIED
@@ -65,6 +71,9 @@ open class PermissionHandler(
     }
 
     private fun doRequestPermission() {
+        if (isShowingDialog) {
+            return
+        }
         val externallyGrantedPermissions = needsPermissions.filterTo(HashSet()) { activity.isPermissionGranted(it) }
 
         if (externallyGrantedPermissions.isNotEmpty()) {
@@ -81,7 +90,7 @@ open class PermissionHandler(
         val currentlyNeeded = buildSet(needsPermissions.size) {
             addAll(needsPermissions)
             removeAll(isRequestingPermissions)
-            if (contains(ACCESS_COARSE_LOCATION) || contains(ACCESS_FINE_LOCATION)) {
+            if (ACCESS_COARSE_LOCATION in needsPermissions || ACCESS_FINE_LOCATION in needsPermissions) {
                 remove(RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT)
             }
         }
@@ -122,13 +131,41 @@ open class PermissionHandler(
             }
             else -> {
                 addRequestingPermissions(currentlyNeeded)
+                isShowingDialog = true
                 requestPermissions(currentlyNeeded)
             }
         }
     }
 
     private fun requestBackgroundLocationPermissions() {
-        requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
+        alertDialog {
+            val view = activity.layoutInflater
+                .inflate(R.layout.background_location_dialog, null)
+            applyDisclosureOverrides(view)
+            setView(view)
+            setCancelable(false)
+            setPositiveButton(R.string.disclosure_accept) { dialog, _ ->
+                dialog.dismiss()
+                requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
+            }
+            setNegativeButton(R.string.disclosure_reject) { dialog, _ ->
+                dialog.cancel()
+                onPermissionRequestResult(ACCESS_BACKGROUND_LOCATION_COMPAT, false)
+            }
+        }
+    }
+
+    private fun applyDisclosureOverrides(view: View) {
+        val config = activity.radarConfig.latestConfig
+        config.optString(RadarConfiguration.BG_LOCATION_DISCLOSURE_TITLE_KEY)
+            ?.takeIf(String::isNotBlank)
+            ?.let { view.findViewById<TextView>(R.id.bg_location_disclosure_title)?.text = it }
+        config.optString(RadarConfiguration.BG_LOCATION_DISCLOSURE_BODY_KEY)
+            ?.takeIf(String::isNotBlank)
+            ?.let { view.findViewById<TextView>(R.id.bg_location_disclosure_body)?.text = it }
+        config.optString(RadarConfiguration.BG_LOCATION_DISCLOSURE_REVOKE_HINT_KEY)
+            ?.takeIf(String::isNotBlank)
+            ?.let { view.findViewById<TextView>(R.id.bg_location_disclosure_revoke_hint)?.text = it }
     }
 
     private fun requestLocationPermissions(locationPermissions: Set<String>) {
@@ -160,6 +197,7 @@ open class PermissionHandler(
     private fun resetRequestingPermission() {
         isRequestingPermissions.clear()
         isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
+        isShowingDialog = false
     }
 
     private fun addRequestingPermissions(permission: String) {
@@ -179,20 +217,33 @@ open class PermissionHandler(
     }
 
     private fun alertDialog(configure: AlertDialog.Builder.() -> Unit) {
+        isShowingDialog = true
         try {
             activity.runOnUiThread {
-                AlertDialog.Builder(activity, android.R.style.Theme_Material_Dialog_Alert)
-                    .apply(configure)
-                    .show()
+                try {
+                    AlertDialog.Builder(activity, android.R.style.Theme_Material_Dialog_Alert)
+                        .apply(configure)
+                        .setOnCancelListener {
+                            mHandler.execute {
+                                isShowingDialog = false
+                                requestPermissions()
+                            }
+                        }
+                        .show()
+                } catch (ex: IllegalStateException) {
+                    logger.warn("Cannot show dialog on closing activity")
+                    mHandler.execute { isShowingDialog = false }
+                }
             }
         } catch (ex: IllegalStateException) {
             logger.warn("Cannot show dialog on closing activity")
+            isShowingDialog = false
         }
     }
 
     private fun requestLocationProvider() {
         alertDialog {
-            setView(R.layout.location_dialog)
+            setView(R.layout.enable_location_dialog)
             setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.dismiss()
                 Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
@@ -333,6 +384,10 @@ open class PermissionHandler(
             broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
                 putExtra(RadarService.EXTRA_PERMISSIONS, permissions)
                 putExtra(RadarService.EXTRA_GRANT_RESULTS, grantResults)
+            }
+            mHandler.execute {
+                isShowingDialog = false
+                requestPermissions()
             }
         }
     }
