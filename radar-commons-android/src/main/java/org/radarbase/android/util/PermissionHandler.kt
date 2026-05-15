@@ -357,9 +357,6 @@ open class PermissionHandler(
     fun onActivityResumed() {
         mHandler.execute {
             if (!isShowingDialog || !awaitingExternalCallback) return@execute
-            // External callback (onActivityResult / onRequestPermissionsResult) never arrived —
-            // happens on some OEM ROMs (e.g. ColorOS) when the user backs out of Settings.
-            // Sync each pending permission against the live state and advance.
             val pending = isRequestingPermissions.toSet()
             pending.forEach { permission ->
                 val granted = activity.isPermissionGranted(permission)
