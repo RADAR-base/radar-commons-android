@@ -78,10 +78,13 @@ open class PermissionHandler(
             needsPermissions -= externallyGrantedPermissions
         }
 
+        val foregroundLocationStillNeeded = ACCESS_COARSE_LOCATION in needsPermissions
+                || ACCESS_FINE_LOCATION in needsPermissions
+
         val currentlyNeeded = buildSet(needsPermissions.size) {
             addAll(needsPermissions)
             removeAll(isRequestingPermissions)
-            if (contains(ACCESS_COARSE_LOCATION) || contains(ACCESS_FINE_LOCATION)) {
+            if (foregroundLocationStillNeeded) {
                 remove(RadarService.ACCESS_BACKGROUND_LOCATION_COMPAT)
             }
         }
@@ -128,21 +131,22 @@ open class PermissionHandler(
     }
 
     private fun requestBackgroundLocationPermissions() {
-        requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
+        alertDialog {
+            setView(R.layout.background_location_dialog)
+            setCancelable(false)
+            setPositiveButton(R.string.disclosure_accept) { dialog, _ ->
+                dialog.dismiss()
+                requestPermissions(setOf(ACCESS_BACKGROUND_LOCATION_COMPAT))
+            }
+            setNegativeButton(R.string.disclosure_reject) { dialog, _ ->
+                dialog.cancel()
+                onPermissionRequestResult(ACCESS_BACKGROUND_LOCATION_COMPAT, false)
+            }
+        }
     }
 
     private fun requestLocationPermissions(locationPermissions: Set<String>) {
-        alertDialog {
-            setView(R.layout.location_dialog)
-            setPositiveButton(android.R.string.ok) { dialog, _ ->
-                dialog.dismiss()
-                requestPermissions(locationPermissions)
-            }
-            setNegativeButton(android.R.string.cancel) { dialog, _ ->
-                dialog.cancel()
-                requestPermissions()
-            }
-        }
+        requestPermissions(locationPermissions)
     }
 
     private fun requestPermissions(permissions: Set<String>) {
@@ -324,12 +328,17 @@ open class PermissionHandler(
                 }
             }.filter { it.isNotEmpty() && !activity.isPermissionGranted(it) }
 
+            isRequestingPermissions.retainAll(needsPermissions)
+
             requestPermissions()
         }
     }
 
     fun permissionsGranted(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         if (requestCode == REQUEST_ENABLE_PERMISSIONS) {
+            mHandler.execute {
+                isRequestingPermissions.removeAll(permissions.toSet())
+            }
             broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
                 putExtra(RadarService.EXTRA_PERMISSIONS, permissions)
                 putExtra(RadarService.EXTRA_GRANT_RESULTS, grantResults)
