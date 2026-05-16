@@ -43,6 +43,7 @@ open class PermissionHandler(
     private var isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
     private var requestFuture: SafeHandler.HandlerFuture? = null
     private var isShowingDialog = false
+    private var awaitingExternalCallback = false
 
     private fun onPermissionRequestResult(permission: String, granted: Boolean) {
         mHandler.execute {
@@ -189,6 +190,7 @@ open class PermissionHandler(
                 permissions.toTypedArray(),
                 REQUEST_ENABLE_PERMISSIONS,
             )
+            mHandler.execute { awaitingExternalCallback = true }
         } catch (ex: IllegalStateException) {
             logger.warn("Cannot request permission on closing activity")
         }
@@ -198,6 +200,7 @@ open class PermissionHandler(
         isRequestingPermissions.clear()
         isRequestingPermissionsTime = java.lang.Long.MAX_VALUE
         isShowingDialog = false
+        awaitingExternalCallback = false
     }
 
     private fun addRequestingPermissions(permission: String) {
@@ -279,6 +282,7 @@ open class PermissionHandler(
         resolveActivity(activity.packageManager) ?: return
         try {
             activity.startActivityForResult(this, code)
+            mHandler.execute { awaitingExternalCallback = true }
         } catch (ex: ActivityNotFoundException) {
             logger.error("Failed to ask for usage code", ex)
         } catch (ex: IllegalStateException) {
@@ -323,6 +327,7 @@ open class PermissionHandler(
     }
 
     fun onActivityResult(requestCode: Int, resultCode: Int) {
+        mHandler.execute { awaitingExternalCallback = false }
         when (requestCode) {
             LOCATION_REQUEST_CODE -> onPermissionRequestResult(
                 LOCATION_SERVICE,
@@ -346,6 +351,28 @@ open class PermissionHandler(
                 SYSTEM_ALERT_WINDOW,
                 resultCode == Activity.RESULT_OK
             )
+        }
+    }
+
+    fun onActivityResumed() {
+        mHandler.execute {
+            if (!isShowingDialog || !awaitingExternalCallback) return@execute
+            val pending = isRequestingPermissions.toSet()
+            pending.forEach { permission ->
+                val granted = activity.isPermissionGranted(permission)
+                needsPermissions.remove(permission)
+                broadcaster.send(RadarService.ACTION_PERMISSIONS_GRANTED) {
+                    putExtra(RadarService.EXTRA_PERMISSIONS, arrayOf(permission))
+                    putExtra(
+                        RadarService.EXTRA_GRANT_RESULTS,
+                        intArrayOf(if (granted) PERMISSION_GRANTED else PERMISSION_DENIED),
+                    )
+                }
+                isRequestingPermissions.remove(permission)
+            }
+            isShowingDialog = false
+            awaitingExternalCallback = false
+            requestPermissions()
         }
     }
 
@@ -387,6 +414,7 @@ open class PermissionHandler(
             }
             mHandler.execute {
                 isShowingDialog = false
+                awaitingExternalCallback = false
                 requestPermissions()
             }
         }
