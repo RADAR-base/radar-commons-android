@@ -138,6 +138,7 @@ abstract class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        permissionHandler.onActivityResumed()
         uiUpdater = mHandler.repeat(uiRefreshRate) {
             try {
                 // Update all rows in the UI with the data from the connections
