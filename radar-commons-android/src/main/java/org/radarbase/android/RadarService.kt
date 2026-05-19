@@ -27,7 +27,6 @@ import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
 import android.os.*
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES
@@ -235,18 +234,33 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             // Below API 34: Start foreground without service types
             startForeground(1, createForegroundNotification())
         } else {
-
-            /**
-             * API 34+ (Android 14+): Adding DATA_SYNC type
-             * Currently this is not explicitly checking for android 14+ version.
-             * This need to be modified it in future when setting new targetSdkVersion
-             */
-            startForeground(1, createForegroundNotification(),
-                        FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
+            val grantedTyped = currentlyGrantedTypedFgsPermissions()
+            if (grantedTyped.isEmpty()) {
+                logger.warn("startForegroundService called without any typed FGS permission, stopping to avoid the 5s deadline")
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
+            startForegroundIfNeeded(grantedTyped)
         }
 
         return START_STICKY
+    }
+
+    private fun currentlyGrantedTypedFgsPermissions(): Set<String> = buildSet {
+        fun maybeAdd(permission: String) {
+            if (isPermissionGranted(permission)) add(permission)
+        }
+        maybeAdd(ACCESS_COARSE_LOCATION)
+        maybeAdd(ACCESS_FINE_LOCATION)
+        maybeAdd(RECORD_AUDIO)
+        if (SDK_INT >= Q) maybeAdd(ACTIVITY_RECOGNITION)
+        maybeAdd(BODY_SENSORS)
+        if (SDK_INT >= S) {
+            maybeAdd(BLUETOOTH_CONNECT)
+            maybeAdd(BLUETOOTH_SCAN)
+            maybeAdd(BLUETOOTH_ADVERTISE)
+            maybeAdd(UWB_RANGING)
+        }
     }
 
     private fun startForegroundIfNeeded(grantedPermissions: Set<String>) {
@@ -277,10 +291,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
 
         if (fgsTypePermissions.isNotEmpty()) {
-            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-
             val combinedFgsType: Int = fgsTypePermissions.reduce { acc, type -> acc or type }
-
             startForeground(
                 1, createForegroundNotification(),
                 combinedFgsType
@@ -392,7 +403,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
 
         if (grantedPermissions.isNotEmpty()) {
-            startForegroundIfNeeded(grantedPermissions)
+            startForegroundIfNeeded(currentlyGrantedTypedFgsPermissions())
             mHandler.execute {
                 logger.info("Granted permissions {}", grantedPermissions)
                 // Permission granted.
