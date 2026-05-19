@@ -16,8 +16,21 @@
 
 package org.radarbase.android
 
+import android.Manifest.permission.ACCESS_COARSE_LOCATION
+import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.Manifest.permission.ACTIVITY_RECOGNITION
+import android.Manifest.permission.BLUETOOTH_ADVERTISE
+import android.Manifest.permission.BLUETOOTH_CONNECT
+import android.Manifest.permission.BLUETOOTH_SCAN
+import android.Manifest.permission.BODY_SENSORS
+import android.Manifest.permission.RECORD_AUDIO
+import android.Manifest.permission.UWB_RANGING
 import android.content.Context
 import android.content.Intent
+import android.os.Build.VERSION.SDK_INT
+import android.os.Build.VERSION_CODES.Q
+import android.os.Build.VERSION_CODES.S
+import android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 import android.os.Bundle
 import android.os.Process
 import androidx.annotation.CallSuper
@@ -37,6 +50,7 @@ import org.radarbase.android.RadarService.Companion.EXTRA_PERMISSIONS
 import org.radarbase.android.auth.AuthService
 import org.radarbase.android.config.CombinedRadarConfig
 import org.radarbase.android.util.*
+import org.radarbase.android.util.PermissionHandler.Companion.isPermissionGranted
 import org.slf4j.LoggerFactory
 
 /** Base MainActivity class. It manages the services to collect the data and starts up a view. To
@@ -165,15 +179,8 @@ abstract class MainActivity : AppCompatActivity() {
         authConnection.bind()
         bluetoothEnforcer.start()
 
-        val radarServiceCls = radarApp.radarService
-        try {
-            val intent = Intent(this, radarServiceCls)
-            ContextCompat.startForegroundService(this, intent)
-        } catch (ex: IllegalStateException) {
-            logger.error("Failed to start RadarService: activity is in background.", ex)
-        }
-
         radarConnection.bind()
+        maybeStartRadarServiceAsForeground()
 
         permissionHandler.invalidateCache()
 
@@ -217,6 +224,7 @@ abstract class MainActivity : AppCompatActivity() {
         }
         bluetoothEnforcer.onActivityResult(requestCode, resultCode)
         permissionHandler.onActivityResult(requestCode, resultCode)
+        maybeStartRadarServiceAsForeground()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
@@ -225,6 +233,34 @@ abstract class MainActivity : AppCompatActivity() {
             mHandler.start()
         }
         permissionHandler.permissionsGranted(requestCode, permissions, grantResults)
+        maybeStartRadarServiceAsForeground()
+    }
+
+    private fun maybeStartRadarServiceAsForeground() {
+        if (SDK_INT >= UPSIDE_DOWN_CAKE && !hasAnyTypedFgsPermission()) {
+            return
+        }
+        try {
+            val intent = Intent(this, radarApp.radarService)
+            ContextCompat.startForegroundService(this, intent)
+        } catch (ex: IllegalStateException) {
+            logger.error("Failed to start RadarService: activity is in background.", ex)
+        }
+    }
+
+    private fun hasAnyTypedFgsPermission(): Boolean {
+        if (isPermissionGranted(ACCESS_COARSE_LOCATION)) return true
+        if (isPermissionGranted(ACCESS_FINE_LOCATION)) return true
+        if (isPermissionGranted(RECORD_AUDIO)) return true
+        if (SDK_INT >= Q && isPermissionGranted(ACTIVITY_RECOGNITION)) return true
+        if (isPermissionGranted(BODY_SENSORS)) return true
+        if (SDK_INT >= S) {
+            if (isPermissionGranted(BLUETOOTH_CONNECT)) return true
+            if (isPermissionGranted(BLUETOOTH_SCAN)) return true
+            if (isPermissionGranted(BLUETOOTH_ADVERTISE)) return true
+            if (isPermissionGranted(UWB_RANGING)) return true
+        }
+        return false
     }
 
     /**
