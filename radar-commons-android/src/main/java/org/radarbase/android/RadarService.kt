@@ -702,6 +702,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         override fun startScanning() = this@RadarService.startActiveScanning()
         override fun stopScanning() = this@RadarService.stopActiveScanning()
 
+        override fun checkPermissions() = this@RadarService.checkPermissions()
+
         override val serverStatus: ServerStatusListener.Status
             get() = this@RadarService.serverStatus
 

@@ -107,6 +107,7 @@ abstract class MainActivity : AppCompatActivity() {
 
         radarConnection = ManagedServiceConnection<IRadarBinder>(this@MainActivity, radarApp.radarService).apply {
             bindFlags = Context.BIND_ABOVE_CLIENT or Context.BIND_AUTO_CREATE
+            onBoundListeners += IRadarBinder::checkPermissions
             onBoundListeners += IRadarBinder::startScanning
             onBoundListeners += { binder -> view?.onRadarServiceBound(binder) }
             onUnboundListeners += IRadarBinder::stopScanning
