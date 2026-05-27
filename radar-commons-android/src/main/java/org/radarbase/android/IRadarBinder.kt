@@ -43,4 +43,6 @@ interface IRadarBinder : IBinder {
     fun stopScanning()
 
     fun needsBluetooth(): Boolean
+
+    fun checkPermissions()
 }
