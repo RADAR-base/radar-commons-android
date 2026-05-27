@@ -108,6 +108,10 @@ interface RadarConfiguration {
         const val OAUTH2_CLIENT_SECRET = "oauth2_client_secret"
         const val ENABLE_BLUETOOTH_REQUESTS = "enable_bluetooth_requests"
 
+        const val BG_LOCATION_DISCLOSURE_TITLE_KEY = "bg_location_disclosure_title"
+        const val BG_LOCATION_DISCLOSURE_BODY_KEY = "bg_location_disclosure_body"
+        const val BG_LOCATION_DISCLOSURE_REVOKE_HINT_KEY = "bg_location_disclosure_revoke_hint"
+
         const val SEND_ONLY_WITH_WIFI_DEFAULT = true
         const val SEND_OVER_DATA_HIGH_PRIORITY_DEFAULT = true
         const val SEND_BINARY_CONTENT_DEFAULT = true

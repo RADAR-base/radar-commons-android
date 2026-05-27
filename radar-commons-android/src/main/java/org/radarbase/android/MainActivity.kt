@@ -159,7 +159,9 @@ abstract class MainActivity : AppCompatActivity() {
     @CallSuper
     public override fun onStart() {
         super.onStart()
-        mHandler.start()
+        if (!mHandler.isStarted) {
+            mHandler.start()
+        }
         authConnection.bind()
         bluetoothEnforcer.start()
 
@@ -210,12 +212,18 @@ abstract class MainActivity : AppCompatActivity() {
 
     public override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         super.onActivityResult(requestCode, resultCode, result)
+        if (!mHandler.isStarted) {
+            mHandler.start()
+        }
         bluetoothEnforcer.onActivityResult(requestCode, resultCode)
         permissionHandler.onActivityResult(requestCode, resultCode)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (!mHandler.isStarted) {
+            mHandler.start()
+        }
         permissionHandler.permissionsGranted(requestCode, permissions, grantResults)
     }
 
