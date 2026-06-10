@@ -381,12 +381,13 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
     }
 
     private fun requestPermissions(permissions: Collection<String>) {
+        val permissionArray = permissions.toTypedArray()
         mainHandler.post {
             startActivity(Intent(this, radarApp.mainActivity).apply {
                 action = ACTION_CHECK_PERMISSIONS
                 addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(EXTRA_PERMISSIONS, permissions.toTypedArray())
+                putExtra(EXTRA_PERMISSIONS, permissionArray)
             })
         }
     }
