@@ -2,6 +2,7 @@ package org.radarbase.passive.polar
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import org.radarbase.android.BuildConfig
@@ -9,6 +10,7 @@ import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
 import org.radarbase.passive.polar.PolarService.Companion.SHARED_PREF_KEY
 import org.radarbase.passive.polar.PolarService.Companion.SHARED_PREF_NAME
+import org.radarbase.passive.polar.ui.PolarActivity
 
 open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState>(radarService) {
     override val serviceClass: Class<PolarService> = PolarService::class.java
@@ -53,14 +55,21 @@ open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState
 
     override val actions: List<Action>
         get() =
-            super.actions.toMutableList().apply { add(
-                Action("Reset Polar device ID", null) {
-                    applicationContext.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
-                        .edit()
-                        .remove(SHARED_PREF_KEY)
-                        .apply()
-                }
-            )}.toList()
+            super.actions.toMutableList().apply {
+                add(
+                    Action(radarService.getString(R.string.polarControlsAction), null) {
+                        startActivity(Intent(this, PolarActivity::class.java))
+                    }
+                )
+                add(
+                    Action("Reset Polar device ID", null) {
+                        applicationContext.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
+                            .edit()
+                            .remove(SHARED_PREF_KEY)
+                            .apply()
+                    }
+                )
+            }.toList()
 
     override val isFilterable = true
     companion object {
