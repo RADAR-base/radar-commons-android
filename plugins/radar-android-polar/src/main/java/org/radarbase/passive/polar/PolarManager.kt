@@ -97,7 +97,7 @@ class PolarManager(
             override fun blePowerStateChanged(powered: Boolean) {
                 logger.debug("BluetoothStateChanged $powered")
                 status = if (!powered) {
-                    SourceStatusListener.Status.DISCONNECTED // red circle
+                    SourceStatusListener.Status.UNAVAILABLE
                 } else {
                     SourceStatusListener.Status.READY // blue loading
                 }
