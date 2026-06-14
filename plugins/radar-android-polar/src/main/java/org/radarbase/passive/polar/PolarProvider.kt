@@ -47,9 +47,9 @@ open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState
 
     override val featuresNeeded = listOf(PackageManager.FEATURE_BLUETOOTH, PackageManager.FEATURE_BLUETOOTH_LE)
 
-    override val sourceProducer: String = PRODUCER
+    override val sourceProducer: String = POLAR_PRODUCER
 
-    override val sourceModel: String = MODEL
+    override val sourceModel: String = POLAR_MODEL
 
     override val version: String = BuildConfig.VERSION_NAME
 
@@ -73,7 +73,7 @@ open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState
 
     override val isFilterable = true
     companion object {
-        const val PRODUCER = "Polar"
-        const val MODEL = "Generic"
+        private const val POLAR_PRODUCER = "Polar"
+        private const val POLAR_MODEL = "Generic"
     }
 }
