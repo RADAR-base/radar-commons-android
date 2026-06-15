@@ -17,6 +17,7 @@ import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.passive.polar.PolarService.Companion.POLAR_UI_ENABLED_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.polar.*
 import org.slf4j.LoggerFactory
@@ -48,6 +49,9 @@ class PolarManager(
     private var deviceId: String? = null
     private var isDeviceConnected: Boolean = false
 
+    @Volatile
+    var uiEnabled: Boolean = POLAR_UI_ENABLED_DEFAULT
+
     private var autoConnectDisposable: Disposable? = null
     private var hrDisposable: Disposable? = null
     private var ecgDisposable: Disposable? = null
@@ -65,17 +69,16 @@ class PolarManager(
 
         status = SourceStatusListener.Status.READY // blue loading
 
-        state.polarController = object : PolarState.PolarController {
-            override fun connectDevice() = this@PolarManager.connectDevice()
-            override fun startCollecting() = this@PolarManager.startStreaming()
-            override fun stopCollecting() = this@PolarManager.stopStreaming()
+        if (uiEnabled) {
+            state.polarController = object : PolarState.PolarController {
+                override fun connectDevice() = this@PolarManager.connectDevice()
+                override fun startCollecting() = this@PolarManager.startStreaming()
+                override fun stopCollecting() = this@PolarManager.stopStreaming()
+            }
+            state.deviceName = null
+            state.isCollecting = false
+            state.connectionRequested = service.isConnectionRequested()
         }
-        state.deviceName = null
-        state.isCollecting = false
-        // Restore the user's connection intent. If they connected before, reconnect automatically
-        // so the connection continues across reconnects and app restarts until they stop it.
-        val wantsConnection = service.isConnectionRequested()
-        state.connectionRequested = wantsConnection
 
         connectToPolarSDK()
 
@@ -88,8 +91,12 @@ class PolarManager(
             }
         }
 
-        if (wantsConnection) {
-            connectDevice()
+        if (uiEnabled) {
+            if (state.connectionRequested) {
+                beginConnecting()
+            }
+        } else {
+            legacyConnect()
         }
     }
 
@@ -112,7 +119,8 @@ class PolarManager(
             override fun blePowerStateChanged(powered: Boolean) {
                 logger.debug("BluetoothStateChanged $powered")
                 status = if (!powered) {
-                    SourceStatusListener.Status.UNAVAILABLE
+                    if (uiEnabled) SourceStatusListener.Status.UNAVAILABLE
+                    else SourceStatusListener.Status.DISCONNECTED
                 } else {
                     SourceStatusListener.Status.READY // blue loading
                 }
@@ -140,7 +148,11 @@ class PolarManager(
                 logger.debug("Device disconnected ${polarDeviceInfo.deviceId}")
                 isDeviceConnected = false
                 state.isCollecting = false
-                status = SourceStatusListener.Status.CONNECTING
+                if (uiEnabled) {
+                    status = SourceStatusListener.Status.CONNECTING
+                } else {
+                    disconnect()
+                }
             }
 
             override fun bleSdkFeatureReady(
@@ -156,8 +168,8 @@ class PolarManager(
                             setDeviceTime(deviceId)
 
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
-                            if (service.isCollectionStarted()) {
-                                logger.debug("Collection already started, resuming streams")
+                            if (!uiEnabled || service.isCollectionStarted()) {
+                                logger.debug("Starting Polar streams, uiEnabled={}", uiEnabled)
                                 startAllStreams()
                                 state.isCollecting = true
                             } else {
@@ -194,19 +206,36 @@ class PolarManager(
         api.setApiLogger { s: String -> logger.debug("POLAR_API: {}", s) }
     }
 
-    /**
-     * Connect to the Polar device. Triggered explicitly by the user from the control screen
-     */
     fun connectDevice() {
+        service.setConnectionRequested(true)
+        beginConnecting()
+    }
+
+    /** Start (or resume) connecting without changing the saved connection intent. */
+    private fun beginConnecting() {
         mHandler.execute {
             if (!::api.isInitialized) {
                 logger.warn("Polar API is not set up yet, cannot connect")
                 return@execute
             }
             state.connectionRequested = true
-            service.setConnectionRequested(true)
             deviceId = service.getPolarDevice()
             connectToPolarDevice()
+        }
+    }
+
+    private fun legacyConnect() {
+        try {
+            deviceId = service.getPolarDevice()
+            if (deviceId == null) {
+                logger.debug("Searching for Polar devices")
+                connectToPolarDevice()
+            } else {
+                logger.debug("Connecting to Polar device $deviceId")
+                api.connectToDevice(deviceId!!)
+            }
+        } catch (a: PolarInvalidArgument) {
+            a.printStackTrace()
         }
     }
 

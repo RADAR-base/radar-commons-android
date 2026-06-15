@@ -12,6 +12,8 @@ import org.radarbase.passive.polar.PolarService.Companion.POLAR_SHARED_PREF_KEY
 import org.radarbase.passive.polar.PolarService.Companion.POLAR_SHARED_PREF_NAME
 import org.radarbase.passive.polar.ui.PolarActivity
 import androidx.core.content.edit
+import org.radarbase.passive.polar.PolarService.Companion.POLAR_UI_ENABLED_CONFIG
+import org.radarbase.passive.polar.PolarService.Companion.POLAR_UI_ENABLED_DEFAULT
 
 open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState>(radarService) {
     override val serviceClass: Class<PolarService> = PolarService::class.java
@@ -55,13 +57,18 @@ open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState
     override val version: String = BuildConfig.VERSION_NAME
 
     override val actions: List<Action>
-        get() =
-            super.actions.toMutableList().apply {
-                add(
-                    Action(radarService.getString(R.string.polarControlsAction), null) {
-                        startActivity(Intent(this, PolarActivity::class.java))
-                    }
+        get() = super.actions.toMutableList().apply {
+                val uiEnabled = config.latestConfig.getBoolean(
+                    POLAR_UI_ENABLED_CONFIG,
+                    POLAR_UI_ENABLED_DEFAULT,
                 )
+                if (uiEnabled) {
+                    add(
+                        Action(radarService.getString(R.string.polarControlsAction), null) {
+                            startActivity(Intent(this, PolarActivity::class.java))
+                        }
+                    )
+                }
                 add(
                     Action("Reset Polar device ID", null) {
                         applicationContext.getSharedPreferences(POLAR_SHARED_PREF_NAME, Context.MODE_PRIVATE)
