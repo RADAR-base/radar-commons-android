@@ -24,9 +24,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
 import android.os.*
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES
@@ -129,16 +127,11 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
     private var bluetoothNotification: NotificationHandler.NotificationRegistration? = null
 
-    @RequiresApi(Q)
-    val fgsHealthPermissions: Set<String> = setOf(BODY_SENSORS, ACTIVITY_RECOGNITION)
     @RequiresApi(S)
     val fgsConnectDevicePermissions: Set<String> =
         setOf(BLUETOOTH_CONNECT, BLUETOOTH_SCAN, BLUETOOTH_ADVERTISE, UWB_RANGING)
     private val fgsLocationPermissions: Set<String> =
         setOf(ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION)
-    private val fgsMicrophonePermissions: Set<String> =
-        setOf(RECORD_AUDIO)
-
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
@@ -274,20 +267,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             }
         }
 
-        if (grantedPermissions.intersect(fgsHealthPermissions)
-                .isNotEmpty() && (SDK_INT >= UPSIDE_DOWN_CAKE)
-        ) {
-            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_HEALTH)
-        }
-
         if (grantedPermissions.intersect(fgsLocationPermissions).isNotEmpty()) {
             fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_LOCATION)
-        }
-
-        if (grantedPermissions.intersect(fgsMicrophonePermissions)
-                .isNotEmpty() && (SDK_INT >= VERSION_CODES.R)
-        ) {
-            fgsTypePermissions.add(FOREGROUND_SERVICE_TYPE_MICROPHONE)
         }
 
         if (fgsTypePermissions.isNotEmpty()) {
@@ -777,7 +758,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
 
         private const val BLUETOOTH_NOTIFICATION = 521290
 
-        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (SDK_INT >= VERSION_CODES.Q)
+        val ACCESS_BACKGROUND_LOCATION_COMPAT = if (SDK_INT >= Q)
             ACCESS_BACKGROUND_LOCATION else "android.permission.ACCESS_BACKGROUND_LOCATION"
 
         private const val BACKGROUND_REQUEST_CODE = 9559
