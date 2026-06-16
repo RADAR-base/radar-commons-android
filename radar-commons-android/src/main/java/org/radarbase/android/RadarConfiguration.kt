@@ -107,6 +107,7 @@ interface RadarConfiguration {
         const val OAUTH2_CLIENT_ID = "oauth2_client_id"
         const val OAUTH2_CLIENT_SECRET = "oauth2_client_secret"
         const val ENABLE_BLUETOOTH_REQUESTS = "enable_bluetooth_requests"
+        const val ENABLE_SOURCE_INFO_UI = "enable_source_info_ui"
 
         const val BG_LOCATION_DISCLOSURE_TITLE_KEY = "bg_location_disclosure_title"
         const val BG_LOCATION_DISCLOSURE_BODY_KEY = "bg_location_disclosure_body"
