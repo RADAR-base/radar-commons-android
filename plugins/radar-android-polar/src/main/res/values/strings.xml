@@ -2,4 +2,21 @@
     <string name="polarDisplayName">Polar auto</string>
     <string name="polarDeviceName">Polar auto %1$s</string>
     <string name="polarSensorsDescription">Polar sensors like acceleration and step counts.</string>
+
+    <string name="polarControlsAction">Polar device</string>
+    <string name="polarActivityTitle">Polar device</string>
+    <string name="polarNoDevice">No Polar device</string>
+
+    <string name="polarStatusConnected">Connected</string>
+    <string name="polarStatusConnecting">Connecting…</string>
+    <string name="polarStatusNotConnected">Not connected</string>
+    <string name="polarStatusBluetoothOff">Bluetooth is off</string>
+
+    <string name="polarBluetoothOffMessage">Bluetooth is off. Please turn it on to connect your Polar device.</string>
+    <string name="polarTurnOnBluetooth">Turn on Bluetooth</string>
+    <string name="polarConnectDevice">Connect device</string>
+    <string name="polarStartCollection">Start data collection</string>
+    <string name="polarStopCollection">Stop data collection</string>
+    <string name="polarDeviceConnectedToast">Device connected</string>
+    <string name="polarBluetoothDescription">Bluetooth connection status</string>
 </resources>

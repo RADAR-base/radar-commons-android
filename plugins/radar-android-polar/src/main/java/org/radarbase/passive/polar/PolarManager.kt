@@ -17,6 +17,7 @@ import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
+import org.radarbase.passive.polar.PolarService.Companion.POLAR_UI_ENABLED_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.polar.*
 import org.slf4j.LoggerFactory
@@ -48,6 +49,9 @@ class PolarManager(
     private var deviceId: String? = null
     private var isDeviceConnected: Boolean = false
 
+    @Volatile
+    var uiEnabled: Boolean = POLAR_UI_ENABLED_DEFAULT
+
     private var autoConnectDisposable: Disposable? = null
     private var hrDisposable: Disposable? = null
     private var ecgDisposable: Disposable? = null
@@ -65,6 +69,17 @@ class PolarManager(
 
         status = SourceStatusListener.Status.READY // blue loading
 
+        if (uiEnabled) {
+            state.polarController = object : PolarState.PolarController {
+                override fun connectDevice() = this@PolarManager.connectDevice()
+                override fun startCollecting() = this@PolarManager.startStreaming()
+                override fun stopCollecting() = this@PolarManager.stopStreaming()
+            }
+            state.deviceName = null
+            state.isCollecting = false
+            state.connectionRequested = service.isConnectionRequested()
+        }
+
         connectToPolarSDK()
 
         register()
@@ -76,6 +91,13 @@ class PolarManager(
             }
         }
 
+        if (uiEnabled) {
+            if (state.connectionRequested) {
+                beginConnecting()
+            }
+        } else {
+            legacyConnect()
+        }
     }
 
     private fun connectToPolarSDK() {
@@ -97,7 +119,8 @@ class PolarManager(
             override fun blePowerStateChanged(powered: Boolean) {
                 logger.debug("BluetoothStateChanged $powered")
                 status = if (!powered) {
-                    SourceStatusListener.Status.DISCONNECTED // red circle
+                    if (uiEnabled) SourceStatusListener.Status.UNAVAILABLE
+                    else SourceStatusListener.Status.DISCONNECTED
                 } else {
                     SourceStatusListener.Status.READY // blue loading
                 }
@@ -108,6 +131,7 @@ class PolarManager(
                 service.savePolarDevice(polarDeviceInfo.deviceId)
                 deviceId = polarDeviceInfo.deviceId
                 name = polarDeviceInfo.name
+                state.deviceName = polarDeviceInfo.name
 
                 if (deviceId != null) {
                     isDeviceConnected = true
@@ -123,7 +147,12 @@ class PolarManager(
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                 logger.debug("Device disconnected ${polarDeviceInfo.deviceId}")
                 isDeviceConnected = false
-                disconnect()
+                state.isCollecting = false
+                if (uiEnabled) {
+                    status = SourceStatusListener.Status.CONNECTING
+                } else {
+                    disconnect()
+                }
             }
 
             override fun bleSdkFeatureReady(
@@ -139,11 +168,13 @@ class PolarManager(
                             setDeviceTime(deviceId)
 
                         PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
-                            streamHR()
-                            streamEcg()
-                            streamAcc()
-                            streamPpi()
-                            streamPpg()
+                            if (!uiEnabled || service.isCollectionStarted()) {
+                                logger.debug("Starting Polar streams, uiEnabled={}", uiEnabled)
+                                startAllStreams()
+                                state.isCollecting = true
+                            } else {
+                                logger.debug("Collection not started by the user, waiting for an explicit start")
+                            }
                         }
 
                         else -> {
@@ -173,7 +204,27 @@ class PolarManager(
         })
 
         api.setApiLogger { s: String -> logger.debug("POLAR_API: {}", s) }
+    }
 
+    fun connectDevice() {
+        service.setConnectionRequested(true)
+        beginConnecting()
+    }
+
+    /** Start (or resume) connecting without changing the saved connection intent. */
+    private fun beginConnecting() {
+        mHandler.execute {
+            if (!::api.isInitialized) {
+                logger.warn("Polar API is not set up yet, cannot connect")
+                return@execute
+            }
+            state.connectionRequested = true
+            deviceId = service.getPolarDevice()
+            connectToPolarDevice()
+        }
+    }
+
+    private fun legacyConnect() {
         try {
             deviceId = service.getPolarDevice()
             if (deviceId == null) {
@@ -190,6 +241,7 @@ class PolarManager(
 
     override fun onClose() {
         super.onClose()
+        state.polarController = null
         if (autoConnectDisposable != null && !autoConnectDisposable!!.isDisposed) {
             autoConnectDisposable?.dispose()
         }
@@ -283,6 +335,46 @@ class PolarManager(
     private fun getTimeNano(): Double {
         val nano = (System.currentTimeMillis() * 1_000_000L).toDouble()
         return nano / 1000_000_000L
+    }
+
+    fun startStreaming() {
+        mHandler.execute {
+            service.setCollectionStarted(true)
+            if (isDeviceConnected) {
+                startAllStreams()
+                state.isCollecting = true
+            } else {
+                // Device not connected yet. Keep isCollecting false so the button stays on Start
+                // until the device connects, at which point streaming begins and it flips to Stop.
+                logger.info("Polar device not connected yet, will stream once it connects")
+            }
+        }
+    }
+
+    fun stopStreaming() {
+        mHandler.execute {
+            service.setCollectionStarted(false)
+            state.isCollecting = false
+            stopAllStreams()
+        }
+    }
+
+    private fun startAllStreams() {
+        if (hrDisposable?.isDisposed != false) streamHR()
+        if (ecgDisposable?.isDisposed != false) streamEcg()
+        if (accDisposable?.isDisposed != false) streamAcc()
+        if (ppiDisposable?.isDisposed != false) streamPpi()
+        if (ppgDisposable?.isDisposed != false) streamPpg()
+    }
+
+    private fun stopAllStreams() {
+        listOf(hrDisposable, ecgDisposable, accDisposable, ppiDisposable, ppgDisposable)
+            .forEach { if (it != null && !it.isDisposed) it.dispose() }
+        hrDisposable = null
+        ecgDisposable = null
+        accDisposable = null
+        ppiDisposable = null
+        ppgDisposable = null
     }
 
     fun streamHR() {
