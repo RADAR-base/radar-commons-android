@@ -19,6 +19,7 @@ package org.radarbase.passive.phone
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.source.SourceProvider.Companion.PHONE_INFO_GROUP
 
 open class PhoneSensorProvider(radarService: RadarService) : SourceProvider<PhoneState>(radarService) {
     override val serviceClass: Class<PhoneSensorService> = PhoneSensorService::class.java
@@ -32,6 +33,8 @@ open class PhoneSensorProvider(radarService: RadarService) : SourceProvider<Phon
 
     override val description: String
         get() = radarService.getString(R.string.phone_sensors_description)
+
+    override val infoGroup: String = PHONE_INFO_GROUP
 
     override val displayName: String
         get() = radarService.getString(R.string.phoneServiceDisplayName)
