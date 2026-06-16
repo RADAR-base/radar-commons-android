@@ -30,10 +30,7 @@ class PolarService : SourceService<PolarState>() {
         config: SingleRadarConfiguration
     ) {
         manager as PolarManager
-        manager.uiEnabled = config.getBoolean(
-            POLAR_UI_ENABLED_CONFIG,
-            POLAR_UI_ENABLED_DEFAULT,
-        )
+        manager.uiEnabled = config.isExplicitDisclosureProject()
     }
 
 
@@ -77,8 +74,6 @@ class PolarService : SourceService<PolarState>() {
         const val POLAR_SHARED_PREF_KEY = "polar_device_id"
         const val POLAR_COLLECTION_STARTED_KEY = "polar_collection_started"
         const val POLAR_CONNECTION_REQUESTED_KEY = "polar_connection_requested"
-        const val POLAR_UI_ENABLED_CONFIG = "polar_control_ui_enabled"
-        const val POLAR_UI_ENABLED_DEFAULT = true
     }
 }
 
