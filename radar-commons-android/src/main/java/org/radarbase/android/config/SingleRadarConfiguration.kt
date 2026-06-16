@@ -129,6 +129,15 @@ class SingleRadarConfiguration(val status: RadarConfiguration.RemoteConfigStatus
         }
     }
 
+    fun isExplicitDisclosureProject(): Boolean {
+        val projectId = optString(RadarConfiguration.PROJECT_ID_KEY)?.trim()
+        if (projectId.isNullOrEmpty()) return false
+        return optString(RadarConfiguration.EXPLICIT_DISCLOSURE)
+            .orEmpty()
+            .splitToSequence(',')
+            .any { it.trim().equals(projectId, ignoreCase = true) }
+    }
+
     /** There is a non-empty configuration for given key. */
     operator fun contains(key: String): Boolean = key in config
 

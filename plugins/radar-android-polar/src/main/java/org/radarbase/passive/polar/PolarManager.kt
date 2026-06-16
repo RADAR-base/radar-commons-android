@@ -17,7 +17,6 @@ import org.radarbase.android.data.DataCache
 import org.radarbase.android.source.AbstractSourceManager
 import org.radarbase.android.source.SourceStatusListener
 import org.radarbase.android.util.SafeHandler
-import org.radarbase.passive.polar.PolarService.Companion.POLAR_UI_ENABLED_DEFAULT
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.polar.*
 import org.slf4j.LoggerFactory
@@ -50,7 +49,7 @@ class PolarManager(
     private var isDeviceConnected: Boolean = false
 
     @Volatile
-    var uiEnabled: Boolean = POLAR_UI_ENABLED_DEFAULT
+    var uiEnabled: Boolean = false
 
     private var autoConnectDisposable: Disposable? = null
     private var hrDisposable: Disposable? = null
