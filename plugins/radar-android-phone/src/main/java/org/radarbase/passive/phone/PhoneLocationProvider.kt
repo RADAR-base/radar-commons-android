@@ -23,12 +23,15 @@ import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.source.SourceProvider.Companion.PHONE_INFO_GROUP
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.MODEL
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.PRODUCER
 
 open class PhoneLocationProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val description: String
         get() = radarService.getString(R.string.phone_location_description)
+
+    override val infoGroup: String = PHONE_INFO_GROUP
 
     override val serviceClass: Class<PhoneLocationService> = PhoneLocationService::class.java
 
