@@ -21,6 +21,7 @@ import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.BaseSourceState
 import org.radarbase.android.source.SourceProvider
+import org.radarbase.android.source.SourceProvider.Companion.PHONE_INFO_GROUP
 import org.radarbase.android.util.BluetoothStateReceiver.Companion.bluetoothPermissionList
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.MODEL
 import org.radarbase.passive.phone.PhoneSensorProvider.Companion.PRODUCER
@@ -28,6 +29,8 @@ import org.radarbase.passive.phone.PhoneSensorProvider.Companion.PRODUCER
 open class PhoneBluetoothProvider(radarService: RadarService) : SourceProvider<BaseSourceState>(radarService) {
     override val description: String
         get() = radarService.getString(R.string.phone_bluetooth_description)
+
+    override val infoGroup: String = PHONE_INFO_GROUP
 
     override val serviceClass: Class<PhoneBluetoothService> = PhoneBluetoothService::class.java
 

@@ -200,6 +200,14 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
     open val isDisplayable: Boolean = true
 
     /**
+     * Identifier that groups several providers together. Providers that
+     * share a non-null [infoGroup] describe a single displayed row collectively, so opening the info
+     * view of the one visible provider can list every grouped provider's [displayName] and
+     * [description]. Defaults to null, meaning the provider stands on its own.
+     */
+    open val infoGroup: String? = null
+
+    /**
      * Whether the source name should be checked with given filters before a connection is allowed
      */
     open val isFilterable: Boolean = false
@@ -253,6 +261,12 @@ abstract class SourceProvider<T : BaseSourceState>(protected val radarService: R
         const val PLUGIN_NAME_KEY = "org.radarbase.android.source.SourceProvider.pluginName"
         const val PRODUCER_KEY = "org.radarbase.android.source.SourceProvider.sourceProducer"
         const val MODEL_KEY = "org.radarbase.android.source.SourceProvider.sourceModel"
+
+        /**
+         * Well-known [infoGroup] shared by the phone plugins (sensors, bluetooth, contacts,
+         * location, usage) so they are described together on the single visible phone row.
+         */
+        const val PHONE_INFO_GROUP = "phone"
 
         private val logger = LoggerFactory.getLogger(SourceProvider::class.java)
     }

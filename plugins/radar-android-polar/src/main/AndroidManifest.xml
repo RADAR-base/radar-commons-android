@@ -15,5 +15,9 @@
 
     <application android:allowBackup="true">
         <service android:name=".PolarService"/>
+        <activity
+            android:name=".ui.PolarActivity"
+            android:exported="false"
+            android:label="@string/polarActivityTitle" />
     </application>
 </manifest>

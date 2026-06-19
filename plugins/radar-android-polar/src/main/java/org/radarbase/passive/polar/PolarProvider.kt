@@ -2,13 +2,16 @@ package org.radarbase.passive.polar
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import org.radarbase.android.BuildConfig
 import org.radarbase.android.RadarService
 import org.radarbase.android.source.SourceProvider
-import org.radarbase.passive.polar.PolarService.Companion.SHARED_PREF_KEY
-import org.radarbase.passive.polar.PolarService.Companion.SHARED_PREF_NAME
+import org.radarbase.passive.polar.PolarService.Companion.POLAR_SHARED_PREF_KEY
+import org.radarbase.passive.polar.PolarService.Companion.POLAR_SHARED_PREF_NAME
+import org.radarbase.passive.polar.ui.PolarActivity
+import androidx.core.content.edit
 
 open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState>(radarService) {
     override val serviceClass: Class<PolarService> = PolarService::class.java
@@ -45,26 +48,35 @@ open class PolarProvider(radarService: RadarService) : SourceProvider<PolarState
 
     override val featuresNeeded = listOf(PackageManager.FEATURE_BLUETOOTH, PackageManager.FEATURE_BLUETOOTH_LE)
 
-    override val sourceProducer: String = PRODUCER
+    override val sourceProducer: String = POLAR_PRODUCER
 
-    override val sourceModel: String = MODEL
+    override val sourceModel: String = POLAR_MODEL
 
     override val version: String = BuildConfig.VERSION_NAME
 
     override val actions: List<Action>
-        get() =
-            super.actions.toMutableList().apply { add(
-                Action("Reset Polar device ID", null) {
-                    applicationContext.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
-                        .edit()
-                        .remove(SHARED_PREF_KEY)
-                        .apply()
+        get() = super.actions.toMutableList().apply {
+                val uiEnabled = config.latestConfig.isExplicitDisclosureProject()
+                if (uiEnabled) {
+                    add(
+                        Action(radarService.getString(R.string.polarControlsAction), null) {
+                            startActivity(Intent(this, PolarActivity::class.java))
+                        }
+                    )
                 }
-            )}.toList()
+                add(
+                    Action("Reset Polar device ID", null) {
+                        applicationContext.getSharedPreferences(POLAR_SHARED_PREF_NAME, Context.MODE_PRIVATE)
+                            .edit {
+                                remove(POLAR_SHARED_PREF_KEY)
+                            }
+                    }
+                )
+            }.toList()
 
     override val isFilterable = true
     companion object {
-        const val PRODUCER = "Polar"
-        const val MODEL = "Generic"
+        private const val POLAR_PRODUCER = "Polar"
+        private const val POLAR_MODEL = "Generic"
     }
 }
