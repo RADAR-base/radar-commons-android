@@ -117,6 +117,7 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
     }
     private lateinit var notificationHandler: NotificationHandler
+    private lateinit var periodicPermissionObserver: PeriodicPermissionObserver
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -149,6 +150,9 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         configuration = radarConfig
         providerLoader = SourceProviderLoader(plugins)
         broadcaster = LocalBroadcastManager.getInstance(this)
+        periodicPermissionObserver = PeriodicPermissionObserver(this).apply {
+            start()
+        }
 
         broadcaster.run {
             permissionsBroadcastReceiver = register(ACTION_PERMISSIONS_GRANTED) { _, intent ->
@@ -313,6 +317,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         }
         authConnection.unbind()
 
+        periodicPermissionObserver.stop()
+
         mConnections.asSequence()
             .filter(SourceProvider<*>::isBound)
             .forEach(SourceProvider<*>::unbind)
@@ -353,6 +359,8 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
                 }
             }
         }
+
+        periodicPermissionObserver.configurePermissionObserver(config)
     }
 
     private fun hasFeatures(provider: SourceProvider<*>, packageManager: PackageManager?): Boolean {
@@ -412,6 +420,10 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
             updateBluetoothNeeded(needsBluetooth.value || connection.needsBluetooth())
             startScanning()
         }
+    }
+
+    fun nonGrantedPermissions(): Set<String> {
+        return needsPermissions
     }
 
     private fun updateBluetoothNeeded(newValue: Boolean) {
