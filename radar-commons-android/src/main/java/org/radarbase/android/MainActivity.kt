@@ -22,7 +22,6 @@ import android.Manifest.permission.ACTIVITY_RECOGNITION
 import android.Manifest.permission.BLUETOOTH_ADVERTISE
 import android.Manifest.permission.BLUETOOTH_CONNECT
 import android.Manifest.permission.BLUETOOTH_SCAN
-import android.Manifest.permission.BODY_SENSORS
 import android.Manifest.permission.RECORD_AUDIO
 import android.Manifest.permission.UWB_RANGING
 import android.content.Context
@@ -254,7 +253,6 @@ abstract class MainActivity : AppCompatActivity() {
         if (isPermissionGranted(ACCESS_FINE_LOCATION)) return true
         if (isPermissionGranted(RECORD_AUDIO)) return true
         if (SDK_INT >= Q && isPermissionGranted(ACTIVITY_RECOGNITION)) return true
-        if (isPermissionGranted(BODY_SENSORS)) return true
         if (SDK_INT >= S) {
             if (isPermissionGranted(BLUETOOTH_CONNECT)) return true
             if (isPermissionGranted(BLUETOOTH_SCAN)) return true
