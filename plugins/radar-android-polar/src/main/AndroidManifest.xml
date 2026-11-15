@@ -16,6 +16,7 @@
         <service android:name=".PolarService"/>
         <activity
             android:name=".ui.PolarActivity"
+            android:screenOrientation="userPortrait"
             android:exported="false"
             android:label="@string/polarActivityTitle" />
     </application>
