@@ -247,7 +247,6 @@ abstract class RadarService : LifecycleService(), ServerStatusListener, LoginLis
         maybeAdd(ACCESS_FINE_LOCATION)
         maybeAdd(RECORD_AUDIO)
         if (SDK_INT >= Q) maybeAdd(ACTIVITY_RECOGNITION)
-        maybeAdd(BODY_SENSORS)
         if (SDK_INT >= S) {
             maybeAdd(BLUETOOTH_CONNECT)
             maybeAdd(BLUETOOTH_SCAN)

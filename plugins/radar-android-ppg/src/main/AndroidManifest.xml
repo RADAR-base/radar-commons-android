@@ -12,7 +12,8 @@
             android:exported="false"
             android:description="@string/phone_ppg_description" />
 
-        <activity android:name=".PhonePpgActivity" />
+        <activity android:name=".PhonePpgActivity"
+            android:screenOrientation="userPortrait" />
     </application>
 
 </manifest>
