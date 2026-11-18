@@ -27,6 +27,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import org.radarbase.android.IRadarBinder
@@ -101,6 +102,16 @@ class PhonePpgActivity : AppCompatActivity(), Runnable {
         wasConnected = false
 
         handler = Handler(Looper.getMainLooper())
+
+        // From target SDK 36, Android no longer calls onBackPressed(), so stop the camera
+        // from a back callback instead.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                state?.actionListener?.stopCamera()
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+            }
+        })
     }
 
     override fun onStart() {
@@ -123,13 +134,8 @@ class PhonePpgActivity : AppCompatActivity(), Runnable {
         unbindService(radarServiceConnection)
     }
     override fun onSupportNavigateUp(): Boolean {
-        onBackPressed()
+        onBackPressedDispatcher.onBackPressed()
         return true
-    }
-
-    override fun onBackPressed() {
-        state?.actionListener?.stopCamera()
-        super.onBackPressed()
     }
 
     override fun run() {

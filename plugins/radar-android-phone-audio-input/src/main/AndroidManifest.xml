@@ -10,6 +10,7 @@
     <application android:allowBackup="true" >
         <activity
             android:name=".ui.PhoneAudioInputActivity"
+            android:screenOrientation="userPortrait"
             android:exported="false" />
 
         <service
